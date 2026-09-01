@@ -31,7 +31,7 @@ describe("state store", () => {
     expect(before).not.toBe(after);
     expect(after.sidebarCollapsed).not.toBe(before.sidebarCollapsed);
     expect(listeners).toHaveLength(1);
-    const [newState, changedKeys] = listeners[0];
+    const [newState, changedKeys] = listeners[0]!;
     expect(changedKeys.has("sidebarCollapsed")).toBe(true);
     expect(newState.sidebarCollapsed).toBe(!before.sidebarCollapsed);
   });

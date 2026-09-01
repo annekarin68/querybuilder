@@ -1,5 +1,8 @@
 import type { Condition, Group, QueryNode } from "./types";
 
+export type NodePatch = Partial<Pick<Condition, "fieldId" | "operatorId" | "value">> &
+  Partial<Pick<Group, "operator" | "collapsed">>;
+
 let counter = 0;
 function id(prefix: string): string {
   counter += 1;
@@ -38,7 +41,7 @@ export function addChild(tree: Group, parentId: string, node: QueryNode): Group 
   ) as Group;
 }
 
-export function updateNode(tree: Group, nodeId: string, patch: Partial<Condition & Group>): Group {
+export function updateNode(tree: Group, nodeId: string, patch: NodePatch): Group {
   return mapTree(tree, (n) => (n.id === nodeId ? ({ ...n, ...patch } as QueryNode) : n)) as Group;
 }
 

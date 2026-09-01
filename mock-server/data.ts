@@ -43,13 +43,13 @@ export const RECORDS: Row[] = (() => {
     const missing = rand() < 0.08; // ~8% of some fields are null, so isEmpty/nullCount are meaningful
     rows.push({
       id: i + 1,
-      species: SPECIES[Math.floor(rand() * SPECIES.length)],
+      species: SPECIES[Math.floor(rand() * SPECIES.length)]!,
       branches: missing ? null : Math.floor(rand() * 40),
       heightCm: Math.floor(rand() * 300),
       foliage: rand() < 0.7,
-      flowering: rand() < 0.5 ? null : MONTHS[Math.floor(rand() * MONTHS.length)],
+      flowering: rand() < 0.5 ? null : MONTHS[Math.floor(rand() * MONTHS.length)]!,
       plantedOn: `20${10 + Math.floor(rand() * 15)}-${String(1 + Math.floor(rand() * 12)).padStart(2, "0")}-${String(1 + Math.floor(rand() * 28)).padStart(2, "0")}`,
-      notes: NOTE_WORDS[Math.floor(rand() * NOTE_WORDS.length)],
+      notes: NOTE_WORDS[Math.floor(rand() * NOTE_WORDS.length)]!,
     });
   }
   return rows;
@@ -57,5 +57,5 @@ export const RECORDS: Row[] = (() => {
 
 // Guard: every field id (except the synthetic "id") exists on every row.
 for (const f of FIELDS) {
-  if (!(f.id in RECORDS[0])) throw new Error(`data.ts is missing column "${f.id}"`);
+  if (!(f.id in RECORDS[0]!)) throw new Error(`data.ts is missing column "${f.id}"`);
 }

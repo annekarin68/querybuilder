@@ -86,7 +86,7 @@ const MONTHS = [
   "october",
   "november",
   "december",
-].map((m) => ({ value: m, label: m[0].toUpperCase() + m.slice(1) }));
+].map((m) => ({ value: m, label: m.charAt(0).toUpperCase() + m.slice(1) }));
 
 export const FIELDS: FieldDef[] = [
   {
