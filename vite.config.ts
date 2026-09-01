@@ -30,9 +30,10 @@ function stripRemoteCss(): Plugin {
  * handful of off-origin URLs that are never network-dereferenced but still trip
  * `scripts/check-offline.mjs` (which greps the built JS for `https://`):
  *   - jQuery's `/*! ... *\/` banner (`https://jquery.com/`, `https://jquery.org/license`).
- *     `esbuild.legalComments: "eof"` below KEEPS that banner (deliberately — we
- *     preserve licence text, see THIRD-PARTY-NOTICES.txt), it just moves it to the
- *     end of the file, so this plugin is what actually neutralises the URLs in it.
+ *     This plugin neutralises the URLs in it. The minifier drops the banner text
+ *     itself (behaviour varies by toolchain), so licence attribution does NOT rely
+ *     on it — `THIRD-PARTY-NOTICES.txt` at the repo root carries the full terms and
+ *     must be deployed alongside `dist/` (see README).
  *   - Fomantic developer-facing error-message strings embedding upstream project
  *     URLs: the `unorm` polyfill hint and the `jquery-address` library hint. These
  *     live inside `error:` setting objects and are only ever `console`'d / thrown.
