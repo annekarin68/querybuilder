@@ -5,7 +5,7 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-01 — initial design + offline-first constraint. Frontend implemented (Tasks 1–17).
+Last updated: 2026-09-01 — Frontend implemented per plan (Tasks 1–17).
 
 ---
 
@@ -524,7 +524,8 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 - `tsconfig.json` in `strict` mode.
 - Prettier + minimal ESLint (`eslint:recommended` + `@typescript-eslint/recommended`).
 - README note / review checklist item: **no `jquery` import outside
-  `src/ui/fomantic.ts`**.
+  `src/ui/fomantic.ts` (plus the one-line `window.jQuery` bootstrap in
+  `src/main.ts`)**.
 
 ---
 

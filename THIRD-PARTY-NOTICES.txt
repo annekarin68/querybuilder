@@ -47,6 +47,12 @@ MIT), with the copyright holders listed underneath:
       Dev server and production bundler.
       Copyright (c) VoidZero Inc. and Vite contributors
 
+The following build/test-only tooling is also MIT-licensed and is not shipped
+in dist/: eslint, prettier, vitest, tsx, concurrently,
+@typescript-eslint/eslint-plugin, @typescript-eslint/parser, @types/node,
+@types/jquery. (Their upstream copyright notices ship with each package under
+node_modules/<name>/.)
+
 MIT License terms (applies to every component in this section):
 
   Permission is hereby granted, free of charge, to any person obtaining a
@@ -122,4 +128,3 @@ SPDX id: Apache-2.0
 
   The full Apache-2.0 text ships with the package at
   node_modules/typescript/LICENSE.txt.
-</content>

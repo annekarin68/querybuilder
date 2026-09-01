@@ -51,5 +51,3 @@ See `docs/ARCHITECTURE.md` §4.
 
 Third-party license texts for every bundled dependency are in
 `THIRD-PARTY-NOTICES.txt` at the repo root.
-</content>
-</invoke>
