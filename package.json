@@ -1,0 +1,19 @@
+{
+  "name": "query-builder",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A framework-agnostic query-builder UI (Web Components) that compiles a boolean tree of conditions into a compact query DSL, plus a small example app and mock backend.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p server/tsconfig.json",
+    "start": "node server/dist/index.js",
+    "dev": "npm run build && npm run start",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0"
+  }
+}
