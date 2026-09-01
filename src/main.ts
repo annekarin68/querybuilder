@@ -10,14 +10,16 @@ import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
-import { getSchema } from "./api/client";
+import { getSchema, getStats } from "./api/client";
 import { store } from "./state";
-import { addChild, newCondition } from "./query/tree";
-import { validateQuery } from "./query/validate";
+import { addChild, countConditions, newCondition } from "./query/tree";
+import { hasBlockingErrors, validateQuery } from "./query/validate";
 import type { Group } from "./query/types";
+import { debounce } from "./util/debounce";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
 import { renderDocsSidebar } from "./ui/docsSidebar";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
+import { renderStatsPanel } from "./ui/statsPanel";
 
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
@@ -30,7 +32,30 @@ onMenu({
   },
 });
 
+const refreshStats = debounce(() => {
+  const { query, issues, schema } = store.getState();
+  if (!schema || hasBlockingErrors(issues) || countConditions(query) === 0) return;
+  const key = JSON.stringify(query);
+  store.setState({ stats: { status: "loading", data: null, error: null } });
+  getStats(query)
+    .then((data) => {
+      if (key !== JSON.stringify(store.getState().query)) return; // stale — a newer edit won
+      store.setState({ stats: { status: "ok", data, error: null } });
+    })
+    .catch((err) => {
+      if (key !== JSON.stringify(store.getState().query)) return;
+      store.setState({
+        stats: {
+          status: "error",
+          data: null,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      });
+    });
+}, 400);
+
 function onQueryChange(nextQuery: Group): void {
+  if (nextQuery === store.getState().query) return;
   const schema = store.getState().schema;
   const issues = schema
     ? validateQuery(nextQuery, { fields: schema.fields, operators: schema.operators })
@@ -42,6 +67,7 @@ function onQueryChange(nextQuery: Group): void {
     stats: { status: "idle", data: null, error: null },
     preview: { status: "idle", data: null, error: null, page: 1 },
   });
+  refreshStats();
 }
 
 store.subscribe((state, changed) => {
@@ -52,10 +78,19 @@ store.subscribe((state, changed) => {
     renderQueryBuilder(state);
     wireQueryBuilder(panelEls().center, onQueryChange);
   }
-  // panel renders are wired in Tasks 12–15.
+  if (
+    changed.has("schema") ||
+    changed.has("query") ||
+    changed.has("issues") ||
+    changed.has("stats")
+  ) {
+    renderStatsPanel(state);
+  }
+  // the preview panel render is wired in Task 16.
 });
 
 renderQueryBuilder(store.getState()); // initial loader (centre panel spinner during schema fetch)
+renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDocsSidebar(store.getState()); // initial loader
 getSchema()
   .then((schema) => {
@@ -74,6 +109,5 @@ getSchema()
     </div>`;
   });
 
-// Temporary placeholder content so the columns are visibly present until Tasks 13–15.
-panelEls().stats.innerHTML = `<div class="ui segment">Statistics (Task 14)</div>`;
-panelEls().preview.innerHTML = `<div class="ui segment">Data preview (Task 15)</div>`;
+// Temporary placeholder content so the preview column is visibly present until Task 16.
+panelEls().preview.innerHTML = `<div class="ui segment">Data preview (Task 16)</div>`;
