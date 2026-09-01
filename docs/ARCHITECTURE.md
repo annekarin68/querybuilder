@@ -162,27 +162,33 @@ This is one commented block and the only place global assignment happens.
 
 ```
 src/
-  main.ts              Bootstrap: set window.jQuery; render layout shell; load schema; wire subscriptions.
-  state.ts             AppState type + a ~15-line store (getState / setState / subscribe).
+  main.ts              Bootstrap: set window.jQuery; render layout shell; load schema; wire subscriptions; hold the refreshStats / runPreview orchestrators.
+  state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
+  util/
+    debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
   api/
     client.ts          The ONLY file that calls fetch(). One function per endpoint.
     types.ts           Request/response types. This IS the API contract.
   query/
-    types.ts           Condition, Group, QueryNode.
-    tree.ts            Pure tree helpers: emptyQuery, newCondition, newGroup, addChild, updateNode, removeNode, findNode.
-    validate.ts        validateQuery(tree, schema) -> Issue[].
+    types.ts           Condition, Group, QueryNode, Issue.
+    tree.ts            Pure tree helpers: emptyQuery, newCondition, newGroup, addChild, updateNode, removeNode, findNode, countConditions.
+    validate.ts        validateQuery(tree, schema) -> Issue[]; hasBlockingErrors(issues).
     summary.ts         queryToText(tree, schema) -> human-readable string (display only).
   ui/
-    fomantic.ts        The jQuery airlock (activate / destroy).
-    panel.ts           paint() helper.
+    fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
+    panel.ts           paint() helper + escapeHtml().
     layout.ts          Renders the shell once (top menu, secondary menu, grid columns). Handles sidebar collapse + active view via CSS class, no repaint.
+    valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
     docsSidebar.ts     render for the left panel (built from schema).
     statsPanel.ts      render for the right panel (data-driven from /api/stats).
     dataPreview.ts     render for the bottom panel (paged table).
 mock-server/
-  index.ts             Dev-only. Plain Node http. Implements the three endpoints over ~200 in-memory records. Shares no code with src/.
-tests/                 Vitest specs for src/query/* (pure, no DOM).
+  index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate(). Starts only when run as the entrypoint.
+  catalog.ts           FIELDS + OPERATORS (with descriptions + arity).
+  data.ts              RECORDS — ~200 deterministically generated in-memory rows.
+  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows).
+tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, mock-server/evaluate + index (pure, no DOM).
 docs/
   ARCHITECTURE.md      This file.
 index.html
@@ -523,3 +529,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 |---|---|
 | 2026-09-01 | Initial design captured. No code yet. Next step: implementation plan. |
 | 2026-09-01 | Added §2 "Offline-first" hard constraint: LAN-only, all assets bundled, fonts self-hosted, `npm run check:offline` guard. |
+| 2026-09-01 | Implementation plan written (`docs/superpowers/plans/2026-09-01-query-builder-frontend.md`). §4 expanded: added `src/util/debounce.ts`, `src/ui/valueControl.ts`, and split `mock-server/` into `index/catalog/data/evaluate`. |
