@@ -52,7 +52,7 @@ function stripRemoteJs(): Plugin {
 
 export default defineConfig({
   plugins: [stripRemoteCss(), stripRemoteJs()],
-  esbuild: { legalComments: "none" },
+  esbuild: { legalComments: "eof" },
   server: {
     port: 5173,
     proxy: { "/api": "http://localhost:3001" },
