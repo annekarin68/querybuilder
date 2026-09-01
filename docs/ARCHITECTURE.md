@@ -556,13 +556,18 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
 `http`, no Express, heavily commented top to bottom.
 
 - ~200 fake in-memory records; a hand-written `FIELDS` / `OPERATORS` / `DATABASES`
-  catalog (a database == a plant species).
-- `GET /api/schema` → the catalog. `GET /api/databases` → `DATABASES`.
-- `POST /api/stats` → `filterByDatabases` to the selected databases, then the
-  recursive `matches(node, record)` evaluator, then `blocks[]` for each field used
-  in the query. `totalCount` / `nullCount` are over the scoped set.
-- `POST /api/query` → same scoping + evaluator, then slices `page` / `pageSize`,
-  returns a fixed `columns` set.
+  catalog (a database == a plant species). Each database carries a mock-only
+  `size` (12 K … 5.6 B) — see below.
+- `GET /api/schema` → the catalog. `GET /api/databases` → `DATABASES` **without
+  `size`** (it isn't part of the contract).
+- `POST /api/stats` → the 200-row sample drives match *rates*; `DATABASES[].size`
+  drives the *magnitude*. Per database: `matchCount = round(sampleMatchRate × size)`,
+  `totalCount = size`. Combined = the sums. `blocks[]` are computed on the sample
+  then scaled (`nullCount` by the total ratio, distribution buckets by the match
+  ratio; `min`/`max`/`avg` are field values, never scaled). This is what makes the
+  UI show `930.3M of 1.3B` rather than `41 of 200`.
+- `POST /api/query` → scopes + evaluates + paginates the real sample; `totalRows`
+  is the real sample size (the preview is a literal row sample, not scaled).
 - Bad query, or missing / empty `databases` → `400 { error }`.
 
 Shares **no code** with `src/`. It stands in for "a real backend in any language";
@@ -630,3 +635,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Database scope feature: `GET /api/databases`; `databases: string[]` added to the `/api/stats` and `/api/query` bodies (400 if missing/empty); mock scopes rows via `filterByDatabases` (a database == a species). New `AppState.databases` / `selectedDatabaseIds`, `src/ui/databasePicker.ts` panel above the builder, empty-selection hints in stats/preview, `syncRunButton` gated on it, stale-guard key widened to `{query, databases}`. |
 | 2026-09-01 | Per-database stats: `StatsResponse.perDatabase` (`{id,label,matchCount,totalCount}[]`, counts only) from `perDatabaseCounts()` in the mock; `statsPanel.ts` renders a "By database" segment below the combined view. |
 | 2026-09-01 | Stats panel formatting for large-scale data: new `src/ui/format.ts` (`compact` / `exact` / `matchRatio` / `barWidth`). All panel numbers are compacted (`1.2B`), tiny proportions render as `1 in 289.3M` not `0%`, nonzero bars keep a 2 px floor, exact values move to `title=` tooltips. `overflow-wrap: anywhere` + `.bar { min-width: 0 }` on the stats column. |
+| 2026-09-01 | Mock now reports counts at real scale: `DATABASES[].size` (mock-only, 12 K–5.6 B); `/api/stats` projects the 200-row sample's match rates onto those sizes (`scaleCount`), and `computeBlocks` takes an optional `{ total, match }` scale for `nullCount` / bucket counts. `/api/databases` strips `size`. Preview (`/api/query`) stays a literal sample. |

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FIELDS, OPERATORS } from "../../mock-server/catalog";
+import { DATABASES, FIELDS, OPERATORS } from "../../mock-server/catalog";
 
 describe("catalog", () => {
   it("every field references only real operator ids", () => {
@@ -17,5 +17,11 @@ describe("catalog", () => {
 
   it("operator arities are from the allowed set", () => {
     for (const o of OPERATORS) expect(["none", "one", "two", "many"]).toContain(o.arity);
+  });
+
+  it("every database has a positive size, spanning several orders of magnitude", () => {
+    for (const d of DATABASES) expect(d.size).toBeGreaterThan(0);
+    const sizes = DATABASES.map((d) => d.size);
+    expect(Math.max(...sizes) / Math.min(...sizes)).toBeGreaterThan(1000);
   });
 });

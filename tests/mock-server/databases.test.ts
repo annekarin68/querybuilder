@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { filterByDatabases, perDatabaseCounts, type JsonNode } from "../../mock-server/evaluate";
+import {
+  filterByDatabases,
+  perDatabaseCounts,
+  scaleCount,
+  type JsonNode,
+} from "../../mock-server/evaluate";
 
 type Row = Record<string, string | number | boolean | null>;
 
@@ -52,5 +57,16 @@ describe("perDatabaseCounts", () => {
     expect(perDatabaseCounts(matchAll, rows, ["cactus"])).toEqual([
       { id: "cactus", matchCount: 0, totalCount: 0 },
     ]);
+  });
+});
+
+describe("scaleCount", () => {
+  it("projects a sample part/whole onto a target size", () => {
+    expect(scaleCount(1, 40, 1_234_000_000)).toBe(30_850_000); // 1/40 of 1.234B
+    expect(scaleCount(40, 40, 5_600_000_000)).toBe(5_600_000_000); // all
+    expect(scaleCount(0, 40, 1_234_000_000)).toBe(0);
+  });
+  it("zero whole → zero (unknown/empty database)", () => {
+    expect(scaleCount(0, 0, 999)).toBe(0);
   });
 });

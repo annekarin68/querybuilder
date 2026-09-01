@@ -7,6 +7,7 @@ import {
   computeBlocks,
   filterByDatabases,
   perDatabaseCounts,
+  scaleCount,
   type JsonNode,
 } from "./evaluate";
 
@@ -75,7 +76,8 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/databases") {
-      sendJson(res, 200, { databases: DATABASES });
+      // `size` is mock-internal (drives the reported magnitudes) — not part of the contract.
+      sendJson(res, 200, { databases: DATABASES.map(({ id, label }) => ({ id, label })) });
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/stats") {
@@ -88,21 +90,31 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "Select at least one database." });
         return;
       }
-      // Scope to the selected databases first, then evaluate the query. totalCount
-      // and (Ruling 9) nullCount are computed over this scoped set.
-      const scoped = filterByDatabases(RECORDS, body.databases as string[]);
-      const matchCount = scoped.filter((r) => matches(body.query as JsonNode, r)).length;
-      const perDatabase = perDatabaseCounts(
-        body.query as JsonNode,
-        RECORDS,
-        body.databases as string[],
-      ).map((c) => ({ ...c, label: DATABASES.find((d) => d.id === c.id)?.label ?? c.id }));
-      sendJson(res, 200, {
-        matchCount,
-        totalCount: scoped.length,
-        blocks: computeBlocks(body.query as JsonNode, scoped),
-        perDatabase,
+      const query = body.query as JsonNode;
+      const ids = body.databases as string[];
+
+      // The 200-row sample drives match RATES; DATABASES[].size drives the
+      // MAGNITUDE the API reports, so the UI sees realistic large numbers.
+      const perDatabase = perDatabaseCounts(query, RECORDS, ids).map((c) => {
+        const size = DATABASES.find((d) => d.id === c.id)?.size ?? 0;
+        return {
+          id: c.id,
+          label: DATABASES.find((d) => d.id === c.id)?.label ?? c.id,
+          totalCount: size,
+          matchCount: scaleCount(c.matchCount, c.totalCount, size),
+        };
       });
+      const totalCount = perDatabase.reduce((s, d) => s + d.totalCount, 0);
+      const matchCount = perDatabase.reduce((s, d) => s + d.matchCount, 0);
+
+      const scoped = filterByDatabases(RECORDS, ids);
+      const sampleMatch = scoped.filter((r) => matches(query, r)).length;
+      const blocks = computeBlocks(query, scoped, {
+        total: scoped.length ? totalCount / scoped.length : 1,
+        match: sampleMatch ? matchCount / sampleMatch : 1,
+      });
+
+      sendJson(res, 200, { matchCount, totalCount, blocks, perDatabase });
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/query") {
