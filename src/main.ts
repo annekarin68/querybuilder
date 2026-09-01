@@ -1,12 +1,37 @@
+// Fomantic's JS expects a global jQuery. Set it BEFORE importing Fomantic's JS.
+// (docs/ARCHITECTURE.md §3 — the bootstrap wrinkle.)
+import $ from "jquery";
+(window as unknown as { jQuery: typeof $; $: typeof $ }).jQuery = $;
+(window as unknown as { jQuery: typeof $; $: typeof $ }).$ = $;
+
 import "@fontsource/lato/400.css";
 import "@fontsource/lato/700.css";
 import "fomantic-ui-css/semantic.min.css";
+import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
-const app = document.querySelector<HTMLElement>("#app");
-if (app) {
-  app.innerHTML = `<div class="ui container" style="padding-top:2rem">
-    <h1 class="ui header">Query Builder</h1>
-    <p>Toolchain scaffolding is working.</p>
-  </div>`;
-}
+import { store } from "./state";
+import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
+
+const root = document.querySelector<HTMLElement>("#app")!;
+renderShell(root);
+
+onMenu({
+  view: (v) => store.setState({ activeView: v }),
+  toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
+  run: () => {
+    /* wired in Task 15 */
+  },
+});
+
+store.subscribe((state, changed) => {
+  if (changed.has("activeView")) setActiveView(state.activeView);
+  if (changed.has("sidebarCollapsed")) setSidebarCollapsed(state.sidebarCollapsed);
+  // panel renders are wired in Tasks 12–15.
+});
+
+// Temporary placeholder content so the columns are visibly present until Tasks 12–15.
+panelEls().docs.innerHTML = `<div class="ui segment">Docs sidebar (Task 12)</div>`;
+panelEls().center.innerHTML = `<div class="ui segment">Query builder (Tasks 13–14)</div>`;
+panelEls().stats.innerHTML = `<div class="ui segment">Statistics (Task 14)</div>`;
+panelEls().preview.innerHTML = `<div class="ui segment">Data preview (Task 15)</div>`;

@@ -19,7 +19,10 @@ module.exports = {
     ],
   },
   overrides: [
-    { files: ["src/ui/fomantic.ts"], rules: { "no-restricted-imports": "off" } },
+    {
+      files: ["src/ui/fomantic.ts", "src/main.ts"],
+      rules: { "no-restricted-imports": "off" },
+    },
     {
       files: ["tests/**/*.ts", "mock-server/**/*.ts", "*.config.ts", "scripts/**"],
       env: { node: true },
