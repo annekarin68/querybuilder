@@ -3,3 +3,6 @@ dist/
 server/dist/
 *.tsbuildinfo
 .DS_Store
+
+# Superpowers SDD scratch (git-ignored)
+.superpowers/
