@@ -1,0 +1,13 @@
+/* System-font override kept out of scope: Fomantic + @fontsource/lato handle typography. */
+html, body { height: 100%; }
+body { margin: 0; }
+#app { min-height: 100%; }
+
+/* Layout helpers used by src/ui/layout.ts */
+.qb-body { display: flex; gap: 1rem; padding: 1rem; align-items: flex-start; }
+.qb-col-docs { flex: 0 0 20rem; }
+.qb-col-center { flex: 1 1 auto; min-width: 0; }
+.qb-col-stats { flex: 0 0 20rem; }
+.qb-body.qb-docs-collapsed .qb-col-docs { display: none; }
+.qb-preview { padding: 0 1rem 2rem; }
+.qb-col-docs .ui.accordion { max-height: 70vh; overflow-y: auto; }

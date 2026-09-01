@@ -6,3 +6,7 @@ server/dist/
 
 # Superpowers SDD scratch (git-ignored)
 .superpowers/
+
+# Vite
+.vite/
+*.local
