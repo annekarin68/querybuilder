@@ -15,16 +15,6 @@ const schema = {
   ],
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function root1(patch: Record<string, unknown>) {
-  const c = newCondition();
-  return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tree: updateNode(addChild(emptyQuery(), emptyQuery().id, c), c.id, patch as any),
-    cid: c.id,
-  };
-}
-
 describe("validateQuery", () => {
   it("empty root query has no issues", () => {
     expect(validateQuery(emptyQuery(), schema)).toEqual([]);
