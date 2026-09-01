@@ -379,9 +379,15 @@ missing / empty `databases` array → `400 { error: "Select at least one databas
 
 ```ts
 interface StatsResponse {
-  matchCount: number;
-  totalCount: number;
-  blocks: StatBlock[];
+  matchCount: number;                 // combined across selected databases
+  totalCount: number;                 // combined
+  blocks: StatBlock[];                // combined field blocks
+  perDatabase: Array<{                // one entry per selected database, in selection order
+    id: string;
+    label: string;
+    matchCount: number;               // rows in that database matching the query
+    totalCount: number;               // rows in that database
+  }>;                                 // counts only — cheap for a real backend at any scale
 }
 
 type StatBlock =
@@ -516,10 +522,13 @@ string with no baked-in closures. Fomantic dropdowns' `onChange` is bound inside
 
 ### Right — `statsPanel.ts`
 
-Top: `matchCount / totalCount` as a `ui statistic` + `ui progress` bar. Below: the
-`blocks[]` list, one small render function per `kind`. `status: "loading"` → a
-`ui loader` (nothing behind it). `status: "error"` → `ui negative message`, no
-data. `status: "idle"` → the appropriate hint from §6.
+Top: combined `matchCount / totalCount` as a `ui statistic` + `ui progress` bar.
+Then the `blocks[]` list, one small render function per `kind`. Then a **By
+database** segment — one row per `perDatabase` entry: `label — matchCount of
+totalCount (pct%)` + a thin bar (numbers via `toLocaleString()`; skipped when a
+single database is selected). `status: "loading"` → a `ui loader` (nothing behind
+it). `status: "error"` → `ui negative message`, no data. `status: "idle"` → the
+appropriate hint from §6.
 
 ### Bottom — `dataPreview.ts`
 
@@ -608,3 +617,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Blank-page fix: the jQuery global must be published from a module (`src/setup-jquery.ts`) imported *before* `fomantic-ui-css/semantic.min.js`, not from `main.ts`'s body — ES import hoisting made the old approach evaluate Fomantic's JS while `window.jQuery` was still undefined. §3 rewritten. |
 | 2026-09-01 | Toolchain bump (needs Node 20.19+): Vite 5→8, Vitest 2→4, ESLint 8→9 (`.eslintrc.cjs` → flat `eslint.config.js`, via `typescript-eslint`). `npm audit` now clean (was 1 critical / 1 high / 3 moderate, all in the old Vite/Vitest chain). Vite 8's minifier no longer keeps vendor licence banners in the bundle, so attribution rests entirely on `THIRD-PARTY-NOTICES.txt`, which must ship next to `dist/` (README updated). |
 | 2026-09-01 | Database scope feature: `GET /api/databases`; `databases: string[]` added to the `/api/stats` and `/api/query` bodies (400 if missing/empty); mock scopes rows via `filterByDatabases` (a database == a species). New `AppState.databases` / `selectedDatabaseIds`, `src/ui/databasePicker.ts` panel above the builder, empty-selection hints in stats/preview, `syncRunButton` gated on it, stale-guard key widened to `{query, databases}`. |
+| 2026-09-01 | Per-database stats: `StatsResponse.perDatabase` (`{id,label,matchCount,totalCount}[]`, counts only) from `perDatabaseCounts()` in the mock; `statsPanel.ts` renders a "By database" segment below the combined view. |

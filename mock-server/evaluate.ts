@@ -68,6 +68,25 @@ export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
   return rows.filter((r) => ids.has(String(r.species)));
 }
 
+/**
+ * Per-database match / total counts, in the given id order. Counts only — a real
+ * backend does this as `COUNT(*) ... GROUP BY database`, cheap at any scale.
+ */
+export function perDatabaseCounts(
+  query: JsonNode,
+  rows: Row[],
+  databaseIds: string[],
+): { id: string; matchCount: number; totalCount: number }[] {
+  return databaseIds.map((id) => {
+    const inDb = rows.filter((r) => String(r.species) === id);
+    return {
+      id,
+      totalCount: inDb.length,
+      matchCount: inDb.filter((r) => matches(query, r)).length,
+    };
+  });
+}
+
 export function matches(node: JsonNode, row: Row): boolean {
   if (node.kind === "condition") return conditionMatches(node, row);
   if (node.children.length === 0) return true;

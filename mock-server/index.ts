@@ -2,7 +2,13 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { argv } from "node:process";
 import { DATABASES, FIELDS, OPERATORS } from "./catalog";
 import { RECORDS } from "./data";
-import { matches, computeBlocks, filterByDatabases, type JsonNode } from "./evaluate";
+import {
+  matches,
+  computeBlocks,
+  filterByDatabases,
+  perDatabaseCounts,
+  type JsonNode,
+} from "./evaluate";
 
 const PORT = 3001;
 
@@ -86,10 +92,16 @@ const server = createServer(async (req, res) => {
       // and (Ruling 9) nullCount are computed over this scoped set.
       const scoped = filterByDatabases(RECORDS, body.databases as string[]);
       const matchCount = scoped.filter((r) => matches(body.query as JsonNode, r)).length;
+      const perDatabase = perDatabaseCounts(
+        body.query as JsonNode,
+        RECORDS,
+        body.databases as string[],
+      ).map((c) => ({ ...c, label: DATABASES.find((d) => d.id === c.id)?.label ?? c.id }));
       sendJson(res, 200, {
         matchCount,
         totalCount: scoped.length,
         blocks: computeBlocks(body.query as JsonNode, scoped),
+        perDatabase,
       });
       return;
     }

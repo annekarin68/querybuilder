@@ -1,5 +1,5 @@
 import type { AppState } from "../state";
-import type { StatBlock } from "../api/types";
+import type { StatBlock, StatsResponse } from "../api/types";
 import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
@@ -45,6 +45,27 @@ function blockHtml(b: StatBlock): string {
         ? distribution(b)
         : dateRange(b);
   return `<div class="ui segment"><h5 class="ui header">${escapeHtml(b.fieldLabel)}</h5>${inner}</div>`;
+}
+
+/** Per-database match counts. Skipped for a single database — the combined header already says it. */
+function perDatabaseHtml(rows: StatsResponse["perDatabase"]): string {
+  if (rows.length < 2) return "";
+  return `<div class="ui segment">
+    <h5 class="ui header">By database</h5>
+    <div class="ui relaxed list">
+      ${rows
+        .map((r) => {
+          const pct = r.totalCount ? Math.round((r.matchCount / r.totalCount) * 100) : 0;
+          return `<div class="item">
+            <div class="ui tiny progress" style="margin:.15rem 0">
+              <div class="bar" style="width:${pct}%"></div>
+              <div class="label" style="text-align:left">${escapeHtml(r.label)} — ${r.matchCount.toLocaleString()} of ${r.totalCount.toLocaleString()} (${pct}%)</div>
+            </div>
+          </div>`;
+        })
+        .join("")}
+    </div>
+  </div>`;
 }
 
 export function renderStatsPanel(state: AppState): void {
@@ -107,6 +128,7 @@ export function renderStatsPanel(state: AppState): void {
          <div class="label">of ${d.totalCount.toLocaleString()} match</div></div>
        <div class="ui progress"><div class="bar" style="width:${pct}%"></div><div class="label">${pct}%</div></div>
      </div>
-     ${d.blocks.map(blockHtml).join("")}`,
+     ${d.blocks.map(blockHtml).join("")}
+     ${perDatabaseHtml(d.perDatabase)}`,
   );
 }
