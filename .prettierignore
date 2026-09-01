@@ -1,0 +1,6 @@
+docs/
+README.md
+.superpowers/
+dist/
+node_modules/
+package-lock.json

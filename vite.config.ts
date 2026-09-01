@@ -1,10 +1,12 @@
 import { defineConfig, type Plugin } from "vite";
 
 /**
- * Offline-first (docs/ARCHITECTURE.md §2): Fomantic's prebuilt CSS contains an
- * `@import url(https://fonts.googleapis.com/...)` for Lato. Nothing may load from
- * the internet, so we strip every off-origin @import / url() from bundled CSS.
- * Lato itself is provided locally by @fontsource/lato (imported in src/main.ts).
+ * Offline-first (docs/ARCHITECTURE.md §2): nothing may load from the internet, so
+ * this plugin strips every off-origin `@import` / `url()` from bundled CSS. In
+ * fomantic-ui-css@2.9.x the off-origin references are the emoji icon URLs pointing
+ * at `cdn.jsdelivr.net` (jdecked/twemoji); older builds also carried an
+ * `@import url(https://fonts.googleapis.com/...)` for Lato. Both forms are removed
+ * regardless. Lato is provided locally by @fontsource/lato (imported in src/main.ts).
  */
 function stripRemoteCss(): Plugin {
   return {
