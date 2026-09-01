@@ -210,9 +210,22 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
       // listener and onDropdownChange below would run handleRowChange for the same
       // interaction; pass 2 would then read the already-detached (stale) row and write
       // back the operator pass 1 cleared — state and screen would disagree (§6).
-      // Field/operator/enum-value dropdowns are handled exclusively by onDropdownChange;
-      // native <input> controls (text/number/date) and the checkbox keep this path.
-      if (target.matches('[data-part="field"], [data-part="operator"]')) return;
+      // So every Fomantic-managed <select> (field, operator, enum value) is handled
+      // EXCLUSIVELY by onDropdownChange, and everything else keeps this path.
+      //
+      // The `select` qualifier is load-bearing, do not drop it: `data-part="value"`
+      // also sits directly on the native <input> controls (text/number/date, the
+      // two-arity from/to pair, and the comma-separated `many` input). A bare
+      // `[data-part="value"]` would exclude those too — and since they are not
+      // `.ui.dropdown`, onDropdownChange never binds them, so their edits would be
+      // silently dropped and the query would stop updating as the user types.
+      if (
+        target.matches(
+          'select[data-part="field"], select[data-part="operator"], select[data-part="value"]',
+        )
+      ) {
+        return;
+      }
       const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
       if (!row) return;
       handleRowChange(row);
