@@ -3,17 +3,32 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A framework-agnostic query-builder UI (Web Components) that compiles a boolean tree of conditions into a compact query DSL, plus a small example app and mock backend.",
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p server/tsconfig.json",
-    "start": "node server/dist/index.js",
-    "dev": "npm run build && npm run start",
-    "test": "tsx --test tests/*.test.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit"
+    "dev": "concurrently -k -n mock,web -c blue,green \"npm:mock\" \"vite\"",
+    "mock": "tsx watch mock-server/index.ts",
+    "build": "tsc --noEmit && vite build && npm run check:offline",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "check:offline": "node scripts/check-offline.mjs",
+    "lint": "eslint . && prettier --check ."
+  },
+  "dependencies": {
+    "fomantic-ui-css": "^2.9.3",
+    "jquery": "^3.7.1"
   },
   "devDependencies": {
+    "@types/jquery": "^3.5.30",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "concurrently": "^9.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "@types/node": "^22.0.0",
-    "tsx": "^4.19.0"
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0"
   }
 }

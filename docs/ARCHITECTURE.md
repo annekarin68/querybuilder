@@ -5,7 +5,7 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-01 — initial design + offline-first constraint. No code written yet.
+Last updated: 2026-09-01 — Frontend implemented per plan (Tasks 1–17).
 
 ---
 
@@ -84,14 +84,30 @@ external host, the app may hang or fail when taken offline. Therefore:
 2. **All third-party code is installed from npm and bundled by Vite** into
    `dist/` — jQuery, Fomantic UI CSS/JS, fonts, icons. `dist/` is fully
    self-contained and can be served by any static file server on the LAN.
-3. **Fonts are self-hosted.** Fomantic's prebuilt `semantic.min.css` contains an
-   `@import url(https://fonts.googleapis.com/...)` for Lato. That import is
-   **stripped at build time** (a small commented step in `vite.config.ts` that
-   removes any `@import` / `url()` pointing off-origin from bundled CSS). Lato
-   itself is installed via the `@fontsource/lato` npm package and imported in
-   `src/main.ts`, so the look is preserved without the network. Fomantic's icon
-   font already ships as local `.woff2` files inside `fomantic-ui-css` and is
-   bundled normally.
+3. **Fonts are self-hosted — by the dependency itself.** `fomantic-ui-css@2.9.x`
+   ships **Lato self-hosted**: its `semantic.min.css` declares local `@font-face`
+   rules pointing at `themes/default/assets/fonts/Lato*.woff2` inside the package,
+   and contains **zero** `fonts.googleapis.com` references. (Verify with
+   `grep -c fonts.googleapis node_modules/fomantic-ui-css/semantic.min.css` → `0`.)
+   Vite bundles those `.woff2` files into `dist/assets/` like any other asset. The
+   same is true of Fomantic's icon font. **No separate font package is needed**, so
+   we deliberately do not depend on `@fontsource/lato` — it would ship a second,
+   redundant ~2 MB copy of the same typeface.
+
+   What `vite.config.ts` actually does is different and narrower. Its two
+   `stripRemoteCss` / `stripRemoteJs` plugins neutralise **off-origin URLs that
+   appear in comments, banners, and developer-facing strings** — text that is never
+   dereferenced by the browser but that the `check:offline` grep (rule 4) cannot
+   tell apart from a real fetch:
+   - CSS: `cdn.jsdelivr.net` twemoji references sitting in commented-out emoji rules.
+   - JS: jQuery's `/*! ... */` licence banner (`jquery.com`, `jquery.org/license`)
+     and Fomantic's `error:` message strings that cite the `unorm` polyfill and the
+     `jquery-address` library.
+
+   `stripRemoteCss` also still removes off-origin `@import url(...)` from bundled
+   CSS. Nothing we depend on today has one; it is kept as a guard so a future CSS
+   dependency that reintroduces a Google Fonts import fails safe instead of
+   silently going online.
 4. **Guard script.** `npm run check:offline` scans the built `dist/` for any
    `http://` or `https://` URL that is not our own API and exits non-zero if it
    finds one. Run in CI and before any release. This is the automated backstop for
@@ -335,6 +351,11 @@ type StatBlock =
   | { kind: "date-range";     fieldLabel: string; earliest: string; latest: string; nullCount: number };
 ```
 
+`nullCount` is dataset-wide (rows missing this field across all records), while
+`min`/`max`/`avg`/`buckets`/`earliest`/`latest` are computed over the query's
+matching rows. This gives both query-specific stats and a data-quality metric
+independent of filtering.
+
 `statsPanel.ts` has one render function per `kind` plus a `switch`. A new block
 type later = one new case, nothing else.
 
@@ -519,7 +540,8 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 - `tsconfig.json` in `strict` mode.
 - Prettier + minimal ESLint (`eslint:recommended` + `@typescript-eslint/recommended`).
 - README note / review checklist item: **no `jquery` import outside
-  `src/ui/fomantic.ts`**.
+  `src/ui/fomantic.ts` (plus the one-line `window.jQuery` bootstrap in
+  `src/main.ts`)**.
 
 ---
 
@@ -530,3 +552,5 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Initial design captured. No code yet. Next step: implementation plan. |
 | 2026-09-01 | Added §2 "Offline-first" hard constraint: LAN-only, all assets bundled, fonts self-hosted, `npm run check:offline` guard. |
 | 2026-09-01 | Implementation plan written (`docs/superpowers/plans/2026-09-01-query-builder-frontend.md`). §4 expanded: added `src/util/debounce.ts`, `src/ui/valueControl.ts`, and split `mock-server/` into `index/catalog/data/evaluate`. |
+| 2026-09-01 | Frontend implemented per plan 2026-09-01-query-builder-frontend.md (Tasks 1–17). `npm run build` now chains `npm run check:offline`; README rewritten; `THIRD-PARTY-NOTICES.txt` added at repo root (bundled deps are MIT; Lato font files are OFL-1.1; TypeScript build tooling is Apache-2.0). |
+| 2026-09-01 | Plan-defect rulings applied during build: `updateNode`'s patch parameter is typed `NodePatch` (`src/query/tree.ts`); `npm run typecheck` added as a standing gate alongside lint/test/build; `wireQueryBuilder` / `wireDataPreview` attach their delegated listeners once per container (not per render); the stats panel treats `idle` as distinct from `loading` (idle shows the §6 hint, loading shows a bare loader). Mock server `POST /api/stats` and `POST /api/query` now also 400 on a JSON-array `query` body (previously fell through to a 500). |

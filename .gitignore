@@ -1,5 +1,11 @@
 node_modules/
 dist/
-server/dist/
 *.tsbuildinfo
 .DS_Store
+
+# Superpowers SDD scratch (git-ignored)
+.superpowers/
+
+# Vite
+.vite/
+*.local
