@@ -12,8 +12,11 @@ import "./styles.css";
 
 import { getSchema } from "./api/client";
 import { store } from "./state";
+import { addChild, newCondition } from "./query/tree";
+import type { Group } from "./query/types";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
 import { renderDocsSidebar } from "./ui/docsSidebar";
+import { renderQueryBuilder } from "./ui/queryBuilder";
 
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
@@ -30,12 +33,21 @@ store.subscribe((state, changed) => {
   if (changed.has("activeView")) setActiveView(state.activeView);
   if (changed.has("sidebarCollapsed")) setSidebarCollapsed(state.sidebarCollapsed);
   if (changed.has("schema")) renderDocsSidebar(state);
+  if (changed.has("schema") || changed.has("query") || changed.has("issues"))
+    renderQueryBuilder(state);
   // panel renders are wired in Tasks 12–15.
 });
 
 renderDocsSidebar(store.getState()); // initial loader
 getSchema()
-  .then((schema) => store.setState({ schema }))
+  .then((schema) => {
+    const seeded = addChild(
+      store.getState().query as Group,
+      (store.getState().query as Group).id,
+      newCondition(),
+    );
+    store.setState({ schema, query: seeded });
+  })
   .catch((err) => {
     root.innerHTML = `<div class="ui negative message" style="margin:2rem">
       <div class="header">Could not load field list</div>
@@ -45,6 +57,5 @@ getSchema()
   });
 
 // Temporary placeholder content so the columns are visibly present until Tasks 13–15.
-panelEls().center.innerHTML = `<div class="ui segment">Query builder (Tasks 13–14)</div>`;
 panelEls().stats.innerHTML = `<div class="ui segment">Statistics (Task 14)</div>`;
 panelEls().preview.innerHTML = `<div class="ui segment">Data preview (Task 15)</div>`;
