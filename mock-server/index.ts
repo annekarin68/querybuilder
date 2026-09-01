@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { FIELDS, OPERATORS } from "./catalog";
+import { RECORDS } from "./data";
+import { matches, computeBlocks, type JsonNode } from "./evaluate";
 
 const PORT = 3001;
 
@@ -22,7 +24,21 @@ const server = createServer(async (req, res) => {
       sendJson(res, 200, { fields: FIELDS, operators: OPERATORS });
       return;
     }
-    // POST /api/stats and /api/query are added in Tasks 9 and 10.
+    if (req.method === "POST" && url.pathname === "/api/stats") {
+      const body = (await readJson(req)) as { query?: JsonNode };
+      if (!body.query || typeof body.query !== "object") {
+        sendJson(res, 400, { error: "Body must include a `query` tree." });
+        return;
+      }
+      const matchCount = RECORDS.filter((r) => matches(body.query as JsonNode, r)).length;
+      sendJson(res, 200, {
+        matchCount,
+        totalCount: RECORDS.length,
+        blocks: computeBlocks(body.query as JsonNode, RECORDS),
+      });
+      return;
+    }
+    // POST /api/query is added in Task 10.
     sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });
   } catch (err) {
     sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
