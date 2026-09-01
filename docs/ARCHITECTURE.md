@@ -168,9 +168,17 @@ export function paint(container: HTMLElement, html: string): void {
 
 ### The bootstrap wrinkle
 
-Fomantic's JS expects a global jQuery. `src/main.ts` sets
-`window.jQuery = window.$ = $` **before** importing `fomantic-ui-css/semantic.min.js`.
-This is one commented block and the only place global assignment happens.
+Fomantic's `semantic.min.js` is an IIFE that ends `}(jQuery, window, document)` — it
+reads the **global** `jQuery` the instant it is evaluated. ES `import`s are hoisted:
+every imported module runs to completion before the importing module's body. So
+setting `window.jQuery` in `main.ts`'s body is too late — `semantic.min.js` has
+already evaluated (and thrown `undefined.fn`) by then, and the app renders blank.
+
+The fix: `src/setup-jquery.ts` does `import $ from "jquery"; window.jQuery = window.$ = $;`
+and nothing else, and `main.ts`'s **first** import is `import "./setup-jquery";`,
+before the `fomantic-ui-css/semantic.min.js` import. Module evaluation order is
+import order, so the global is set first. `setup-jquery.ts` and `src/ui/fomantic.ts`
+are the only two files that may import jquery (ESLint enforces it).
 
 ---
 
@@ -178,7 +186,8 @@ This is one commented block and the only place global assignment happens.
 
 ```
 src/
-  main.ts              Bootstrap: set window.jQuery; render layout shell; load schema; wire subscriptions; hold the refreshStats / runPreview orchestrators.
+  setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
+  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema; wire subscriptions; hold the refreshStats / runPreview orchestrators.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
@@ -554,3 +563,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Implementation plan written (`docs/superpowers/plans/2026-09-01-query-builder-frontend.md`). §4 expanded: added `src/util/debounce.ts`, `src/ui/valueControl.ts`, and split `mock-server/` into `index/catalog/data/evaluate`. |
 | 2026-09-01 | Frontend implemented per plan 2026-09-01-query-builder-frontend.md (Tasks 1–17). `npm run build` now chains `npm run check:offline`; README rewritten; `THIRD-PARTY-NOTICES.txt` added at repo root (bundled deps are MIT; Lato font files are OFL-1.1; TypeScript build tooling is Apache-2.0). |
 | 2026-09-01 | Plan-defect rulings applied during build: `updateNode`'s patch parameter is typed `NodePatch` (`src/query/tree.ts`); `npm run typecheck` added as a standing gate alongside lint/test/build; `wireQueryBuilder` / `wireDataPreview` attach their delegated listeners once per container (not per render); the stats panel treats `idle` as distinct from `loading` (idle shows the §6 hint, loading shows a bare loader). Mock server `POST /api/stats` and `POST /api/query` now also 400 on a JSON-array `query` body (previously fell through to a 500). |
+| 2026-09-01 | Blank-page fix: the jQuery global must be published from a module (`src/setup-jquery.ts`) imported *before* `fomantic-ui-css/semantic.min.js`, not from `main.ts`'s body — ES import hoisting made the old approach evaluate Fomantic's JS while `window.jQuery` was still undefined. §3 rewritten. |

@@ -12,7 +12,7 @@ module.exports = {
           {
             name: "jquery",
             message:
-              "jQuery may only be imported in src/ui/fomantic.ts (the airlock). See docs/ARCHITECTURE.md §3.",
+              "jQuery may only be imported in src/ui/fomantic.ts (the airlock) or src/setup-jquery.ts (the global bootstrap). See docs/ARCHITECTURE.md §3.",
           },
         ],
       },
@@ -20,21 +20,22 @@ module.exports = {
   },
   overrides: [
     {
-      files: ["src/ui/fomantic.ts"],
+      // The airlock, and the one module that publishes window.jQuery before
+      // Fomantic's JS evaluates (§3, "the bootstrap wrinkle").
+      files: ["src/ui/fomantic.ts", "src/setup-jquery.ts"],
       rules: { "no-restricted-imports": "off" },
     },
     {
-      // main.ts must import jquery to set window.jQuery before Fomantic's JS loads
-      // (§3, "the bootstrap wrinkle") — but that is ALL it may do with it.
-      files: ["src/main.ts"],
+      // setup-jquery.ts assigns the global; it must never CALL $(). main.ts
+      // imports neither, but keep the guard so nobody reintroduces $() there.
+      files: ["src/main.ts", "src/setup-jquery.ts"],
       rules: {
-        "no-restricted-imports": "off",
         "no-restricted-syntax": [
           "error",
           {
             selector: "CallExpression[callee.name='$']",
             message:
-              "src/main.ts may bootstrap window.jQuery but must not use $() — put jQuery work in src/ui/fomantic.ts.",
+              "This file may only bootstrap window.jQuery — put jQuery work in src/ui/fomantic.ts.",
           },
         ],
       },

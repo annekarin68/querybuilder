@@ -1,8 +1,8 @@
-// Fomantic's JS expects a global jQuery. Set it BEFORE importing Fomantic's JS.
+// Publishes `window.jQuery` before Fomantic's JS is imported below. MUST stay the
+// first import — ES imports are hoisted and evaluated in order, so this is the only
+// way to guarantee the global exists when `semantic.min.js` evaluates.
 // (docs/ARCHITECTURE.md §3 — the bootstrap wrinkle.)
-import $ from "jquery";
-(window as unknown as { jQuery: typeof $; $: typeof $ }).jQuery = $;
-(window as unknown as { jQuery: typeof $; $: typeof $ }).$ = $;
+import "./setup-jquery";
 
 // Lato is NOT imported separately: fomantic-ui-css@2.9.x self-hosts it via local
 // @font-face rules pointing at its own bundled LatoLatin-*.woff2 files. See
