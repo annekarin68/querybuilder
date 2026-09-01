@@ -13,10 +13,11 @@ import "./styles.css";
 import { getSchema } from "./api/client";
 import { store } from "./state";
 import { addChild, newCondition } from "./query/tree";
+import { validateQuery } from "./query/validate";
 import type { Group } from "./query/types";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
 import { renderDocsSidebar } from "./ui/docsSidebar";
-import { renderQueryBuilder } from "./ui/queryBuilder";
+import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
 
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
@@ -29,15 +30,32 @@ onMenu({
   },
 });
 
+function onQueryChange(nextQuery: Group): void {
+  const schema = store.getState().schema;
+  const issues = schema
+    ? validateQuery(nextQuery, { fields: schema.fields, operators: schema.operators })
+    : [];
+  // Spec §6: editing the query immediately clears stats & preview in the SAME setState.
+  store.setState({
+    query: nextQuery,
+    issues,
+    stats: { status: "idle", data: null, error: null },
+    preview: { status: "idle", data: null, error: null, page: 1 },
+  });
+}
+
 store.subscribe((state, changed) => {
   if (changed.has("activeView")) setActiveView(state.activeView);
   if (changed.has("sidebarCollapsed")) setSidebarCollapsed(state.sidebarCollapsed);
   if (changed.has("schema")) renderDocsSidebar(state);
-  if (changed.has("schema") || changed.has("query") || changed.has("issues"))
+  if (changed.has("schema") || changed.has("query") || changed.has("issues")) {
     renderQueryBuilder(state);
+    wireQueryBuilder(panelEls().center, onQueryChange);
+  }
   // panel renders are wired in Tasks 12–15.
 });
 
+renderQueryBuilder(store.getState()); // initial loader (centre panel spinner during schema fetch)
 renderDocsSidebar(store.getState()); // initial loader
 getSchema()
   .then((schema) => {

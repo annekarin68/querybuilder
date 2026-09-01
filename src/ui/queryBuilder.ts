@@ -1,9 +1,11 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { SchemaResponse } from "../api/types";
+import { addChild, findNode, newCondition, newGroup, removeNode, updateNode } from "../query/tree";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
-import { renderValueControl } from "./valueControl";
+import { onDropdownChange } from "./fomantic";
+import { readValueControl, renderValueControl } from "./valueControl";
 
 function issuesFor(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
@@ -17,7 +19,7 @@ function fieldDropdown(schema: SchemaResponse, c: Condition): string {
   const opts = schema.fields
     .map(
       (f) =>
-        `<option value="${f.id}"${f.id === c.fieldId ? " selected" : ""}>${escapeHtml(f.label)}</option>`,
+        `<option value="${escapeHtml(f.id)}"${f.id === c.fieldId ? " selected" : ""}>${escapeHtml(f.label)}</option>`,
     )
     .join("");
   return `<select class="ui selection dropdown" data-part="field"><option value="">Field…</option>${opts}</select>`;
@@ -33,7 +35,7 @@ function operatorDropdown(schema: SchemaResponse, c: Condition): string {
   const opts = ops
     .map(
       (o) =>
-        `<option value="${o.id}"${o.id === c.operatorId ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
+        `<option value="${escapeHtml(o.id)}"${o.id === c.operatorId ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
     )
     .join("");
   return `<select class="ui selection dropdown" data-part="operator"${field ? "" : " disabled"}>
@@ -84,10 +86,10 @@ function nodeHtml(
   schema: SchemaResponse,
   node: QueryNode,
   issues: Issue[],
-  _isRoot: boolean,
+  isRoot: boolean,
 ): string {
   return node.kind === "group"
-    ? groupHtml(schema, node, issues, _isRoot)
+    ? groupHtml(schema, node, issues, isRoot)
     : conditionHtml(schema, node, issues);
 }
 
@@ -101,4 +103,102 @@ export function renderQueryBuilder(state: AppState): void {
     el,
     `<h4 class="ui header">Build your query</h4>${nodeHtml(state.schema, state.query, state.issues, true)}`,
   );
+  // Keep the once-wired delegated handlers acting on the current tree/schema.
+  _setBuilderRefs(state.query as Group, state.schema);
+}
+
+// module-scope refs set by renderQueryBuilder; the delegated handlers below read
+// these so a single wiring keeps working across every paint().
+let currentQuery: Group;
+let schemaRef: SchemaResponse | null = null;
+
+export function _setBuilderRefs(query: Group, schema: SchemaResponse | null): void {
+  currentQuery = query;
+  schemaRef = schema;
+}
+
+/**
+ * Install the query-builder's interactive behaviour on `container` (the persistent
+ * centre panel). main.ts calls this after every renderQueryBuilder(), because
+ * paint() swaps container.innerHTML. The two delegated listeners are attached
+ * ONCE per container (guarded by data-qbWired) so re-calls don't stack handlers;
+ * onDropdownChange is re-run every time because Fomantic rebinds onChange per
+ * .ui.dropdown element, and paint() replaces those elements.
+ */
+export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group) => void): void {
+  const getQuery = (): Group => currentQuery;
+  const rootId = (): string => currentQuery.id;
+
+  function nodeIdFrom(el: HTMLElement): string | null {
+    return el.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? null;
+  }
+
+  function handleRowChange(row: HTMLElement): void {
+    const nodeId = row.dataset.nodeId!;
+    const q = getQuery();
+    const cond = findNode(q, nodeId);
+    if (!cond || cond.kind !== "condition") return;
+
+    const fieldSel = row.querySelector<HTMLSelectElement>('[data-part="field"]');
+    const opSel = row.querySelector<HTMLSelectElement>('[data-part="operator"]');
+    const newFieldId = fieldSel ? fieldSel.value || null : cond.fieldId;
+    const fieldChanged = newFieldId !== cond.fieldId;
+    let newOperatorId = opSel ? opSel.value || null : cond.operatorId;
+    if (fieldChanged) newOperatorId = null; // operators depend on field
+
+    const field = schemaRef?.fields.find((f) => f.id === newFieldId);
+    const operator = schemaRef?.operators.find((o) => o.id === newOperatorId);
+    let value: unknown = cond.value;
+    if (fieldChanged || !operator) {
+      value = null;
+    } else {
+      value = readValueControl(row, operator.arity, field?.valueType ?? "string");
+    }
+    onChange(updateNode(q, nodeId, { fieldId: newFieldId, operatorId: newOperatorId, value }));
+  }
+
+  if (container.dataset.qbWired !== "1") {
+    container.dataset.qbWired = "1";
+
+    container.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
+      if (!btn) return;
+      const action = btn.dataset.action!;
+      const nodeId = nodeIdFrom(btn);
+      if (!nodeId) return;
+      const q = getQuery();
+      switch (action) {
+        case "add-condition":
+          return onChange(addChild(q, nodeId, newCondition()));
+        case "add-group":
+          return onChange(addChild(q, nodeId, newGroup()));
+        case "remove-node":
+          return onChange(nodeId === rootId() ? q : removeNode(q, nodeId));
+        case "set-and":
+          return onChange(updateNode(q, nodeId, { operator: "AND" }));
+        case "set-or":
+          return onChange(updateNode(q, nodeId, { operator: "OR" }));
+        case "toggle-collapse": {
+          const node = findNode(q, nodeId);
+          return onChange(
+            updateNode(q, nodeId, {
+              collapsed: !(node && "collapsed" in node && node.collapsed),
+            }),
+          );
+        }
+      }
+    });
+
+    container.addEventListener("change", (e) => {
+      const row = (e.target as HTMLElement).closest<HTMLElement>(".qb-condition[data-node-id]");
+      if (!row) return;
+      handleRowChange(row);
+    });
+  }
+
+  // ALWAYS re-run — Fomantic rebinds onChange per .ui.dropdown, which paint() replaces.
+  onDropdownChange(container, (el) => {
+    const row = el.closest<HTMLElement>(".qb-condition[data-node-id]");
+    if (row) handleRowChange(row);
+  });
 }
