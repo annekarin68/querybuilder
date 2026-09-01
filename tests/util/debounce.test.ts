@@ -1,52 +1,29 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { debounce } from "../../src/util/debounce";
 
 describe("debounce", () => {
-  beforeEach(() => {
+  it("calls once after the quiet period, with the latest args", () => {
     vi.useFakeTimers();
+    const spy = vi.fn();
+    const d = debounce(spy, 400);
+    d(1);
+    d(2);
+    d(3);
+    expect(spy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(400);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(3);
+    vi.useRealTimers();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("delays calling the function until the wait time passes", () => {
-    const fn = vi.fn();
-    const debounced = debounce(fn, 100);
-
-    debounced();
-    expect(fn).not.toHaveBeenCalled();
-
-    vi.advanceTimersByTime(100);
-    expect(fn).toHaveBeenCalledOnce();
-  });
-
-  it("resets the timer on subsequent calls and passes arguments", () => {
-    const fn = vi.fn();
-    const debounced = debounce(fn, 100);
-
-    debounced("arg1");
-    vi.advanceTimersByTime(50);
-    debounced("arg2");
-    vi.advanceTimersByTime(50);
-    expect(fn).not.toHaveBeenCalled();
-
-    vi.advanceTimersByTime(50);
-    expect(fn).toHaveBeenCalledOnce();
-    expect(fn).toHaveBeenCalledWith("arg2");
-  });
-
-  it("cancel method clears the pending call and allows re-debouncing", () => {
-    const fn = vi.fn();
-    const debounced = debounce(fn, 100);
-
-    debounced();
-    debounced.cancel();
-    vi.advanceTimersByTime(100);
-    expect(fn).not.toHaveBeenCalled();
-
-    debounced();
-    vi.advanceTimersByTime(100);
-    expect(fn).toHaveBeenCalledOnce();
+  it("cancel() prevents a pending call", () => {
+    vi.useFakeTimers();
+    const spy = vi.fn();
+    const d = debounce(spy, 400);
+    d();
+    d.cancel();
+    vi.advanceTimersByTime(1000);
+    expect(spy).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

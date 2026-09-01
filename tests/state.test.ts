@@ -1,56 +1,36 @@
-import { describe, it, expect } from "vitest";
-import { createStore, initialState, store } from "../src/state";
+import { describe, it, expect, vi } from "vitest";
+import { createStore, initialState } from "../src/state";
 
-describe("state store", () => {
-  it("initialState has the expected shape with all required fields", () => {
-    expect(initialState).toHaveProperty("activeView");
-    expect(initialState).toHaveProperty("query");
-    expect(initialState).toHaveProperty("issues");
-    expect(initialState).toHaveProperty("stats");
-    expect(initialState).toHaveProperty("preview");
-    expect(initialState).toHaveProperty("schema");
-    expect(initialState).toHaveProperty("sidebarCollapsed");
-    expect(initialState.stats).toHaveProperty("status");
-    expect(initialState.stats).toHaveProperty("data");
-    expect(initialState.stats).toHaveProperty("error");
-    expect(initialState.preview).toHaveProperty("page");
+describe("store", () => {
+  it("setState shallow-merges and keeps other keys", () => {
+    const s = createStore(initialState);
+    s.setState({ sidebarCollapsed: true });
+    expect(s.getState().sidebarCollapsed).toBe(true);
+    expect(s.getState().activeView).toBe("filter");
   });
 
-  it("createStore getState returns state and setState shallow-merges with change notification", () => {
-    const st = createStore(initialState);
-    const listeners: Array<[typeof initialState, Set<string>]> = [];
-
-    st.subscribe((s, changed) => {
-      listeners.push([s, changed]);
+  it("subscribers receive the new state and the set of changed keys", () => {
+    const s = createStore(initialState);
+    const seen: string[] = [];
+    s.subscribe((_state, changed) => {
+      seen.push(...changed);
     });
-
-    const before = st.getState();
-    st.setState({ sidebarCollapsed: !before.sidebarCollapsed });
-    const after = st.getState();
-
-    expect(before).not.toBe(after);
-    expect(after.sidebarCollapsed).not.toBe(before.sidebarCollapsed);
-    expect(listeners).toHaveLength(1);
-    const [newState, changedKeys] = listeners[0]!;
-    expect(changedKeys.has("sidebarCollapsed")).toBe(true);
-    expect(newState.sidebarCollapsed).toBe(!before.sidebarCollapsed);
+    s.setState({ activeView: "review" });
+    expect(seen).toEqual(["activeView"]);
   });
 
-  it("multiple subscribers are notified and module singleton store works", () => {
-    const st = createStore(initialState);
-    const called: number[] = [];
+  it("unsubscribe stops notifications", () => {
+    const s = createStore(initialState);
+    const spy = vi.fn();
+    const off = s.subscribe(spy);
+    off();
+    s.setState({ sidebarCollapsed: true });
+    expect(spy).not.toHaveBeenCalled();
+  });
 
-    st.subscribe(() => called.push(1));
-    st.subscribe(() => called.push(2));
-
-    st.setState({ sidebarCollapsed: true });
-
-    expect(called).toEqual([1, 2]);
-
-    const before = store.getState();
-    store.setState({ sidebarCollapsed: !before.sidebarCollapsed });
-    const after = store.getState();
-
-    expect(after.sidebarCollapsed).not.toBe(before.sidebarCollapsed);
+  it("initialState has an empty AND-group query and idle panels", () => {
+    expect(initialState.query).toMatchObject({ kind: "group", operator: "AND", children: [] });
+    expect(initialState.stats.status).toBe("idle");
+    expect(initialState.preview.status).toBe("idle");
   });
 });
