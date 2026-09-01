@@ -47,3 +47,29 @@ body {
 .qb-db-warn {
   color: #9f3a38;
 }
+
+/* Statistics panel (src/ui/statsPanel.ts + format.ts) — must stay inside a ~20rem column */
+[data-panel="stats"] {
+  overflow-wrap: anywhere;
+}
+/* Fomantic gives .bar a 2em min-width; we drive width ourselves (incl. a 2px sliver). */
+[data-panel="stats"] .ui.progress .bar {
+  min-width: 0;
+}
+.qb-stat-big {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.qb-stat-sub {
+  display: block;
+  font-size: 0.85em;
+  color: rgba(0, 0, 0, 0.6);
+}
+.qb-db-name {
+  font-weight: 600;
+}
+.qb-db-nums {
+  font-size: 0.85em;
+  color: rgba(0, 0, 0, 0.6);
+}

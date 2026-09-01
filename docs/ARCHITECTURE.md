@@ -207,6 +207,7 @@ src/
   ui/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
     panel.ts           paint() helper + escapeHtml().
+    format.ts          compact() / exact() / matchRatio() / barWidth() — number & proportion formatting for the stats panel at billion-row / 1e-10 % scale.
     layout.ts          Renders the shell once (top menu, secondary menu, grid columns). Handles sidebar collapse + active view via CSS class, no repaint.
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
@@ -522,13 +523,23 @@ string with no baked-in closures. Fomantic dropdowns' `onChange` is bound inside
 
 ### Right — `statsPanel.ts`
 
-Top: combined `matchCount / totalCount` as a `ui statistic` + `ui progress` bar.
-Then the `blocks[]` list, one small render function per `kind`. Then a **By
-database** segment — one row per `perDatabase` entry: `label — matchCount of
-totalCount (pct%)` + a thin bar (numbers via `toLocaleString()`; skipped when a
-single database is selected). `status: "loading"` → a `ui loader` (nothing behind
-it). `status: "error"` → `ui negative message`, no data. `status: "idle"` → the
-appropriate hint from §6.
+Every number in this panel goes through `src/ui/format.ts` so it stays inside a
+~20 rem column when a real backend returns billions:
+
+- **`compact(n)`** — `1.2B` / `988M` / `12,345`; the exact value is in a `title=`
+  tooltip.
+- **`matchRatio(match, total)`** — `62%` / `6.2%` / `0.34%`, and for sub-0.05 %
+  (e.g. `3.46e-7 %`) **`1 in 289.3M`** instead of a misleading `0%`. `none` / `all`
+  at the extremes; `>99.9%` rather than a rounded-up `100%`.
+- **`barWidth(match, total)`** — a CSS `max(…%, 2px)`, so any nonzero match shows a
+  2 px sliver, visibly distinct from zero.
+
+Layout: a compact headline (`compact(matchCount)` big + `of … · matchRatio` small)
+and a thin bar; then the `blocks[]` list (min/max/avg, distribution counts,
+`nullCount` all compacted); then a **By database** segment — per row: name,
+`compact(match) / compact(total) · matchRatio`, thin bar; exact figures on hover;
+skipped for a single selected database. `status` branches: `loading` → `ui loader`;
+`error` → `ui negative message`, no data; `idle` → hint from §6.
 
 ### Bottom — `dataPreview.ts`
 
@@ -618,3 +629,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Toolchain bump (needs Node 20.19+): Vite 5→8, Vitest 2→4, ESLint 8→9 (`.eslintrc.cjs` → flat `eslint.config.js`, via `typescript-eslint`). `npm audit` now clean (was 1 critical / 1 high / 3 moderate, all in the old Vite/Vitest chain). Vite 8's minifier no longer keeps vendor licence banners in the bundle, so attribution rests entirely on `THIRD-PARTY-NOTICES.txt`, which must ship next to `dist/` (README updated). |
 | 2026-09-01 | Database scope feature: `GET /api/databases`; `databases: string[]` added to the `/api/stats` and `/api/query` bodies (400 if missing/empty); mock scopes rows via `filterByDatabases` (a database == a species). New `AppState.databases` / `selectedDatabaseIds`, `src/ui/databasePicker.ts` panel above the builder, empty-selection hints in stats/preview, `syncRunButton` gated on it, stale-guard key widened to `{query, databases}`. |
 | 2026-09-01 | Per-database stats: `StatsResponse.perDatabase` (`{id,label,matchCount,totalCount}[]`, counts only) from `perDatabaseCounts()` in the mock; `statsPanel.ts` renders a "By database" segment below the combined view. |
+| 2026-09-01 | Stats panel formatting for large-scale data: new `src/ui/format.ts` (`compact` / `exact` / `matchRatio` / `barWidth`). All panel numbers are compacted (`1.2B`), tiny proportions render as `1 in 289.3M` not `0%`, nonzero bars keep a 2 px floor, exact values move to `title=` tooltips. `overflow-wrap: anywhere` + `.bar { min-width: 0 }` on the stats column. |

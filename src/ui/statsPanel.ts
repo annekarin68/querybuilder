@@ -4,17 +4,23 @@ import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
+import { barWidth, compact, exact, matchRatio } from "./format";
 
 function hint(text: string): string {
   return `<div class="ui info message">${escapeHtml(text)}</div>`;
 }
 
+/** "N missing" line under a block; N can be billions, so compact it (exact on hover). */
+function missing(nullCount: number): string {
+  return `<div class="ui small text" title="${escapeHtml(exact(nullCount))} missing">${escapeHtml(compact(nullCount))} missing in dataset</div>`;
+}
+
 function numberSummary(b: Extract<StatBlock, { kind: "number-summary" }>): string {
-  return `<div class="ui tiny statistics">
-    <div class="statistic"><div class="value">${b.min}</div><div class="label">min</div></div>
-    <div class="statistic"><div class="value">${b.max}</div><div class="label">max</div></div>
-    <div class="statistic"><div class="value">${b.avg}</div><div class="label">avg</div></div>
-  </div><div class="ui small text">${b.nullCount} missing in dataset</div>`;
+  return `<div class="ui tiny statistics" title="min ${escapeHtml(exact(b.min))} · max ${escapeHtml(exact(b.max))} · avg ${escapeHtml(exact(b.avg))}">
+    <div class="statistic"><div class="value">${escapeHtml(compact(b.min))}</div><div class="label">min</div></div>
+    <div class="statistic"><div class="value">${escapeHtml(compact(b.max))}</div><div class="label">max</div></div>
+    <div class="statistic"><div class="value">${escapeHtml(compact(b.avg))}</div><div class="label">avg</div></div>
+  </div>${missing(b.nullCount)}`;
 }
 
 function distribution(b: Extract<StatBlock, { kind: "distribution" }>): string {
@@ -22,19 +28,19 @@ function distribution(b: Extract<StatBlock, { kind: "distribution" }>): string {
   return `<div class="ui relaxed list">
     ${b.buckets
       .map(
-        (x) => `<div class="item">
-          <div class="ui tiny progress" data-percent="${Math.round((x.count / max) * 100)}" style="margin:.15rem 0">
+        (x) => `<div class="item" title="${escapeHtml(exact(x.count))}">
+          <div class="ui tiny progress" style="margin:.15rem 0">
             <div class="bar" style="width:${Math.round((x.count / max) * 100)}%"></div>
-            <div class="label" style="text-align:left">${escapeHtml(x.label)} — ${x.count}</div>
+            <div class="label" style="text-align:left">${escapeHtml(x.label)} — ${escapeHtml(compact(x.count))}</div>
           </div>
         </div>`,
       )
       .join("")}
-  </div><div class="ui small text">${b.nullCount} missing in dataset</div>`;
+  </div>${missing(b.nullCount)}`;
 }
 
 function dateRange(b: Extract<StatBlock, { kind: "date-range" }>): string {
-  return `<div>${escapeHtml(b.earliest)} → ${escapeHtml(b.latest)}</div><div class="ui small text">${b.nullCount} missing in dataset</div>`;
+  return `<div>${escapeHtml(b.earliest)} → ${escapeHtml(b.latest)}</div>${missing(b.nullCount)}`;
 }
 
 function blockHtml(b: StatBlock): string {
@@ -54,16 +60,30 @@ function perDatabaseHtml(rows: StatsResponse["perDatabase"]): string {
     <h5 class="ui header">By database</h5>
     <div class="ui relaxed list">
       ${rows
-        .map((r) => {
-          const pct = r.totalCount ? Math.round((r.matchCount / r.totalCount) * 100) : 0;
-          return `<div class="item">
-            <div class="ui tiny progress" style="margin:.15rem 0">
-              <div class="bar" style="width:${pct}%"></div>
-              <div class="label" style="text-align:left">${escapeHtml(r.label)} — ${r.matchCount.toLocaleString()} of ${r.totalCount.toLocaleString()} (${pct}%)</div>
+        .map(
+          (
+            r,
+          ) => `<div class="item" title="${escapeHtml(exact(r.matchCount))} of ${escapeHtml(exact(r.totalCount))}">
+            <div class="qb-db-name">${escapeHtml(r.label)}</div>
+            <div class="qb-db-nums">${escapeHtml(compact(r.matchCount))} / ${escapeHtml(compact(r.totalCount))} · ${escapeHtml(matchRatio(r.matchCount, r.totalCount))}</div>
+            <div class="ui tiny progress" style="margin:.1rem 0 0">
+              <div class="bar" style="width:${barWidth(r.matchCount, r.totalCount)}"></div>
             </div>
-          </div>`;
-        })
+          </div>`,
+        )
         .join("")}
+    </div>
+  </div>`;
+}
+
+function headlineHtml(d: StatsResponse): string {
+  return `<div class="ui segment">
+    <div class="qb-stat-headline" title="${escapeHtml(exact(d.matchCount))} of ${escapeHtml(exact(d.totalCount))}">
+      <span class="qb-stat-big">${escapeHtml(compact(d.matchCount))}</span>
+      <span class="qb-stat-sub">of ${escapeHtml(compact(d.totalCount))} · ${escapeHtml(matchRatio(d.matchCount, d.totalCount))}</span>
+    </div>
+    <div class="ui tiny progress" style="margin:.35rem 0 0">
+      <div class="bar" style="width:${barWidth(d.matchCount, d.totalCount)}"></div>
     </div>
   </div>`;
 }
@@ -119,15 +139,10 @@ export function renderStatsPanel(state: AppState): void {
     return;
   }
   const d = s.data;
-  const pct = d.totalCount ? Math.round((d.matchCount / d.totalCount) * 100) : 0;
   paint(
     el,
     `<h4 class="ui header">Statistics</h4>
-     <div class="ui segment">
-       <div class="ui tiny statistic"><div class="value">${d.matchCount.toLocaleString()}</div>
-         <div class="label">of ${d.totalCount.toLocaleString()} match</div></div>
-       <div class="ui progress"><div class="bar" style="width:${pct}%"></div><div class="label">${pct}%</div></div>
-     </div>
+     ${headlineHtml(d)}
      ${d.blocks.map(blockHtml).join("")}
      ${perDatabaseHtml(d.perDatabase)}`,
   );
