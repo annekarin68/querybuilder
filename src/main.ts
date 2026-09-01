@@ -10,7 +10,7 @@ import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
-import { getSchema, getStats } from "./api/client";
+import { getSchema, getStats, runQuery } from "./api/client";
 import { store } from "./state";
 import { addChild, countConditions, newCondition } from "./query/tree";
 import { hasBlockingErrors, validateQuery } from "./query/validate";
@@ -20,6 +20,7 @@ import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } fro
 import { renderDocsSidebar } from "./ui/docsSidebar";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
+import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
@@ -27,10 +28,44 @@ renderShell(root);
 onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
-  run: () => {
-    /* wired in Task 15 */
-  },
+  run: () => runPreview(1),
 });
+
+const PAGE_SIZE = 25;
+
+function runPreview(page: number): void {
+  const { query, issues, schema } = store.getState();
+  if (!schema || hasBlockingErrors(issues) || countConditions(query) === 0) return;
+  const key = JSON.stringify(query);
+  store.setState({ preview: { status: "loading", data: null, error: null, page } });
+  runQuery(query, page, PAGE_SIZE)
+    .then((data) => {
+      if (key !== JSON.stringify(store.getState().query)) return; // query changed since Run
+      store.setState({ preview: { status: "ok", data, error: null, page: data.page } });
+    })
+    .catch((err) => {
+      if (key !== JSON.stringify(store.getState().query)) return;
+      store.setState({
+        preview: {
+          status: "error",
+          data: null,
+          error: err instanceof Error ? err.message : String(err),
+          page,
+        },
+      });
+    });
+}
+
+function syncRunButton(state = store.getState()): void {
+  const btn = document.querySelector<HTMLButtonElement>('[data-menu="run"]');
+  if (!btn) return;
+  const ready =
+    !!state.schema &&
+    !hasBlockingErrors(state.issues) &&
+    countConditions(state.query) > 0 &&
+    state.preview.status !== "loading";
+  btn.disabled = !ready;
+}
 
 const refreshStats = debounce(() => {
   const { query, issues, schema } = store.getState();
@@ -86,11 +121,25 @@ store.subscribe((state, changed) => {
   ) {
     renderStatsPanel(state);
   }
-  // the preview panel render is wired in Task 16.
+  if (
+    changed.has("preview") ||
+    changed.has("query") ||
+    changed.has("issues") ||
+    changed.has("schema")
+  ) {
+    renderDataPreview(state);
+    wireDataPreview(panelEls().preview, {
+      prev: () => runPreview(store.getState().preview.page - 1),
+      next: () => runPreview(store.getState().preview.page + 1),
+    });
+    syncRunButton(state);
+  }
 });
 
 renderQueryBuilder(store.getState()); // initial loader (centre panel spinner during schema fetch)
 renderStatsPanel(store.getState()); // initial state ("" while schema is null)
+renderDataPreview(store.getState()); // initial idle message
+syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
 getSchema()
   .then((schema) => {
@@ -108,6 +157,3 @@ getSchema()
       <button class="ui button" onclick="location.reload()">Reload</button>
     </div>`;
   });
-
-// Temporary placeholder content so the preview column is visibly present until Task 16.
-panelEls().preview.innerHTML = `<div class="ui segment">Data preview (Task 16)</div>`;
