@@ -37,3 +37,13 @@ body {
   max-height: 70vh;
   overflow-y: auto;
 }
+
+/* Database scope selector (src/ui/databasePicker.ts) */
+[data-panel="dbpicker"] a[data-db-all],
+[data-panel="dbpicker"] a[data-db-none] {
+  cursor: pointer;
+  text-decoration: underline;
+}
+.qb-db-warn {
+  color: #9f3a38;
+}

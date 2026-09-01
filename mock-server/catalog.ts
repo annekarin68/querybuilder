@@ -17,6 +17,23 @@ export interface OperatorDef {
   arity: Arity;
 }
 
+export interface DatabaseDef {
+  id: string;
+  label: string;
+}
+
+/**
+ * "Each kind of plant has its own database": the selectable databases are the
+ * species. A query runs only against rows whose species is a selected database.
+ */
+export const DATABASES: DatabaseDef[] = [
+  { id: "fern", label: "Fern" },
+  { id: "oak", label: "Oak" },
+  { id: "rose", label: "Rose" },
+  { id: "cactus", label: "Cactus" },
+  { id: "bamboo", label: "Bamboo" },
+];
+
 export const OPERATORS: OperatorDef[] = [
   { id: "eq", label: "Equals", description: "The field exactly matches the value.", arity: "one" },
   {

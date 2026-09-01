@@ -209,15 +209,16 @@ src/
     panel.ts           paint() helper + escapeHtml().
     layout.ts          Renders the shell once (top menu, secondary menu, grid columns). Handles sidebar collapse + active view via CSS class, no repaint.
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
+    databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
     docsSidebar.ts     render for the left panel (built from schema).
     statsPanel.ts      render for the right panel (data-driven from /api/stats).
     dataPreview.ts     render for the bottom panel (paged table).
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate(). Starts only when run as the entrypoint.
-  catalog.ts           FIELDS + OPERATORS (with descriptions + arity).
+  catalog.ts           FIELDS + OPERATORS + DATABASES (with descriptions + arity).
   data.ts              RECORDS — ~200 deterministically generated in-memory rows.
-  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows).
+  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows) + filterByDatabases(rows, ids).
 tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, mock-server/evaluate + index (pure, no DOM).
 docs/
   ARCHITECTURE.md      This file.
@@ -233,6 +234,8 @@ index.html
 ```ts
 export interface AppState {
   schema: SchemaResponse | null;      // loaded once at startup
+  databases: Array<{ id; label }> | null;   // loaded once (GET /api/databases)
+  selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
 
   query: QueryNode;                   // the tree (root Group, operator "AND")
@@ -291,13 +294,20 @@ subscribe((state, changed) => {
 from the exact query tree currently in `AppState`. In every other situation they
 are empty (placeholder or error) — never stale.**
 
+"The exact query" includes the **selected databases** — a stats/preview response
+belongs to a `(query, selectedDatabaseIds)` pair, and the stale-guard key
+(`requestKey` in `main.ts`) is `JSON.stringify({ query, databases: sorted })`.
+
 Concretely:
 
-- **On any query edit**, the same `setState` that writes `query` also resets
-  `stats` to `{ status: "idle", data: null }` and `preview` to
+- **On any query edit _or database-selection change_**, the same `setState` that
+  writes `query` / `selectedDatabaseIds` also resets `stats` to
+  `{ status: "idle", data: null }` and `preview` to
   `{ status: "idle", data: null, page: 1 }`. Old numbers and rows disappear the
-  instant the query changes on screen — before any new request goes out.
-  - Preview then shows: *"Query changed — press Run to refresh."*
+  instant the scope changes on screen — before any new request goes out.
+  - Preview then shows: *"Press Run / Refresh to load matching rows."*
+- **If no database is selected:** no request fires; both panels show
+  *"Select at least one database…"* and **Run** is disabled.
 - **If `issues` has errors:**
   - No `/api/stats` request fires. Stats shows a neutral hint:
     *"Fix the errors in your query to see statistics."*
@@ -316,14 +326,15 @@ Concretely:
 
 ## 7. API contract (`src/api/types.ts`)
 
-`src/api/client.ts` is the only file that calls `fetch()`. Three functions, each
-typed, each throwing a plain `Error` (message unwrapped from `{ error }`) on any
-non-2xx response.
+`src/api/client.ts` is the only file that calls `fetch()`. Each function is typed
+and throws a plain `Error` (message unwrapped from `{ error }`) on any non-2xx
+response.
 
 ```ts
 getSchema(): Promise<SchemaResponse>
-getStats(query: QueryNode): Promise<StatsResponse>
-runQuery(query: QueryNode, page: number, pageSize: number): Promise<QueryResponse>
+getDatabases(): Promise<DatabasesResponse>
+getStats(query: QueryNode, databases: string[]): Promise<StatsResponse>
+runQuery(query: QueryNode, databases: string[], page: number, pageSize: number): Promise<QueryResponse>
 ```
 
 ### `GET /api/schema`
@@ -347,10 +358,24 @@ interface SchemaResponse {
 }
 ```
 
+### `GET /api/databases`
+
+The databases the query can be scoped to. "Each kind of plant has its own
+database", so the mock derives these from its species list.
+
+```ts
+interface DatabasesResponse {
+  databases: Array<{ id: string; label: string }>;
+}
+```
+
 ### `POST /api/stats`
 
-Body: `{ "query": <QueryNode tree> }`. Called live (debounced ~400 ms) only when
-the query is valid.
+Body: `{ "query": <QueryNode tree>, "databases": string[] }`. Called live
+(debounced ~400 ms) only when the query is valid **and at least one database is
+selected**. The server scopes rows to the selected databases first, then
+evaluates the query; `totalCount` and `nullCount` are over that scoped set. A
+missing / empty `databases` array → `400 { error: "Select at least one database." }`.
 
 ```ts
 interface StatsResponse {
@@ -375,8 +400,9 @@ type later = one new case, nothing else.
 
 ### `POST /api/query`
 
-Body: `{ "query": <QueryNode tree>, "page": number, "pageSize": number }`. Called
-only on **Run / Refresh** and **Prev / Next**.
+Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
+Called only on **Run / Refresh** and **Prev / Next**. Same `databases` scoping and
+`400` guard as `/api/stats`.
 
 ```ts
 interface QueryResponse {
@@ -450,6 +476,15 @@ The tree is sent as-is, `JSON.stringify(query)`. No custom DSL string on the wir
 
 ## 9. Panels
 
+### Centre, above the builder — `databasePicker.ts`
+
+Its own panel (`data-panel="dbpicker"`, painted independently of the query
+builder). A Fomantic `ui checkbox` per `state.databases` entry, plus
+**Select all** / **Select none** shortcuts. Toggling calls `onDatabasesChange`
+in `main.ts`, which treats it exactly like a query edit (§6): same-`setState`
+clear of stats/preview, debounced `refreshStats()`. Zero selected → the panels
+show a "Select at least one database" hint and **Run** is disabled.
+
 ### Left — `docsSidebar.ts`
 
 Built entirely from `state.schema`. A Fomantic `ui accordion`: one section per
@@ -500,13 +535,15 @@ button (disabled while `issues` has errors or while loading), a Fomantic
 Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
 `http`, no Express, heavily commented top to bottom.
 
-- ~200 fake in-memory records; a hand-written `FIELDS` / `OPERATORS` catalog.
-- `GET /api/schema` → the catalog.
-- `POST /api/stats` → recursive `matches(node, record)` evaluator over the array,
-  then computes `blocks[]` for each field used in the query.
-- `POST /api/query` → same evaluator, then slices `page` / `pageSize`, returns a
-  fixed `columns` set.
-- Bad query → `400 { error }`.
+- ~200 fake in-memory records; a hand-written `FIELDS` / `OPERATORS` / `DATABASES`
+  catalog (a database == a plant species).
+- `GET /api/schema` → the catalog. `GET /api/databases` → `DATABASES`.
+- `POST /api/stats` → `filterByDatabases` to the selected databases, then the
+  recursive `matches(node, record)` evaluator, then `blocks[]` for each field used
+  in the query. `totalCount` / `nullCount` are over the scoped set.
+- `POST /api/query` → same scoping + evaluator, then slices `page` / `pageSize`,
+  returns a fixed `columns` set.
+- Bad query, or missing / empty `databases` → `400 { error }`.
 
 Shares **no code** with `src/`. It stands in for "a real backend in any language";
 the frontend knows it only through `src/api/types.ts`.
@@ -570,3 +607,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Plan-defect rulings applied during build: `updateNode`'s patch parameter is typed `NodePatch` (`src/query/tree.ts`); `npm run typecheck` added as a standing gate alongside lint/test/build; `wireQueryBuilder` / `wireDataPreview` attach their delegated listeners once per container (not per render); the stats panel treats `idle` as distinct from `loading` (idle shows the §6 hint, loading shows a bare loader). Mock server `POST /api/stats` and `POST /api/query` now also 400 on a JSON-array `query` body (previously fell through to a 500). |
 | 2026-09-01 | Blank-page fix: the jQuery global must be published from a module (`src/setup-jquery.ts`) imported *before* `fomantic-ui-css/semantic.min.js`, not from `main.ts`'s body — ES import hoisting made the old approach evaluate Fomantic's JS while `window.jQuery` was still undefined. §3 rewritten. |
 | 2026-09-01 | Toolchain bump (needs Node 20.19+): Vite 5→8, Vitest 2→4, ESLint 8→9 (`.eslintrc.cjs` → flat `eslint.config.js`, via `typescript-eslint`). `npm audit` now clean (was 1 critical / 1 high / 3 moderate, all in the old Vite/Vitest chain). Vite 8's minifier no longer keeps vendor licence banners in the bundle, so attribution rests entirely on `THIRD-PARTY-NOTICES.txt`, which must ship next to `dist/` (README updated). |
+| 2026-09-01 | Database scope feature: `GET /api/databases`; `databases: string[]` added to the `/api/stats` and `/api/query` bodies (400 if missing/empty); mock scopes rows via `filterByDatabases` (a database == a species). New `AppState.databases` / `selectedDatabaseIds`, `src/ui/databasePicker.ts` panel above the builder, empty-selection hints in stats/preview, `syncRunButton` gated on it, stale-guard key widened to `{query, databases}`. |

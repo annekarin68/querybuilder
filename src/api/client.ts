@@ -1,5 +1,5 @@
 import type { QueryNode } from "../query/types";
-import type { QueryResponse, SchemaResponse, StatsResponse } from "./types";
+import type { DatabasesResponse, QueryResponse, SchemaResponse, StatsResponse } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -22,18 +22,27 @@ export function getSchema(): Promise<SchemaResponse> {
   return request<SchemaResponse>("/schema");
 }
 
-export function getStats(query: QueryNode): Promise<StatsResponse> {
+export function getDatabases(): Promise<DatabasesResponse> {
+  return request<DatabasesResponse>("/databases");
+}
+
+export function getStats(query: QueryNode, databases: string[]): Promise<StatsResponse> {
   return request<StatsResponse>("/stats", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, databases }),
   });
 }
 
-export function runQuery(query: QueryNode, page: number, pageSize: number): Promise<QueryResponse> {
+export function runQuery(
+  query: QueryNode,
+  databases: string[],
+  page: number,
+  pageSize: number,
+): Promise<QueryResponse> {
   return request<QueryResponse>("/query", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query, page, pageSize }),
+    body: JSON.stringify({ query, databases, page, pageSize }),
   });
 }

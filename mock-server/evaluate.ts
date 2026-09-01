@@ -58,6 +58,16 @@ function conditionMatches(c: JsonCondition, row: Row): boolean {
   }
 }
 
+/**
+ * Restrict rows to the selected databases. Each plant species is its own
+ * "database" (see catalog DATABASES), so a database id is matched against
+ * `row.species`.
+ */
+export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
+  const ids = new Set(databaseIds);
+  return rows.filter((r) => ids.has(String(r.species)));
+}
+
 export function matches(node: JsonNode, row: Row): boolean {
   if (node.kind === "condition") return conditionMatches(node, row);
   if (node.children.length === 0) return true;

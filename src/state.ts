@@ -1,12 +1,16 @@
 import type { Issue, QueryNode } from "./query/types";
 import { emptyQuery } from "./query/tree";
-import type { QueryResponse, SchemaResponse, StatsResponse } from "./api/types";
+import type { DatabasesResponse, QueryResponse, SchemaResponse, StatsResponse } from "./api/types";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 export type AsyncStatus = "idle" | "loading" | "ok" | "error";
 
 export interface AppState {
   schema: SchemaResponse | null;
+  /** The databases the query can be scoped to (loaded once). */
+  databases: DatabasesResponse["databases"] | null;
+  /** Which databases the query currently runs against. Empty = nothing runs. */
+  selectedDatabaseIds: string[];
   activeView: ActiveView;
 
   query: QueryNode;
@@ -20,6 +24,8 @@ export interface AppState {
 
 export const initialState: AppState = {
   schema: null,
+  databases: null,
+  selectedDatabaseIds: [],
   activeView: "filter",
   query: emptyQuery(),
   issues: [],

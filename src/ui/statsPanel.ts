@@ -53,6 +53,13 @@ export function renderStatsPanel(state: AppState): void {
     paint(el, "");
     return;
   }
+  if (state.selectedDatabaseIds.length === 0) {
+    paint(
+      el,
+      `<h4 class="ui header">Statistics</h4>${hint("Select at least one database to see statistics.")}`,
+    );
+    return;
+  }
   if (countConditions(state.query) === 0) {
     paint(el, `<h4 class="ui header">Statistics</h4>${hint("Add a condition to see statistics.")}`);
     return;

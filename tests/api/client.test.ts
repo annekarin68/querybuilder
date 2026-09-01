@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getSchema, getStats, runQuery } from "../../src/api/client";
+import { getDatabases, getSchema, getStats, runQuery } from "../../src/api/client";
 import { emptyQuery } from "../../src/query/tree";
 
 function mockFetchOnce(status: number, body: unknown) {
@@ -22,28 +22,39 @@ describe("api client", () => {
     expect(f).toHaveBeenCalledWith("/api/schema", undefined);
   });
 
-  it("getStats POSTs the query tree as JSON", async () => {
+  it("getDatabases GETs /api/databases and returns the parsed body", async () => {
+    const f = mockFetchOnce(200, { databases: [{ id: "fern", label: "Fern" }] });
+    vi.stubGlobal("fetch", f);
+    const out = await getDatabases();
+    expect(out).toEqual({ databases: [{ id: "fern", label: "Fern" }] });
+    expect(f).toHaveBeenCalledWith("/api/databases", undefined);
+  });
+
+  it("getStats POSTs the query tree + selected databases as JSON", async () => {
     const f = mockFetchOnce(200, { matchCount: 1, totalCount: 2, blocks: [] });
     vi.stubGlobal("fetch", f);
     const q = emptyQuery();
-    await getStats(q);
+    await getStats(q, ["fern", "oak"]);
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe("/api/stats");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ query: JSON.parse(JSON.stringify(q)) });
+    expect(JSON.parse(init.body)).toEqual({
+      query: JSON.parse(JSON.stringify(q)),
+      databases: ["fern", "oak"],
+    });
   });
 
-  it("runQuery POSTs query + paging", async () => {
+  it("runQuery POSTs query + databases + paging", async () => {
     const f = mockFetchOnce(200, { columns: [], rows: [], page: 2, pageSize: 25, totalRows: 0 });
     vi.stubGlobal("fetch", f);
-    await runQuery(emptyQuery(), 2, 25);
+    await runQuery(emptyQuery(), ["rose"], 2, 25);
     const [, init] = f.mock.calls[0]!;
-    expect(JSON.parse(init.body)).toMatchObject({ page: 2, pageSize: 25 });
+    expect(JSON.parse(init.body)).toMatchObject({ databases: ["rose"], page: 2, pageSize: 25 });
   });
 
   it("throws the server's error message on non-2xx", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(400, { error: "bad query tree" }));
-    await expect(getStats(emptyQuery())).rejects.toThrow("bad query tree");
+    await expect(getStats(emptyQuery(), ["fern"])).rejects.toThrow("bad query tree");
   });
 
   it("falls back to status text when there is no error field", async () => {

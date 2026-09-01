@@ -59,3 +59,8 @@ export interface QueryResponse {
   pageSize: number;
   totalRows: number;
 }
+
+/** The databases the query can be scoped to (GET /api/databases). */
+export interface DatabasesResponse {
+  databases: { id: string; label: string }[];
+}
