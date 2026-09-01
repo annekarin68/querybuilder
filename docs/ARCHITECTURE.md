@@ -5,7 +5,7 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-01 — initial design + offline-first constraint. No code written yet.
+Last updated: 2026-09-01 — initial design + offline-first constraint. Frontend implemented (Tasks 1–17).
 
 ---
 
@@ -535,3 +535,5 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Initial design captured. No code yet. Next step: implementation plan. |
 | 2026-09-01 | Added §2 "Offline-first" hard constraint: LAN-only, all assets bundled, fonts self-hosted, `npm run check:offline` guard. |
 | 2026-09-01 | Implementation plan written (`docs/superpowers/plans/2026-09-01-query-builder-frontend.md`). §4 expanded: added `src/util/debounce.ts`, `src/ui/valueControl.ts`, and split `mock-server/` into `index/catalog/data/evaluate`. |
+| 2026-09-01 | Frontend implemented per plan 2026-09-01-query-builder-frontend.md (Tasks 1–17). `npm run build` now chains `npm run check:offline`; README rewritten; `THIRD-PARTY-NOTICES.txt` added at repo root (bundled deps are MIT; Lato font files are OFL-1.1; TypeScript build tooling is Apache-2.0). |
+| 2026-09-01 | Plan-defect rulings applied during build: `updateNode`'s patch parameter is typed `NodePatch` (`src/query/tree.ts`); `npm run typecheck` added as a standing gate alongside lint/test/build; `wireQueryBuilder` / `wireDataPreview` attach their delegated listeners once per container (not per render); the stats panel treats `idle` as distinct from `loading` (idle shows the §6 hint, loading shows a bare loader). Mock server `POST /api/stats` and `POST /api/query` now also 400 on a JSON-array `query` body (previously fell through to a 500). |

@@ -1,0 +1,125 @@
+THIRD-PARTY NOTICES
+===================
+
+This project bundles or depends on the third-party components listed below.
+Their copyright and license notices are reproduced here.
+
+Some of these vendors ship their license banner only as a plain "/*" CSS/JS
+comment, which the production minifier strips from the built bundle in dist/
+(Fomantic-UI's CSS and @fontsource/lato's CSS are affected; jQuery's "/*!"
+banner is preserved by the minifier). This file exists so the notices are
+retained regardless of what survives minification.
+
+Everything the app actually ships to the browser (jQuery, Fomantic-UI CSS/JS,
+and the @fontsource/lato packaging) is MIT-licensed. The Lato font *files*
+themselves are licensed separately under the SIL Open Font License 1.1.
+Build-only tools (Vite, TypeScript) are not shipped in dist/ and are listed
+for completeness.
+
+
+-------------------------------------------------------------------------------
+1. The MIT License
+-------------------------------------------------------------------------------
+
+The following components are all distributed under the MIT License (SPDX id:
+MIT), with the copyright holders listed underneath:
+
+  - jQuery 3.x  (npm: jquery)
+      A fast, small, feature-rich JavaScript library used here for the DOM
+      plumbing that Fomantic-UI's jQuery plugins require.
+      Copyright (c) OpenJS Foundation and other contributors,
+      https://openjsf.org/
+
+  - Fomantic-UI 2.9.x  (npm: fomantic-ui-css)
+      A community fork of Semantic-UI; supplies the CSS component framework
+      and the jQuery plugins (dropdown, checkbox, accordion, ...) the UI uses.
+      Copyright (c) Fomantic-UI contributors
+      Originally Semantic-UI, Copyright (c) Contributors
+
+  - @fontsource/lato 5.x  (npm: @fontsource/lato)
+      Self-hostable npm packaging (CSS @font-face rules + web-font files) for
+      the Lato typeface, so the app needs no Google Fonts / CDN request.
+      The PACKAGING (the npm package, its CSS and build scripts) is MIT:
+      Copyright (c) Fontsource contributors
+      The FONT FILES themselves are NOT MIT — see section 2 (OFL-1.1) below.
+
+  - Vite 5.x  (npm: vite)  [dev/build tooling only — not shipped in dist/]
+      Dev server and production bundler.
+      Copyright (c) VoidZero Inc. and Vite contributors
+
+MIT License terms (applies to every component in this section):
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+
+-------------------------------------------------------------------------------
+2. SIL Open Font License, Version 1.1 — the Lato font files
+-------------------------------------------------------------------------------
+
+SPDX id: OFL-1.1
+
+The Lato typeface web-font files delivered by the @fontsource/lato package
+(the .woff2 / .woff assets referenced from its @font-face CSS) are licensed
+under the SIL Open Font License, Version 1.1 — separately from, and in
+addition to, the MIT license that covers the @fontsource packaging itself.
+
+  Copyright (c) 2010-2014 by tyPoland Lukasz Dziedzic
+  (team@latofonts.com), with Reserved Font Name "Lato".
+  Lato font Copyright (c) the Lato Project Authors.
+
+Summary of the OFL-1.1 (the full text is authoritative; see
+https://scripts.sil.org/OFL and node_modules/@fontsource/lato/LICENSE):
+
+  - The fonts, including derivative works, may be used, studied, modified,
+    and redistributed freely, and may be bundled, embedded, and redistributed
+    (including with software) — provided they are not sold by themselves.
+  - Derivative fonts must not use the Reserved Font Name ("Lato").
+  - The fonts and any derivatives cannot be released under any other type of
+    license; this OFL license must travel with them.
+  - The fonts are provided "as is", without warranty of any kind.
+  - Using the fonts to create a document does not place the document itself
+    under this license.
+
+
+-------------------------------------------------------------------------------
+3. Apache License, Version 2.0 — TypeScript
+-------------------------------------------------------------------------------
+
+SPDX id: Apache-2.0
+
+  - TypeScript 5.x  (npm: typescript)  [dev/build tooling only — not shipped
+    in dist/]
+      The type system and compiler used to type-check and transpile src/.
+      Copyright (c) Microsoft Corporation.
+
+  Licensed under the Apache License, Version 2.0 (the "License"); you may not
+  use this file except in compliance with the License. You may obtain a copy
+  of the License at:
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+  License for the specific language governing permissions and limitations
+  under the License.
+
+  The full Apache-2.0 text ships with the package at
+  node_modules/typescript/LICENSE.txt.
+</content>

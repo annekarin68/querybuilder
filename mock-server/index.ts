@@ -49,7 +49,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/stats") {
       const body = (await readJson(req)) as { query?: JsonNode };
-      if (!body.query || typeof body.query !== "object") {
+      if (!body.query || typeof body.query !== "object" || Array.isArray(body.query)) {
         sendJson(res, 400, { error: "Body must include a `query` tree." });
         return;
       }
@@ -63,7 +63,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/query") {
       const body = (await readJson(req)) as { query?: JsonNode; page?: number; pageSize?: number };
-      if (!body.query || typeof body.query !== "object") {
+      if (!body.query || typeof body.query !== "object" || Array.isArray(body.query)) {
         sendJson(res, 400, { error: "Body must include a `query` tree." });
         return;
       }
