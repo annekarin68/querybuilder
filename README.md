@@ -50,4 +50,7 @@ See `docs/ARCHITECTURE.md` §4.
 ## Licenses
 
 Third-party license texts for every bundled dependency are in
-`THIRD-PARTY-NOTICES.txt` at the repo root.
+`THIRD-PARTY-NOTICES.txt` at the repo root. The JS minifier does not preserve
+vendor licence banners in the bundle, so **when you deploy `dist/`, copy
+`THIRD-PARTY-NOTICES.txt` alongside it** — that file is the licence notice for the
+bundled jQuery / Fomantic-UI / Lato code.
