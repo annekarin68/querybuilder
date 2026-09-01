@@ -1,4 +1,4 @@
-/* System-font override kept out of scope: Fomantic + @fontsource/lato handle typography. */
+/* System-font override kept out of scope: Fomantic handles typography (it self-hosts Lato). */
 html,
 body {
   height: 100%;

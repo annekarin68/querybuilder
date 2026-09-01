@@ -41,10 +41,14 @@ export function renderValueControl(
   if (!field || !operator || operator.arity === "none") return "";
   if (operator.arity === "many") {
     if (field.valueType === "enum") return enumDropdown(field, value, true);
-    return `<div class="ui multiple search selection dropdown" data-part="value" data-allow-additions="1">
-      <input type="hidden" value="${escapeHtml(Array.isArray(value) ? value.join(",") : "")}" />
-      <div class="default text">Add values…</div>
-    </div>`;
+    // Non-enum "many" has no fixed option list, so there is nothing for a Fomantic
+    // dropdown to offer. Fomantic's free-entry mode (`allowAdditions`) is a
+    // settings-only option — it is never read from `data-*`, and the airlock's
+    // activate() passes only { fullTextSearch: true } — so the old dropdown markup
+    // was inert. A plain comma-separated text input is the simpler, working control.
+    return `<div class="ui input"><input type="text" data-part="value" data-multi="1" value="${escapeHtml(
+      Array.isArray(value) ? value.join(", ") : "",
+    )}" placeholder="Comma-separated values" /></div>`;
   }
   if (operator.arity === "two") {
     if (field.valueType === "enum") {
@@ -97,8 +101,8 @@ export function readValueControl(
   if (arity === "many") {
     const sel = row.querySelector<HTMLSelectElement>('select[multiple][data-part="value"]');
     if (sel) return Array.from(sel.selectedOptions).map((o) => o.value);
-    const hidden = row.querySelector<HTMLInputElement>('[data-part="value"] input[type="hidden"]');
-    return (hidden?.value ?? "")
+    const text = row.querySelector<HTMLInputElement>('[data-part="value"][data-multi="1"]');
+    return (text?.value ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);

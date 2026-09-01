@@ -1,7 +1,15 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { SchemaResponse } from "../api/types";
-import { addChild, findNode, newCondition, newGroup, removeNode, updateNode } from "../query/tree";
+import {
+  addChild,
+  emptyQuery,
+  findNode,
+  newCondition,
+  newGroup,
+  removeNode,
+  updateNode,
+} from "../query/tree";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { onDropdownChange } from "./fomantic";
@@ -109,7 +117,7 @@ export function renderQueryBuilder(state: AppState): void {
 
 // module-scope refs set by renderQueryBuilder; the delegated handlers below read
 // these so a single wiring keeps working across every paint().
-let currentQuery: Group;
+let currentQuery: Group = emptyQuery();
 let schemaRef: SchemaResponse | null = null;
 
 export function _setBuilderRefs(query: Group, schema: SchemaResponse | null): void {
@@ -154,6 +162,12 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     } else {
       value = readValueControl(row, operator.arity, field?.valueType ?? "string");
     }
+    // A boolean toggle has no "unset" state on screen: an unchecked toggle IS `false`.
+    // Default a null value to `false` so the rendered control and the validated value
+    // agree, instead of showing an unchecked toggle under an "Enter a value." error.
+    if (field?.valueType === "boolean" && operator?.arity === "one" && value == null) {
+      value = false;
+    }
     onChange(updateNode(q, nodeId, { fieldId: newFieldId, operatorId: newOperatorId, value }));
   }
 
@@ -190,7 +204,16 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     });
 
     container.addEventListener("change", (e) => {
-      const row = (e.target as HTMLElement).closest<HTMLElement>(".qb-condition[data-node-id]");
+      const target = e.target as HTMLElement;
+      // Fomantic's `set.value` dispatches a NATIVE bubbling "change" on the backing
+      // <select> *before* calling settings.onChange. Without this guard both this
+      // listener and onDropdownChange below would run handleRowChange for the same
+      // interaction; pass 2 would then read the already-detached (stale) row and write
+      // back the operator pass 1 cleared — state and screen would disagree (§6).
+      // Field/operator/enum-value dropdowns are handled exclusively by onDropdownChange;
+      // native <input> controls (text/number/date) and the checkbox keep this path.
+      if (target.matches('[data-part="field"], [data-part="operator"]')) return;
+      const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
       if (!row) return;
       handleRowChange(row);
     });

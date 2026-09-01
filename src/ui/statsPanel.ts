@@ -14,7 +14,7 @@ function numberSummary(b: Extract<StatBlock, { kind: "number-summary" }>): strin
     <div class="statistic"><div class="value">${b.min}</div><div class="label">min</div></div>
     <div class="statistic"><div class="value">${b.max}</div><div class="label">max</div></div>
     <div class="statistic"><div class="value">${b.avg}</div><div class="label">avg</div></div>
-  </div><div class="ui small text">${b.nullCount} empty</div>`;
+  </div><div class="ui small text">${b.nullCount} missing in dataset</div>`;
 }
 
 function distribution(b: Extract<StatBlock, { kind: "distribution" }>): string {
@@ -30,11 +30,11 @@ function distribution(b: Extract<StatBlock, { kind: "distribution" }>): string {
         </div>`,
       )
       .join("")}
-  </div><div class="ui small text">${b.nullCount} empty</div>`;
+  </div><div class="ui small text">${b.nullCount} missing in dataset</div>`;
 }
 
 function dateRange(b: Extract<StatBlock, { kind: "date-range" }>): string {
-  return `<div>${escapeHtml(b.earliest)} → ${escapeHtml(b.latest)}</div><div class="ui small text">${b.nullCount} empty</div>`;
+  return `<div>${escapeHtml(b.earliest)} → ${escapeHtml(b.latest)}</div><div class="ui small text">${b.nullCount} missing in dataset</div>`;
 }
 
 function blockHtml(b: StatBlock): string {
@@ -86,7 +86,11 @@ export function renderStatsPanel(state: AppState): void {
     );
     return;
   }
-  const d = s.data!;
+  if (s.status !== "ok" || !s.data) {
+    paint(el, "");
+    return;
+  }
+  const d = s.data;
   const pct = d.totalCount ? Math.round((d.matchCount / d.totalCount) * 100) : 0;
   paint(
     el,

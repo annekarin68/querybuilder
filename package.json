@@ -15,7 +15,6 @@
     "lint": "eslint . && prettier --check ."
   },
   "dependencies": {
-    "@fontsource/lato": "^5.0.0",
     "fomantic-ui-css": "^2.9.3",
     "jquery": "^3.7.1"
   },

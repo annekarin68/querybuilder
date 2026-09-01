@@ -33,11 +33,20 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+/** Thrown by readJson when the request body is not valid JSON — mapped to 400. */
+class BadBodyError extends Error {}
+
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
   const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? JSON.parse(raw) : {};
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // §10: a malformed body is the caller's fault, not ours — 400, never 500.
+    throw new BadBodyError("Request body must be valid JSON.");
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -85,6 +94,10 @@ const server = createServer(async (req, res) => {
     }
     sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });
   } catch (err) {
+    if (err instanceof BadBodyError) {
+      sendJson(res, 400, { error: err.message });
+      return;
+    }
     sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
   }
 });

@@ -1,16 +1,39 @@
 import type { AppState } from "../state";
 import { queryToText } from "../query/summary";
+import { countConditions } from "../query/tree";
+import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
+
+function hint(text: string): string {
+  return `<h4 class="ui header">Data preview</h4><div class="ui info message">${escapeHtml(text)}</div>`;
+}
 
 export function renderDataPreview(state: AppState): void {
   const el = panelEls().preview;
   const p = state.preview;
 
+  // §6: the preview never shows anything that does not belong to the query on
+  // screen, and it says WHY it is empty. These three checks mirror statsPanel.ts.
+  if (!state.schema) {
+    paint(el, "");
+    return;
+  }
+  if (countConditions(state.query) === 0) {
+    paint(el, hint("Add a condition, then press Run."));
+    return;
+  }
+  if (hasBlockingErrors(state.issues)) {
+    paint(el, hint("Fix the errors in your query, then press Run."));
+    return;
+  }
+
   if (p.status === "idle") {
+    // onQueryChange nulls preview.data in the same setState that writes the query,
+    // so "idle" always means "nothing current" — never run yet, or edited since.
     paint(
       el,
-      `<h4 class="ui header">Data preview</h4><div class="ui message">Build a query and press <b>Run / Refresh</b>.</div>`,
+      `<h4 class="ui header">Data preview</h4><div class="ui info message">Press <b>Run / Refresh</b> to load matching rows.</div>`,
     );
     return;
   }
@@ -29,10 +52,15 @@ export function renderDataPreview(state: AppState): void {
     return;
   }
 
-  const d = p.data!;
-  const summary = state.schema
-    ? queryToText(state.query, { fields: state.schema.fields, operators: state.schema.operators })
-    : "";
+  if (p.status !== "ok" || !p.data) {
+    paint(el, "");
+    return;
+  }
+  const d = p.data;
+  const summary = queryToText(state.query, {
+    fields: state.schema.fields,
+    operators: state.schema.operators,
+  });
   const from = d.totalRows === 0 ? 0 : (d.page - 1) * d.pageSize + 1;
   const to = Math.min(d.page * d.pageSize, d.totalRows);
   const body = d.rows.length

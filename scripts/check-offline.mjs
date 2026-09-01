@@ -13,12 +13,17 @@ const URL_RE = /https?:\/\/[^\s"'`)]+/gi;
 // exact string equality below, so nothing else on w3.org is permitted.
 const ALLOW = ["http://www.w3.org/2000/svg"];
 
+// Scan EVERYTHING except known-binary assets, rather than allow-listing a few text
+// extensions: that way .json, .svg, .txt and .webmanifest are covered too, and any
+// new text asset type is audited by default instead of silently skipped.
+const BINARY_RE = /\.(woff2?|ttf|eot|otf|png|jpe?g|gif|webp|avif|ico|mp4|webm)$/i;
+
 function walk(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out.push(...walk(p));
-    else if (/\.(js|css|html|map)$/.test(name)) out.push(p);
+    else if (!BINARY_RE.test(name)) out.push(p);
   }
   return out;
 }

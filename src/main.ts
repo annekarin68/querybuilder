@@ -4,8 +4,9 @@ import $ from "jquery";
 (window as unknown as { jQuery: typeof $; $: typeof $ }).jQuery = $;
 (window as unknown as { jQuery: typeof $; $: typeof $ }).$ = $;
 
-import "@fontsource/lato/400.css";
-import "@fontsource/lato/700.css";
+// Lato is NOT imported separately: fomantic-ui-css@2.9.x self-hosts it via local
+// @font-face rules pointing at its own bundled LatoLatin-*.woff2 files. See
+// docs/ARCHITECTURE.md §2.3.
 import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
@@ -148,7 +149,11 @@ getSchema()
       (store.getState().query as Group).id,
       newCondition(),
     );
-    store.setState({ schema, query: seeded });
+    // Validate in the SAME setState: this seed bypasses onQueryChange, so without
+    // it `issues` would stay [] and syncRunButton would enable Run on the empty
+    // seeded condition.
+    const issues = validateQuery(seeded, { fields: schema.fields, operators: schema.operators });
+    store.setState({ schema, query: seeded, issues });
   })
   .catch((err) => {
     root.innerHTML = `<div class="ui negative message" style="margin:2rem">

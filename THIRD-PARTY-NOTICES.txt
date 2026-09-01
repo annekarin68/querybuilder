@@ -6,13 +6,14 @@ Their copyright and license notices are reproduced here.
 
 Some of these vendors ship their license banner only as a plain "/*" CSS/JS
 comment, which the production minifier strips from the built bundle in dist/
-(Fomantic-UI's CSS and @fontsource/lato's CSS are affected; jQuery's "/*!"
-banner is preserved by the minifier). This file exists so the notices are
-retained regardless of what survives minification.
+(Fomantic-UI's CSS is affected; jQuery's "/*!" banner is preserved by the
+minifier). This file exists so the notices are retained regardless of what
+survives minification.
 
-Everything the app actually ships to the browser (jQuery, Fomantic-UI CSS/JS,
-and the @fontsource/lato packaging) is MIT-licensed. The Lato font *files*
-themselves are licensed separately under the SIL Open Font License 1.1.
+Everything the app actually ships to the browser (jQuery, Fomantic-UI CSS/JS)
+is MIT-licensed. Fomantic-UI additionally bundles font *files* that carry their
+own separate licenses: the Lato typeface under the SIL Open Font License 1.1
+(section 2), and its icon fonts under the Font Awesome Free license (section 3).
 Build-only tools (Vite, TypeScript) are not shipped in dist/ and are listed
 for completeness.
 
@@ -33,15 +34,12 @@ MIT), with the copyright holders listed underneath:
   - Fomantic-UI 2.9.x  (npm: fomantic-ui-css)
       A community fork of Semantic-UI; supplies the CSS component framework
       and the jQuery plugins (dropdown, checkbox, accordion, ...) the UI uses.
+      It also self-hosts the web-font files the theme needs (Lato and the icon
+      fonts), so the app needs no Google Fonts / CDN request.
+      The PACKAGING (its CSS and JS) is MIT:
       Copyright (c) Fomantic-UI contributors
       Originally Semantic-UI, Copyright (c) Contributors
-
-  - @fontsource/lato 5.x  (npm: @fontsource/lato)
-      Self-hostable npm packaging (CSS @font-face rules + web-font files) for
-      the Lato typeface, so the app needs no Google Fonts / CDN request.
-      The PACKAGING (the npm package, its CSS and build scripts) is MIT:
-      Copyright (c) Fontsource contributors
-      The FONT FILES themselves are NOT MIT — see section 2 (OFL-1.1) below.
+      The FONT FILES it bundles are NOT MIT — see sections 2 and 3 below.
 
   - Vite 5.x  (npm: vite)  [dev/build tooling only — not shipped in dist/]
       Dev server and production bundler.
@@ -80,17 +78,18 @@ MIT License terms (applies to every component in this section):
 
 SPDX id: OFL-1.1
 
-The Lato typeface web-font files delivered by the @fontsource/lato package
-(the .woff2 / .woff assets referenced from its @font-face CSS) are licensed
-under the SIL Open Font License, Version 1.1 — separately from, and in
-addition to, the MIT license that covers the @fontsource packaging itself.
+The Lato typeface web-font files bundled inside the fomantic-ui-css package
+(themes/default/assets/fonts/Lato*.woff2 / .woff, referenced from its own
+@font-face rules and emitted into dist/assets/) are licensed under the SIL
+Open Font License, Version 1.1 — separately from, and in addition to, the MIT
+license that covers the Fomantic-UI packaging itself.
 
-  Copyright (c) 2010-2014 by tyPoland Lukasz Dziedzic
-  (team@latofonts.com), with Reserved Font Name "Lato".
-  Lato font Copyright (c) the Lato Project Authors.
+  Copyright (c) 2010-2015, Łukasz Dziedzic (dziedzic@typoland.com),
+  with Reserved Font Name "Lato".
 
 Summary of the OFL-1.1 (the full text is authoritative; see
-https://scripts.sil.org/OFL and node_modules/@fontsource/lato/LICENSE):
+https://scripts.sil.org/OFL and the verbatim copy that ships at
+node_modules/fomantic-ui-css/themes/default/assets/fonts/LICENSE_Lato.txt):
 
   - The fonts, including derivative works, may be used, studied, modified,
     and redistributed freely, and may be bundled, embedded, and redistributed
@@ -104,7 +103,30 @@ https://scripts.sil.org/OFL and node_modules/@fontsource/lato/LICENSE):
 
 
 -------------------------------------------------------------------------------
-3. Apache License, Version 2.0 — TypeScript
+3. Font Awesome Free License — the icon font files
+-------------------------------------------------------------------------------
+
+The icon web-font files bundled inside the fomantic-ui-css package
+(themes/default/assets/fonts/icons.*, outline-icons.*, brand-icons.*, emitted
+into dist/assets/) come from Font Awesome Free and are licensed separately
+from the MIT-licensed Fomantic-UI packaging.
+
+  Fonticons, Inc. (https://fontawesome.com)
+
+Font Awesome Free is free, open source, and GPL friendly, and may be used for
+commercial and open-source projects. Its components are multi-licensed:
+
+  - Icons (the font glyphs themselves): CC BY 4.0
+  - Fonts (the .woff2 / .woff files): SIL OFL 1.1
+  - Code (the accompanying CSS/JS): MIT
+
+The full license text ships verbatim at
+node_modules/fomantic-ui-css/themes/default/assets/fonts/LICENSE_icons.txt;
+see also https://fontawesome.com/license/free.
+
+
+-------------------------------------------------------------------------------
+4. Apache License, Version 2.0 — TypeScript
 -------------------------------------------------------------------------------
 
 SPDX id: Apache-2.0

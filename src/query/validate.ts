@@ -1,7 +1,7 @@
 import type { Condition, Issue, QueryNode } from "./types";
 
 export interface ValidationSchema {
-  fields: { id: string; valueType: string }[];
+  fields: { id: string; valueType: string; operatorIds: string[] }[];
   operators: { id: string; arity: "none" | "one" | "two" | "many" }[];
 }
 
@@ -18,6 +18,11 @@ function checkCondition(c: Condition, schema: ValidationSchema, out: Issue[]): v
     out.push({ nodeId: c.id, message: "Choose a field.", severity: "error" });
     return;
   }
+  const fieldDef = schema.fields.find((f) => f.id === c.fieldId);
+  if (!fieldDef) {
+    out.push({ nodeId: c.id, message: "Unknown field.", severity: "error" });
+    return;
+  }
   if (!c.operatorId) {
     out.push({ nodeId: c.id, message: "Choose an operator.", severity: "error" });
     return;
@@ -25,6 +30,14 @@ function checkCondition(c: Condition, schema: ValidationSchema, out: Issue[]): v
   const op = schema.operators.find((o) => o.id === c.operatorId);
   if (!op) {
     out.push({ nodeId: c.id, message: "Unknown operator.", severity: "error" });
+    return;
+  }
+  if (!fieldDef.operatorIds.includes(c.operatorId)) {
+    out.push({
+      nodeId: c.id,
+      message: "That operator isn't available for this field.",
+      severity: "error",
+    });
     return;
   }
   if (op.arity === "one" && isEmptyScalar(c.value)) {

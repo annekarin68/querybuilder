@@ -51,8 +51,19 @@ describe("renderValueControl", () => {
     expect(html).toContain('data-range="to"');
   });
 
-  it('arity "many" + enum renders a multiple select', () => {
+  it('arity "many" + enum renders a multiple select with an option per value', () => {
     const html = renderValueControl(enumField, op("many"), ["a"]);
-    expect(html).toContain("multiple");
+    expect(html).toContain('class="ui multiple selection dropdown"');
+    expect(html).toContain(" multiple");
+    expect(html.match(/<option /g) ?? []).toHaveLength(2);
+    expect(html).toContain("Apple");
+    expect(html).toContain("Banana");
+  });
+
+  it('arity "many" + non-enum renders a comma-separated text input', () => {
+    const html = renderValueControl(field({ valueType: "string" }), op("many"), ["a", "b"]);
+    expect(html).toContain('data-multi="1"');
+    expect(html).toContain("placeholder");
+    expect(html).toContain('value="a, b"');
   });
 });

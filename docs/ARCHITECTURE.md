@@ -84,14 +84,30 @@ external host, the app may hang or fail when taken offline. Therefore:
 2. **All third-party code is installed from npm and bundled by Vite** into
    `dist/` — jQuery, Fomantic UI CSS/JS, fonts, icons. `dist/` is fully
    self-contained and can be served by any static file server on the LAN.
-3. **Fonts are self-hosted.** Fomantic's prebuilt `semantic.min.css` contains an
-   `@import url(https://fonts.googleapis.com/...)` for Lato. That import is
-   **stripped at build time** (a small commented step in `vite.config.ts` that
-   removes any `@import` / `url()` pointing off-origin from bundled CSS). Lato
-   itself is installed via the `@fontsource/lato` npm package and imported in
-   `src/main.ts`, so the look is preserved without the network. Fomantic's icon
-   font already ships as local `.woff2` files inside `fomantic-ui-css` and is
-   bundled normally.
+3. **Fonts are self-hosted — by the dependency itself.** `fomantic-ui-css@2.9.x`
+   ships **Lato self-hosted**: its `semantic.min.css` declares local `@font-face`
+   rules pointing at `themes/default/assets/fonts/Lato*.woff2` inside the package,
+   and contains **zero** `fonts.googleapis.com` references. (Verify with
+   `grep -c fonts.googleapis node_modules/fomantic-ui-css/semantic.min.css` → `0`.)
+   Vite bundles those `.woff2` files into `dist/assets/` like any other asset. The
+   same is true of Fomantic's icon font. **No separate font package is needed**, so
+   we deliberately do not depend on `@fontsource/lato` — it would ship a second,
+   redundant ~2 MB copy of the same typeface.
+
+   What `vite.config.ts` actually does is different and narrower. Its two
+   `stripRemoteCss` / `stripRemoteJs` plugins neutralise **off-origin URLs that
+   appear in comments, banners, and developer-facing strings** — text that is never
+   dereferenced by the browser but that the `check:offline` grep (rule 4) cannot
+   tell apart from a real fetch:
+   - CSS: `cdn.jsdelivr.net` twemoji references sitting in commented-out emoji rules.
+   - JS: jQuery's `/*! ... */` licence banner (`jquery.com`, `jquery.org/license`)
+     and Fomantic's `error:` message strings that cite the `unorm` polyfill and the
+     `jquery-address` library.
+
+   `stripRemoteCss` also still removes off-origin `@import url(...)` from bundled
+   CSS. Nothing we depend on today has one; it is kept as a guard so a future CSS
+   dependency that reintroduces a Google Fonts import fails safe instead of
+   silently going online.
 4. **Guard script.** `npm run check:offline` scans the built `dist/` for any
    `http://` or `https://` URL that is not our own API and exits non-zero if it
    finds one. Run in CI and before any release. This is the automated backstop for

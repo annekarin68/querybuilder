@@ -4,8 +4,8 @@ import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../
 
 const schema = {
   fields: [
-    { id: "species", valueType: "enum" },
-    { id: "branches", valueType: "number" },
+    { id: "species", valueType: "enum", operatorIds: ["eq", "in", "isEmpty"] },
+    { id: "branches", valueType: "number", operatorIds: ["eq", "between", "isEmpty"] },
   ],
   operators: [
     { id: "eq", arity: "one" as const },
@@ -82,6 +82,31 @@ describe("validateQuery", () => {
     let tree = addChild(root, root.id, c);
     tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "isEmpty", value: null });
     expect(validateQuery(tree, schema)).toEqual([]);
+  });
+
+  it("a field that is not in the schema is an error", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    let tree = addChild(root, root.id, c);
+    tree = updateNode(tree, c.id, { fieldId: "nope", operatorId: "eq", value: "x" });
+    expect(validateQuery(tree, schema)).toContainEqual({
+      nodeId: c.id,
+      message: "Unknown field.",
+      severity: "error",
+    });
+  });
+
+  it("an operator the field does not offer is an error", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    let tree = addChild(root, root.id, c);
+    // "between" exists globally but is not in species.operatorIds.
+    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "between", value: [1, 2] });
+    expect(validateQuery(tree, schema)).toContainEqual({
+      nodeId: c.id,
+      message: "That operator isn't available for this field.",
+      severity: "error",
+    });
   });
 
   it("a non-root empty group is an error", () => {
