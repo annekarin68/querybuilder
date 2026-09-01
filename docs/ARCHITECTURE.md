@@ -335,6 +335,11 @@ type StatBlock =
   | { kind: "date-range";     fieldLabel: string; earliest: string; latest: string; nullCount: number };
 ```
 
+`nullCount` is dataset-wide (rows missing this field across all records), while
+`min`/`max`/`avg`/`buckets`/`earliest`/`latest` are computed over the query's
+matching rows. This gives both query-specific stats and a data-quality metric
+independent of filtering.
+
 `statsPanel.ts` has one render function per `kind` plus a `switch`. A new block
 type later = one new case, nothing else.
 
