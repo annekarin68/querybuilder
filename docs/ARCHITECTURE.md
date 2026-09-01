@@ -534,12 +534,17 @@ Every number in this panel goes through `src/ui/format.ts` so it stays inside a
 - **`barWidth(match, total)`** — a CSS `max(…%, 2px)`, so any nonzero match shows a
   2 px sliver, visibly distinct from zero.
 
-Layout: a compact headline (`compact(matchCount)` big + `of … · matchRatio` small)
-and a thin bar; then the `blocks[]` list (min/max/avg, distribution counts,
-`nullCount` all compacted); then a **By database** segment — per row: name,
-`compact(match) / compact(total) · matchRatio`, thin bar; exact figures on hover;
-skipped for a single selected database. `status` branches: `loading` → `ui loader`;
-`error` → `ui negative message`, no data; `idle` → hint from §6.
+Layout, top to bottom: a compact headline (`compact(matchCount)` big +
+`of … · matchRatio` small) and a thin bar; the **By database** segment (per row:
+name, `compact(match) / compact(total) · matchRatio`, thin bar; exact figures on
+hover; skipped for a single selected database); then the `blocks[]` list
+(min/max/avg, distribution counts, `nullCount` all compacted) **inside a
+`.qb-stat-blocks` scroll region** (`max-height: 45vh`). The block list grows with
+the query (one block per referenced field), so it scrolls internally rather than
+pushing "By database" out of view. The whole stats column is `position: sticky`
+so it tracks the viewport while a tall query builder scrolls past. `status`
+branches: `loading` → `ui loader`; `error` → `ui negative message`, no data;
+`idle` → hint from §6.
 
 ### Bottom — `dataPreview.ts`
 
@@ -636,3 +641,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Per-database stats: `StatsResponse.perDatabase` (`{id,label,matchCount,totalCount}[]`, counts only) from `perDatabaseCounts()` in the mock; `statsPanel.ts` renders a "By database" segment below the combined view. |
 | 2026-09-01 | Stats panel formatting for large-scale data: new `src/ui/format.ts` (`compact` / `exact` / `matchRatio` / `barWidth`). All panel numbers are compacted (`1.2B`), tiny proportions render as `1 in 289.3M` not `0%`, nonzero bars keep a 2 px floor, exact values move to `title=` tooltips. `overflow-wrap: anywhere` + `.bar { min-width: 0 }` on the stats column. |
 | 2026-09-01 | Mock now reports counts at real scale: `DATABASES[].size` (mock-only, 12 K–5.6 B); `/api/stats` projects the 200-row sample's match rates onto those sizes (`scaleCount`), and `computeBlocks` takes an optional `{ total, match }` scale for `nullCount` / bucket counts. `/api/databases` strips `size`. Preview (`/api/query`) stays a literal sample. |
+| 2026-09-01 | Stats panel: headline + "By database" pinned; field blocks moved into a `.qb-stat-blocks` (`max-height: 45vh`) scroll region; stats column `position: sticky`. Per-database stats stay visible for any query size. |

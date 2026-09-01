@@ -139,11 +139,14 @@ export function renderStatsPanel(state: AppState): void {
     return;
   }
   const d = s.data;
+  // Order matters: the combined headline and the per-database breakdown stay
+  // pinned at the top; only the field-block list (one per referenced field —
+  // grows with the query) scrolls, inside .qb-stat-blocks. See src/styles.css.
   paint(
     el,
     `<h4 class="ui header">Statistics</h4>
      ${headlineHtml(d)}
-     ${d.blocks.map(blockHtml).join("")}
-     ${perDatabaseHtml(d.perDatabase)}`,
+     ${perDatabaseHtml(d.perDatabase)}
+     <div class="qb-stat-blocks">${d.blocks.map(blockHtml).join("")}</div>`,
   );
 }
