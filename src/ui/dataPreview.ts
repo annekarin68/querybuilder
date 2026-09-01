@@ -19,6 +19,10 @@ export function renderDataPreview(state: AppState): void {
     paint(el, "");
     return;
   }
+  if (state.selectedDatabaseIds.length === 0) {
+    paint(el, hint("Select at least one database, then press Run."));
+    return;
+  }
   if (countConditions(state.query) === 0) {
     paint(el, hint("Add a condition, then press Run."));
     return;
@@ -61,6 +65,10 @@ export function renderDataPreview(state: AppState): void {
     fields: state.schema.fields,
     operators: state.schema.operators,
   });
+  const dbLabels = (state.databases ?? [])
+    .filter((db) => state.selectedDatabaseIds.includes(db.id))
+    .map((db) => db.label)
+    .join(", ");
   const from = d.totalRows === 0 ? 0 : (d.page - 1) * d.pageSize + 1;
   const to = Math.min(d.page * d.pageSize, d.totalRows);
   const body = d.rows.length
@@ -77,7 +85,7 @@ export function renderDataPreview(state: AppState): void {
   paint(
     el,
     `<h4 class="ui header">Data preview</h4>
-     <p class="ui small text"><b>Query:</b> ${escapeHtml(summary)}</p>
+     <p class="ui small text"><b>Databases:</b> ${escapeHtml(dbLabels)}<br /><b>Query:</b> ${escapeHtml(summary)}</p>
      <p>Showing ${from}–${to} of ${d.totalRows.toLocaleString()}</p>
      ${body}
      <div class="ui buttons">

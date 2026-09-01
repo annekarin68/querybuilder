@@ -7,7 +7,13 @@ const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "done", label: "Done" },
 ];
 
-let els: { docs: HTMLElement; center: HTMLElement; stats: HTMLElement; preview: HTMLElement };
+let els: {
+  docs: HTMLElement;
+  dbpicker: HTMLElement;
+  center: HTMLElement;
+  stats: HTMLElement;
+  preview: HTMLElement;
+};
 let bodyEl: HTMLElement;
 
 export function renderShell(root: HTMLElement): void {
@@ -24,7 +30,10 @@ export function renderShell(root: HTMLElement): void {
     </div>
     <div class="qb-body">
       <aside class="qb-col-docs" data-panel="docs"></aside>
-      <main class="qb-col-center" data-panel="center"></main>
+      <main class="qb-col-center">
+        <div data-panel="dbpicker"></div>
+        <div data-panel="center"></div>
+      </main>
       <aside class="qb-col-stats" data-panel="stats"></aside>
     </div>
     <section class="qb-preview" data-panel="preview"></section>
@@ -32,6 +41,7 @@ export function renderShell(root: HTMLElement): void {
   bodyEl = root.querySelector<HTMLElement>(".qb-body")!;
   els = {
     docs: root.querySelector<HTMLElement>('[data-panel="docs"]')!,
+    dbpicker: root.querySelector<HTMLElement>('[data-panel="dbpicker"]')!,
     center: root.querySelector<HTMLElement>('[data-panel="center"]')!,
     stats: root.querySelector<HTMLElement>('[data-panel="stats"]')!,
     preview: root.querySelector<HTMLElement>('[data-panel="preview"]')!,

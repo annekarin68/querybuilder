@@ -50,6 +50,8 @@ export interface StatsResponse {
   matchCount: number;
   totalCount: number;
   blocks: StatBlock[];
+  /** One entry per selected database: its own match / total counts (counts only — cheap at any scale). */
+  perDatabase: { id: string; label: string; matchCount: number; totalCount: number }[];
 }
 
 export interface QueryResponse {
@@ -58,4 +60,9 @@ export interface QueryResponse {
   page: number;
   pageSize: number;
   totalRows: number;
+}
+
+/** The databases the query can be scoped to (GET /api/databases). */
+export interface DatabasesResponse {
+  databases: { id: string; label: string }[];
 }

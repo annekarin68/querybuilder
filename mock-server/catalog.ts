@@ -17,6 +17,30 @@ export interface OperatorDef {
   arity: Arity;
 }
 
+export interface DatabaseDef {
+  id: string;
+  label: string;
+  /**
+   * Mock-only: the pretend real size of this database. The 200-row RECORDS sample
+   * drives match *rates*; this drives the *magnitude* the API reports, so the UI
+   * sees realistic numbers (thousands next to billions, tiny percentages). Not
+   * sent on GET /api/databases.
+   */
+  size: number;
+}
+
+/**
+ * "Each kind of plant has its own database": the selectable databases are the
+ * species. A query runs only against rows whose species is a selected database.
+ */
+export const DATABASES: DatabaseDef[] = [
+  { id: "fern", label: "Fern", size: 41_000_000 },
+  { id: "oak", label: "Oak", size: 1_234_000_000 },
+  { id: "rose", label: "Rose", size: 892_000_000 },
+  { id: "cactus", label: "Cactus", size: 5_600_000_000 },
+  { id: "bamboo", label: "Bamboo", size: 12_345 },
+];
+
 export const OPERATORS: OperatorDef[] = [
   { id: "eq", label: "Equals", description: "The field exactly matches the value.", arity: "one" },
   {

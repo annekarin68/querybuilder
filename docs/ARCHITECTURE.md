@@ -207,17 +207,19 @@ src/
   ui/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
     panel.ts           paint() helper + escapeHtml().
+    format.ts          compact() / exact() / matchRatio() / barWidth() — number & proportion formatting for the stats panel at billion-row / 1e-10 % scale.
     layout.ts          Renders the shell once (top menu, secondary menu, grid columns). Handles sidebar collapse + active view via CSS class, no repaint.
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
+    databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
     docsSidebar.ts     render for the left panel (built from schema).
     statsPanel.ts      render for the right panel (data-driven from /api/stats).
     dataPreview.ts     render for the bottom panel (paged table).
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate(). Starts only when run as the entrypoint.
-  catalog.ts           FIELDS + OPERATORS (with descriptions + arity).
+  catalog.ts           FIELDS + OPERATORS + DATABASES (with descriptions + arity).
   data.ts              RECORDS — ~200 deterministically generated in-memory rows.
-  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows).
+  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows) + filterByDatabases(rows, ids).
 tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, mock-server/evaluate + index (pure, no DOM).
 docs/
   ARCHITECTURE.md      This file.
@@ -233,6 +235,8 @@ index.html
 ```ts
 export interface AppState {
   schema: SchemaResponse | null;      // loaded once at startup
+  databases: Array<{ id; label }> | null;   // loaded once (GET /api/databases)
+  selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
 
   query: QueryNode;                   // the tree (root Group, operator "AND")
@@ -291,13 +295,20 @@ subscribe((state, changed) => {
 from the exact query tree currently in `AppState`. In every other situation they
 are empty (placeholder or error) — never stale.**
 
+"The exact query" includes the **selected databases** — a stats/preview response
+belongs to a `(query, selectedDatabaseIds)` pair, and the stale-guard key
+(`requestKey` in `main.ts`) is `JSON.stringify({ query, databases: sorted })`.
+
 Concretely:
 
-- **On any query edit**, the same `setState` that writes `query` also resets
-  `stats` to `{ status: "idle", data: null }` and `preview` to
+- **On any query edit _or database-selection change_**, the same `setState` that
+  writes `query` / `selectedDatabaseIds` also resets `stats` to
+  `{ status: "idle", data: null }` and `preview` to
   `{ status: "idle", data: null, page: 1 }`. Old numbers and rows disappear the
-  instant the query changes on screen — before any new request goes out.
-  - Preview then shows: *"Query changed — press Run to refresh."*
+  instant the scope changes on screen — before any new request goes out.
+  - Preview then shows: *"Press Run / Refresh to load matching rows."*
+- **If no database is selected:** no request fires; both panels show
+  *"Select at least one database…"* and **Run** is disabled.
 - **If `issues` has errors:**
   - No `/api/stats` request fires. Stats shows a neutral hint:
     *"Fix the errors in your query to see statistics."*
@@ -316,14 +327,15 @@ Concretely:
 
 ## 7. API contract (`src/api/types.ts`)
 
-`src/api/client.ts` is the only file that calls `fetch()`. Three functions, each
-typed, each throwing a plain `Error` (message unwrapped from `{ error }`) on any
-non-2xx response.
+`src/api/client.ts` is the only file that calls `fetch()`. Each function is typed
+and throws a plain `Error` (message unwrapped from `{ error }`) on any non-2xx
+response.
 
 ```ts
 getSchema(): Promise<SchemaResponse>
-getStats(query: QueryNode): Promise<StatsResponse>
-runQuery(query: QueryNode, page: number, pageSize: number): Promise<QueryResponse>
+getDatabases(): Promise<DatabasesResponse>
+getStats(query: QueryNode, databases: string[]): Promise<StatsResponse>
+runQuery(query: QueryNode, databases: string[], page: number, pageSize: number): Promise<QueryResponse>
 ```
 
 ### `GET /api/schema`
@@ -347,16 +359,36 @@ interface SchemaResponse {
 }
 ```
 
+### `GET /api/databases`
+
+The databases the query can be scoped to. "Each kind of plant has its own
+database", so the mock derives these from its species list.
+
+```ts
+interface DatabasesResponse {
+  databases: Array<{ id: string; label: string }>;
+}
+```
+
 ### `POST /api/stats`
 
-Body: `{ "query": <QueryNode tree> }`. Called live (debounced ~400 ms) only when
-the query is valid.
+Body: `{ "query": <QueryNode tree>, "databases": string[] }`. Called live
+(debounced ~400 ms) only when the query is valid **and at least one database is
+selected**. The server scopes rows to the selected databases first, then
+evaluates the query; `totalCount` and `nullCount` are over that scoped set. A
+missing / empty `databases` array → `400 { error: "Select at least one database." }`.
 
 ```ts
 interface StatsResponse {
-  matchCount: number;
-  totalCount: number;
-  blocks: StatBlock[];
+  matchCount: number;                 // combined across selected databases
+  totalCount: number;                 // combined
+  blocks: StatBlock[];                // combined field blocks
+  perDatabase: Array<{                // one entry per selected database, in selection order
+    id: string;
+    label: string;
+    matchCount: number;               // rows in that database matching the query
+    totalCount: number;               // rows in that database
+  }>;                                 // counts only — cheap for a real backend at any scale
 }
 
 type StatBlock =
@@ -375,8 +407,9 @@ type later = one new case, nothing else.
 
 ### `POST /api/query`
 
-Body: `{ "query": <QueryNode tree>, "page": number, "pageSize": number }`. Called
-only on **Run / Refresh** and **Prev / Next**.
+Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
+Called only on **Run / Refresh** and **Prev / Next**. Same `databases` scoping and
+`400` guard as `/api/stats`.
 
 ```ts
 interface QueryResponse {
@@ -450,6 +483,15 @@ The tree is sent as-is, `JSON.stringify(query)`. No custom DSL string on the wir
 
 ## 9. Panels
 
+### Centre, above the builder — `databasePicker.ts`
+
+Its own panel (`data-panel="dbpicker"`, painted independently of the query
+builder). A Fomantic `ui checkbox` per `state.databases` entry, plus
+**Select all** / **Select none** shortcuts. Toggling calls `onDatabasesChange`
+in `main.ts`, which treats it exactly like a query edit (§6): same-`setState`
+clear of stats/preview, debounced `refreshStats()`. Zero selected → the panels
+show a "Select at least one database" hint and **Run** is disabled.
+
 ### Left — `docsSidebar.ts`
 
 Built entirely from `state.schema`. A Fomantic `ui accordion`: one section per
@@ -481,10 +523,28 @@ string with no baked-in closures. Fomantic dropdowns' `onChange` is bound inside
 
 ### Right — `statsPanel.ts`
 
-Top: `matchCount / totalCount` as a `ui statistic` + `ui progress` bar. Below: the
-`blocks[]` list, one small render function per `kind`. `status: "loading"` → a
-`ui loader` (nothing behind it). `status: "error"` → `ui negative message`, no
-data. `status: "idle"` → the appropriate hint from §6.
+Every number in this panel goes through `src/ui/format.ts` so it stays inside a
+~20 rem column when a real backend returns billions:
+
+- **`compact(n)`** — `1.2B` / `988M` / `12,345`; the exact value is in a `title=`
+  tooltip.
+- **`matchRatio(match, total)`** — `62%` / `6.2%` / `0.34%`, and for sub-0.05 %
+  (e.g. `3.46e-7 %`) **`1 in 289.3M`** instead of a misleading `0%`. `none` / `all`
+  at the extremes; `>99.9%` rather than a rounded-up `100%`.
+- **`barWidth(match, total)`** — a CSS `max(…%, 2px)`, so any nonzero match shows a
+  2 px sliver, visibly distinct from zero.
+
+Layout, top to bottom: a compact headline (`compact(matchCount)` big +
+`of … · matchRatio` small) and a thin bar; the **By database** segment (per row:
+name, `compact(match) / compact(total) · matchRatio`, thin bar; exact figures on
+hover; skipped for a single selected database); then the `blocks[]` list
+(min/max/avg, distribution counts, `nullCount` all compacted) **inside a
+`.qb-stat-blocks` scroll region** (`max-height: 45vh`). The block list grows with
+the query (one block per referenced field), so it scrolls internally rather than
+pushing "By database" out of view. The whole stats column is `position: sticky`
+so it tracks the viewport while a tall query builder scrolls past. `status`
+branches: `loading` → `ui loader`; `error` → `ui negative message`, no data;
+`idle` → hint from §6.
 
 ### Bottom — `dataPreview.ts`
 
@@ -500,13 +560,20 @@ button (disabled while `issues` has errors or while loading), a Fomantic
 Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
 `http`, no Express, heavily commented top to bottom.
 
-- ~200 fake in-memory records; a hand-written `FIELDS` / `OPERATORS` catalog.
-- `GET /api/schema` → the catalog.
-- `POST /api/stats` → recursive `matches(node, record)` evaluator over the array,
-  then computes `blocks[]` for each field used in the query.
-- `POST /api/query` → same evaluator, then slices `page` / `pageSize`, returns a
-  fixed `columns` set.
-- Bad query → `400 { error }`.
+- ~200 fake in-memory records; a hand-written `FIELDS` / `OPERATORS` / `DATABASES`
+  catalog (a database == a plant species). Each database carries a mock-only
+  `size` (12 K … 5.6 B) — see below.
+- `GET /api/schema` → the catalog. `GET /api/databases` → `DATABASES` **without
+  `size`** (it isn't part of the contract).
+- `POST /api/stats` → the 200-row sample drives match *rates*; `DATABASES[].size`
+  drives the *magnitude*. Per database: `matchCount = round(sampleMatchRate × size)`,
+  `totalCount = size`. Combined = the sums. `blocks[]` are computed on the sample
+  then scaled (`nullCount` by the total ratio, distribution buckets by the match
+  ratio; `min`/`max`/`avg` are field values, never scaled). This is what makes the
+  UI show `930.3M of 1.3B` rather than `41 of 200`.
+- `POST /api/query` → scopes + evaluates + paginates the real sample; `totalRows`
+  is the real sample size (the preview is a literal row sample, not scaled).
+- Bad query, or missing / empty `databases` → `400 { error }`.
 
 Shares **no code** with `src/`. It stands in for "a real backend in any language";
 the frontend knows it only through `src/api/types.ts`.
@@ -570,3 +637,8 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Plan-defect rulings applied during build: `updateNode`'s patch parameter is typed `NodePatch` (`src/query/tree.ts`); `npm run typecheck` added as a standing gate alongside lint/test/build; `wireQueryBuilder` / `wireDataPreview` attach their delegated listeners once per container (not per render); the stats panel treats `idle` as distinct from `loading` (idle shows the §6 hint, loading shows a bare loader). Mock server `POST /api/stats` and `POST /api/query` now also 400 on a JSON-array `query` body (previously fell through to a 500). |
 | 2026-09-01 | Blank-page fix: the jQuery global must be published from a module (`src/setup-jquery.ts`) imported *before* `fomantic-ui-css/semantic.min.js`, not from `main.ts`'s body — ES import hoisting made the old approach evaluate Fomantic's JS while `window.jQuery` was still undefined. §3 rewritten. |
 | 2026-09-01 | Toolchain bump (needs Node 20.19+): Vite 5→8, Vitest 2→4, ESLint 8→9 (`.eslintrc.cjs` → flat `eslint.config.js`, via `typescript-eslint`). `npm audit` now clean (was 1 critical / 1 high / 3 moderate, all in the old Vite/Vitest chain). Vite 8's minifier no longer keeps vendor licence banners in the bundle, so attribution rests entirely on `THIRD-PARTY-NOTICES.txt`, which must ship next to `dist/` (README updated). |
+| 2026-09-01 | Database scope feature: `GET /api/databases`; `databases: string[]` added to the `/api/stats` and `/api/query` bodies (400 if missing/empty); mock scopes rows via `filterByDatabases` (a database == a species). New `AppState.databases` / `selectedDatabaseIds`, `src/ui/databasePicker.ts` panel above the builder, empty-selection hints in stats/preview, `syncRunButton` gated on it, stale-guard key widened to `{query, databases}`. |
+| 2026-09-01 | Per-database stats: `StatsResponse.perDatabase` (`{id,label,matchCount,totalCount}[]`, counts only) from `perDatabaseCounts()` in the mock; `statsPanel.ts` renders a "By database" segment below the combined view. |
+| 2026-09-01 | Stats panel formatting for large-scale data: new `src/ui/format.ts` (`compact` / `exact` / `matchRatio` / `barWidth`). All panel numbers are compacted (`1.2B`), tiny proportions render as `1 in 289.3M` not `0%`, nonzero bars keep a 2 px floor, exact values move to `title=` tooltips. `overflow-wrap: anywhere` + `.bar { min-width: 0 }` on the stats column. |
+| 2026-09-01 | Mock now reports counts at real scale: `DATABASES[].size` (mock-only, 12 K–5.6 B); `/api/stats` projects the 200-row sample's match rates onto those sizes (`scaleCount`), and `computeBlocks` takes an optional `{ total, match }` scale for `nullCount` / bucket counts. `/api/databases` strips `size`. Preview (`/api/query`) stays a literal sample. |
+| 2026-09-01 | Stats panel: headline + "By database" pinned; field blocks moved into a `.qb-stat-blocks` (`max-height: 45vh`) scroll region; stats column `position: sticky`. Per-database stats stay visible for any query size. |

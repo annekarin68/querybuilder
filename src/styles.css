@@ -26,6 +26,13 @@ body {
 }
 .qb-col-stats {
   flex: 0 0 20rem;
+  /* Stay with the viewport as a tall query builder scrolls past, and scroll
+     internally if the stats themselves are taller than the screen. */
+  position: sticky;
+  top: 1rem;
+  align-self: flex-start;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 .qb-body.qb-docs-collapsed .qb-col-docs {
   display: none;
@@ -35,5 +42,47 @@ body {
 }
 .qb-col-docs .ui.accordion {
   max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Database scope selector (src/ui/databasePicker.ts) */
+[data-panel="dbpicker"] a[data-db-all],
+[data-panel="dbpicker"] a[data-db-none] {
+  cursor: pointer;
+  text-decoration: underline;
+}
+.qb-db-warn {
+  color: #9f3a38;
+}
+
+/* Statistics panel (src/ui/statsPanel.ts + format.ts) — must stay inside a ~20rem column */
+[data-panel="stats"] {
+  overflow-wrap: anywhere;
+}
+/* Fomantic gives .bar a 2em min-width; we drive width ourselves (incl. a 2px sliver). */
+[data-panel="stats"] .ui.progress .bar {
+  min-width: 0;
+}
+.qb-stat-big {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.qb-stat-sub {
+  display: block;
+  font-size: 0.85em;
+  color: rgba(0, 0, 0, 0.6);
+}
+.qb-db-name {
+  font-weight: 600;
+}
+.qb-db-nums {
+  font-size: 0.85em;
+  color: rgba(0, 0, 0, 0.6);
+}
+/* Per-field blocks grow with the query; keep them from pushing "By database"
+   off screen by giving the list its own scroll region. */
+.qb-stat-blocks {
+  max-height: 45vh;
   overflow-y: auto;
 }

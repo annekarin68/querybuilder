@@ -1,8 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { argv } from "node:process";
-import { FIELDS, OPERATORS } from "./catalog";
+import { DATABASES, FIELDS, OPERATORS } from "./catalog";
 import { RECORDS } from "./data";
-import { matches, computeBlocks, type JsonNode } from "./evaluate";
+import {
+  matches,
+  computeBlocks,
+  filterByDatabases,
+  perDatabaseCounts,
+  scaleCount,
+  type JsonNode,
+} from "./evaluate";
 
 const PORT = 3001;
 
@@ -36,6 +43,18 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 /** Thrown by readJson when the request body is not valid JSON — mapped to 400. */
 class BadBodyError extends Error {}
 
+/** A valid `query` body is a non-array object; a valid `databases` is a non-empty string[]. */
+function badQuery(body: { query?: unknown }): boolean {
+  return !body.query || typeof body.query !== "object" || Array.isArray(body.query);
+}
+function badDatabases(body: { databases?: unknown }): boolean {
+  return (
+    !Array.isArray(body.databases) ||
+    body.databases.length === 0 ||
+    !body.databases.every((d) => typeof d === "string")
+  );
+}
+
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
@@ -56,27 +75,65 @@ const server = createServer(async (req, res) => {
       sendJson(res, 200, { fields: FIELDS, operators: OPERATORS });
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/databases") {
+      // `size` is mock-internal (drives the reported magnitudes) — not part of the contract.
+      sendJson(res, 200, { databases: DATABASES.map(({ id, label }) => ({ id, label })) });
+      return;
+    }
     if (req.method === "POST" && url.pathname === "/api/stats") {
-      const body = (await readJson(req)) as { query?: JsonNode };
-      if (!body.query || typeof body.query !== "object" || Array.isArray(body.query)) {
+      const body = (await readJson(req)) as { query?: JsonNode; databases?: string[] };
+      if (badQuery(body)) {
         sendJson(res, 400, { error: "Body must include a `query` tree." });
         return;
       }
-      const matchCount = RECORDS.filter((r) => matches(body.query as JsonNode, r)).length;
-      sendJson(res, 200, {
-        matchCount,
-        totalCount: RECORDS.length,
-        blocks: computeBlocks(body.query as JsonNode, RECORDS),
+      if (badDatabases(body)) {
+        sendJson(res, 400, { error: "Select at least one database." });
+        return;
+      }
+      const query = body.query as JsonNode;
+      const ids = body.databases as string[];
+
+      // The 200-row sample drives match RATES; DATABASES[].size drives the
+      // MAGNITUDE the API reports, so the UI sees realistic large numbers.
+      const perDatabase = perDatabaseCounts(query, RECORDS, ids).map((c) => {
+        const size = DATABASES.find((d) => d.id === c.id)?.size ?? 0;
+        return {
+          id: c.id,
+          label: DATABASES.find((d) => d.id === c.id)?.label ?? c.id,
+          totalCount: size,
+          matchCount: scaleCount(c.matchCount, c.totalCount, size),
+        };
       });
+      const totalCount = perDatabase.reduce((s, d) => s + d.totalCount, 0);
+      const matchCount = perDatabase.reduce((s, d) => s + d.matchCount, 0);
+
+      const scoped = filterByDatabases(RECORDS, ids);
+      const sampleMatch = scoped.filter((r) => matches(query, r)).length;
+      const blocks = computeBlocks(query, scoped, {
+        total: scoped.length ? totalCount / scoped.length : 1,
+        match: sampleMatch ? matchCount / sampleMatch : 1,
+      });
+
+      sendJson(res, 200, { matchCount, totalCount, blocks, perDatabase });
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/query") {
-      const body = (await readJson(req)) as { query?: JsonNode; page?: number; pageSize?: number };
-      if (!body.query || typeof body.query !== "object" || Array.isArray(body.query)) {
+      const body = (await readJson(req)) as {
+        query?: JsonNode;
+        databases?: string[];
+        page?: number;
+        pageSize?: number;
+      };
+      if (badQuery(body)) {
         sendJson(res, 400, { error: "Body must include a `query` tree." });
         return;
       }
-      const all = RECORDS.filter((r) => matches(body.query as JsonNode, r));
+      if (badDatabases(body)) {
+        sendJson(res, 400, { error: "Select at least one database." });
+        return;
+      }
+      const scoped = filterByDatabases(RECORDS, body.databases as string[]);
+      const all = scoped.filter((r) => matches(body.query as JsonNode, r));
       const { slice, page, pageSize, totalRows } = paginate(
         all,
         body.page ?? 1,

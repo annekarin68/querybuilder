@@ -95,4 +95,24 @@ describe("computeBlocks", () => {
       .sort();
     expect(labels).toEqual(["Branch count", "Height (cm)", "Species"]);
   });
+
+  it("scale multiplies count-shaped fields but not min/max/avg", () => {
+    const [num] = computeBlocks(cond("branches", "gte", 0), rows, {
+      total: 1_000_000,
+      match: 500_000,
+    }) as [Extract<StatBlock, { kind: "number-summary" }>];
+    expect(num.min).toBe(10); // value — unscaled
+    expect(num.max).toBe(20);
+    expect(num.nullCount).toBe(1_000_000); // 1 null row × total scale
+
+    const dist = computeBlocks(cond("species", "in", ["oak", "fern"]), rows, {
+      match: 1000,
+    }).find((b) => b.kind === "distribution") as Extract<StatBlock, { kind: "distribution" }>;
+    expect(dist.buckets).toEqual(
+      expect.arrayContaining([
+        { label: "oak", count: 2000 },
+        { label: "fern", count: 1000 },
+      ]),
+    );
+  });
 });

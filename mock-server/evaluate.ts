@@ -58,6 +58,35 @@ function conditionMatches(c: JsonCondition, row: Row): boolean {
   }
 }
 
+/**
+ * Restrict rows to the selected databases. Each plant species is its own
+ * "database" (see catalog DATABASES), so a database id is matched against
+ * `row.species`.
+ */
+export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
+  const ids = new Set(databaseIds);
+  return rows.filter((r) => ids.has(String(r.species)));
+}
+
+/**
+ * Per-database match / total counts, in the given id order. Counts only — a real
+ * backend does this as `COUNT(*) ... GROUP BY database`, cheap at any scale.
+ */
+export function perDatabaseCounts(
+  query: JsonNode,
+  rows: Row[],
+  databaseIds: string[],
+): { id: string; matchCount: number; totalCount: number }[] {
+  return databaseIds.map((id) => {
+    const inDb = rows.filter((r) => String(r.species) === id);
+    return {
+      id,
+      totalCount: inDb.length,
+      matchCount: inDb.filter((r) => matches(query, r)).length,
+    };
+  });
+}
+
 export function matches(node: JsonNode, row: Row): boolean {
   if (node.kind === "condition") return conditionMatches(node, row);
   if (node.children.length === 0) return true;
@@ -75,7 +104,24 @@ function referencedFieldIds(node: JsonNode, acc = new Set<string>()): Set<string
   return acc;
 }
 
-export function computeBlocks(query: JsonNode, rows: Row[]): StatBlock[] {
+/** part / whole, scaled to `target`, rounded. Zero whole → zero. */
+export function scaleCount(part: number, whole: number, target: number): number {
+  return whole ? Math.round((part / whole) * target) : 0;
+}
+
+/**
+ * `scale` lets the mock report counts at real database scale while still
+ * evaluating the 200-row sample: `total` multiplies row-population counts
+ * (nullCount), `match` multiplies match-population counts (distribution buckets).
+ * min/max/avg are field *values*, never scaled. Both default to 1 (no scaling).
+ */
+export function computeBlocks(
+  query: JsonNode,
+  rows: Row[],
+  scale: { total?: number; match?: number } = {},
+): StatBlock[] {
+  const totalScale = scale.total ?? 1;
+  const matchScale = scale.match ?? 1;
   const matching = rows.filter((r) => matches(query, r));
   const blocks: StatBlock[] = [];
 
@@ -85,10 +131,10 @@ export function computeBlocks(query: JsonNode, rows: Row[]): StatBlock[] {
     const matchingValues = matching.map((r) => r[fieldId]);
     const present = matchingValues.filter((v) => v !== null && v !== undefined && v !== "");
 
-    // nullCount is computed across ALL rows in the dataset for reference
+    // nullCount is computed across ALL rows in the (scoped) dataset — Ruling 9.
     const allValues = rows.map((r) => r[fieldId]);
     const allPresent = allValues.filter((v) => v !== null && v !== undefined && v !== "");
-    const nullCount = allValues.length - allPresent.length;
+    const nullCount = Math.round((allValues.length - allPresent.length) * totalScale);
 
     if (field.valueType === "number") {
       const nums = present.map(Number);
@@ -113,7 +159,7 @@ export function computeBlocks(query: JsonNode, rows: Row[]): StatBlock[] {
       const counts = new Map<string, number>();
       for (const v of present) counts.set(String(v), (counts.get(String(v)) ?? 0) + 1);
       let buckets = [...counts.entries()]
-        .map(([label, count]) => ({ label, count }))
+        .map(([label, count]) => ({ label, count: Math.round(count * matchScale) }))
         .sort((a, b) => b.count - a.count);
       if (field.valueType === "string") buckets = buckets.slice(0, 10);
       blocks.push({ kind: "distribution", fieldLabel: field.label, buckets, nullCount });
