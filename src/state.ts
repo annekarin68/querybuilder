@@ -2,7 +2,7 @@ import type { Issue, QueryNode } from "./query/types";
 import { emptyQuery } from "./query/tree";
 import type {
   DatabasesResponse,
-  EntrysetResponse,
+  EntrysetsResponse,
   IndividualsResponse,
   SchemaResponse,
   StatsResponse,
@@ -25,7 +25,7 @@ export interface AppState {
   issues: Issue[];
 
   stats: { status: AsyncStatus; data: StatsResponse | null; error: string | null };
-  preview: { status: AsyncStatus; data: EntrysetResponse | null; error: string | null };
+  preview: { status: AsyncStatus; data: EntrysetsResponse | null; error: string | null };
 
   sidebarCollapsed: boolean;
 }

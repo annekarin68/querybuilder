@@ -1,7 +1,7 @@
 import type { QueryNode } from "../query/types";
 import type {
   DatabasesResponse,
-  EntrysetResponse,
+  EntrysetsResponse,
   IndividualsResponse,
   SchemaResponse,
   StatsResponse,
@@ -49,8 +49,8 @@ export function runQuery(
   databases: string[],
   page: number,
   pageSize: number,
-): Promise<EntrysetResponse> {
-  return request<EntrysetResponse>("/query", {
+): Promise<EntrysetsResponse> {
+  return request<EntrysetsResponse>("/query", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query, databases, page, pageSize }),

@@ -1,9 +1,12 @@
 import type { AppState } from "../state";
-import type { Individual } from "../api/types";
+import type { Entryset, Individual } from "../api/types";
 import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
+
+/** How many group badges to show inline before collapsing the rest into "+N". */
+const MAX_GROUP_BADGES = 3;
 
 function hint(text: string): string {
   return `<h4 class="ui header">Data preview</h4><div class="ui info message">${escapeHtml(text)}</div>`;
@@ -13,6 +16,46 @@ function individualsByLabel(state: AppState): Map<string, Individual> {
   const map = new Map<string, Individual>();
   for (const item of state.individuals?.individuals ?? []) map.set(item.label, item);
   return map;
+}
+
+function formatWhen(iso: string | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
+function groupsBadgesHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
+  const groups = [
+    ...new Set(
+      Object.keys(entryset.items)
+        .map((slug) => byLabel.get(slug)?.group)
+        .filter((g): g is string => Boolean(g) && g !== "metadata"),
+    ),
+  ].sort();
+  const shown = groups.slice(0, MAX_GROUP_BADGES);
+  const overflow = groups.length - shown.length;
+  return (
+    shown
+      .map((g) => `<span class="ui mini label">${escapeHtml(g.replace(/_/g, " "))}</span>`)
+      .join(" ") + (overflow > 0 ? ` <span class="qb-er-more">+${overflow}</span>` : "")
+  );
+}
+
+function entrysetRowHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
+  const vehicle = entryset.items["vehicle_identity"]?.["vehicle_type"];
+  const when = entryset.items["observation_window"]?.["from_timestamp"];
+  const itemCount = Object.keys(entryset.items).length;
+  return `
+    <details class="qb-entryset-row">
+      <summary>
+        <span class="qb-er-id">#${entryset.id}</span>
+        <span class="qb-er-when">${escapeHtml(formatWhen(typeof when === "string" ? when : undefined))}</span>
+        <span class="qb-er-vehicle">${escapeHtml(typeof vehicle === "string" ? vehicle : "—")}</span>
+        <span class="qb-er-groups">${groupsBadgesHtml(entryset, byLabel)}</span>
+        <span class="qb-er-count">${itemCount} items</span>
+      </summary>
+      <pre class="qb-er-json">${escapeHtml(JSON.stringify(entryset, null, 2))}</pre>
+    </details>`;
 }
 
 export function renderDataPreview(state: AppState): void {
@@ -43,21 +86,21 @@ export function renderDataPreview(state: AppState): void {
     // so "idle" always means "nothing current" — never run yet, or edited since.
     paint(
       el,
-      `<h4 class="ui header">Data preview</h4><div class="ui info message">Press <b>Run / Refresh</b> to load the sample entryset.</div>`,
+      `<h4 class="ui header">Data preview</h4><div class="ui info message">Press <b>Run / Refresh</b> to load sample entrysets.</div>`,
     );
     return;
   }
   if (p.status === "loading") {
     paint(
       el,
-      `<h4 class="ui header">Data preview</h4><div class="ui segment"><div class="ui active inline loader"></div> Loading entryset…</div>`,
+      `<h4 class="ui header">Data preview</h4><div class="ui segment"><div class="ui active inline loader"></div> Loading entrysets…</div>`,
     );
     return;
   }
   if (p.status === "error") {
     paint(
       el,
-      `<h4 class="ui header">Data preview</h4><div class="ui negative message"><div class="header">Could not load entryset</div><p>${escapeHtml(p.error)}</p></div>`,
+      `<h4 class="ui header">Data preview</h4><div class="ui negative message"><div class="header">Could not load entrysets</div><p>${escapeHtml(p.error)}</p></div>`,
     );
     return;
   }
@@ -66,27 +109,15 @@ export function renderDataPreview(state: AppState): void {
     paint(el, "");
     return;
   }
-  const d = p.data;
   const byLabel = individualsByLabel(state);
-  const rows = Object.entries(d.items).map(([slug, values]) => {
-    const individual = byLabel.get(slug);
-    const name = individual?.name ?? slug;
-    const group = individual?.group ?? "—";
-    const valuesText = Object.entries(values)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(", ");
-    return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(group)}</td><td>${escapeHtml(valuesText)}</td></tr>`;
-  });
+  const rows = p.data.entrysets.map((e) => entrysetRowHtml(e, byLabel));
 
   paint(
     el,
     `<h4 class="ui header">Data preview</h4>
      <p class="ui small text">
-       Entryset #${d.id} — mock data; the query above does not filter this yet.
+       ${p.data.entrysets.length} entryset(s) — mock data; the query above does not filter this yet. Click a row to see its full JSON.
      </p>
-     <table class="ui celled compact table">
-       <thead><tr><th>Item</th><th>Group</th><th>Values</th></tr></thead>
-       <tbody>${rows.join("")}</tbody>
-     </table>`,
+     <div class="qb-entryset-list">${rows.join("")}</div>`,
   );
 }

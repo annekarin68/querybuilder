@@ -5,8 +5,9 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-16 — Docs sidebar and data preview repointed at the new
-vehicle-telemetry mock data (`GET /api/individuals`, repurposed `POST /api/query`).
+Last updated: 2026-09-16 — Data preview redesigned as a multi-entryset summary
+list (`POST /api/query` now returns `{ entrysets: [...] }`), with 5 varied
+example entrysets to exercise it.
 
 ---
 
@@ -216,8 +217,9 @@ src/
     docsSidebar.ts     render for the left panel — built from state.individuals
                        (GET /api/individuals), NOT state.schema. See §9.
     statsPanel.ts      render for the right panel (data-driven from /api/stats).
-    dataPreview.ts     render for the bottom panel — shows one entryset
-                       (GET-via-POST /api/query), NOT a paged row table. See §9.
+    dataPreview.ts     render for the bottom panel — a summary list of
+                       entrysets (POST /api/query), NOT a paged row table.
+                       See §9.
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate(). Starts only when run as the entrypoint.
   catalog.ts           FIELDS + OPERATORS + DATABASES (with descriptions + arity).
@@ -243,9 +245,15 @@ mock-server/
                        keyed by entryset id (string): `{ [id]: { id, items: {
                        [individualLabel]: { [fieldLabel]: value } } } }`. The 4
                        metadata items (observation_window, vehicle_identity,
-                       trip_context, gps_position) always have every field populated;
-                       content items may omit fields. Currently holds one example
-                       entryset (a delivery van idling curbside mid-route).
+                       trip_context, gps_position) always have every field populated
+                       when present, though not every entryset includes all 4 (e.g.
+                       an unattended/parked vehicle may omit trip_context); content
+                       items may also omit fields. Currently holds 5 example
+                       entrysets, each a different vehicle/event scenario (a
+                       delivery van, a semi truck, a rideshare EV, a parked sedan,
+                       a construction dump truck) with deliberately different item
+                       counts (11-39) and subsystem coverage, to exercise the data
+                       preview's summary list (§9) realistically.
 tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, mock-server/evaluate + index (pure, no DOM).
 docs/
   ARCHITECTURE.md      This file.
@@ -276,7 +284,7 @@ export interface AppState {
   };
   preview: {
     status: "idle" | "loading" | "ok" | "error";
-    data: EntrysetResponse | null;    // transitional: always the mock server's one entryset — see §7/§9/§10
+    data: EntrysetsResponse | null;   // transitional: always every entryset the mock server has — see §7/§9/§10
     error: string | null;
   };
 
@@ -295,7 +303,7 @@ of the keys that changed.
 | App starts | `getSchema()` + `getDatabases()` + `getIndividuals()` → `setState({ schema, databases, individuals, ... })` → every panel renders once. Schema (or individuals/databases) load failure is fatal (full-page error + Reload). |
 | User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
 | `getStats()` resolves/rejects | stale-response guard (below); if current, `setState({ stats })` → **only** `statsPanel` repaints. |
-| User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. Transitional: the mock server always returns its one entryset regardless of `query`/`databases` — see §7/§10. There is no Prev/Next; a single entryset has nothing to page through. |
+| User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. Transitional: the mock server always returns every entryset it has regardless of `query`/`databases` — see §7/§10. There is no Prev/Next; the whole (short) list comes back in one response and scrolls internally. |
 | User toggles docs sidebar | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class. No repaint. |
 | User clicks a secondary-menu tab | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
 
@@ -465,21 +473,27 @@ type later = one new case, nothing else.
 Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
 Called only on **Run / Refresh**. Same `400` validation as `/api/stats` (still
 gates the Run button the same way), but — **transitional** — the query and
-databases are otherwise ignored: the mock server always returns its one
-entryset from `mock-server/data/entrysets.json`, regardless of what was asked
-for. `page`/`pageSize` are likewise accepted but unused. This is a deliberate,
-known simplification (see §10) until real filtering against entrysets exists.
+databases are otherwise ignored: the mock server always returns *every*
+entryset it has from `mock-server/data/entrysets.json` (currently 5, capped
+defensively at 25), regardless of what was asked for. `page`/`pageSize` are
+likewise accepted but unused. This is a deliberate, known simplification (see
+§10) until real filtering against entrysets exists.
 
 ```ts
-interface EntrysetResponse {
+interface Entryset {
   id: number;
   items: Record<string, Record<string, string | number | boolean>>; // keyed by Individual.label, then field label
 }
+interface EntrysetsResponse {
+  entrysets: Entryset[];
+}
 ```
 
-Drives the **bottom** data preview (§9), which shows the entryset's items
-directly — there is no pagination (a single entryset has nothing to page
-through), so no Prev/Next.
+Drives the **bottom** data preview (§9): a compact summary row per entryset,
+not a full item-by-item view — see §9 for why (design rationale: a full
+comparison grid doesn't scale past a handful of entrysets in either
+orientation; a summary list does). There is no pagination — the whole list is
+returned in one response and scrolls internally.
 
 ### Errors
 
@@ -615,14 +629,36 @@ branches: `loading` → `ui loader`; `error` → `ui negative message`, no data;
 ### Bottom — `dataPreview.ts`
 
 **Run / Refresh** button (disabled while `issues` has errors or while
-loading — same gating as before). On success, a Fomantic `ui celled table`
-with one row per item in the returned entryset (`Item` / `Group` / `Values`),
-the entryset id shown above it. `Item`/`Group` are looked up by cross-
-referencing `state.individuals` (falling back to the raw slug if not yet
-loaded); `Values` is that item's populated fields as `label: value` pairs.
-Transitional: since `/api/query` always returns the same entryset (§7, §10),
-this table currently never changes with the query — there is a note to that
-effect in the panel. No pagination (§7). `status: "idle"` → hint from §6.
+loading — same gating as before). On success: a **summary index list**, one
+compact row per entryset in `EntrysetsResponse.entrysets` — not a full
+item-by-item grid. Design rationale: entrysets are heterogeneous (each is a
+different event, most likely holding a different subset of `individual.json`'s
+items), so a grid needs either items-as-rows (fine for a handful of
+entrysets-as-columns, but entrysets don't scale past ~5-6 columns on screen)
+or entrysets-as-rows (scales entrysets fine, but then *items* become columns
+and the union across many varied entrysets can easily reach 60-100+, needing
+horizontal scroll — worse UX than vertical). A summary list sidesteps the
+problem entirely: no per-item columns, so it scales to 20+ entrysets just by
+scrolling vertically (`.qb-entryset-list`, `max-height: 45vh`, same pattern as
+`.qb-stat-blocks`).
+
+Each row is a native `<details>/<summary>` element (no JS wiring needed for
+expand/collapse):
+
+- **Summary line**: entryset id, "When" (`observation_window.from_timestamp`,
+  locale-formatted), "Vehicle" (`vehicle_identity.vehicle_type`, both falling
+  back to `—` if that metadata item is absent), the distinct non-`metadata`
+  `group`s present as badges (first 3, `+N` overflow — computed by
+  cross-referencing `state.individuals`), and the total item count.
+- **Expanded content**: the entryset's full `{ id, items }` as pretty-printed
+  JSON (`JSON.stringify(entryset, null, 2)` in a `<pre>`) — a throwaway stand-in
+  for the dedicated pretty-JSON entryset viewer planned as a follow-up; expect
+  this to be replaced by a link/route into that viewer once it exists.
+
+Transitional: since `/api/query` always returns every entryset the mock has
+(§7, §10), this list currently never changes with the query — there is a note
+to that effect in the panel. No pagination (§7). `status: "idle"` → hint from
+§6.
 
 ---
 
@@ -644,8 +680,9 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
   UI show `930.3M of 1.3B` rather than `41 of 200`.
 - `POST /api/query` → validates the body the same way (`400` on a bad query or
   missing/empty `databases`), but the query/databases/page/pageSize are
-  otherwise **ignored**: it always returns `Object.values(ENTRYSETS)[0]`, the
-  one entryset in `data/entrysets.json`. Transitional — see §7.
+  otherwise **ignored**: it always returns `{ entrysets: Object.values(ENTRYSETS).slice(0, 25) }`,
+  every entryset in `data/entrysets.json` (currently 5), capped defensively.
+  Transitional — see §7.
 - A second, separate mock dataset (`mock-server/vehicleData.ts`, loading
   `data/individual.json` / `data/entrysets.json`) backs `GET /api/individuals`
   and the repurposed `POST /api/query` above. It shares no logic with
@@ -725,3 +762,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Stats panel: headline + "By database" pinned; field blocks moved into a `.qb-stat-blocks` (`max-height: 45vh`) scroll region; stats column `position: sticky`. Per-database stats stay visible for any query size. |
 | 2026-09-16 | New mock dataset added: `mock-server/data/individual.json` (a vehicle/fleet telemetry data model: ~157 items across 18 subsystem groups + metadata) and `mock-server/data/entrysets.json` (actual telemetry records referencing those items; one example entryset so far). Not yet wired into the app. |
 | 2026-09-16 | Docs sidebar and data preview repointed at the new dataset: `mock-server/vehicleData.ts` loads it; new `GET /api/individuals` endpoint + `IndividualsResponse`/`Individual`/`IndividualField` types; `POST /api/query`'s response type becomes `EntrysetResponse` (`{ id, items }`, replacing the old `columns`/`rows`/pagination shape) and — transitionally — always returns the mock server's one entryset regardless of the query/databases sent. `AppState` gains `individuals`; `preview` drops `page` (no pagination for a single entryset, so Prev/Next is removed from `dataPreview.ts`). `docsSidebar.ts` now renders `state.individuals` grouped by subsystem instead of `state.schema`'s fields/operators. The query builder, stats panel, and database picker are untouched and still run against the original plant/species mock data — a known, temporary inconsistency (see §10). |
+| 2026-09-16 | Data preview redesigned as a multi-entryset summary list (a single-entryset item table doesn't scale to a real ~6B-entryset dataset). Added 4 more example entrysets to `data/entrysets.json` (ids 2-5: semi truck, rideshare EV, parked sedan, construction dump truck — 11-39 items each, deliberately varied) alongside the original delivery van. `POST /api/query` now returns `{ entrysets: Entryset[] }` (every entryset the mock has, capped at 25) instead of one `Entryset`; `EntrysetResponse` renamed to `Entryset` + new `EntrysetsResponse` wrapper. `dataPreview.ts` renders one native `<details>/<summary>` row per entryset (id, formatted time, vehicle type, subsystem-group badges, item count; no JS wiring needed for expand/collapse) inside a `.qb-entryset-list` scroll region (`max-height: 45vh`, same pattern as `.qb-stat-blocks`); expanding a row shows that entryset's full `{ id, items }` as pretty-printed JSON — a throwaway stand-in for the dedicated pretty-JSON entryset viewer planned as a follow-up task. Rejected an items×entrysets comparison grid in either orientation: entrysets-as-columns tops out around 5-6 on screen, and entrysets-as-rows just moves the same explosion onto item columns (60-100+ for a varied 20-entryset sample) — worse than the vertical scroll a summary list needs instead. |
