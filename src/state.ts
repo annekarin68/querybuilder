@@ -1,5 +1,6 @@
 import type { Issue, QueryNode } from "./query/types";
-import { emptyQuery } from "./query/tree";
+import { countConditions, emptyQuery } from "./query/tree";
+import { hasBlockingErrors } from "./query/validate";
 import type {
   DatabasesResponse,
   EntrysetsResponse,
@@ -42,6 +43,24 @@ export const initialState: AppState = {
   preview: { status: "idle", data: null, error: null },
   sidebarCollapsed: false,
 };
+
+/**
+ * Whether the current query/scope is complete and valid enough to run or
+ * refresh (§6): a schema is loaded, there are no blocking validation issues,
+ * at least one condition exists, and at least one database is selected. The
+ * single source of truth for this check — main.ts's runPreview, refreshStats,
+ * and syncRunButton all read it instead of repeating the four clauses.
+ */
+export function canRunQuery(
+  state: Pick<AppState, "schema" | "issues" | "query" | "selectedDatabaseIds">,
+): boolean {
+  return (
+    !!state.schema &&
+    !hasBlockingErrors(state.issues) &&
+    countConditions(state.query) > 0 &&
+    state.selectedDatabaseIds.length > 0
+  );
+}
 
 type Listener = (state: AppState, changed: Set<keyof AppState>) => void;
 

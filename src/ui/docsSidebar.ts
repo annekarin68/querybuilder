@@ -4,7 +4,12 @@ import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { compact, matchRatio } from "./format";
 
-const TOTAL_ENTRYSETS = 6_000_000_000;
+/** The universe size implied by this item's own count/percentage — derived rather
+ * than hardcoded, so this stays correct however large the real dataset is (the API
+ * already tells us the ratio; we only need it back in absolute terms for display). */
+function impliedTotal(stats: Individual["stats"]): number {
+  return stats.percentage > 0 ? Math.round(stats.count / stats.percentage) : stats.count;
+}
 
 function groupLabel(group: string): string {
   return group.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -20,7 +25,8 @@ function itemHtml(item: Individual): string {
         `<code>${escapeHtml(f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type)}</span>`,
     )
     .join(" ");
-  const ratio = matchRatio(item.stats.count, TOTAL_ENTRYSETS);
+  const total = impliedTotal(item.stats);
+  const ratio = matchRatio(item.stats.count, total);
   return `
     <div class="item" data-item-label="${escapeHtml(item.name.toLowerCase())}">
       <div class="content">
@@ -28,7 +34,7 @@ function itemHtml(item: Individual): string {
         ${tags}
         <div class="description">${escapeHtml(item.description)}</div>
         ${item.comment ? `<p class="ui small text"><i>${escapeHtml(item.comment)}</i></p>` : ""}
-        <p class="ui small text" title="${escapeHtml(item.stats.count.toLocaleString())} of ${TOTAL_ENTRYSETS.toLocaleString()} entrysets">
+        <p class="ui small text" title="${escapeHtml(item.stats.count.toLocaleString())} of ${total.toLocaleString()} entrysets">
           In ${compact(item.stats.count)} entrysets (${ratio})
         </p>
         <p class="ui small text">${fields}</p>
