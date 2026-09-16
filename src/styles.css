@@ -86,3 +86,59 @@ body {
   max-height: 45vh;
   overflow-y: auto;
 }
+
+/* Data preview (src/ui/dataPreview.ts): a scrollable list of entrysets, each
+   a native <details> row — no JS needed for expand/collapse. */
+.qb-entryset-list {
+  max-height: 45vh;
+  overflow-y: auto;
+  border: 1px solid rgba(34, 36, 38, 0.15);
+  border-radius: 0.28rem;
+}
+.qb-entryset-row {
+  border-bottom: 1px solid rgba(34, 36, 38, 0.1);
+  padding: 0.5rem 0.75rem;
+}
+.qb-entryset-row:last-child {
+  border-bottom: none;
+}
+.qb-entryset-row summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.qb-er-id {
+  font-weight: 700;
+  flex: 0 0 2.5rem;
+}
+.qb-er-when {
+  flex: 0 0 11rem;
+  color: rgba(0, 0, 0, 0.6);
+}
+.qb-er-vehicle {
+  flex: 0 0 8rem;
+  font-weight: 600;
+}
+.qb-er-groups {
+  flex: 1 1 auto;
+  min-width: 10rem;
+}
+.qb-er-more {
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 0.85em;
+}
+.qb-er-count {
+  flex: 0 0 5rem;
+  text-align: right;
+  color: rgba(0, 0, 0, 0.6);
+}
+.qb-er-json {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 0.28rem;
+  font-size: 0.8em;
+  overflow-x: auto;
+}

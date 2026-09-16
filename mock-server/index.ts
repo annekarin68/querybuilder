@@ -129,9 +129,10 @@ const server = createServer(async (req, res) => {
       }
       // Transitional: the query/databases are validated above (so the Run button's
       // gating still behaves normally) but otherwise ignored — the mock always
-      // returns the one entryset we have, regardless of what was asked for.
-      const entryset = Object.values(ENTRYSETS)[0];
-      sendJson(res, 200, entryset ?? { id: 0, items: {} });
+      // returns every entryset it has (capped defensively), regardless of what
+      // was asked for.
+      const entrysets = Object.values(ENTRYSETS).slice(0, 25);
+      sendJson(res, 200, { entrysets });
       return;
     }
     sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });

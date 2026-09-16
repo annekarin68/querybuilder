@@ -89,13 +89,18 @@ export interface IndividualsResponse {
  * for a subset of `individual.json`'s items. `items` is keyed by an
  * Individual's `label`; each item's value object is keyed by one of that
  * item's field labels — see docs/ARCHITECTURE.md for the full shape.
- *
- * Transitional: POST /api/query currently always returns the mock server's one
- * entryset, regardless of the query/databases sent.
  */
-export interface EntrysetResponse {
+export interface Entryset {
   id: number;
   items: Record<string, Record<string, string | number | boolean>>;
+}
+
+/**
+ * Transitional: POST /api/query currently always returns every entryset the
+ * mock server has (capped at 25), regardless of the query/databases sent.
+ */
+export interface EntrysetsResponse {
+  entrysets: Entryset[];
 }
 
 /** The databases the query can be scoped to (GET /api/databases). */
