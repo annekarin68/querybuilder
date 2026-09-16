@@ -221,14 +221,29 @@ src/
                        entrysets (POST /api/query), NOT a paged row table.
                        See §9.
 mock-server/
-  index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate(). Starts only when run as the entrypoint.
-  catalog.ts           FIELDS + OPERATORS + DATABASES (with descriptions + arity).
-  data.ts              RECORDS — ~200 deterministically generated in-memory rows.
-  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows) + filterByDatabases(rows, ids).
+  index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate().
+                       Starts only when run as the entrypoint.
+  schema.ts            FieldDef/OperatorDef/ValueType/Arity types, OPERATORS,
+                       and buildFields(individuals) — the generic field
+                       catalog, derived purely from individual.json's
+                       declared item/field shape (never from specific
+                       item/field names or values).
+  databases.ts         DatabaseDef type, DATABASES (7 synthetic, arbitrarily
+                       named ALPHA..ETA partitions with mock-only sizes),
+                       dbIndexForEntrysetId(id) / databaseIdForEntrysetId(id)
+                       — a pure function of an entryset's numeric id, never
+                       of its content.
+  rows.ts              flattenEntryset(entryset) -> Row (nested items ->
+                       dotted "individualLabel.fieldLabel" keys + a
+                       synthetic __db key) and ROWS, every entryset
+                       flattened once at startup.
+  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows, fields)
+                       + filterByDatabases(rows, ids) / perDatabaseCounts(query, rows, ids)
+                       (keyed on row.__db). Fully generic: takes FieldDef[]
+                       as a parameter rather than importing a data-specific
+                       catalog.
   vehicleData.ts       Loads data/individual.json + data/entrysets.json via
-                       fs.readFileSync (no bundler JSON-module config needed) ->
-                       INDIVIDUALS, ENTRYSETS. A separate, newer mock dataset from
-                       FIELDS/RECORDS above — see §7 and §10.
+                       fs.readFileSync -> INDIVIDUALS, ENTRYSETS.
   data/
     individual.json    The vehicle/fleet telemetry data model: ~157 items (4 metadata
                        + ~153 content items across 18 subsystem groups: engine,
@@ -243,17 +258,10 @@ mock-server/
                        item's own description.
     entrysets.json     Actual telemetry records referencing individual.json's items,
                        keyed by entryset id (string): `{ [id]: { id, items: {
-                       [individualLabel]: { [fieldLabel]: value } } } }`. The 4
-                       metadata items (observation_window, vehicle_identity,
-                       trip_context, gps_position) always have every field populated
-                       when present, though not every entryset includes all 4 (e.g.
-                       an unattended/parked vehicle may omit trip_context); content
-                       items may also omit fields. Currently holds 5 example
-                       entrysets, each a different vehicle/event scenario (a
-                       delivery van, a semi truck, a rideshare EV, a parked sedan,
-                       a construction dump truck) with deliberately different item
-                       counts (11-39) and subsystem coverage, to exercise the data
-                       preview's summary list (§9) realistically.
+                       [individualLabel]: { [fieldLabel]: value } } } }`. 21 example
+                       entrysets (ids 1-21), each a distinct, internally-consistent
+                       vehicle/event scenario, spread across all 7 mock databases via
+                       dbIndexForEntrysetId(id).
 tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, mock-server/evaluate + index (pure, no DOM).
 docs/
   ARCHITECTURE.md      This file.
@@ -394,8 +402,11 @@ interface SchemaResponse {
 
 ### `GET /api/databases`
 
-The databases the query can be scoped to. "Each kind of plant has its own
-database", so the mock derives these from its species list.
+The databases the query can be scoped to: 7 arbitrary, content-agnostic
+partitions (`mock-server/databases.ts`). An entryset's database is a pure
+function of its own numeric id (`dbIndexForEntrysetId`) — never of anything
+inside it — which is what keeps this mock decoupled from the concrete shape
+of `entrysets.json`'s content.
 
 ```ts
 interface DatabasesResponse {
@@ -471,13 +482,12 @@ type later = one new case, nothing else.
 ### `POST /api/query`
 
 Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
-Called only on **Run / Refresh**. Same `400` validation as `/api/stats` (still
-gates the Run button the same way), but — **transitional** — the query and
-databases are otherwise ignored: the mock server always returns *every*
-entryset it has from `mock-server/data/entrysets.json` (currently 5, capped
-defensively at 25), regardless of what was asked for. `page`/`pageSize` are
-likewise accepted but unused. This is a deliberate, known simplification (see
-§10) until real filtering against entrysets exists.
+Called only on **Run / Refresh**. Same `400` validation as `/api/stats`. The
+mock scopes `ROWS` (every entryset, flattened) to the selected databases,
+evaluates the query against them, and maps matching rows back to their
+source entrysets, capped at 25. `page`/`pageSize` are accepted but unused —
+there is no pagination (§9); the whole capped result comes back in one
+response.
 
 ```ts
 interface Entryset {
@@ -667,34 +677,35 @@ to that effect in the panel. No pagination (§7). `status: "idle"` → hint from
 Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
 `http`, no Express, heavily commented top to bottom.
 
-- ~200 fake in-memory records; a hand-written `FIELDS` / `OPERATORS` / `DATABASES`
-  catalog (a database == a plant species). Each database carries a mock-only
-  `size` (12 K … 5.6 B) — see below.
-- `GET /api/schema` → the catalog. `GET /api/databases` → `DATABASES` **without
-  `size`** (it isn't part of the contract).
-- `POST /api/stats` → the 200-row sample drives match *rates*; `DATABASES[].size`
-  drives the *magnitude*. Per database: `matchCount = round(sampleMatchRate × size)`,
-  `totalCount = size`. Combined = the sums. `blocks[]` are computed on the sample
-  then scaled (`nullCount` by the total ratio, distribution buckets by the match
-  ratio; `min`/`max`/`avg` are field values, never scaled). This is what makes the
-  UI show `930.3M of 1.3B` rather than `41 of 200`.
-- `POST /api/query` → validates the body the same way (`400` on a bad query or
-  missing/empty `databases`), but the query/databases/page/pageSize are
-  otherwise **ignored**: it always returns `{ entrysets: Object.values(ENTRYSETS).slice(0, 25) }`,
-  every entryset in `data/entrysets.json` (currently 5), capped defensively.
-  Transitional — see §7.
-- A second, separate mock dataset (`mock-server/vehicleData.ts`, loading
-  `data/individual.json` / `data/entrysets.json`) backs `GET /api/individuals`
-  and the repurposed `POST /api/query` above. It shares no logic with
-  `FIELDS`/`RECORDS`/`DATABASES` — the query builder, stats panel, and database
-  picker are untouched and still run against the original plant/species mock
-  data; only the docs sidebar and data preview were repointed. This is a known,
-  temporary inconsistency (a species query has no effect on what the preview
-  shows) accepted for now rather than rewiring the whole app in one step.
+- `mock-server/schema.ts` builds the field/operator catalog purely from
+  `individual.json`'s declared item/field shape: one field per
+  (individual, field) pair, id `"individualLabel.fieldLabel"`, `valueType`
+  mapped from the declared `str`/`int`/`float`/`bool` type, and
+  `operatorIds` assigned by a generic per-valueType profile (never per
+  specific field). `GET /api/schema` returns this catalog.
+- `mock-server/databases.ts` defines 7 synthetic databases (`ALPHA`..`ETA`),
+  each with a mock-only `size` spanning several orders of magnitude, and
+  `dbIndexForEntrysetId(id)` — a hash of the entryset's own numeric id that
+  assigns it to exactly one database, independent of its content.
+  `GET /api/databases` returns these **without** `size` (it isn't part of
+  the contract).
+- `mock-server/rows.ts` flattens every entryset in `ENTRYSETS`
+  (`mock-server/vehicleData.ts`) into a flat `Row` — dotted
+  `"individualLabel.fieldLabel"` keys matching the schema's field ids, plus
+  a synthetic `__db` key from `databaseIdForEntrysetId` — once at startup
+  (`ROWS`).
+- `POST /api/stats` scopes `ROWS` to the selected databases
+  (`filterByDatabases`, keyed on `row.__db`), evaluates the query
+  (`matches`), and scales the sample's match rate onto each database's
+  `size` (`scaleCount`) so the UI sees realistic large numbers exactly as
+  before — only the underlying data changed, not the scaling technique.
+- `POST /api/query` scopes and evaluates the same way, then maps matching
+  rows back to their source `Entryset` objects via `ENTRYSETS[id]`, capped
+  at 25.
 - Bad query, or missing / empty `databases` → `400 { error }`.
 
-Shares **no code** with `src/`. It stands in for "a real backend in any language";
-the frontend knows it only through `src/api/types.ts`.
+Shares **no code** with `src/`. It stands in for "a real backend in any
+language"; the frontend knows it only through `src/api/types.ts`.
 
 ---
 
@@ -763,3 +774,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-16 | New mock dataset added: `mock-server/data/individual.json` (a vehicle/fleet telemetry data model: ~157 items across 18 subsystem groups + metadata) and `mock-server/data/entrysets.json` (actual telemetry records referencing those items; one example entryset so far). Not yet wired into the app. |
 | 2026-09-16 | Docs sidebar and data preview repointed at the new dataset: `mock-server/vehicleData.ts` loads it; new `GET /api/individuals` endpoint + `IndividualsResponse`/`Individual`/`IndividualField` types; `POST /api/query`'s response type becomes `EntrysetResponse` (`{ id, items }`, replacing the old `columns`/`rows`/pagination shape) and — transitionally — always returns the mock server's one entryset regardless of the query/databases sent. `AppState` gains `individuals`; `preview` drops `page` (no pagination for a single entryset, so Prev/Next is removed from `dataPreview.ts`). `docsSidebar.ts` now renders `state.individuals` grouped by subsystem instead of `state.schema`'s fields/operators. The query builder, stats panel, and database picker are untouched and still run against the original plant/species mock data — a known, temporary inconsistency (see §10). |
 | 2026-09-16 | Data preview redesigned as a multi-entryset summary list (a single-entryset item table doesn't scale to a real ~6B-entryset dataset). Added 4 more example entrysets to `data/entrysets.json` (ids 2-5: semi truck, rideshare EV, parked sedan, construction dump truck — 11-39 items each, deliberately varied) alongside the original delivery van. `POST /api/query` now returns `{ entrysets: Entryset[] }` (every entryset the mock has, capped at 25) instead of one `Entryset`; `EntrysetResponse` renamed to `Entryset` + new `EntrysetsResponse` wrapper. `dataPreview.ts` renders one native `<details>/<summary>` row per entryset (id, formatted time, vehicle type, subsystem-group badges, item count; no JS wiring needed for expand/collapse) inside a `.qb-entryset-list` scroll region (`max-height: 45vh`, same pattern as `.qb-stat-blocks`); expanding a row shows that entryset's full `{ id, items }` as pretty-printed JSON — a throwaway stand-in for the dedicated pretty-JSON entryset viewer planned as a follow-up task. Rejected an items×entrysets comparison grid in either orientation: entrysets-as-columns tops out around 5-6 on screen, and entrysets-as-rows just moves the same explosion onto item columns (60-100+ for a varied 20-entryset sample) — worse than the vertical scroll a summary list needs instead. |
+| 2026-09-16 | Finalized the entrysets transition: the query builder, database picker, and stats panel now run against the entryset/individual model (previously only the docs sidebar and preview did). Replaced the plant/species mock (`catalog.ts`, `data.ts`) with `schema.ts` (field catalog built purely from `individual.json`'s declared shape), `databases.ts` (7 arbitrary, content-agnostic databases partitioned by a hash of each entryset's id), and `rows.ts` (flattens entrysets into the flat rows the existing matching engine expects). `POST /api/query` now filters for real instead of always returning every entryset. `evaluate.ts`'s `computeBlocks` takes `fields` as an explicit parameter instead of importing a data-specific catalog. Sample data grew from 5 to 21 entrysets so every database has real sample data. No changes to `src/` — it already consumed the API purely through its typed contract. |
