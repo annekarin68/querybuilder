@@ -31,9 +31,10 @@ const individualsByLabel = new Map(
   }),
 );
 
-const entrysets = JSON.parse(
-  readFileSync(path.join(dataDir, "entrysets.json"), "utf8"),
-) as Record<string, Entryset>;
+const entrysets = JSON.parse(readFileSync(path.join(dataDir, "entrysets.json"), "utf8")) as Record<
+  string,
+  Entryset
+>;
 
 const EXPECTED_DB_INDEX: Record<number, number> = {
   1: 6,
