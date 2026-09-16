@@ -96,8 +96,8 @@ export interface Entryset {
 }
 
 /**
- * Transitional: POST /api/query currently always returns every entryset the
- * mock server has (capped at 25), regardless of the query/databases sent.
+ * The entrysets matching the current query, scoped to the selected
+ * databases, capped at 25. No pagination.
  */
 export interface EntrysetsResponse {
   entrysets: Entryset[];

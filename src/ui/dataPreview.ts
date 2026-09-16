@@ -116,7 +116,7 @@ export function renderDataPreview(state: AppState): void {
     el,
     `<h4 class="ui header">Data preview</h4>
      <p class="ui small text">
-       ${p.data.entrysets.length} entryset(s) — mock data; the query above does not filter this yet. Click a row to see its full JSON.
+       ${p.data.entrysets.length} entryset(s) matching your query — click a row to see its full JSON.
      </p>
      <div class="qb-entryset-list">${rows.join("")}</div>`,
   );

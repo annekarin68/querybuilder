@@ -69,6 +69,10 @@ export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
   return rows.filter((r) => ids.has(String(r.__db)));
 }
 
+/**
+ * Per-database match / total counts, in the given id order. Counts only — a real
+ * backend does this as `COUNT(*) ... GROUP BY database`, cheap at any scale.
+ */
 export function perDatabaseCounts(
   query: JsonNode,
   rows: Row[],
@@ -106,6 +110,12 @@ export function scaleCount(part: number, whole: number, target: number): number 
   return whole ? Math.round((part / whole) * target) : 0;
 }
 
+/**
+ * `scale` lets the mock report counts at real database scale while still
+ * evaluating the sample: `total` multiplies row-population counts
+ * (nullCount), `match` multiplies match-population counts (distribution buckets).
+ * min/max/avg are field *values*, never scaled. Both default to 1 (no scaling).
+ */
 export function computeBlocks(
   query: JsonNode,
   rows: Row[],
@@ -123,6 +133,7 @@ export function computeBlocks(
     const matchingValues = matching.map((r) => r[fieldId]);
     const present = matchingValues.filter((v) => v !== null && v !== undefined && v !== "");
 
+    // nullCount is computed across ALL rows in the (scoped) dataset — Ruling 9.
     const allValues = rows.map((r) => r[fieldId]);
     const allPresent = allValues.filter((v) => v !== null && v !== undefined && v !== "");
     const nullCount = Math.round((allValues.length - allPresent.length) * totalScale);

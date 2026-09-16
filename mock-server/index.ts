@@ -91,7 +91,7 @@ const server = createServer(async (req, res) => {
       const query = body.query as JsonNode;
       const ids = body.databases as string[];
 
-      // The 200-row sample drives match RATES; DATABASES[].size drives the
+      // The sample drives match RATES; DATABASES[].size drives the
       // MAGNITUDE the API reports, so the UI sees realistic large numbers.
       const perDatabase = perDatabaseCounts(query, ROWS, ids).map((c) => {
         const size = DATABASES.find((d) => d.id === c.id)?.size ?? 0;

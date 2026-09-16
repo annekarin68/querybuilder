@@ -1,10 +1,11 @@
 # Query Builder (frontend)
 
 A single-page query-builder UI. Build a filter with nested AND/OR groups; see live
-match statistics; page through a sample of matching rows. All data comes from our
+match statistics; browse a summary list of matching entrysets. All data comes from our
 API (`/api/schema`, `/api/databases`, `/api/stats`, `/api/query`). A dev-only mock
 server implements those endpoints so the app runs end to end locally. The query
-can be scoped to one or more "databases" (each plant species is its own database).
+can be scoped to one or more "databases" (7 arbitrary, content-agnostic partitions
+of the sample vehicle-telemetry data, ALPHA through ETA).
 
 ## Run it
 

@@ -54,8 +54,9 @@ function runPreview(): void {
     return;
   const key = requestKey(query, selectedDatabaseIds);
   store.setState({ preview: { status: "loading", data: null, error: null } });
-  // page/pageSize are sent for API-shape stability but currently ignored by the
-  // mock server, which always returns its one entryset (see mock-server §10).
+  // page/pageSize are sent for API-shape stability, but the mock server does
+  // not paginate — it filters query/databases for real and returns every
+  // matching entryset (capped at 25) in one response (see mock-server §10).
   runQuery(query, selectedDatabaseIds, 1, PAGE_SIZE)
     .then((data) => {
       const s = store.getState();

@@ -292,7 +292,7 @@ export interface AppState {
   };
   preview: {
     status: "idle" | "loading" | "ok" | "error";
-    data: EntrysetsResponse | null;   // transitional: always every entryset the mock server has — see §7/§9/§10
+    data: EntrysetsResponse | null;   // the entrysets matching the current query — see §7/§9/§10
     error: string | null;
   };
 
@@ -311,7 +311,7 @@ of the keys that changed.
 | App starts | `getSchema()` + `getDatabases()` + `getIndividuals()` → `setState({ schema, databases, individuals, ... })` → every panel renders once. Schema (or individuals/databases) load failure is fatal (full-page error + Reload). |
 | User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
 | `getStats()` resolves/rejects | stale-response guard (below); if current, `setState({ stats })` → **only** `statsPanel` repaints. |
-| User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. Transitional: the mock server always returns every entryset it has regardless of `query`/`databases` — see §7/§10. There is no Prev/Next; the whole (short) list comes back in one response and scrolls internally. |
+| User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and scrolls internally. |
 | User toggles docs sidebar | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class. No repaint. |
 | User clicks a secondary-menu tab | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
 
@@ -579,8 +579,9 @@ show a "Select at least one database" hint and **Run** is disabled.
 ### Left — `docsSidebar.ts`
 
 Built entirely from `state.individuals` (GET /api/individuals) — **not**
-`state.schema`; this panel documents the vehicle-telemetry data model, which is
-independent of the query builder's plant/species schema (see §7, §10). A
+`state.schema`; both now describe the same vehicle-telemetry entryset/individual
+model (see §7, §10), just via two separate API responses/state slices, so the
+docs sidebar renders independently of the query builder's field catalog. A
 Fomantic `ui accordion`: one section per `group` (18 subsystem groups, e.g.
 `engine`, `tires_wheels`, `metadata`), each listing its items — name, tags,
 `description`/`comment`, `stats.count`/`percentage` (via `matchRatio()` from
@@ -665,10 +666,8 @@ expand/collapse):
   for the dedicated pretty-JSON entryset viewer planned as a follow-up; expect
   this to be replaced by a link/route into that viewer once it exists.
 
-Transitional: since `/api/query` always returns every entryset the mock has
-(§7, §10), this list currently never changes with the query — there is a note
-to that effect in the panel. No pagination (§7). `status: "idle"` → hint from
-§6.
+`/api/query` filters for real (§7, §10), so this list changes with the query
+and selected databases. No pagination (§7). `status: "idle"` → hint from §6.
 
 ---
 

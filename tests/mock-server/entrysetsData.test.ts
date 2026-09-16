@@ -110,4 +110,9 @@ describe("entrysets.json sample data", () => {
       expect(entrysets[idStr]?.id).toBe(id);
     }
   });
+
+  it("every one of the 7 databases has at least one sample entryset", () => {
+    const dbIndexes = new Set(Object.values(entrysets).map((e) => dbIndexForEntrysetId(e.id)));
+    expect(dbIndexes.size).toBe(7);
+  });
 });
