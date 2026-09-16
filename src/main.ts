@@ -81,9 +81,8 @@ function runGuarded<T>(
 }
 
 function runPreview(): void {
-  // page/pageSize are sent for API-shape stability, but the mock server does
-  // not paginate — it filters query/databases for real and returns every
-  // matching entryset (capped at 25) in one response (see mock-server §10).
+  // page/pageSize are sent for API-shape stability; the response is capped at
+  // 25 entrysets regardless (see EntrysetsResponse in api/types.ts).
   runGuarded(
     (query, databases) => runQuery(query, databases, 1, PAGE_SIZE),
     () => store.setState({ preview: { status: "loading", data: null, error: null } }),

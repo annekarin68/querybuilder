@@ -3,10 +3,10 @@ import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 
 /**
- * The database scope selector, above the query builder. Databases are 7
- * arbitrary partitions with no semantic tie to entryset content (see
- * mock-server/databases.ts) — this is a checkbox per database. Changing it
- * behaves like editing the query (see main.ts onDatabasesChange + §6).
+ * The database scope selector, above the query builder. Databases are
+ * arbitrary partitions with no semantic tie to entryset content (returned by
+ * GET /api/databases) — this is a checkbox per database. Changing it behaves
+ * like editing the query (see main.ts onDatabasesChange + §6).
  */
 export function renderDatabasePicker(state: AppState): void {
   const el = panelEls().dbpicker;

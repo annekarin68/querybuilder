@@ -3,7 +3,7 @@ export type LogicalOperator = "AND" | "OR";
 export interface Condition {
   kind: "condition";
   id: string;
-  /** Which individual.json item this condition targets — UI staging only; `fieldId` (below) is the authoritative target once chosen. */
+  /** Which item (from GET /api/individuals) this condition targets — UI staging only; `fieldId` (below) is the authoritative target once chosen. */
   individualId: string | null;
   fieldId: string | null;
   operatorId: string | null;
