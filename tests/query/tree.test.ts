@@ -20,7 +20,14 @@ describe("tree", () => {
   it("new nodes get unique ids", () => {
     expect(newCondition().id).not.toBe(newCondition().id);
     expect(newGroup().id).not.toBe(newGroup().id);
-    expect(newCondition().individualId).toBeNull();
+  });
+
+  it("newCondition starts with no individual, field, operator, or value", () => {
+    const c = newCondition();
+    expect(c.individualId).toBeNull();
+    expect(c.fieldId).toBeNull();
+    expect(c.operatorId).toBeNull();
+    expect(c.value).toBeNull();
   });
 
   it("addChild returns a new tree with the node appended, original unchanged", () => {

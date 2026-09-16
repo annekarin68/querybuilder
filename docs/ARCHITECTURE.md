@@ -278,7 +278,7 @@ index.html
 export interface AppState {
   schema: SchemaResponse | null;      // loaded once at startup
   databases: Array<{ id; label }> | null;   // loaded once (GET /api/databases)
-  individuals: IndividualsResponse | null;  // loaded once (GET /api/individuals); drives docsSidebar
+  individuals: IndividualsResponse | null;  // loaded once (GET /api/individuals); drives docsSidebar and the query builder's Item dropdown
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
 
@@ -319,7 +319,8 @@ Each panel subscribes narrowly:
 
 ```ts
 subscribe((state, changed) => {
-  if (changed.has("query") || changed.has("issues")) queryBuilder.render(state);
+  if (changed.has("query") || changed.has("issues") || changed.has("individuals"))
+    queryBuilder.render(state);
   if (changed.has("stats"))   statsPanel.render(state);
   if (changed.has("preview") || changed.has("individuals")) dataPreview.render(state);
   if (changed.has("individuals")) docsSidebar.render(state);
@@ -521,6 +522,10 @@ export type LogicalOperator = "AND" | "OR";
 export interface Condition {
   kind: "condition";
   id: string;                 // stable id; used as the key when re-rendering
+  individualId: string | null; // UI staging only — which individual.json item is picked in the
+                                // builder's Item dropdown, ahead of a field being chosen. Never
+                                // read by validate.ts/summary.ts/the mock backend; fieldId (below)
+                                // stays the sole authoritative target.
   fieldId: string | null;     // null = not chosen yet
   operatorId: string | null;
   value: unknown;             // shape depends on operator arity; validate.ts checks it
@@ -562,6 +567,9 @@ Display only; has no bearing on what is sent to the API.
 ### Wire format
 
 The tree is sent as-is, `JSON.stringify(query)`. No custom DSL string on the wire.
+Since `Condition` gained `individualId`, the tree can now carry that one UI-only
+key on the wire too — the backend simply ignores it, same as any other field it
+doesn't recognize.
 
 ---
 
@@ -594,17 +602,31 @@ centre; no repaint.
 
 ### Centre — `queryBuilder.ts`
 
-One recursive `renderGroup(group, schema, depth): string`.
+Three mutually-recursive functions build the tree's HTML: `nodeHtml` dispatches
+on node kind, `groupHtml` renders a group and recurses into its children via
+`nodeHtml`, and `conditionHtml` renders one condition row (no function called
+`renderGroup` exists).
 
 - A group = a Fomantic `ui segment` with an **AND / OR** `ui buttons` toggle,
   **+ Condition** and **+ Group** buttons, and (if not the root) **Remove group**.
-- A condition = one row: **field** `ui dropdown` (searchable), **operator**
-  `ui dropdown` (options from the selected field's `operatorIds`), and a **value**
-  control chosen by the operator's `arity` × the field's `valueType`:
-  - `none` → no control
-  - `one` → single `ui input` / enum `ui dropdown` / boolean `ui checkbox` / date input
-  - `two` → two inputs (from / to)
-  - `many` → multiple `ui dropdown` (chips)
+- A condition = three cascading dropdowns followed by a value control:
+  1. **Item** `ui dropdown` (searchable) — built from `state.individuals`; picking
+     one stages `individualId` on the condition.
+  2. **Field** `ui dropdown` — filtered to the chosen item's fields (matched by
+     `fieldId` prefix), shown by their short slug rather than repeating the
+     item's name; disabled and empty until an item is chosen.
+  3. **Operator** `ui dropdown` (unchanged) — options from the selected field's
+     `operatorIds`.
+  4. A **value** control chosen by the operator's `arity` × the field's
+     `valueType`:
+     - `none` → no control
+     - `one` → single `ui input` / enum `ui dropdown` / boolean `ui checkbox` / date input
+     - `two` → two inputs (from / to)
+     - `many` → multiple `ui dropdown` (chips)
+
+  Changing the Item resets Field, Operator, and the value to empty/null — the
+  same cascade-reset pattern that changing Field already applies one level
+  down to Operator/value.
 - Nodes in `state.issues` get a red `ui message` under the row.
 
 **Event wiring:** one delegated listener on the panel container, reading
@@ -774,3 +796,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-16 | Docs sidebar and data preview repointed at the new dataset: `mock-server/vehicleData.ts` loads it; new `GET /api/individuals` endpoint + `IndividualsResponse`/`Individual`/`IndividualField` types; `POST /api/query`'s response type becomes `EntrysetResponse` (`{ id, items }`, replacing the old `columns`/`rows`/pagination shape) and — transitionally — always returns the mock server's one entryset regardless of the query/databases sent. `AppState` gains `individuals`; `preview` drops `page` (no pagination for a single entryset, so Prev/Next is removed from `dataPreview.ts`). `docsSidebar.ts` now renders `state.individuals` grouped by subsystem instead of `state.schema`'s fields/operators. The query builder, stats panel, and database picker are untouched and still run against the original plant/species mock data — a known, temporary inconsistency (see §10). |
 | 2026-09-16 | Data preview redesigned as a multi-entryset summary list (a single-entryset item table doesn't scale to a real ~6B-entryset dataset). Added 4 more example entrysets to `data/entrysets.json` (ids 2-5: semi truck, rideshare EV, parked sedan, construction dump truck — 11-39 items each, deliberately varied) alongside the original delivery van. `POST /api/query` now returns `{ entrysets: Entryset[] }` (every entryset the mock has, capped at 25) instead of one `Entryset`; `EntrysetResponse` renamed to `Entryset` + new `EntrysetsResponse` wrapper. `dataPreview.ts` renders one native `<details>/<summary>` row per entryset (id, formatted time, vehicle type, subsystem-group badges, item count; no JS wiring needed for expand/collapse) inside a `.qb-entryset-list` scroll region (`max-height: 45vh`, same pattern as `.qb-stat-blocks`); expanding a row shows that entryset's full `{ id, items }` as pretty-printed JSON — a throwaway stand-in for the dedicated pretty-JSON entryset viewer planned as a follow-up task. Rejected an items×entrysets comparison grid in either orientation: entrysets-as-columns tops out around 5-6 on screen, and entrysets-as-rows just moves the same explosion onto item columns (60-100+ for a varied 20-entryset sample) — worse than the vertical scroll a summary list needs instead. |
 | 2026-09-16 | Finalized the entrysets transition: the query builder, database picker, and stats panel now run against the entryset/individual model (previously only the docs sidebar and preview did). Replaced the plant/species mock (`catalog.ts`, `data.ts`) with `schema.ts` (field catalog built purely from `individual.json`'s declared shape), `databases.ts` (7 arbitrary, content-agnostic databases partitioned by a hash of each entryset's id), and `rows.ts` (flattens entrysets into the flat rows the existing matching engine expects). `POST /api/query` now filters for real instead of always returning every entryset. `evaluate.ts`'s `computeBlocks` takes `fields` as an explicit parameter instead of importing a data-specific catalog. Sample data grew from 5 to 21 entrysets so every database has real sample data. No changes to `src/` — it already consumed the API purely through its typed contract. |
+| 2026-09-16 | Query builder's condition row now cascades **Item → Field → Operator** (previously just Field → Operator): the user first picks an individual from `state.individuals`, which filters the Field dropdown to that item's fields, shown by short slug. `Condition` gained `individualId: string | null` (UI-staging only; `fieldId` remains the sole authoritative target, so `validate.ts`, `summary.ts`, and the mock backend needed no changes). Changing Item resets Field/Operator/value, mirroring the existing Field→Operator reset. No backend or schema-contract changes. |
