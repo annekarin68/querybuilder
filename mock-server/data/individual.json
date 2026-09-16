@@ -1,0 +1,6095 @@
+[
+    {
+        "savoy_cabbage": {
+            "label": "savoy_cabbage",
+            "group": "vegetable",
+            "tags": [
+                "green"
+            ],
+            "id_number": 1,
+            "name": "Savoy cabbage",
+            "description": "(Brassica oleracea var. sabauda L. or Brassica oleracea Savoy Cabbage Group) is a variety or cultivar group of the plant species Brassica oleracea. Savoy cabbage is a winter vegetable and one of several cabbage varieties. It has crinkled, emerald green leaves, which are crunchy with a slightly elastic consistency on the palate.",
+            "comment": "A kind of winter cabbage",
+            "stats": {
+                "percentage": 7.61315e-05,
+                "count": 456789
+            },
+            "fields": [
+                {
+                    "label": "planted",
+                    "type": "datetime",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "integer",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaves",
+                    "type": "integer",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "kale": {
+            "label": "kale",
+            "group": "vegetable",
+            "tags": [
+                "tropical",
+                "blue",
+                "common"
+            ],
+            "id_number": 2,
+            "name": "Kale",
+            "description": "A leafy cultivar of Brassica oleracea with tightly curled, fibrous leaves. Popular in cold-climate gardens because frost improves its flavor.",
+            "comment": "Sweetens after first frost",
+            "stats": {
+                "percentage": 0.00210404,
+                "count": 12624241
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "artichoke": {
+            "label": "artichoke",
+            "group": "vegetable",
+            "tags": [
+                "edible",
+                "endangered"
+            ],
+            "id_number": 3,
+            "name": "Artichoke",
+            "description": "The edible flower bud of a large thistle, harvested before it blooms. The fleshy base of each bract and the heart are the parts eaten.",
+            "comment": "Actually an unopened flower",
+            "stats": {
+                "percentage": 0.00208114,
+                "count": 12486813
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "rutabaga": {
+            "label": "rutabaga",
+            "group": "vegetable",
+            "tags": [
+                "desert",
+                "common"
+            ],
+            "id_number": 4,
+            "name": "Rutabaga",
+            "description": "A root vegetable that arose as a natural cross between cabbage and turnip. Its dense, slightly sweet flesh is common in winter stews.",
+            "comment": "A cabbage-turnip hybrid",
+            "stats": {
+                "percentage": 0.000242075,
+                "count": 1452448
+            },
+            "fields": [
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "fennel": {
+            "label": "fennel",
+            "group": "vegetable",
+            "tags": [
+                "invasive"
+            ],
+            "id_number": 5,
+            "name": "Fennel",
+            "description": "A crisp, anise-flavored bulb vegetable whose feathery fronds and seeds are also used as an herb and spice. Native to the Mediterranean coast.",
+            "comment": "Tastes faintly of licorice",
+            "stats": {
+                "percentage": 0.326167,
+                "count": 1956999317
+            },
+            "fields": [
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "okra": {
+            "label": "okra",
+            "group": "vegetable",
+            "tags": [
+                "mountain"
+            ],
+            "id_number": 6,
+            "name": "Okra",
+            "description": "A warm-season pod vegetable known for the mucilaginous texture it releases when cut, which is prized as a natural thickener in stews.",
+            "comment": "Thickens gumbo and stew",
+            "stats": {
+                "percentage": 2.58333e-08,
+                "count": 155
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "parsnip": {
+            "label": "parsnip",
+            "group": "vegetable",
+            "tags": [
+                "yellow",
+                "red"
+            ],
+            "id_number": 7,
+            "name": "Parsnip",
+            "description": "A pale, carrot-shaped root vegetable that develops a nutty sweetness after exposure to frost, when stored starches convert to sugar.",
+            "comment": "Sweetens like a carrot",
+            "stats": {
+                "percentage": 0.0042566,
+                "count": 25539627
+            },
+            "fields": [
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "radicchio": {
+            "label": "radicchio",
+            "group": "vegetable",
+            "tags": [],
+            "id_number": 8,
+            "name": "Radicchio",
+            "description": "A chicory grown for its dense, wine-red leaves and pleasantly bitter flavor. Often grilled to mellow the bitterness.",
+            "comment": "Bitter Italian chicory",
+            "stats": {
+                "percentage": 0.000326642,
+                "count": 1959854
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "kohlrabi": {
+            "label": "kohlrabi",
+            "group": "vegetable",
+            "tags": [
+                "invasive",
+                "blue"
+            ],
+            "id_number": 9,
+            "name": "Kohlrabi",
+            "description": "A cabbage relative grown for its swollen, above-ground stem rather than its leaves. The pale bulb has a mild flavor similar to broccoli stalk.",
+            "comment": "Grows its bulb above ground",
+            "stats": {
+                "percentage": 0.00203838,
+                "count": 12230279
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "jicama": {
+            "label": "jicama",
+            "group": "vegetable",
+            "tags": [
+                "poisonous"
+            ],
+            "id_number": 10,
+            "name": "Jicama",
+            "description": "A crisp, sweet root vegetable from a climbing legume vine. Eaten raw, its watery crunch resembles a cross between an apple and a potato.",
+            "comment": "Crunchy and eaten raw",
+            "stats": {
+                "percentage": 0.265944,
+                "count": 1595663005
+            },
+            "fields": [
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "watercress": {
+            "label": "watercress",
+            "group": "vegetable",
+            "tags": [
+                "forest",
+                "mountain",
+                "desert"
+            ],
+            "id_number": 11,
+            "name": "Watercress",
+            "description": "A fast-growing aquatic plant harvested for its peppery leaves. It roots directly in flowing streams and shallow ponds.",
+            "comment": "Grows rooted in flowing water",
+            "stats": {
+                "percentage": 0.00178758,
+                "count": 10725509
+            },
+            "fields": [
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "endive": {
+            "label": "endive",
+            "group": "vegetable",
+            "tags": [
+                "brown",
+                "black"
+            ],
+            "id_number": 12,
+            "name": "Endive",
+            "description": "A slightly bitter salad green grown by forcing the roots to sprout in complete darkness, which keeps the compact leaves pale and tender.",
+            "comment": "Grown blanched in the dark",
+            "stats": {
+                "percentage": 1.27333e-07,
+                "count": 764
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "taro": {
+            "label": "taro",
+            "group": "vegetable",
+            "tags": [
+                "fragrant",
+                "purple"
+            ],
+            "id_number": 13,
+            "name": "Taro",
+            "description": "A starchy tropical corm that must be cooked thoroughly, since the raw flesh contains calcium oxalate crystals that irritate the mouth.",
+            "comment": "Must be cooked before eating",
+            "stats": {
+                "percentage": 1.11167e-07,
+                "count": 667
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "chayote": {
+            "label": "chayote",
+            "group": "vegetable",
+            "tags": [
+                "tropical",
+                "mountain",
+                "edible"
+            ],
+            "id_number": 14,
+            "name": "Chayote",
+            "description": "A pale green, single-seeded squash from a climbing vine, with a mild flavor that takes on whatever it is cooked with.",
+            "comment": "A single-seeded climbing squash",
+            "stats": {
+                "percentage": 0.00182423,
+                "count": 10945351
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "salsify": {
+            "label": "salsify",
+            "group": "vegetable",
+            "tags": [
+                "green",
+                "edible",
+                "endangered"
+            ],
+            "id_number": 15,
+            "name": "Salsify",
+            "description": "A slender root vegetable sometimes called the oyster plant for the faint briny note some tasters detect when it is cooked.",
+            "comment": "Nicknamed the oyster plant",
+            "stats": {
+                "percentage": 0.00524703,
+                "count": 31482151
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "sorrel": {
+            "label": "sorrel",
+            "group": "vegetable",
+            "tags": [
+                "white"
+            ],
+            "id_number": 16,
+            "name": "Sorrel",
+            "description": "A leafy green with a distinctly sour, lemony bite caused by naturally occurring oxalic acid in its leaves.",
+            "comment": "Sour, lemony leaf",
+            "stats": {
+                "percentage": 0.000235667,
+                "count": 1414001
+            },
+            "fields": [
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "kiwano": {
+            "label": "kiwano",
+            "group": "fruit",
+            "tags": [
+                "yellow"
+            ],
+            "id_number": 17,
+            "name": "Kiwano",
+            "description": "Also called horned melon, this African fruit has spiky orange skin and bright green, jelly-like flesh with a flavor between banana and cucumber.",
+            "comment": "Spiky orange horned melon",
+            "stats": {
+                "percentage": 9.33333e-08,
+                "count": 560
+            },
+            "fields": [
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "persimmon": {
+            "label": "persimmon",
+            "group": "fruit",
+            "tags": [],
+            "id_number": 18,
+            "name": "Persimmon",
+            "description": "An orange tree fruit that ranges from astringent until fully soft-ripe to naturally sweet, depending on the cultivar grown.",
+            "comment": "Astringent until fully ripe",
+            "stats": {
+                "percentage": 6.689e-06,
+                "count": 40134
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "durian": {
+            "label": "durian",
+            "group": "fruit",
+            "tags": [
+                "forest",
+                "tropical",
+                "mountain"
+            ],
+            "id_number": 19,
+            "name": "Durian",
+            "description": "A large, thorn-covered Southeast Asian fruit famous for a smell strong enough to get it banned from many hotels and public transit.",
+            "comment": "Banned from many hotels",
+            "stats": {
+                "percentage": 0.00107844,
+                "count": 6470631
+            },
+            "fields": [
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lychee": {
+            "label": "lychee",
+            "group": "fruit",
+            "tags": [
+                "brown",
+                "ancient"
+            ],
+            "id_number": 20,
+            "name": "Lychee",
+            "description": "A small tropical fruit with a rough, rosy shell hiding pale, fragrant, and very juicy flesh around a single glossy seed.",
+            "comment": "Fragrant flesh around one seed",
+            "stats": {
+                "percentage": 3.80752e-05,
+                "count": 228451
+            },
+            "fields": [
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "starfruit": {
+            "label": "starfruit",
+            "group": "fruit",
+            "tags": [
+                "common"
+            ],
+            "id_number": 21,
+            "name": "Starfruit",
+            "description": "A waxy yellow fruit that forms a perfect five-pointed star shape when sliced crosswise, used as a garnish as often as a snack.",
+            "comment": "Slices into a perfect star",
+            "stats": {
+                "percentage": 5.3e-08,
+                "count": 318
+            },
+            "fields": [
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "quince": {
+            "label": "quince",
+            "group": "fruit",
+            "tags": [],
+            "id_number": 22,
+            "name": "Quince",
+            "description": "A hard, aromatic fruit that is nearly inedible raw but turns a deep rose color and soft texture once slowly cooked.",
+            "comment": "Turns rose-colored when cooked",
+            "stats": {
+                "percentage": 2.18892e-05,
+                "count": 131335
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "mangosteen": {
+            "label": "mangosteen",
+            "group": "fruit",
+            "tags": [
+                "poisonous",
+                "tropical"
+            ],
+            "id_number": 23,
+            "name": "Mangosteen",
+            "description": "A thick, deep-purple rind encloses segmented white flesh often called the queen of tropical fruits for its delicate sweet-tart flavor.",
+            "comment": "Called the queen of fruits",
+            "stats": {
+                "percentage": 1.35208e-05,
+                "count": 81125
+            },
+            "fields": [
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "jabuticaba": {
+            "label": "jabuticaba",
+            "group": "fruit",
+            "tags": [
+                "poisonous",
+                "forest"
+            ],
+            "id_number": 24,
+            "name": "Jabuticaba",
+            "description": "A Brazilian tree fruit unusual for growing directly on the trunk and older branches rather than at the tips of twigs.",
+            "comment": "Fruits directly on the trunk",
+            "stats": {
+                "percentage": 0.000135956,
+                "count": 815739
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "cherimoya": {
+            "label": "cherimoya",
+            "group": "fruit",
+            "tags": [
+                "fragrant",
+                "invasive",
+                "striped",
+                "green"
+            ],
+            "id_number": 25,
+            "name": "Cherimoya",
+            "description": "A green, scaly-skinned fruit with creamy white flesh often compared to a blend of banana, pineapple, and strawberry.",
+            "comment": "Custard-like tropical flesh",
+            "stats": {
+                "percentage": 0.0103283,
+                "count": 61969983
+            },
+            "fields": [
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "longan": {
+            "label": "longan",
+            "group": "fruit",
+            "tags": [
+                "aquatic"
+            ],
+            "id_number": 26,
+            "name": "Longan",
+            "description": "A small brown-shelled fruit related to lychee, nicknamed dragon's eye because the black seed shows through the translucent flesh.",
+            "comment": "Nicknamed dragon's eye",
+            "stats": {
+                "percentage": 0.00457353,
+                "count": 27441197
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "feijoa": {
+            "label": "feijoa",
+            "group": "fruit",
+            "tags": [],
+            "id_number": 27,
+            "name": "Feijoa",
+            "description": "An egg-shaped green fruit with a grainy, aromatic pulp tasting of pineapple, guava, and mint all at once.",
+            "comment": "Tastes of pineapple and mint",
+            "stats": {
+                "percentage": 7.01667e-08,
+                "count": 421
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "medlar": {
+            "label": "medlar",
+            "group": "fruit",
+            "tags": [
+                "green"
+            ],
+            "id_number": 28,
+            "name": "Medlar",
+            "description": "A small brown fruit that must be softened by frost or extended storage, a process called bletting, before it becomes edible.",
+            "comment": "Edible only after bletting",
+            "stats": {
+                "percentage": 2.97633e-05,
+                "count": 178580
+            },
+            "fields": [
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "damson": {
+            "label": "damson",
+            "group": "fruit",
+            "tags": [
+                "invasive",
+                "rare"
+            ],
+            "id_number": 29,
+            "name": "Damson",
+            "description": "A small, tart wild plum with dark blue-black skin, most often cooked into jams and preserves rather than eaten fresh.",
+            "comment": "A tart wild plum",
+            "stats": {
+                "percentage": 0.000202021,
+                "count": 1212129
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "loquat": {
+            "label": "loquat",
+            "group": "fruit",
+            "tags": [],
+            "id_number": 30,
+            "name": "Loquat",
+            "description": "A small orange fruit with downy skin and a sweet-tart flavor reminiscent of a mix between peach and citrus.",
+            "comment": "Downy skin, peachy citrus taste",
+            "stats": {
+                "percentage": 1.24733e-06,
+                "count": 7484
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "pawpaw": {
+            "label": "pawpaw",
+            "group": "fruit",
+            "tags": [],
+            "id_number": 31,
+            "name": "Pawpaw",
+            "description": "North America's largest native fruit, with custardy yellow flesh tasting of banana and mango, though it bruises and spoils quickly.",
+            "comment": "Largest native North American fruit",
+            "stats": {
+                "percentage": 1.4325e-06,
+                "count": 8595
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "tarragon": {
+            "label": "tarragon",
+            "group": "herb",
+            "tags": [
+                "mountain"
+            ],
+            "id_number": 32,
+            "name": "Tarragon",
+            "description": "A slender, anise-scented herb central to French cooking, most often infused into vinegar or butter rather than dried.",
+            "comment": "Anise-scented French staple",
+            "stats": {
+                "percentage": 0.029341,
+                "count": 176045878
+            },
+            "fields": [
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "chervil": {
+            "label": "chervil",
+            "group": "herb",
+            "tags": [
+                "poisonous"
+            ],
+            "id_number": 33,
+            "name": "Chervil",
+            "description": "A delicate, lacy-leaved herb with a mild flavor somewhere between parsley and anise, best added at the very end of cooking.",
+            "comment": "Delicate parsley-anise flavor",
+            "stats": {
+                "percentage": 0.000158511,
+                "count": 951069
+            },
+            "fields": [
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lovage": {
+            "label": "lovage",
+            "group": "herb",
+            "tags": [],
+            "id_number": 34,
+            "name": "Lovage",
+            "description": "A tall perennial herb whose leaves and stalks taste strongly of celery, used to season broths and soups.",
+            "comment": "Tastes strongly of celery",
+            "stats": {
+                "percentage": 0.17706,
+                "count": 1062358892
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "hyssop": {
+            "label": "hyssop",
+            "group": "herb",
+            "tags": [
+                "blue"
+            ],
+            "id_number": 35,
+            "name": "Hyssop",
+            "description": "An aromatic, minty herb with small blue flowers, historically used both as a flavoring and a strewing herb.",
+            "comment": "Minty and historically medicinal",
+            "stats": {
+                "percentage": 0.219928,
+                "count": 1319566352
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "marjoram": {
+            "label": "marjoram",
+            "group": "herb",
+            "tags": [
+                "mountain",
+                "common"
+            ],
+            "id_number": 36,
+            "name": "Marjoram",
+            "description": "A sweet, milder cousin of oregano, with soft grey-green leaves used fresh at the end of cooking to preserve its delicate flavor.",
+            "comment": "Milder, sweeter than oregano",
+            "stats": {
+                "percentage": 1.62903e-05,
+                "count": 97742
+            },
+            "fields": [
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "savory": {
+            "label": "savory",
+            "group": "herb",
+            "tags": [
+                "poisonous"
+            ],
+            "id_number": 37,
+            "name": "Savory",
+            "description": "A peppery herb available in a tender summer variety and a stronger, woodier winter variety, both used to season beans.",
+            "comment": "Peppery herb for seasoning beans",
+            "stats": {
+                "percentage": 2.78757e-05,
+                "count": 167254
+            },
+            "fields": [
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lemongrass": {
+            "label": "lemongrass",
+            "group": "herb",
+            "tags": [
+                "rare"
+            ],
+            "id_number": 38,
+            "name": "Lemongrass",
+            "description": "A tall tropical grass whose fibrous stalks release a bright, citrusy oil when bruised or crushed, essential to many Southeast Asian broths.",
+            "comment": "Citrus aroma from crushed stalks",
+            "stats": {
+                "percentage": 0.0843516,
+                "count": 506109370
+            },
+            "fields": [
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "catnip": {
+            "label": "catnip",
+            "group": "herb",
+            "tags": [],
+            "id_number": 39,
+            "name": "Catnip",
+            "description": "A minty herb whose nepetalactone oil triggers a euphoric response in most domestic cats, though it acts as a mild sedative on humans.",
+            "comment": "Euphoric to most house cats",
+            "stats": {
+                "percentage": 0.0270373,
+                "count": 162223897
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "borage": {
+            "label": "borage",
+            "group": "herb",
+            "tags": [
+                "invasive"
+            ],
+            "id_number": 40,
+            "name": "Borage",
+            "description": "A fuzzy-leaved herb with star-shaped blue flowers and a cool, cucumber-like flavor, often floated in cold drinks.",
+            "comment": "Cucumber-flavored star-shaped flowers",
+            "stats": {
+                "percentage": 0.0223314,
+                "count": 133988279
+            },
+            "fields": [
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "rue": {
+            "label": "rue",
+            "group": "herb",
+            "tags": [
+                "spotted"
+            ],
+            "id_number": 41,
+            "name": "Rue",
+            "description": "A bitter, blue-green herb once widely used medicinally, though it is now used sparingly since it can irritate skin in sunlight.",
+            "comment": "Can irritate skin in sunlight",
+            "stats": {
+                "percentage": 2.24137e-05,
+                "count": 134482
+            },
+            "fields": [
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "angelica": {
+            "label": "angelica",
+            "group": "herb",
+            "tags": [],
+            "id_number": 42,
+            "name": "Angelica",
+            "description": "A tall, statuesque herb with hollow stems traditionally candied whole and used to decorate cakes and pastries.",
+            "comment": "Stems are candied whole",
+            "stats": {
+                "percentage": 1.48167e-07,
+                "count": 889
+            },
+            "fields": [
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "sweet_cicely": {
+            "label": "sweet_cicely",
+            "group": "herb",
+            "tags": [
+                "mountain"
+            ],
+            "id_number": 43,
+            "name": "Sweet cicely",
+            "description": "A fern-leaved herb with a natural sweetness and mild anise flavor, sometimes used to cut the tartness of stewed fruit.",
+            "comment": "Naturally sweet, anise-flavored fern leaves",
+            "stats": {
+                "percentage": 0.0332492,
+                "count": 199494916
+            },
+            "fields": [
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "baobab": {
+            "label": "baobab",
+            "group": "tree",
+            "tags": [
+                "fragrant",
+                "ancient"
+            ],
+            "id_number": 44,
+            "name": "Baobab",
+            "description": "An African tree with a massively swollen trunk that stores water through long dry seasons, earning it the nickname the tree of life.",
+            "comment": "Stores water in its trunk",
+            "stats": {
+                "percentage": 6.75e-08,
+                "count": 405
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "banyan": {
+            "label": "banyan",
+            "group": "tree",
+            "tags": [
+                "forest",
+                "brown",
+                "blue",
+                "striped"
+            ],
+            "id_number": 45,
+            "name": "Banyan",
+            "description": "A fig species that grows aerial roots down from its branches, which thicken into new trunks so a single tree can spread over acres.",
+            "comment": "Grows new trunks from branches",
+            "stats": {
+                "percentage": 0.122627,
+                "count": 735763410
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "ginkgo": {
+            "label": "ginkgo",
+            "group": "tree",
+            "tags": [
+                "spotted",
+                "green",
+                "blue",
+                "aquatic"
+            ],
+            "id_number": 46,
+            "name": "Ginkgo",
+            "description": "An ancient tree species that has changed little in over 200 million years and is now valued mainly as a hardy, disease-resistant street tree.",
+            "comment": "A living fossil species",
+            "stats": {
+                "percentage": 1.85915e-05,
+                "count": 111549
+            },
+            "fields": [
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "dragon_blood_tree": {
+            "label": "dragon_blood_tree",
+            "group": "tree",
+            "tags": [
+                "tropical",
+                "fragrant",
+                "striped",
+                "edible"
+            ],
+            "id_number": 47,
+            "name": "Dragon blood tree",
+            "description": "An umbrella-shaped tree native to a single remote archipelago, named for the dark red resin that seeps from any cut in its bark.",
+            "comment": "Named for its red resin",
+            "stats": {
+                "percentage": 0.00416669,
+                "count": 25000122
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "monkey_puzzle_tree": {
+            "label": "monkey_puzzle_tree",
+            "group": "tree",
+            "tags": [
+                "endangered",
+                "purple",
+                "invasive",
+                "ancient"
+            ],
+            "id_number": 48,
+            "name": "Monkey puzzle tree",
+            "description": "A conifer covered in sharp, overlapping, scale-like leaves so dense and spiky that climbing it would puzzle even a monkey.",
+            "comment": "Covered in sharp, spiky leaves",
+            "stats": {
+                "percentage": 6.85e-07,
+                "count": 4110
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "kapok": {
+            "label": "kapok",
+            "group": "tree",
+            "tags": [
+                "spotted",
+                "mountain",
+                "tropical"
+            ],
+            "id_number": 49,
+            "name": "Kapok",
+            "description": "A fast-growing tropical tree whose seed pods burst open to release a lightweight, water-resistant fiber once used to stuff life jackets.",
+            "comment": "Seed fiber once stuffed life jackets",
+            "stats": {
+                "percentage": 0.0216328,
+                "count": 129797079
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "cedar_of_lebanon": {
+            "label": "cedar_of_lebanon",
+            "group": "tree",
+            "tags": [
+                "ancient",
+                "blue",
+                "desert",
+                "green"
+            ],
+            "id_number": 50,
+            "name": "Cedar of Lebanon",
+            "description": "A long-lived evergreen conifer with broad, flat-topped branches, historically prized as timber for ships and temples.",
+            "comment": "Ancient timber tree of temples",
+            "stats": {
+                "percentage": 0.000151638,
+                "count": 909826
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "bristlecone_pine": {
+            "label": "bristlecone_pine",
+            "group": "tree",
+            "tags": [
+                "brown"
+            ],
+            "id_number": 51,
+            "name": "Bristlecone pine",
+            "description": "A slow-growing high-altitude pine counted among the oldest living non-clonal organisms on Earth, with some individuals surpassing four thousand years old.",
+            "comment": "Among the oldest living trees",
+            "stats": {
+                "percentage": 0.00537172,
+                "count": 32230335
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "rainbow_eucalyptus": {
+            "label": "rainbow_eucalyptus",
+            "group": "tree",
+            "tags": [
+                "mountain"
+            ],
+            "id_number": 52,
+            "name": "Rainbow eucalyptus",
+            "description": "A fast-growing tree whose bark peels in patches to reveal streaks of green, orange, and purple underneath.",
+            "comment": "Bark peels in rainbow streaks",
+            "stats": {
+                "percentage": 0.578408,
+                "count": 3470446961
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "quaking_aspen": {
+            "label": "quaking_aspen",
+            "group": "tree",
+            "tags": [
+                "orange"
+            ],
+            "id_number": 53,
+            "name": "Quaking aspen",
+            "description": "A tree whose flattened leaf stalks let each leaf flutter in the slightest breeze, and whose root systems can form single connected clonal colonies.",
+            "comment": "Leaves flutter in the slightest breeze",
+            "stats": {
+                "percentage": 1.88833e-06,
+                "count": 11330
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "japanese_maple": {
+            "label": "japanese_maple",
+            "group": "tree",
+            "tags": [
+                "black",
+                "tropical",
+                "yellow",
+                "aquatic"
+            ],
+            "id_number": 54,
+            "name": "Japanese maple",
+            "description": "An ornamental maple prized for its finely lobed leaves that shift through vivid shades of red and orange in autumn.",
+            "comment": "Prized for vivid autumn foliage",
+            "stats": {
+                "percentage": 1.98333e-07,
+                "count": 1190
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "cork_oak": {
+            "label": "cork_oak",
+            "group": "tree",
+            "tags": [
+                "ancient"
+            ],
+            "id_number": 55,
+            "name": "Cork oak",
+            "description": "An evergreen oak whose thick bark can be stripped for cork roughly once a decade without harming the tree.",
+            "comment": "Bark harvested without harming the tree",
+            "stats": {
+                "percentage": 0.0018778,
+                "count": 11266827
+            },
+            "fields": [
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "protea": {
+            "label": "protea",
+            "group": "flower",
+            "tags": [
+                "fragrant",
+                "black",
+                "endangered"
+            ],
+            "id_number": 56,
+            "name": "Protea",
+            "description": "A striking South African flower with a large central cone surrounded by stiff, colorful bracts, adapted to survive periodic wildfires.",
+            "comment": "Adapted to survive wildfires",
+            "stats": {
+                "percentage": 0.0973001,
+                "count": 583800386
+            },
+            "fields": [
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "corpse_flower": {
+            "label": "corpse_flower",
+            "group": "flower",
+            "tags": [],
+            "id_number": 57,
+            "name": "Corpse flower",
+            "description": "A rare flower that blooms for only a day or two roughly once a decade, releasing an odor of rotting flesh to attract carrion insects.",
+            "comment": "Smells like rotting flesh",
+            "stats": {
+                "percentage": 0.000519302,
+                "count": 3115815
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "bird_of_paradise": {
+            "label": "bird_of_paradise",
+            "group": "flower",
+            "tags": [
+                "yellow",
+                "invasive"
+            ],
+            "id_number": 58,
+            "name": "Bird of paradise",
+            "description": "A tropical flower whose orange and blue petals emerge from a sheath in a shape resembling a bird's head and crest.",
+            "comment": "Shaped like a bird's head",
+            "stats": {
+                "percentage": 2.13333e-08,
+                "count": 128
+            },
+            "fields": [
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "edelweiss": {
+            "label": "edelweiss",
+            "group": "flower",
+            "tags": [
+                "endangered"
+            ],
+            "id_number": 59,
+            "name": "Edelweiss",
+            "description": "A small, star-shaped alpine flower covered in fine white hairs that protect it from intense high-altitude sunlight and cold.",
+            "comment": "Fuzzy alpine mountain flower",
+            "stats": {
+                "percentage": 6.79167e-05,
+                "count": 407500
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "passionflower": {
+            "label": "passionflower",
+            "group": "flower",
+            "tags": [
+                "yellow",
+                "striped",
+                "edible",
+                "red"
+            ],
+            "id_number": 60,
+            "name": "Passionflower",
+            "description": "A climbing vine with an intricate, radial flower whose structure was once interpreted by missionaries as a symbol of the crucifixion.",
+            "comment": "Intricate radial flower structure",
+            "stats": {
+                "percentage": 0.059071,
+                "count": 354426182
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "black_bat_flower": {
+            "label": "black_bat_flower",
+            "group": "flower",
+            "tags": [
+                "ancient",
+                "common",
+                "tropical"
+            ],
+            "id_number": 61,
+            "name": "Black bat flower",
+            "description": "A shade-loving tropical flower with two dramatic wing-like bracts and long, whisker-like filaments trailing beneath it.",
+            "comment": "Wing-shaped bracts and whiskers",
+            "stats": {
+                "percentage": 4.45e-08,
+                "count": 267
+            },
+            "fields": [
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "ghost_orchid": {
+            "label": "ghost_orchid",
+            "group": "flower",
+            "tags": [
+                "fragrant"
+            ],
+            "id_number": 62,
+            "name": "Ghost orchid",
+            "description": "A leafless, chlorophyll-free orchid that appears to float on its host tree, pollinated by a single specialized moth species.",
+            "comment": "Leafless and appears to float",
+            "stats": {
+                "percentage": 0.000200808,
+                "count": 1204846
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "silversword": {
+            "label": "silversword",
+            "group": "flower",
+            "tags": [
+                "endangered",
+                "spotted"
+            ],
+            "id_number": 63,
+            "name": "Silversword",
+            "description": "A rosette-forming alpine plant found only on a few volcanic slopes, which flowers once after decades of growth and then dies.",
+            "comment": "Flowers once, then dies",
+            "stats": {
+                "percentage": 0.000120296,
+                "count": 721776
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lotus": {
+            "label": "lotus",
+            "group": "flower",
+            "tags": [
+                "aquatic"
+            ],
+            "id_number": 64,
+            "name": "Lotus",
+            "description": "An aquatic flower whose waxy leaves and petals repel water and dirt completely, a self-cleaning effect studied for coatings and fabrics.",
+            "comment": "Naturally self-cleaning petals",
+            "stats": {
+                "percentage": 3.93945e-05,
+                "count": 236367
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "hibiscus": {
+            "label": "hibiscus",
+            "group": "flower",
+            "tags": [
+                "blue"
+            ],
+            "id_number": 65,
+            "name": "Hibiscus",
+            "description": "A large, trumpet-shaped tropical flower whose petals are dried and steeped into a tart, deep red herbal tea.",
+            "comment": "Petals steeped into tart red tea",
+            "stats": {
+                "percentage": 0.00331551,
+                "count": 19893050
+            },
+            "fields": [
+                {
+                    "label": "petal_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "foxglove": {
+            "label": "foxglove",
+            "group": "flower",
+            "tags": [
+                "forest",
+                "edible",
+                "tropical"
+            ],
+            "id_number": 66,
+            "name": "Foxglove",
+            "description": "A tall spike of tubular, spotted flowers that is the original source of a heart medication, though the whole plant is toxic if eaten.",
+            "comment": "Source of a heart medication",
+            "stats": {
+                "percentage": 0.000323482,
+                "count": 1940895
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "larkspur": {
+            "label": "larkspur",
+            "group": "flower",
+            "tags": [
+                "edible"
+            ],
+            "id_number": 67,
+            "name": "Larkspur",
+            "description": "A tall spire of delicate, spurred flowers in blues and purples, related to the buttercup and toxic to grazing livestock.",
+            "comment": "Toxic spurred flower spikes",
+            "stats": {
+                "percentage": 3.25333e-07,
+                "count": 1952
+            },
+            "fields": [
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lions_mane_mushroom": {
+            "label": "lions_mane_mushroom",
+            "group": "fungus",
+            "tags": [
+                "spotted",
+                "ancient"
+            ],
+            "id_number": 68,
+            "name": "Lion's mane mushroom",
+            "description": "A shaggy white mushroom made of long, icicle-like spines rather than gills, with a texture often compared to crab or lobster when cooked.",
+            "comment": "Icicle-like spines, no gills",
+            "stats": {
+                "percentage": 0.20746,
+                "count": 1244761494
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "chanterelle": {
+            "label": "chanterelle",
+            "group": "fungus",
+            "tags": [
+                "poisonous",
+                "black",
+                "rare",
+                "brown"
+            ],
+            "id_number": 69,
+            "name": "Chanterelle",
+            "description": "A golden, trumpet-shaped wild mushroom with a fruity aroma often described as apricot-like, and shallow ridges rather than true gills.",
+            "comment": "Golden with an apricot aroma",
+            "stats": {
+                "percentage": 1.07267e-06,
+                "count": 6436
+            },
+            "fields": [
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "morel": {
+            "label": "morel",
+            "group": "fungus",
+            "tags": [
+                "forest",
+                "red"
+            ],
+            "id_number": 70,
+            "name": "Morel",
+            "description": "A honeycomb-textured spring mushroom that must be cooked before eating, since it contains mild toxins that break down with heat.",
+            "comment": "Honeycomb cap, toxic raw",
+            "stats": {
+                "percentage": 0.000494563,
+                "count": 2967378
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "puffball": {
+            "label": "puffball",
+            "group": "fungus",
+            "tags": [
+                "purple",
+                "orange"
+            ],
+            "id_number": 71,
+            "name": "Puffball",
+            "description": "A round, sometimes basketball-sized fungus that releases a visible cloud of spores when its outer skin ruptures at maturity.",
+            "comment": "Releases spores in a visible cloud",
+            "stats": {
+                "percentage": 3.28333e-08,
+                "count": 197
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "turkey_tail": {
+            "label": "turkey_tail",
+            "group": "fungus",
+            "tags": [],
+            "id_number": 72,
+            "name": "Turkey tail",
+            "description": "A thin, fan-shaped bracket fungus banded in alternating colors that grows in overlapping tiers on dead hardwood logs.",
+            "comment": "Banded fan shape on dead wood",
+            "stats": {
+                "percentage": 0.000457151,
+                "count": 2742907
+            },
+            "fields": [
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "destroying_angel": {
+            "label": "destroying_angel",
+            "group": "fungus",
+            "tags": [],
+            "id_number": 73,
+            "name": "Destroying angel",
+            "description": "An all-white, innocent-looking mushroom that is among the deadliest fungi known, responsible for many fatal misidentifications each year.",
+            "comment": "One of the deadliest fungi",
+            "stats": {
+                "percentage": 0.0409526,
+                "count": 245715402
+            },
+            "fields": [
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "king_bolete": {
+            "label": "king_bolete",
+            "group": "fungus",
+            "tags": [
+                "common",
+                "rare"
+            ],
+            "id_number": 74,
+            "name": "King bolete",
+            "description": "A large, meaty wild mushroom with a spongy pore surface instead of gills, prized in European cooking as porcini.",
+            "comment": "Known in cooking as porcini",
+            "stats": {
+                "percentage": 1.30517e-06,
+                "count": 7831
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "shiitake": {
+            "label": "shiitake",
+            "group": "fungus",
+            "tags": [
+                "endangered",
+                "brown"
+            ],
+            "id_number": 75,
+            "name": "Shiitake",
+            "description": "A brown-capped mushroom traditionally cultivated on hardwood logs, valued for its savory, umami-rich flavor when cooked.",
+            "comment": "Grown on hardwood logs",
+            "stats": {
+                "percentage": 4.41183e-06,
+                "count": 26471
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "enoki": {
+            "label": "enoki",
+            "group": "fungus",
+            "tags": [
+                "mountain",
+                "fragrant"
+            ],
+            "id_number": 76,
+            "name": "Enoki",
+            "description": "A cultivated mushroom with long, thin white stems and tiny caps, grown crowded together in the dark to keep them pale and slender.",
+            "comment": "Grown crowded together in the dark",
+            "stats": {
+                "percentage": 8.44845e-05,
+                "count": 506907
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "ghost_fungus": {
+            "label": "ghost_fungus",
+            "group": "fungus",
+            "tags": [
+                "green",
+                "ancient",
+                "invasive"
+            ],
+            "id_number": 77,
+            "name": "Ghost fungus",
+            "description": "A gilled fungus that glows a faint green in complete darkness, a phenomenon caused by a light-producing chemical reaction in its tissue.",
+            "comment": "Glows faintly green in the dark",
+            "stats": {
+                "percentage": 3.89157e-05,
+                "count": 233494
+            },
+            "fields": [
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "teff": {
+            "label": "teff",
+            "group": "grain",
+            "tags": [
+                "blue",
+                "white",
+                "ancient"
+            ],
+            "id_number": 78,
+            "name": "Teff",
+            "description": "An extremely tiny East African grain, so small that a handful contains thousands of seeds, traditionally ground into flour for injera flatbread.",
+            "comment": "Tiny seed used for injera",
+            "stats": {
+                "percentage": 0.000422533,
+                "count": 2535197
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "fonio": {
+            "label": "fonio",
+            "group": "grain",
+            "tags": [
+                "invasive",
+                "forest",
+                "endangered",
+                "tropical"
+            ],
+            "id_number": 79,
+            "name": "Fonio",
+            "description": "A drought-tolerant West African grain that matures in as little as six to eight weeks, faster than almost any other cereal crop.",
+            "comment": "Matures in as little as six weeks",
+            "stats": {
+                "percentage": 0.0819677,
+                "count": 491806183
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "spelt": {
+            "label": "spelt",
+            "group": "grain",
+            "tags": [
+                "blue"
+            ],
+            "id_number": 80,
+            "name": "Spelt",
+            "description": "An ancient wheat relative with a tougher outer hull than modern wheat, which protects the grain but requires extra milling to remove.",
+            "comment": "An ancient, tough-hulled wheat relative",
+            "stats": {
+                "percentage": 8.20333e-07,
+                "count": 4922
+            },
+            "fields": [
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "amaranth": {
+            "label": "amaranth",
+            "group": "grain",
+            "tags": [],
+            "id_number": 81,
+            "name": "Amaranth",
+            "description": "A broadleaf plant grown for its tiny, protein-rich seeds, which pop slightly when toasted in a dry pan.",
+            "comment": "Seeds pop slightly when toasted",
+            "stats": {
+                "percentage": 3.35307e-05,
+                "count": 201184
+            },
+            "fields": [
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "freekeh": {
+            "label": "freekeh",
+            "group": "grain",
+            "tags": [
+                "endangered",
+                "fragrant"
+            ],
+            "id_number": 82,
+            "name": "Freekeh",
+            "description": "Young green wheat that is harvested early, then roasted over fire, which gives the grain a distinctive smoky flavor.",
+            "comment": "Green wheat roasted for smoky flavor",
+            "stats": {
+                "percentage": 0.273062,
+                "count": 1638372300
+            },
+            "fields": [
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "kamut": {
+            "label": "kamut",
+            "group": "grain",
+            "tags": [
+                "endangered",
+                "common"
+            ],
+            "id_number": 83,
+            "name": "Kamut",
+            "description": "An ancient variety of wheat with unusually large, golden kernels, marketed under its trademarked name khorasan.",
+            "comment": "Large golden ancient wheat kernels",
+            "stats": {
+                "percentage": 0.0924875,
+                "count": 554924864
+            },
+            "fields": [
+                {
+                    "label": "leaf_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "farro": {
+            "label": "farro",
+            "group": "grain",
+            "tags": [
+                "white",
+                "brown"
+            ],
+            "id_number": 84,
+            "name": "Farro",
+            "description": "A chewy, nutty ancient wheat grain that keeps its shape well when cooked, making it popular in grain salads.",
+            "comment": "Chewy grain popular in salads",
+            "stats": {
+                "percentage": 0.0089867,
+                "count": 53920196
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "jobs_tears": {
+            "label": "jobs_tears",
+            "group": "grain",
+            "tags": [
+                "green",
+                "tropical",
+                "endangered"
+            ],
+            "id_number": 85,
+            "name": "Job's tears",
+            "description": "A tall tropical grass grown for its hard, tear-shaped grains, which are used both as a food grain and strung into beads.",
+            "comment": "Grains are also strung into beads",
+            "stats": {
+                "percentage": 0.0271159,
+                "count": 162695152
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "sumac": {
+            "label": "sumac",
+            "group": "spice",
+            "tags": [
+                "mountain",
+                "forest",
+                "white"
+            ],
+            "id_number": 86,
+            "name": "Sumac",
+            "description": "A tangy, brick-red spice ground from dried berries, used across the Middle East to add a lemony sourness without adding liquid.",
+            "comment": "Adds sourness without liquid",
+            "stats": {
+                "percentage": 1.78833e-07,
+                "count": 1073
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "frost_tolerant",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "asafoetida": {
+            "label": "asafoetida",
+            "group": "spice",
+            "tags": [
+                "aquatic",
+                "desert",
+                "black",
+                "white"
+            ],
+            "id_number": 87,
+            "name": "Asafoetida",
+            "description": "A pungent resin from a giant fennel-like plant that smells sharply of sulfur raw, but mellows into a savory, onion-like note when cooked in oil.",
+            "comment": "Pungent raw, savory once cooked",
+            "stats": {
+                "percentage": 0.00184641,
+                "count": 11078454
+            },
+            "fields": [
+                {
+                    "label": "seed_count",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "grains_of_paradise": {
+            "label": "grains_of_paradise",
+            "group": "spice",
+            "tags": [
+                "purple"
+            ],
+            "id_number": 88,
+            "name": "Grains of paradise",
+            "description": "A peppery West African spice related to ginger, with a warm heat and a faint citrus and floral aroma.",
+            "comment": "Peppery relative of ginger",
+            "stats": {
+                "percentage": 2.12533e-06,
+                "count": 12752
+            },
+            "fields": [
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "long_pepper": {
+            "label": "long_pepper",
+            "group": "spice",
+            "tags": [
+                "fragrant",
+                "black",
+                "common",
+                "brown"
+            ],
+            "id_number": 89,
+            "name": "Long pepper",
+            "description": "An elongated, catkin-shaped relative of black pepper with a hotter, more complex heat, once more prized in Europe than pepper itself.",
+            "comment": "Hotter cousin of black pepper",
+            "stats": {
+                "percentage": 0.0795177,
+                "count": 477106404
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "mahlab": {
+            "label": "mahlab",
+            "group": "spice",
+            "tags": [
+                "ancient"
+            ],
+            "id_number": 90,
+            "name": "Mahlab",
+            "description": "An aromatic spice ground from the pit inside a wild cherry species, with a flavor somewhere between almond and cherry, used in baking.",
+            "comment": "Ground from wild cherry pits",
+            "stats": {
+                "percentage": 0.3185,
+                "count": 1911002573
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "root_depth_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "annatto": {
+            "label": "annatto",
+            "group": "spice",
+            "tags": [
+                "yellow"
+            ],
+            "id_number": 91,
+            "name": "Annatto",
+            "description": "Small, brick-red seeds from a tropical shrub, used more for the deep orange color they impart than for flavor.",
+            "comment": "Used mainly for its orange color",
+            "stats": {
+                "percentage": 0.0165335,
+                "count": 99201285
+            },
+            "fields": [
+                {
+                    "label": "sugar_content_brix",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "harvest_month",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "galangal": {
+            "label": "galangal",
+            "group": "spice",
+            "tags": [
+                "red",
+                "white"
+            ],
+            "id_number": 92,
+            "name": "Galangal",
+            "description": "A rhizome related to ginger with a sharper, more citrusy and piney bite, essential to many Southeast Asian curry pastes.",
+            "comment": "Sharper, pinier than ginger",
+            "stats": {
+                "percentage": 0.000658604,
+                "count": 3951626
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "fenugreek": {
+            "label": "fenugreek",
+            "group": "spice",
+            "tags": [
+                "ancient",
+                "poisonous",
+                "striped",
+                "forest"
+            ],
+            "id_number": 93,
+            "name": "Fenugreek",
+            "description": "A small, angular seed with a bitter, maple-like aroma when toasted, widely used in South Asian spice blends.",
+            "comment": "Bitter seed with a maple aroma",
+            "stats": {
+                "percentage": 0.170924,
+                "count": 1025544966
+            },
+            "fields": [
+                {
+                    "label": "preferred_ph",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "fragrance_intensity",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "sichuan_pepper": {
+            "label": "sichuan_pepper",
+            "group": "spice",
+            "tags": [
+                "desert"
+            ],
+            "id_number": 94,
+            "name": "Sichuan pepper",
+            "description": "A citrusy husk from a small shrub that produces a tingling, numbing sensation on the tongue rather than straightforward heat.",
+            "comment": "Produces a tingling numbness",
+            "stats": {
+                "percentage": 0.00145428,
+                "count": 8725670
+            },
+            "fields": [
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_edible",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_perennial",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "cubeb": {
+            "label": "cubeb",
+            "group": "spice",
+            "tags": [
+                "ancient",
+                "edible",
+                "tropical",
+                "aquatic"
+            ],
+            "id_number": 95,
+            "name": "Cubeb",
+            "description": "A relative of black pepper with a distinctive tail-like stem attached to each dried berry, giving it the nickname tailed pepper.",
+            "comment": "Nicknamed tailed pepper",
+            "stats": {
+                "percentage": 8.186e-06,
+                "count": 49116
+            },
+            "fields": [
+                {
+                    "label": "bloom_duration_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "height_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "pangolin": {
+            "label": "pangolin",
+            "group": "mammal",
+            "tags": [
+                "orange",
+                "purple"
+            ],
+            "id_number": 96,
+            "name": "Pangolin",
+            "description": "A scaly, ant-eating mammal that curls into a tight, armored ball when threatened. It is the most trafficked mammal in the world.",
+            "comment": "Curls into an armored ball",
+            "stats": {
+                "percentage": 4.17e-07,
+                "count": 2502
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "capybara": {
+            "label": "capybara",
+            "group": "mammal",
+            "tags": [],
+            "id_number": 97,
+            "name": "Capybara",
+            "description": "The largest living rodent, a semi-aquatic South American mammal that lives in social groups near rivers and lakes.",
+            "comment": "The world's largest rodent",
+            "stats": {
+                "percentage": 1.14517e-06,
+                "count": 6871
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "okapi": {
+            "label": "okapi",
+            "group": "mammal",
+            "tags": [
+                "purple",
+                "white"
+            ],
+            "id_number": 98,
+            "name": "Okapi",
+            "description": "A forest-dwelling relative of the giraffe with zebra-striped legs, discovered by Western science only in the early twentieth century.",
+            "comment": "A striped relative of the giraffe",
+            "stats": {
+                "percentage": 1.71167e-07,
+                "count": 1027
+            },
+            "fields": [
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "quokka": {
+            "label": "quokka",
+            "group": "mammal",
+            "tags": [
+                "spotted",
+                "migratory"
+            ],
+            "id_number": 99,
+            "name": "Quokka",
+            "description": "A small, stocky marsupial found mainly on a few Australian islands, known for an upturned mouth that gives it a permanent smile.",
+            "comment": "Famous for its permanent smile",
+            "stats": {
+                "percentage": 2.36167e-07,
+                "count": 1417
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "fossa": {
+            "label": "fossa",
+            "group": "mammal",
+            "tags": [
+                "rare"
+            ],
+            "id_number": 100,
+            "name": "Fossa",
+            "description": "Madagascar's largest carnivorous mammal, a slender, cat-like predator that hunts lemurs through the forest canopy.",
+            "comment": "Madagascar's top predator",
+            "stats": {
+                "percentage": 3.46667e-08,
+                "count": 208
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_social",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "saiga_antelope": {
+            "label": "saiga_antelope",
+            "group": "mammal",
+            "tags": [
+                "arctic",
+                "bioluminescent",
+                "orange",
+                "purple"
+            ],
+            "id_number": 101,
+            "name": "Saiga antelope",
+            "description": "A steppe-dwelling antelope with an unusually large, flexible nose thought to warm and filter the cold, dusty air it breathes.",
+            "comment": "Has an oversized, flexible nose",
+            "stats": {
+                "percentage": 5.59833e-07,
+                "count": 3359
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "aardvark": {
+            "label": "aardvark",
+            "group": "mammal",
+            "tags": [],
+            "id_number": 102,
+            "name": "Aardvark",
+            "description": "A nocturnal, burrowing mammal with a long snout and sticky tongue, adapted almost entirely to feeding on ants and termites.",
+            "comment": "Feeds almost entirely on ants",
+            "stats": {
+                "percentage": 0.000172252,
+                "count": 1033513
+            },
+            "fields": [
+                {
+                    "label": "max_speed_kmh",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "sloth": {
+            "label": "sloth",
+            "group": "mammal",
+            "tags": [
+                "desert",
+                "tropical"
+            ],
+            "id_number": 103,
+            "name": "Sloth",
+            "description": "A slow-moving tree-dwelling mammal whose fur hosts a small ecosystem of algae and insects, giving it a faint greenish tinge.",
+            "comment": "Fur hosts its own tiny ecosystem",
+            "stats": {
+                "percentage": 3.53867e-06,
+                "count": 21232
+            },
+            "fields": [
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "narwhal": {
+            "label": "narwhal",
+            "group": "mammal",
+            "tags": [
+                "nocturnal",
+                "desert",
+                "common",
+                "green"
+            ],
+            "id_number": 104,
+            "name": "Narwhal",
+            "description": "An Arctic whale whose males grow a single long, spiraled tusk, actually an elongated tooth, up to several meters long.",
+            "comment": "Tusk is an elongated tooth",
+            "stats": {
+                "percentage": 3.58817e-06,
+                "count": 21529
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "platypus": {
+            "label": "platypus",
+            "group": "mammal",
+            "tags": [
+                "common",
+                "aquatic"
+            ],
+            "id_number": 105,
+            "name": "Platypus",
+            "description": "An egg-laying mammal with a duck-like bill, webbed feet, and venomous spurs, combining traits so unusual it puzzled the scientists who first examined it.",
+            "comment": "An egg-laying, venomous mammal",
+            "stats": {
+                "percentage": 0.000268147,
+                "count": 1608881
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "max_speed_kmh",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "tapir": {
+            "label": "tapir",
+            "group": "mammal",
+            "tags": [
+                "forest"
+            ],
+            "id_number": 106,
+            "name": "Tapir",
+            "description": "A pig-sized mammal with a short, flexible snout used like a small trunk to grasp leaves and fruit.",
+            "comment": "Uses its snout like a small trunk",
+            "stats": {
+                "percentage": 0.00460055,
+                "count": 27603286
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "dhole": {
+            "label": "dhole",
+            "group": "mammal",
+            "tags": [
+                "green",
+                "common",
+                "white"
+            ],
+            "id_number": 107,
+            "name": "Dhole",
+            "description": "A highly social Asian wild dog that hunts in large packs and communicates with an unusual range of whistles and calls.",
+            "comment": "Communicates with whistling calls",
+            "stats": {
+                "percentage": 0.0307164,
+                "count": 184298667
+            },
+            "fields": [
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "binturong": {
+            "label": "binturong",
+            "group": "mammal",
+            "tags": [
+                "arctic"
+            ],
+            "id_number": 108,
+            "name": "Binturong",
+            "description": "A shaggy, tree-dwelling mammal from Southeast Asian forests whose scent glands produce an odor often compared to buttered popcorn.",
+            "comment": "Smells faintly of buttered popcorn",
+            "stats": {
+                "percentage": 1.1655e-06,
+                "count": 6993
+            },
+            "fields": [
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "markhor": {
+            "label": "markhor",
+            "group": "mammal",
+            "tags": [
+                "camouflaged",
+                "black"
+            ],
+            "id_number": 109,
+            "name": "Markhor",
+            "description": "A wild mountain goat known for its long, dramatically twisted, corkscrew-shaped horns.",
+            "comment": "Corkscrew-shaped horns",
+            "stats": {
+                "percentage": 0.000485792,
+                "count": 2914754
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "gerenuk": {
+            "label": "gerenuk",
+            "group": "mammal",
+            "tags": [
+                "rare",
+                "blue"
+            ],
+            "id_number": 110,
+            "name": "Gerenuk",
+            "description": "A long-necked African antelope that stands upright on its hind legs to browse leaves other grazers cannot reach.",
+            "comment": "Stands on hind legs to browse",
+            "stats": {
+                "percentage": 8.79833e-07,
+                "count": 5279
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "axolotl": {
+            "label": "axolotl",
+            "group": "amphibian",
+            "tags": [
+                "endangered",
+                "white",
+                "tropical",
+                "camouflaged"
+            ],
+            "id_number": 111,
+            "name": "Axolotl",
+            "description": "A Mexican salamander that typically never undergoes full metamorphosis, keeping its feathery external gills into adulthood, and can regrow entire lost limbs.",
+            "comment": "Can regrow entire lost limbs",
+            "stats": {
+                "percentage": 7.39365e-05,
+                "count": 443619
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "hellbender": {
+            "label": "hellbender",
+            "group": "amphibian",
+            "tags": [
+                "migratory"
+            ],
+            "id_number": 112,
+            "name": "Hellbender",
+            "description": "North America's largest salamander, a fully aquatic species that breathes partly through folds of loose skin along its sides.",
+            "comment": "Breathes partly through its skin",
+            "stats": {
+                "percentage": 1.69033e-06,
+                "count": 10142
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "olm": {
+            "label": "olm",
+            "group": "amphibian",
+            "tags": [
+                "rare",
+                "nocturnal",
+                "camouflaged"
+            ],
+            "id_number": 113,
+            "name": "Olm",
+            "description": "A pale, blind cave salamander that can survive without food for years by slowing its metabolism to a near standstill.",
+            "comment": "Can go years without food",
+            "stats": {
+                "percentage": 2.26667e-08,
+                "count": 136
+            },
+            "fields": [
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "poison_dart_frog": {
+            "label": "poison_dart_frog",
+            "group": "amphibian",
+            "tags": [
+                "spotted"
+            ],
+            "id_number": 114,
+            "name": "Poison dart frog",
+            "description": "A brightly colored rainforest frog whose vivid skin patterns warn predators of the potent toxins it secretes.",
+            "comment": "Bright colors warn of its toxins",
+            "stats": {
+                "percentage": 0.0255787,
+                "count": 153471929
+            },
+            "fields": [
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "caecilian": {
+            "label": "caecilian",
+            "group": "amphibian",
+            "tags": [
+                "purple"
+            ],
+            "id_number": 115,
+            "name": "Caecilian",
+            "description": "A limbless, burrowing amphibian often mistaken for a large earthworm or snake, found in moist tropical soil.",
+            "comment": "Limbless and often mistaken for a worm",
+            "stats": {
+                "percentage": 0.0173791,
+                "count": 104274649
+            },
+            "fields": [
+                {
+                    "label": "is_social",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "kakapo": {
+            "label": "kakapo",
+            "group": "bird",
+            "tags": [],
+            "id_number": 116,
+            "name": "Kakapo",
+            "description": "A large, flightless, nocturnal parrot from New Zealand that climbs trees and glides short distances instead of flying.",
+            "comment": "A flightless nocturnal parrot",
+            "stats": {
+                "percentage": 7.30813e-05,
+                "count": 438488
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "shoebill": {
+            "label": "shoebill",
+            "group": "bird",
+            "tags": [
+                "common",
+                "camouflaged"
+            ],
+            "id_number": 117,
+            "name": "Shoebill",
+            "description": "A tall African wading bird named for its massive, clog-shaped bill, which it uses to snatch fish and even small crocodiles.",
+            "comment": "Has a massive clog-shaped bill",
+            "stats": {
+                "percentage": 2.57818e-05,
+                "count": 154691
+            },
+            "fields": [
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "harpy_eagle": {
+            "label": "harpy_eagle",
+            "group": "bird",
+            "tags": [
+                "endangered",
+                "spotted"
+            ],
+            "id_number": 118,
+            "name": "Harpy eagle",
+            "description": "One of the largest and most powerful eagles in the world, with talons roughly the size of a grizzly bear's claws.",
+            "comment": "Talons rival a bear's claws",
+            "stats": {
+                "percentage": 7.53933e-06,
+                "count": 45236
+            },
+            "fields": [
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "secretarybird": {
+            "label": "secretarybird",
+            "group": "bird",
+            "tags": [
+                "nocturnal"
+            ],
+            "id_number": 119,
+            "name": "Secretarybird",
+            "description": "A long-legged African bird of prey that hunts on foot, stomping venomous snakes to death with powerful, rapid kicks.",
+            "comment": "Stomps snakes to death on foot",
+            "stats": {
+                "percentage": 1.3735e-06,
+                "count": 8241
+            },
+            "fields": [
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_migratory",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "resplendent_quetzal": {
+            "label": "resplendent_quetzal",
+            "group": "bird",
+            "tags": [
+                "mountain"
+            ],
+            "id_number": 120,
+            "name": "Resplendent quetzal",
+            "description": "A brilliantly iridescent Central American bird whose males trail elongated tail coverts once prized as a symbol of royalty.",
+            "comment": "Iridescent tail once symbolized royalty",
+            "stats": {
+                "percentage": 0.0136958,
+                "count": 82174722
+            },
+            "fields": [
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "hoatzin": {
+            "label": "hoatzin",
+            "group": "bird",
+            "tags": [],
+            "id_number": 121,
+            "name": "Hoatzin",
+            "description": "An Amazonian bird that ferments leaves in an enlarged crop much like a cow's rumen, giving it an earthy, musky odor.",
+            "comment": "Digests leaves like a cow",
+            "stats": {
+                "percentage": 2.13467e-06,
+                "count": 12808
+            },
+            "fields": [
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "kagu": {
+            "label": "kagu",
+            "group": "bird",
+            "tags": [
+                "mountain",
+                "aquatic"
+            ],
+            "id_number": 122,
+            "name": "Kagu",
+            "description": "A ground-dwelling, nearly flightless bird found only in the forests of a single Pacific island, with a distinctive crest and bark-like call.",
+            "comment": "Found on only one island",
+            "stats": {
+                "percentage": 0.0110622,
+                "count": 66373147
+            },
+            "fields": [
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "potoo": {
+            "label": "potoo",
+            "group": "bird",
+            "tags": [
+                "venomous",
+                "nocturnal"
+            ],
+            "id_number": 123,
+            "name": "Potoo",
+            "description": "A nocturnal bird that perches upright and motionless on broken branch stumps by day, camouflaged almost perfectly against detection.",
+            "comment": "Camouflages as a broken branch",
+            "stats": {
+                "percentage": 1.1203e-05,
+                "count": 67218
+            },
+            "fields": [
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lyrebird": {
+            "label": "lyrebird",
+            "group": "bird",
+            "tags": [
+                "aquatic",
+                "red",
+                "invasive",
+                "yellow"
+            ],
+            "id_number": 124,
+            "name": "Lyrebird",
+            "description": "An Australian ground bird capable of mimicking an extraordinary range of sounds, from other birdsong to camera shutters and chainsaws.",
+            "comment": "Mimics chainsaws and camera shutters",
+            "stats": {
+                "percentage": 0.593115,
+                "count": 3558689173
+            },
+            "fields": [
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "cassowary": {
+            "label": "cassowary",
+            "group": "bird",
+            "tags": [
+                "yellow",
+                "striped",
+                "camouflaged"
+            ],
+            "id_number": 125,
+            "name": "Cassowary",
+            "description": "A large, flightless rainforest bird with a bony head casque and a dagger-like inner claw, considered one of the most dangerous birds alive.",
+            "comment": "Considered a dangerous flightless bird",
+            "stats": {
+                "percentage": 0.000719296,
+                "count": 4315775
+            },
+            "fields": [
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_migratory",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "mudskipper": {
+            "label": "mudskipper",
+            "group": "fish",
+            "tags": [
+                "yellow",
+                "brown",
+                "spotted",
+                "desert"
+            ],
+            "id_number": 126,
+            "name": "Mudskipper",
+            "description": "An amphibious fish that spends much of its time out of water, breathing through its skin and moist gill chambers while skipping across mudflats.",
+            "comment": "Spends most of its time out of water",
+            "stats": {
+                "percentage": 0.000630545,
+                "count": 3783273
+            },
+            "fields": [
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "max_speed_kmh",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "anglerfish": {
+            "label": "anglerfish",
+            "group": "fish",
+            "tags": [
+                "invasive"
+            ],
+            "id_number": 127,
+            "name": "Anglerfish",
+            "description": "A deep-sea fish that dangles a glowing, bioluminescent lure above its mouth to attract prey in total darkness.",
+            "comment": "Lures prey with a glowing appendage",
+            "stats": {
+                "percentage": 0.000596336,
+                "count": 3578019
+            },
+            "fields": [
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lungfish": {
+            "label": "lungfish",
+            "group": "fish",
+            "tags": [
+                "black"
+            ],
+            "id_number": 128,
+            "name": "Lungfish",
+            "description": "An ancient fish lineage with a primitive lung that lets it survive out of water for months by burrowing into mud and going dormant.",
+            "comment": "Can survive buried in dried mud",
+            "stats": {
+                "percentage": 0.000711739,
+                "count": 4270434
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "arapaima": {
+            "label": "arapaima",
+            "group": "fish",
+            "tags": [
+                "arctic",
+                "bioluminescent"
+            ],
+            "id_number": 129,
+            "name": "Arapaima",
+            "description": "One of the largest freshwater fish in the world, an Amazonian species that must surface periodically to gulp air.",
+            "comment": "Must surface periodically to breathe air",
+            "stats": {
+                "percentage": 6.36667e-08,
+                "count": 382
+            },
+            "fields": [
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "pufferfish": {
+            "label": "pufferfish",
+            "group": "fish",
+            "tags": [
+                "black"
+            ],
+            "id_number": 130,
+            "name": "Pufferfish",
+            "description": "A fish that inflates its body into a spiny ball when threatened and carries a potent neurotoxin in its skin and organs.",
+            "comment": "Inflates into a spiny ball",
+            "stats": {
+                "percentage": 0.00170831,
+                "count": 10249869
+            },
+            "fields": [
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "flying_fish": {
+            "label": "flying_fish",
+            "group": "fish",
+            "tags": [
+                "aquatic",
+                "common",
+                "desert"
+            ],
+            "id_number": 131,
+            "name": "Flying fish",
+            "description": "A fish with oversized, wing-like pectoral fins that let it glide well above the water's surface to escape underwater predators.",
+            "comment": "Glides above the water on winglike fins",
+            "stats": {
+                "percentage": 0.0129354,
+                "count": 77612396
+            },
+            "fields": [
+                {
+                    "label": "is_social",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "seahorse": {
+            "label": "seahorse",
+            "group": "fish",
+            "tags": [
+                "brown",
+                "red",
+                "green",
+                "venomous"
+            ],
+            "id_number": 132,
+            "name": "Seahorse",
+            "description": "A small, upright-swimming fish notable because it is the male that carries the fertilized eggs in a specialized brood pouch.",
+            "comment": "Males carry the fertilized eggs",
+            "stats": {
+                "percentage": 1.56267e-06,
+                "count": 9376
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lamprey": {
+            "label": "lamprey",
+            "group": "fish",
+            "tags": [
+                "migratory"
+            ],
+            "id_number": 133,
+            "name": "Lamprey",
+            "description": "A primitive, jawless fish with a circular, tooth-lined mouth used to latch onto other fish and feed on their blood and tissue.",
+            "comment": "A jawless, parasitic fish",
+            "stats": {
+                "percentage": 2.80133e-06,
+                "count": 16808
+            },
+            "fields": [
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "atlas_moth": {
+            "label": "atlas_moth",
+            "group": "insect",
+            "tags": [],
+            "id_number": 134,
+            "name": "Atlas moth",
+            "description": "One of the largest moths in the world by wing surface area, with wingtips patterned to resemble a snake's head to deter predators.",
+            "comment": "Wingtips mimic a snake's head",
+            "stats": {
+                "percentage": 0.0224883,
+                "count": 134929704
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "max_speed_kmh",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "goliath_beetle": {
+            "label": "goliath_beetle",
+            "group": "insect",
+            "tags": [
+                "camouflaged"
+            ],
+            "id_number": 135,
+            "name": "Goliath beetle",
+            "description": "Among the heaviest insects on Earth, an African beetle whose larvae can outweigh a small mammal before pupating.",
+            "comment": "Among the heaviest insects alive",
+            "stats": {
+                "percentage": 3.68328e-05,
+                "count": 220997
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "max_speed_kmh",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "luna_moth": {
+            "label": "luna_moth",
+            "group": "insect",
+            "tags": [
+                "brown",
+                "striped",
+                "yellow"
+            ],
+            "id_number": 136,
+            "name": "Luna moth",
+            "description": "A pale green moth with long, trailing hindwing tails and no functional mouthparts, since its short adult life is spent only reproducing.",
+            "comment": "Adults never eat",
+            "stats": {
+                "percentage": 0.0420321,
+                "count": 252192616
+            },
+            "fields": [
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "bombardier_beetle": {
+            "label": "bombardier_beetle",
+            "group": "insect",
+            "tags": [
+                "blue"
+            ],
+            "id_number": 137,
+            "name": "Bombardier beetle",
+            "description": "A beetle that defends itself by mixing chemicals in an internal chamber to spray a boiling, noxious jet at attackers.",
+            "comment": "Sprays a boiling chemical jet",
+            "stats": {
+                "percentage": 0.000320154,
+                "count": 1920922
+            },
+            "fields": [
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "leafcutter_ant": {
+            "label": "leafcutter_ant",
+            "group": "insect",
+            "tags": [
+                "venomous",
+                "spotted"
+            ],
+            "id_number": 138,
+            "name": "Leafcutter ant",
+            "description": "A highly social ant that slices leaf fragments to carry back to the colony, not to eat directly but to cultivate a fungus garden.",
+            "comment": "Farms fungus instead of eating leaves",
+            "stats": {
+                "percentage": 4.975e-07,
+                "count": 2985
+            },
+            "fields": [
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "praying_mantis": {
+            "label": "praying_mantis",
+            "group": "insect",
+            "tags": [
+                "brown",
+                "rare",
+                "spotted"
+            ],
+            "id_number": 139,
+            "name": "Praying mantis",
+            "description": "An ambush predator insect with forelegs folded as if in prayer, and specialized joints that let it turn its head nearly all the way around.",
+            "comment": "Can turn its head almost fully around",
+            "stats": {
+                "percentage": 0.0278492,
+                "count": 167095221
+            },
+            "fields": [
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "monarch_butterfly": {
+            "label": "monarch_butterfly",
+            "group": "insect",
+            "tags": [],
+            "id_number": 140,
+            "name": "Monarch butterfly",
+            "description": "A butterfly famous for a multigenerational migration spanning thousands of miles, with no single individual completing the full round trip.",
+            "comment": "No single butterfly completes the migration",
+            "stats": {
+                "percentage": 0.685906,
+                "count": 4115433427
+            },
+            "fields": [
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "dung_beetle": {
+            "label": "dung_beetle",
+            "group": "insect",
+            "tags": [
+                "forest",
+                "endangered",
+                "common",
+                "spotted"
+            ],
+            "id_number": 141,
+            "name": "Dung beetle",
+            "description": "An insect that rolls and buries animal dung both as a food source and a brood chamber, and some species navigate by the stars.",
+            "comment": "Some species navigate using the stars",
+            "stats": {
+                "percentage": 1.91667e-08,
+                "count": 115
+            },
+            "fields": [
+                {
+                    "label": "max_speed_kmh",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "firefly": {
+            "label": "firefly",
+            "group": "insect",
+            "tags": [
+                "forest",
+                "orange"
+            ],
+            "id_number": 142,
+            "name": "Firefly",
+            "description": "A beetle that produces cold, chemical light from its abdomen in flashing patterns used to attract mates of the same species.",
+            "comment": "Produces cold light from its abdomen",
+            "stats": {
+                "percentage": 0.00198149,
+                "count": 11888948
+            },
+            "fields": [
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "bite_force_n",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "cicada": {
+            "label": "cicada",
+            "group": "insect",
+            "tags": [
+                "arctic",
+                "white",
+                "blue",
+                "brown"
+            ],
+            "id_number": 143,
+            "name": "Cicada",
+            "description": "An insect known for loud mating calls and, in some species, a life cycle of thirteen or seventeen years spent almost entirely underground.",
+            "comment": "Some emerge only every 17 years",
+            "stats": {
+                "percentage": 2.70502e-05,
+                "count": 162301
+            },
+            "fields": [
+                {
+                    "label": "litter_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "komodo_dragon": {
+            "label": "komodo_dragon",
+            "group": "reptile",
+            "tags": [
+                "red",
+                "migratory",
+                "camouflaged",
+                "yellow"
+            ],
+            "id_number": 144,
+            "name": "Komodo dragon",
+            "description": "The largest living lizard species, an Indonesian monitor lizard with a mildly venomous bite that weakens large prey over time.",
+            "comment": "The largest living lizard",
+            "stats": {
+                "percentage": 0.105742,
+                "count": 634451354
+            },
+            "fields": [
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "tuatara": {
+            "label": "tuatara",
+            "group": "reptile",
+            "tags": [
+                "striped"
+            ],
+            "id_number": 145,
+            "name": "Tuatara",
+            "description": "A reptile found only in New Zealand that looks lizard-like but belongs to an ancient lineage otherwise extinct for over a hundred million years.",
+            "comment": "Last survivor of an ancient lineage",
+            "stats": {
+                "percentage": 1.91667e-08,
+                "count": 115
+            },
+            "fields": [
+                {
+                    "label": "is_venomous",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "thorny_devil": {
+            "label": "thorny_devil",
+            "group": "reptile",
+            "tags": [
+                "nocturnal",
+                "yellow"
+            ],
+            "id_number": 146,
+            "name": "Thorny devil",
+            "description": "An Australian desert lizard covered entirely in defensive spines, which also channel dew and rainwater along grooves directly to its mouth.",
+            "comment": "Spines also channel water to its mouth",
+            "stats": {
+                "percentage": 0.000304619,
+                "count": 1827714
+            },
+            "fields": [
+                {
+                    "label": "wingspan_cm",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "max_speed_kmh",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "gila_monster": {
+            "label": "gila_monster",
+            "group": "reptile",
+            "tags": [
+                "striped",
+                "tropical"
+            ],
+            "id_number": 147,
+            "name": "Gila monster",
+            "description": "One of the few venomous lizard species, a slow-moving desert reptile that delivers venom by chewing rather than injecting through fangs.",
+            "comment": "Delivers venom by chewing",
+            "stats": {
+                "percentage": 0.00710326,
+                "count": 42619577
+            },
+            "fields": [
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "veiled_chameleon": {
+            "label": "veiled_chameleon",
+            "group": "reptile",
+            "tags": [
+                "blue"
+            ],
+            "id_number": 148,
+            "name": "Veiled chameleon",
+            "description": "A tree-dwelling lizard with a tall casque on its head and eyes that swivel independently to watch two directions at once.",
+            "comment": "Eyes swivel independently of each other",
+            "stats": {
+                "percentage": 3.86667e-08,
+                "count": 232
+            },
+            "fields": [
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "gestation_days",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "gharial": {
+            "label": "gharial",
+            "group": "reptile",
+            "tags": [
+                "migratory",
+                "forest"
+            ],
+            "id_number": 149,
+            "name": "Gharial",
+            "description": "A fish-eating crocodilian with an extremely narrow, elongated snout adapted for quick sideways snapping through water.",
+            "comment": "Has an extremely narrow snout",
+            "stats": {
+                "percentage": 0.000433824,
+                "count": 2602945
+            },
+            "fields": [
+                {
+                    "label": "weight_kg",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_endangered",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_migratory",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "matamata_turtle": {
+            "label": "matamata_turtle",
+            "group": "reptile",
+            "tags": [],
+            "id_number": 150,
+            "name": "Matamata turtle",
+            "description": "A South American freshwater turtle with a bark-textured shell and a flattened, leaf-like head that camouflages it while it ambushes fish.",
+            "comment": "Shell resembles tree bark",
+            "stats": {
+                "percentage": 0.0375573,
+                "count": 225343869
+            },
+            "fields": [
+                {
+                    "label": "is_nocturnal",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "clutch_size",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "lifespan_years",
+                    "type": "int",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "flying_gecko": {
+            "label": "flying_gecko",
+            "group": "reptile",
+            "tags": [
+                "nocturnal",
+                "common",
+                "purple"
+            ],
+            "id_number": 151,
+            "name": "Flying gecko",
+            "description": "A gecko with folds of skin along its body and tail that spread out to let it glide between trees rather than fall.",
+            "comment": "Glides using skin flaps",
+            "stats": {
+                "percentage": 8.55667e-07,
+                "count": 5134
+            },
+            "fields": [
+                {
+                    "label": "native_region",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "diet_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "malachite": {
+            "label": "malachite",
+            "group": "mineral",
+            "tags": [
+                "ancient",
+                "black"
+            ],
+            "id_number": 152,
+            "name": "Malachite",
+            "description": "A vivid green banded mineral that forms from copper deposits, historically ground into pigment and jewelry.",
+            "comment": "Green banded copper mineral",
+            "stats": {
+                "percentage": 0.000635955,
+                "count": 3815730
+            },
+            "fields": [
+                {
+                    "label": "is_magnetic",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "crystal_system",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "density_g_cm3",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_rare",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "azurite": {
+            "label": "azurite",
+            "group": "mineral",
+            "tags": [
+                "blue",
+                "white"
+            ],
+            "id_number": 153,
+            "name": "Azurite",
+            "description": "A deep blue copper mineral that often forms alongside malachite and slowly weathers into it over geological time.",
+            "comment": "Slowly weathers into malachite",
+            "stats": {
+                "percentage": 1.55817e-06,
+                "count": 9349
+            },
+            "fields": [
+                {
+                    "label": "crystal_system",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_rare",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "moonstone": {
+            "label": "moonstone",
+            "group": "mineral",
+            "tags": [
+                "common"
+            ],
+            "id_number": 154,
+            "name": "Moonstone",
+            "description": "A feldspar mineral prized for an internal glow called adularescence, caused by light scattering between microscopic internal layers.",
+            "comment": "Glows with an internal shimmer",
+            "stats": {
+                "percentage": 2.43667e-07,
+                "count": 1462
+            },
+            "fields": [
+                {
+                    "label": "cleavage_quality",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "density_g_cm3",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_rare",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "luster_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "obsidian": {
+            "label": "obsidian",
+            "group": "mineral",
+            "tags": [
+                "ancient"
+            ],
+            "id_number": 155,
+            "name": "Obsidian",
+            "description": "A naturally occurring volcanic glass formed when lava cools too quickly for crystals to form, fracturing into edges sharp enough for ancient blades.",
+            "comment": "Volcanic glass sharp enough for blades",
+            "stats": {
+                "percentage": 0.00134061,
+                "count": 8043638
+            },
+            "fields": [
+                {
+                    "label": "color",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_magnetic",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "luster_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "pyrite": {
+            "label": "pyrite",
+            "group": "mineral",
+            "tags": [
+                "green",
+                "black"
+            ],
+            "id_number": 156,
+            "name": "Pyrite",
+            "description": "A brassy, metallic mineral nicknamed fool's gold for its resemblance to real gold, though it is far more brittle and common.",
+            "comment": "Nicknamed fool's gold",
+            "stats": {
+                "percentage": 1.71667e-08,
+                "count": 103
+            },
+            "fields": [
+                {
+                    "label": "is_rare",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "streak_color",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "crystal_system",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "cleavage_quality",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "opal": {
+            "label": "opal",
+            "group": "mineral",
+            "tags": [
+                "black"
+            ],
+            "id_number": 157,
+            "name": "Opal",
+            "description": "A mineraloid made of tiny silica spheres that diffract light into shifting flashes of color known as play-of-color.",
+            "comment": "Diffracts light into shifting colors",
+            "stats": {
+                "percentage": 0.000138325,
+                "count": 829951
+            },
+            "fields": [
+                {
+                    "label": "color",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "crystal_system",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "streak_color",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "labradorite": {
+            "label": "labradorite",
+            "group": "mineral",
+            "tags": [
+                "blue",
+                "white",
+                "rare"
+            ],
+            "id_number": 158,
+            "name": "Labradorite",
+            "description": "A feldspar mineral that flashes bright blues and greens, an optical effect called labradorescence caused by internal layering.",
+            "comment": "Flashes blue and green internally",
+            "stats": {
+                "percentage": 4.58333e-08,
+                "count": 275
+            },
+            "fields": [
+                {
+                    "label": "hardness_mohs",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "cleavage_quality",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "crystal_system",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_magnetic",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "tourmaline": {
+            "label": "tourmaline",
+            "group": "mineral",
+            "tags": [
+                "common",
+                "black"
+            ],
+            "id_number": 159,
+            "name": "Tourmaline",
+            "description": "A crystal family that occurs in nearly every color, sometimes within a single crystal, and can even generate a static charge when heated.",
+            "comment": "Generates static charge when heated",
+            "stats": {
+                "percentage": 4.19833e-06,
+                "count": 25190
+            },
+            "fields": [
+                {
+                    "label": "cleavage_quality",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "hardness_mohs",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "luster_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "streak_color",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "selenite": {
+            "label": "selenite",
+            "group": "mineral",
+            "tags": [
+                "common",
+                "black"
+            ],
+            "id_number": 160,
+            "name": "Selenite",
+            "description": "A soft, translucent form of gypsum that grows in long, flexible crystal blades and can sometimes be scratched with a fingernail.",
+            "comment": "Soft enough to scratch with a nail",
+            "stats": {
+                "percentage": 0.00939407,
+                "count": 56364445
+            },
+            "fields": [
+                {
+                    "label": "luster_type",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "is_rare",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "density_g_cm3",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    },
+    {
+        "lapis_lazuli": {
+            "label": "lapis_lazuli",
+            "group": "mineral",
+            "tags": [
+                "purple",
+                "blue"
+            ],
+            "id_number": 161,
+            "name": "Lapis lazuli",
+            "description": "A deep blue metamorphic rock flecked with golden pyrite, historically ground into the pigment ultramarine.",
+            "comment": "Ground into ultramarine pigment",
+            "stats": {
+                "percentage": 0.496961,
+                "count": 2981763836
+            },
+            "fields": [
+                {
+                    "label": "is_magnetic",
+                    "type": "bool",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "color",
+                    "type": "str",
+                    "description": "",
+                    "comment": ""
+                },
+                {
+                    "label": "density_g_cm3",
+                    "type": "float",
+                    "description": "",
+                    "comment": ""
+                }
+            ]
+        }
+    }
+]
