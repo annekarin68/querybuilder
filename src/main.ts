@@ -11,7 +11,7 @@ import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
-import { getDatabases, getSchema, getStats, runQuery } from "./api/client";
+import { getDatabases, getIndividuals, getSchema, getStats, runQuery } from "./api/client";
 import { store } from "./state";
 import { addChild, countConditions, newCondition } from "./query/tree";
 import { hasBlockingErrors, validateQuery } from "./query/validate";
@@ -22,7 +22,7 @@ import { renderDocsSidebar } from "./ui/docsSidebar";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
-import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
+import { renderDataPreview } from "./ui/dataPreview";
 
 /**
  * Stale-guard key for /api/stats and /api/query. A request depends on BOTH the
@@ -38,12 +38,12 @@ renderShell(root);
 onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
-  run: () => runPreview(1),
+  run: () => runPreview(),
 });
 
 const PAGE_SIZE = 25;
 
-function runPreview(page: number): void {
+function runPreview(): void {
   const { query, issues, schema, selectedDatabaseIds } = store.getState();
   if (
     !schema ||
@@ -53,12 +53,14 @@ function runPreview(page: number): void {
   )
     return;
   const key = requestKey(query, selectedDatabaseIds);
-  store.setState({ preview: { status: "loading", data: null, error: null, page } });
-  runQuery(query, selectedDatabaseIds, page, PAGE_SIZE)
+  store.setState({ preview: { status: "loading", data: null, error: null } });
+  // page/pageSize are sent for API-shape stability but currently ignored by the
+  // mock server, which always returns its one entryset (see mock-server §10).
+  runQuery(query, selectedDatabaseIds, 1, PAGE_SIZE)
     .then((data) => {
       const s = store.getState();
       if (key !== requestKey(s.query, s.selectedDatabaseIds)) return; // scope changed since Run
-      store.setState({ preview: { status: "ok", data, error: null, page: data.page } });
+      store.setState({ preview: { status: "ok", data, error: null } });
     })
     .catch((err) => {
       const s = store.getState();
@@ -68,7 +70,6 @@ function runPreview(page: number): void {
           status: "error",
           data: null,
           error: err instanceof Error ? err.message : String(err),
-          page,
         },
       });
     });
@@ -127,7 +128,7 @@ function onQueryChange(nextQuery: Group): void {
     query: nextQuery,
     issues,
     stats: { status: "idle", data: null, error: null },
-    preview: { status: "idle", data: null, error: null, page: 1 },
+    preview: { status: "idle", data: null, error: null },
   });
   refreshStats();
 }
@@ -139,7 +140,7 @@ function onDatabasesChange(nextIds: string[]): void {
   store.setState({
     selectedDatabaseIds: nextIds,
     stats: { status: "idle", data: null, error: null },
-    preview: { status: "idle", data: null, error: null, page: 1 },
+    preview: { status: "idle", data: null, error: null },
   });
   refreshStats();
 }
@@ -147,7 +148,7 @@ function onDatabasesChange(nextIds: string[]): void {
 store.subscribe((state, changed) => {
   if (changed.has("activeView")) setActiveView(state.activeView);
   if (changed.has("sidebarCollapsed")) setSidebarCollapsed(state.sidebarCollapsed);
-  if (changed.has("schema")) renderDocsSidebar(state);
+  if (changed.has("individuals")) renderDocsSidebar(state);
   if (changed.has("databases") || changed.has("selectedDatabaseIds")) {
     renderDatabasePicker(state);
     wireDatabasePicker(panelEls().dbpicker, onDatabasesChange);
@@ -170,13 +171,10 @@ store.subscribe((state, changed) => {
     changed.has("query") ||
     changed.has("issues") ||
     changed.has("schema") ||
-    changed.has("selectedDatabaseIds")
+    changed.has("selectedDatabaseIds") ||
+    changed.has("individuals")
   ) {
     renderDataPreview(state);
-    wireDataPreview(panelEls().preview, {
-      prev: () => runPreview(store.getState().preview.page - 1),
-      next: () => runPreview(store.getState().preview.page + 1),
-    });
     syncRunButton(state);
   }
 });
@@ -187,8 +185,8 @@ renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
 syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
-Promise.all([getSchema(), getDatabases()])
-  .then(([schema, dbResp]) => {
+Promise.all([getSchema(), getDatabases(), getIndividuals()])
+  .then(([schema, dbResp, individuals]) => {
     const seeded = addChild(
       store.getState().query as Group,
       (store.getState().query as Group).id,
@@ -201,6 +199,7 @@ Promise.all([getSchema(), getDatabases()])
     store.setState({
       schema,
       databases: dbResp.databases,
+      individuals,
       selectedDatabaseIds: dbResp.databases.map((d) => d.id),
       query: seeded,
       issues,

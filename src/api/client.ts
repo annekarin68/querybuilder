@@ -1,5 +1,11 @@
 import type { QueryNode } from "../query/types";
-import type { DatabasesResponse, QueryResponse, SchemaResponse, StatsResponse } from "./types";
+import type {
+  DatabasesResponse,
+  EntrysetResponse,
+  IndividualsResponse,
+  SchemaResponse,
+  StatsResponse,
+} from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -26,6 +32,10 @@ export function getDatabases(): Promise<DatabasesResponse> {
   return request<DatabasesResponse>("/databases");
 }
 
+export function getIndividuals(): Promise<IndividualsResponse> {
+  return request<IndividualsResponse>("/individuals");
+}
+
 export function getStats(query: QueryNode, databases: string[]): Promise<StatsResponse> {
   return request<StatsResponse>("/stats", {
     method: "POST",
@@ -39,8 +49,8 @@ export function runQuery(
   databases: string[],
   page: number,
   pageSize: number,
-): Promise<QueryResponse> {
-  return request<QueryResponse>("/query", {
+): Promise<EntrysetResponse> {
+  return request<EntrysetResponse>("/query", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query, databases, page, pageSize }),

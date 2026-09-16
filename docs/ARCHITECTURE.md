@@ -5,7 +5,8 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-01 — Frontend implemented per plan (Tasks 1–17).
+Last updated: 2026-09-16 — Docs sidebar and data preview repointed at the new
+vehicle-telemetry mock data (`GET /api/individuals`, repurposed `POST /api/query`).
 
 ---
 
@@ -212,14 +213,39 @@ src/
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
-    docsSidebar.ts     render for the left panel (built from schema).
+    docsSidebar.ts     render for the left panel — built from state.individuals
+                       (GET /api/individuals), NOT state.schema. See §9.
     statsPanel.ts      render for the right panel (data-driven from /api/stats).
-    dataPreview.ts     render for the bottom panel (paged table).
+    dataPreview.ts     render for the bottom panel — shows one entryset
+                       (GET-via-POST /api/query), NOT a paged row table. See §9.
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate(). Starts only when run as the entrypoint.
   catalog.ts           FIELDS + OPERATORS + DATABASES (with descriptions + arity).
   data.ts              RECORDS — ~200 deterministically generated in-memory rows.
   evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows) + filterByDatabases(rows, ids).
+  vehicleData.ts       Loads data/individual.json + data/entrysets.json via
+                       fs.readFileSync (no bundler JSON-module config needed) ->
+                       INDIVIDUALS, ENTRYSETS. A separate, newer mock dataset from
+                       FIELDS/RECORDS above — see §7 and §10.
+  data/
+    individual.json    The vehicle/fleet telemetry data model: ~157 items (4 metadata
+                       + ~153 content items across 18 subsystem groups: engine,
+                       powertrain, fuel, emissions, cooling, electrical, EV battery,
+                       tires/wheels, brakes, suspension, steering, body/chassis,
+                       lighting, HVAC, infotainment, ADAS, radar/lidar, diagnostics,
+                       driver behavior, environment context), each with
+                       label/group/tags/id_number/name/description/comment/stats/
+                       fields. stats.count/percentage is that item's share of a mock
+                       6-billion-entryset universe, tiered by real-world commonality
+                       (near-universal/common/uncommon/rare) so it agrees with the
+                       item's own description.
+    entrysets.json     Actual telemetry records referencing individual.json's items,
+                       keyed by entryset id (string): `{ [id]: { id, items: {
+                       [individualLabel]: { [fieldLabel]: value } } } }`. The 4
+                       metadata items (observation_window, vehicle_identity,
+                       trip_context, gps_position) always have every field populated;
+                       content items may omit fields. Currently holds one example
+                       entryset (a delivery van idling curbside mid-route).
 tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, mock-server/evaluate + index (pure, no DOM).
 docs/
   ARCHITECTURE.md      This file.
@@ -236,6 +262,7 @@ index.html
 export interface AppState {
   schema: SchemaResponse | null;      // loaded once at startup
   databases: Array<{ id; label }> | null;   // loaded once (GET /api/databases)
+  individuals: IndividualsResponse | null;  // loaded once (GET /api/individuals); drives docsSidebar
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
 
@@ -249,9 +276,8 @@ export interface AppState {
   };
   preview: {
     status: "idle" | "loading" | "ok" | "error";
-    data: QueryResponse | null;
+    data: EntrysetResponse | null;    // transitional: always the mock server's one entryset — see §7/§9/§10
     error: string | null;
-    page: number;
   };
 
   sidebarCollapsed: boolean;
@@ -266,11 +292,10 @@ of the keys that changed.
 
 | Trigger | Effect |
 |---|---|
-| App starts | `getSchema()` → `setState({ schema })` → every panel renders once. Schema load failure is fatal (full-page error + Reload). |
-| User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null, page 1> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
+| App starts | `getSchema()` + `getDatabases()` + `getIndividuals()` → `setState({ schema, databases, individuals, ... })` → every panel renders once. Schema (or individuals/databases) load failure is fatal (full-page error + Reload). |
+| User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
 | `getStats()` resolves/rejects | stale-response guard (below); if current, `setState({ stats })` → **only** `statsPanel` repaints. |
-| User clicks **Run / Refresh** | `setState({ preview: { status: "loading", page: 1, data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. |
-| User clicks **Prev / Next** | as Run, with `page ± 1`. |
+| User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. Transitional: the mock server always returns its one entryset regardless of `query`/`databases` — see §7/§10. There is no Prev/Next; a single entryset has nothing to page through. |
 | User toggles docs sidebar | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class. No repaint. |
 | User clicks a secondary-menu tab | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
 
@@ -280,8 +305,8 @@ Each panel subscribes narrowly:
 subscribe((state, changed) => {
   if (changed.has("query") || changed.has("issues")) queryBuilder.render(state);
   if (changed.has("stats"))   statsPanel.render(state);
-  if (changed.has("preview")) dataPreview.render(state);
-  if (changed.has("schema"))  docsSidebar.render(state);
+  if (changed.has("preview") || changed.has("individuals")) dataPreview.render(state);
+  if (changed.has("individuals")) docsSidebar.render(state);
 });
 ```
 
@@ -370,6 +395,36 @@ interface DatabasesResponse {
 }
 ```
 
+### `GET /api/individuals`
+
+The vehicle/fleet telemetry data model — every "individual" (signal, sensor, or
+piece of event metadata) an entryset may hold a value for. Loaded once at
+startup, alongside schema/databases; drives the **left** docs sidebar (§9).
+Unrelated to `FIELDS`/`DATABASES` above — this is a separate, newer mock
+dataset (`mock-server/data/individual.json`, see §4 and §10).
+
+```ts
+interface IndividualsResponse {
+  individuals: Array<{
+    label: string;                      // slug; also the key used in an entryset's `items`
+    group: string;                      // one of 18 subsystem groups, or "metadata"
+    tags: string[];                     // 0-4, from a shared vocabulary
+    id_number: number;
+    name: string;
+    description: string;
+    comment: string;
+    stats: { percentage: number; count: number }; // share of a mock 6,000,000,000-entryset universe
+    fields: Array<{ label: string; type: string; description: string; comment: string }>;
+  }>;
+}
+```
+
+The 4 `group: "metadata"` items (`observation_window`, `vehicle_identity`,
+`trip_context`, `gps_position`) are always fully populated in any entryset —
+they carry the time/identity/position every entryset needs and are used for
+indexing. There is no field marking an item as metadata vs. content; it's
+tracked only by convention (see git history for the design discussion).
+
 ### `POST /api/stats`
 
 Body: `{ "query": <QueryNode tree>, "databases": string[] }`. Called live
@@ -408,18 +463,23 @@ type later = one new case, nothing else.
 ### `POST /api/query`
 
 Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
-Called only on **Run / Refresh** and **Prev / Next**. Same `databases` scoping and
-`400` guard as `/api/stats`.
+Called only on **Run / Refresh**. Same `400` validation as `/api/stats` (still
+gates the Run button the same way), but — **transitional** — the query and
+databases are otherwise ignored: the mock server always returns its one
+entryset from `mock-server/data/entrysets.json`, regardless of what was asked
+for. `page`/`pageSize` are likewise accepted but unused. This is a deliberate,
+known simplification (see §10) until real filtering against entrysets exists.
 
 ```ts
-interface QueryResponse {
-  columns: Array<{ key: string; label: string }>;         // backend decides which columns
-  rows: Array<Record<string, string | number | boolean | null>>;
-  page: number;
-  pageSize: number;
-  totalRows: number;                                       // for "Showing 26–50 of 1,240"
+interface EntrysetResponse {
+  id: number;
+  items: Record<string, Record<string, string | number | boolean>>; // keyed by Individual.label, then field label
 }
 ```
+
+Drives the **bottom** data preview (§9), which shows the entryset's items
+directly — there is no pagination (a single entryset has nothing to page
+through), so no Prev/Next.
 
 ### Errors
 
@@ -494,12 +554,18 @@ show a "Select at least one database" hint and **Run** is disabled.
 
 ### Left — `docsSidebar.ts`
 
-Built entirely from `state.schema`. A Fomantic `ui accordion`: one section per
-field (label, type badge, `description`, nested list of its allowed operators with
-each operator's `description`). A plain `ui input` at the top filters sections by
-field label (`String.includes`, no plugin). Collapse is a CSS class toggled in
-`layout.ts` (`sidebarCollapsed`) — sets the left column to `display:none` and
-widens the centre; no repaint.
+Built entirely from `state.individuals` (GET /api/individuals) — **not**
+`state.schema`; this panel documents the vehicle-telemetry data model, which is
+independent of the query builder's plant/species schema (see §7, §10). A
+Fomantic `ui accordion`: one section per `group` (18 subsystem groups, e.g.
+`engine`, `tires_wheels`, `metadata`), each listing its items — name, tags,
+`description`/`comment`, `stats.count`/`percentage` (via `matchRatio()` from
+`format.ts`, treating `6_000_000_000` as the total), and its `fields` (label +
+type). A plain `ui input` at the top filters items by name (`String.includes`,
+no plugin) — matching items stay visible, others get `display:none`; empty
+group sections are not hidden. Collapse is a CSS class toggled in `layout.ts`
+(`sidebarCollapsed`) — sets the left column to `display:none` and widens the
+centre; no repaint.
 
 ### Centre — `queryBuilder.ts`
 
@@ -548,10 +614,15 @@ branches: `loading` → `ui loader`; `error` → `ui negative message`, no data;
 
 ### Bottom — `dataPreview.ts`
 
-Summary line (`queryToText(...)` + "Showing 26–50 of 1,240"), **Run / Refresh**
-button (disabled while `issues` has errors or while loading), a Fomantic
-`ui celled table` from `columns` + `rows`, **Prev / Next** gated on
-`page` / `totalRows`. Empty result → `ui message`. `status: "idle"` → hint from §6.
+**Run / Refresh** button (disabled while `issues` has errors or while
+loading — same gating as before). On success, a Fomantic `ui celled table`
+with one row per item in the returned entryset (`Item` / `Group` / `Values`),
+the entryset id shown above it. `Item`/`Group` are looked up by cross-
+referencing `state.individuals` (falling back to the raw slug if not yet
+loaded); `Values` is that item's populated fields as `label: value` pairs.
+Transitional: since `/api/query` always returns the same entryset (§7, §10),
+this table currently never changes with the query — there is a note to that
+effect in the panel. No pagination (§7). `status: "idle"` → hint from §6.
 
 ---
 
@@ -571,8 +642,18 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
   then scaled (`nullCount` by the total ratio, distribution buckets by the match
   ratio; `min`/`max`/`avg` are field values, never scaled). This is what makes the
   UI show `930.3M of 1.3B` rather than `41 of 200`.
-- `POST /api/query` → scopes + evaluates + paginates the real sample; `totalRows`
-  is the real sample size (the preview is a literal row sample, not scaled).
+- `POST /api/query` → validates the body the same way (`400` on a bad query or
+  missing/empty `databases`), but the query/databases/page/pageSize are
+  otherwise **ignored**: it always returns `Object.values(ENTRYSETS)[0]`, the
+  one entryset in `data/entrysets.json`. Transitional — see §7.
+- A second, separate mock dataset (`mock-server/vehicleData.ts`, loading
+  `data/individual.json` / `data/entrysets.json`) backs `GET /api/individuals`
+  and the repurposed `POST /api/query` above. It shares no logic with
+  `FIELDS`/`RECORDS`/`DATABASES` — the query builder, stats panel, and database
+  picker are untouched and still run against the original plant/species mock
+  data; only the docs sidebar and data preview were repointed. This is a known,
+  temporary inconsistency (a species query has no effect on what the preview
+  shows) accepted for now rather than rewiring the whole app in one step.
 - Bad query, or missing / empty `databases` → `400 { error }`.
 
 Shares **no code** with `src/`. It stands in for "a real backend in any language";
@@ -642,3 +723,5 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-01 | Stats panel formatting for large-scale data: new `src/ui/format.ts` (`compact` / `exact` / `matchRatio` / `barWidth`). All panel numbers are compacted (`1.2B`), tiny proportions render as `1 in 289.3M` not `0%`, nonzero bars keep a 2 px floor, exact values move to `title=` tooltips. `overflow-wrap: anywhere` + `.bar { min-width: 0 }` on the stats column. |
 | 2026-09-01 | Mock now reports counts at real scale: `DATABASES[].size` (mock-only, 12 K–5.6 B); `/api/stats` projects the 200-row sample's match rates onto those sizes (`scaleCount`), and `computeBlocks` takes an optional `{ total, match }` scale for `nullCount` / bucket counts. `/api/databases` strips `size`. Preview (`/api/query`) stays a literal sample. |
 | 2026-09-01 | Stats panel: headline + "By database" pinned; field blocks moved into a `.qb-stat-blocks` (`max-height: 45vh`) scroll region; stats column `position: sticky`. Per-database stats stay visible for any query size. |
+| 2026-09-16 | New mock dataset added: `mock-server/data/individual.json` (a vehicle/fleet telemetry data model: ~157 items across 18 subsystem groups + metadata) and `mock-server/data/entrysets.json` (actual telemetry records referencing those items; one example entryset so far). Not yet wired into the app. |
+| 2026-09-16 | Docs sidebar and data preview repointed at the new dataset: `mock-server/vehicleData.ts` loads it; new `GET /api/individuals` endpoint + `IndividualsResponse`/`Individual`/`IndividualField` types; `POST /api/query`'s response type becomes `EntrysetResponse` (`{ id, items }`, replacing the old `columns`/`rows`/pagination shape) and — transitionally — always returns the mock server's one entryset regardless of the query/databases sent. `AppState` gains `individuals`; `preview` drops `page` (no pagination for a single entryset, so Prev/Next is removed from `dataPreview.ts`). `docsSidebar.ts` now renders `state.individuals` grouped by subsystem instead of `state.schema`'s fields/operators. The query builder, stats panel, and database picker are untouched and still run against the original plant/species mock data — a known, temporary inconsistency (see §10). |

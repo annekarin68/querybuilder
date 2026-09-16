@@ -10,6 +10,7 @@ import {
   scaleCount,
   type JsonNode,
 } from "./evaluate";
+import { ENTRYSETS, INDIVIDUALS } from "./vehicleData";
 
 const PORT = 3001;
 
@@ -24,16 +25,6 @@ export function paginate<T>(items: T[], page: number, pageSize: number) {
     totalRows: items.length,
   };
 }
-
-const PREVIEW_COLUMNS = [
-  "id",
-  "species",
-  "branches",
-  "heightCm",
-  "foliage",
-  "flowering",
-  "plantedOn",
-];
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -78,6 +69,10 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/databases") {
       // `size` is mock-internal (drives the reported magnitudes) — not part of the contract.
       sendJson(res, 200, { databases: DATABASES.map(({ id, label }) => ({ id, label })) });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/individuals") {
+      sendJson(res, 200, { individuals: INDIVIDUALS });
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/stats") {
@@ -132,21 +127,11 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "Select at least one database." });
         return;
       }
-      const scoped = filterByDatabases(RECORDS, body.databases as string[]);
-      const all = scoped.filter((r) => matches(body.query as JsonNode, r));
-      const { slice, page, pageSize, totalRows } = paginate(
-        all,
-        body.page ?? 1,
-        body.pageSize ?? 25,
-      );
-      const columns = PREVIEW_COLUMNS.map((key) => ({
-        key,
-        label: key === "id" ? "ID" : (FIELDS.find((f) => f.id === key)?.label ?? key),
-      }));
-      const rows = slice.map((r) =>
-        Object.fromEntries(PREVIEW_COLUMNS.map((k) => [k, r[k as keyof typeof r] ?? null])),
-      );
-      sendJson(res, 200, { columns, rows, page, pageSize, totalRows });
+      // Transitional: the query/databases are validated above (so the Run button's
+      // gating still behaves normally) but otherwise ignored — the mock always
+      // returns the one entryset we have, regardless of what was asked for.
+      const entryset = Object.values(ENTRYSETS)[0];
+      sendJson(res, 200, entryset ?? { id: 0, items: {} });
       return;
     }
     sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });

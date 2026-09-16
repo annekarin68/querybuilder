@@ -1,0 +1,131 @@
+{
+  "1": {
+    "id": 1,
+    "items": {
+      "observation_window": {
+        "from_timestamp": "2024-11-06T14:32:00Z",
+        "to_timestamp": "2024-11-06T14:32:10Z"
+      },
+      "vehicle_identity": {
+        "vin": "1FTBW2CG5PKA48213",
+        "fleet_id": "FLEET-042",
+        "vehicle_type": "delivery_van"
+      },
+      "trip_context": {
+        "trip_id": "TRIP-88213",
+        "driver_id": "DRV-1029",
+        "route_id": "ROUTE-BOS-14"
+      },
+      "gps_position": {
+        "latitude": 42.3601,
+        "longitude": -71.0589,
+        "altitude_m": 12.4,
+        "heading_deg": 185.0
+      },
+      "engine_rpm": {
+        "value_rpm": 750,
+        "redline_rpm": 6000,
+        "is_over_rev": false
+      },
+      "engine_oil_temperature": {
+        "value_celsius": 92.5,
+        "sensor_id": "OIL-TEMP-1",
+        "is_within_normal_range": true
+      },
+      "engine_coolant_temperature": {
+        "value_celsius": 89.0,
+        "thermostat_open": true
+      },
+      "engine_load": {
+        "load_percentage": 14.2
+      },
+      "fuel_level": {
+        "percentage": 63.5,
+        "liters_remaining": 48.6
+      },
+      "fuel_consumption_rate": {
+        "liters_per_100km": 11.8
+      },
+      "battery_12v_voltage": {
+        "voltage": 13.8,
+        "is_charging": true
+      },
+      "tire_pressure_front_left": {
+        "pressure_psi": 42.0,
+        "tread_depth_mm": 7.8,
+        "is_low_pressure_warning": false
+      },
+      "tire_pressure_front_right": {
+        "pressure_psi": 41.5,
+        "tread_depth_mm": 7.6,
+        "is_low_pressure_warning": false
+      },
+      "tire_pressure_rear_left": {
+        "pressure_psi": 44.0
+      },
+      "tire_pressure_rear_right": {
+        "pressure_psi": 43.5
+      },
+      "wheel_speed": {
+        "speed_kmh": 0.0,
+        "wheel_position": "front_left"
+      },
+      "brake_pad_wear_front": {
+        "wear_percentage": 38.0,
+        "side": "front"
+      },
+      "brake_fluid_level": {
+        "percentage": 91.0,
+        "is_low": false
+      },
+      "parking_brake_status": {
+        "is_engaged": true
+      },
+      "transmission_gear": {
+        "current_gear": 0,
+        "is_in_manual_mode": false
+      },
+      "door_status": {
+        "door_id": "cargo_rear",
+        "is_open": true
+      },
+      "trunk_latch_status": {
+        "is_closed": false
+      },
+      "headlight_status": {
+        "side": "both",
+        "is_on": false,
+        "brightness_percentage": 0.0
+      },
+      "hazard_light_status": {
+        "is_active": true
+      },
+      "cabin_temperature": {
+        "value_celsius": 21.5,
+        "zone": "front"
+      },
+      "gps_signal_strength": {
+        "signal_bars": 4,
+        "satellites_locked": 9
+      },
+      "cellular_signal_strength": {
+        "signal_dbm": -78.0,
+        "network_type": "LTE"
+      },
+      "seatbelt_status": {
+        "seat_id": "driver",
+        "is_fastened": false
+      },
+      "idle_time": {
+        "minutes": 6.5,
+        "is_excessive": false
+      },
+      "ambient_temperature": {
+        "value_celsius": 14.0
+      },
+      "precipitation_detected": {
+        "is_detected": false
+      }
+    }
+  }
+}
