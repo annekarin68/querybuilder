@@ -1,12 +1,61 @@
 import type { AppState } from "../state";
-import { queryToText } from "../query/summary";
+import type { Entryset, Individual } from "../api/types";
 import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 
+/** How many group badges to show inline before collapsing the rest into "+N". */
+const MAX_GROUP_BADGES = 3;
+
 function hint(text: string): string {
   return `<h4 class="ui header">Data preview</h4><div class="ui info message">${escapeHtml(text)}</div>`;
+}
+
+function individualsByLabel(state: AppState): Map<string, Individual> {
+  const map = new Map<string, Individual>();
+  for (const item of state.individuals?.individuals ?? []) map.set(item.label, item);
+  return map;
+}
+
+function formatWhen(iso: string | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
+function groupsBadgesHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
+  const groups = [
+    ...new Set(
+      Object.keys(entryset.items)
+        .map((slug) => byLabel.get(slug)?.group)
+        .filter((g): g is string => Boolean(g) && g !== "metadata"),
+    ),
+  ].sort();
+  const shown = groups.slice(0, MAX_GROUP_BADGES);
+  const overflow = groups.length - shown.length;
+  return (
+    shown
+      .map((g) => `<span class="ui mini label">${escapeHtml(g.replace(/_/g, " "))}</span>`)
+      .join(" ") + (overflow > 0 ? ` <span class="qb-er-more">+${overflow}</span>` : "")
+  );
+}
+
+function entrysetRowHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
+  const vehicle = entryset.items["vehicle_identity"]?.["vehicle_type"];
+  const when = entryset.items["observation_window"]?.["from_timestamp"];
+  const itemCount = Object.keys(entryset.items).length;
+  return `
+    <details class="qb-entryset-row">
+      <summary>
+        <span class="qb-er-id">#${entryset.id}</span>
+        <span class="qb-er-when">${escapeHtml(formatWhen(typeof when === "string" ? when : undefined))}</span>
+        <span class="qb-er-vehicle">${escapeHtml(typeof vehicle === "string" ? vehicle : "—")}</span>
+        <span class="qb-er-groups">${groupsBadgesHtml(entryset, byLabel)}</span>
+        <span class="qb-er-count">${itemCount} items</span>
+      </summary>
+      <pre class="qb-er-json">${escapeHtml(JSON.stringify(entryset, null, 2))}</pre>
+    </details>`;
 }
 
 export function renderDataPreview(state: AppState): void {
@@ -37,21 +86,21 @@ export function renderDataPreview(state: AppState): void {
     // so "idle" always means "nothing current" — never run yet, or edited since.
     paint(
       el,
-      `<h4 class="ui header">Data preview</h4><div class="ui info message">Press <b>Run / Refresh</b> to load matching rows.</div>`,
+      `<h4 class="ui header">Data preview</h4><div class="ui info message">Press <b>Run / Refresh</b> to load sample entrysets.</div>`,
     );
     return;
   }
   if (p.status === "loading") {
     paint(
       el,
-      `<h4 class="ui header">Data preview</h4><div class="ui segment"><div class="ui active inline loader"></div> Loading rows…</div>`,
+      `<h4 class="ui header">Data preview</h4><div class="ui segment"><div class="ui active inline loader"></div> Loading entrysets…</div>`,
     );
     return;
   }
   if (p.status === "error") {
     paint(
       el,
-      `<h4 class="ui header">Data preview</h4><div class="ui negative message"><div class="header">Could not load rows</div><p>${escapeHtml(p.error)}</p></div>`,
+      `<h4 class="ui header">Data preview</h4><div class="ui negative message"><div class="header">Could not load entrysets</div><p>${escapeHtml(p.error)}</p></div>`,
     );
     return;
   }
@@ -60,51 +109,15 @@ export function renderDataPreview(state: AppState): void {
     paint(el, "");
     return;
   }
-  const d = p.data;
-  const summary = queryToText(state.query, {
-    fields: state.schema.fields,
-    operators: state.schema.operators,
-  });
-  const dbLabels = (state.databases ?? [])
-    .filter((db) => state.selectedDatabaseIds.includes(db.id))
-    .map((db) => db.label)
-    .join(", ");
-  const from = d.totalRows === 0 ? 0 : (d.page - 1) * d.pageSize + 1;
-  const to = Math.min(d.page * d.pageSize, d.totalRows);
-  const body = d.rows.length
-    ? `<table class="ui celled compact table">
-        <thead><tr>${d.columns.map((c) => `<th>${escapeHtml(c.label)}</th>`).join("")}</tr></thead>
-        <tbody>${d.rows
-          .map(
-            (r) => `<tr>${d.columns.map((c) => `<td>${escapeHtml(r[c.key])}</td>`).join("")}</tr>`,
-          )
-          .join("")}</tbody>
-      </table>`
-    : `<div class="ui message">No rows match this query.</div>`;
+  const byLabel = individualsByLabel(state);
+  const rows = p.data.entrysets.map((e) => entrysetRowHtml(e, byLabel));
 
   paint(
     el,
     `<h4 class="ui header">Data preview</h4>
-     <p class="ui small text"><b>Databases:</b> ${escapeHtml(dbLabels)}<br /><b>Query:</b> ${escapeHtml(summary)}</p>
-     <p>Showing ${from}–${to} of ${d.totalRows.toLocaleString()}</p>
-     ${body}
-     <div class="ui buttons">
-       <button class="ui button" data-preview="prev" ${d.page <= 1 ? "disabled" : ""}>Prev</button>
-       <button class="ui button" data-preview="next" ${to >= d.totalRows ? "disabled" : ""}>Next</button>
-     </div>`,
+     <p class="ui small text">
+       ${p.data.entrysets.length} entryset(s) matching your query — click a row to see its full JSON.
+     </p>
+     <div class="qb-entryset-list">${rows.join("")}</div>`,
   );
-}
-
-export function wireDataPreview(
-  container: HTMLElement,
-  handlers: { prev(): void; next(): void },
-): void {
-  if (container.dataset.dpWired === "1") return;
-  container.dataset.dpWired = "1";
-  container.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-preview]");
-    if (!btn) return;
-    if (btn.dataset.preview === "prev") handlers.prev();
-    if (btn.dataset.preview === "next") handlers.next();
-  });
 }

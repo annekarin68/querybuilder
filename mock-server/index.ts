@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { argv } from "node:process";
-import { DATABASES, FIELDS, OPERATORS } from "./catalog";
-import { RECORDS } from "./data";
+import { buildFields, OPERATORS } from "./schema";
+import { DATABASES } from "./databases";
 import {
   matches,
   computeBlocks,
@@ -10,6 +10,10 @@ import {
   scaleCount,
   type JsonNode,
 } from "./evaluate";
+import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
+import { ROWS } from "./rows";
+
+const FIELDS = buildFields(INDIVIDUALS);
 
 const PORT = 3001;
 
@@ -24,16 +28,6 @@ export function paginate<T>(items: T[], page: number, pageSize: number) {
     totalRows: items.length,
   };
 }
-
-const PREVIEW_COLUMNS = [
-  "id",
-  "species",
-  "branches",
-  "heightCm",
-  "foliage",
-  "flowering",
-  "plantedOn",
-];
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -80,6 +74,10 @@ const server = createServer(async (req, res) => {
       sendJson(res, 200, { databases: DATABASES.map(({ id, label }) => ({ id, label })) });
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/individuals") {
+      sendJson(res, 200, { individuals: INDIVIDUALS });
+      return;
+    }
     if (req.method === "POST" && url.pathname === "/api/stats") {
       const body = (await readJson(req)) as { query?: JsonNode; databases?: string[] };
       if (badQuery(body)) {
@@ -93,9 +91,9 @@ const server = createServer(async (req, res) => {
       const query = body.query as JsonNode;
       const ids = body.databases as string[];
 
-      // The 200-row sample drives match RATES; DATABASES[].size drives the
+      // The sample drives match RATES; DATABASES[].size drives the
       // MAGNITUDE the API reports, so the UI sees realistic large numbers.
-      const perDatabase = perDatabaseCounts(query, RECORDS, ids).map((c) => {
+      const perDatabase = perDatabaseCounts(query, ROWS, ids).map((c) => {
         const size = DATABASES.find((d) => d.id === c.id)?.size ?? 0;
         return {
           id: c.id,
@@ -107,9 +105,9 @@ const server = createServer(async (req, res) => {
       const totalCount = perDatabase.reduce((s, d) => s + d.totalCount, 0);
       const matchCount = perDatabase.reduce((s, d) => s + d.matchCount, 0);
 
-      const scoped = filterByDatabases(RECORDS, ids);
+      const scoped = filterByDatabases(ROWS, ids);
       const sampleMatch = scoped.filter((r) => matches(query, r)).length;
-      const blocks = computeBlocks(query, scoped, {
+      const blocks = computeBlocks(query, scoped, FIELDS, {
         total: scoped.length ? totalCount / scoped.length : 1,
         match: sampleMatch ? matchCount / sampleMatch : 1,
       });
@@ -132,21 +130,16 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "Select at least one database." });
         return;
       }
-      const scoped = filterByDatabases(RECORDS, body.databases as string[]);
-      const all = scoped.filter((r) => matches(body.query as JsonNode, r));
-      const { slice, page, pageSize, totalRows } = paginate(
-        all,
-        body.page ?? 1,
-        body.pageSize ?? 25,
-      );
-      const columns = PREVIEW_COLUMNS.map((key) => ({
-        key,
-        label: key === "id" ? "ID" : (FIELDS.find((f) => f.id === key)?.label ?? key),
-      }));
-      const rows = slice.map((r) =>
-        Object.fromEntries(PREVIEW_COLUMNS.map((k) => [k, r[k as keyof typeof r] ?? null])),
-      );
-      sendJson(res, 200, { columns, rows, page, pageSize, totalRows });
+      const query = body.query as JsonNode;
+      const ids = body.databases as string[];
+
+      const scoped = filterByDatabases(ROWS, ids);
+      const matchingIds = scoped.filter((r) => matches(query, r)).map((r) => r.id);
+      const entrysets = matchingIds
+        .map((id) => ENTRYSETS[String(id)])
+        .filter((e): e is Entryset => e !== undefined)
+        .slice(0, 25);
+      sendJson(res, 200, { entrysets });
       return;
     }
     sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });

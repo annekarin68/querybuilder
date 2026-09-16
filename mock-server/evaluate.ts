@@ -1,7 +1,7 @@
-import { FIELDS } from "./catalog";
+import type { FieldDef } from "./schema";
 import type { StatBlock } from "../src/api/types";
 
-type Row = Record<string, string | number | boolean | null>;
+export type Row = Record<string, string | number | boolean | null>;
 
 export interface JsonCondition {
   kind: "condition";
@@ -59,13 +59,14 @@ function conditionMatches(c: JsonCondition, row: Row): boolean {
 }
 
 /**
- * Restrict rows to the selected databases. Each plant species is its own
- * "database" (see catalog DATABASES), so a database id is matched against
- * `row.species`.
+ * Restrict rows to the selected databases. Rows are flattened entrysets
+ * (see mock-server/rows.ts), each carrying a synthetic `__db` key assigned
+ * purely from the entryset's numeric id (see mock-server/databases.ts) —
+ * never from anything inside the entryset's own fields.
  */
 export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
   const ids = new Set(databaseIds);
-  return rows.filter((r) => ids.has(String(r.species)));
+  return rows.filter((r) => ids.has(String(r.__db)));
 }
 
 /**
@@ -78,7 +79,7 @@ export function perDatabaseCounts(
   databaseIds: string[],
 ): { id: string; matchCount: number; totalCount: number }[] {
   return databaseIds.map((id) => {
-    const inDb = rows.filter((r) => String(r.species) === id);
+    const inDb = rows.filter((r) => String(r.__db) === id);
     return {
       id,
       totalCount: inDb.length,
@@ -111,13 +112,14 @@ export function scaleCount(part: number, whole: number, target: number): number 
 
 /**
  * `scale` lets the mock report counts at real database scale while still
- * evaluating the 200-row sample: `total` multiplies row-population counts
+ * evaluating the sample: `total` multiplies row-population counts
  * (nullCount), `match` multiplies match-population counts (distribution buckets).
  * min/max/avg are field *values*, never scaled. Both default to 1 (no scaling).
  */
 export function computeBlocks(
   query: JsonNode,
   rows: Row[],
+  fields: FieldDef[],
   scale: { total?: number; match?: number } = {},
 ): StatBlock[] {
   const totalScale = scale.total ?? 1;
@@ -126,7 +128,7 @@ export function computeBlocks(
   const blocks: StatBlock[] = [];
 
   for (const fieldId of referencedFieldIds(query)) {
-    const field = FIELDS.find((f) => f.id === fieldId);
+    const field = fields.find((f) => f.id === fieldId);
     if (!field) continue;
     const matchingValues = matching.map((r) => r[fieldId]);
     const present = matchingValues.filter((v) => v !== null && v !== undefined && v !== "");

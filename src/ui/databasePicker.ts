@@ -3,8 +3,9 @@ import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 
 /**
- * The database scope selector, above the query builder. "Each kind of plant has
- * its own database" — so this is a checkbox per database (species). Changing it
+ * The database scope selector, above the query builder. Databases are 7
+ * arbitrary partitions with no semantic tie to entryset content (see
+ * mock-server/databases.ts) — this is a checkbox per database. Changing it
  * behaves like editing the query (see main.ts onDatabasesChange + §6).
  */
 export function renderDatabasePicker(state: AppState): void {
