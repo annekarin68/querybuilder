@@ -20,6 +20,7 @@ describe("tree", () => {
   it("new nodes get unique ids", () => {
     expect(newCondition().id).not.toBe(newCondition().id);
     expect(newGroup().id).not.toBe(newGroup().id);
+    expect(newCondition().individualId).toBeNull();
   });
 
   it("addChild returns a new tree with the node appended, original unchanged", () => {
