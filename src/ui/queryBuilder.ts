@@ -181,11 +181,7 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     const newIndividualId = individualSel ? individualSel.value || null : cond.individualId;
     const individualChanged = newIndividualId !== cond.individualId;
 
-    const newFieldId = individualChanged
-      ? null
-      : fieldSel
-        ? fieldSel.value || null
-        : cond.fieldId;
+    const newFieldId = individualChanged ? null : fieldSel ? fieldSel.value || null : cond.fieldId;
     const fieldChanged = newFieldId !== cond.fieldId;
     let newOperatorId = fieldChanged ? null : opSel ? opSel.value || null : cond.operatorId;
     if (fieldChanged) newOperatorId = null; // operators depend on field

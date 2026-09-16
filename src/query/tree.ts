@@ -1,6 +1,8 @@
 import type { Condition, Group, QueryNode } from "./types";
 
-export type NodePatch = Partial<Pick<Condition, "individualId" | "fieldId" | "operatorId" | "value">> &
+export type NodePatch = Partial<
+  Pick<Condition, "individualId" | "fieldId" | "operatorId" | "value">
+> &
   Partial<Pick<Group, "operator" | "collapsed">>;
 
 let counter = 0;
