@@ -54,12 +54,48 @@ export interface StatsResponse {
   perDatabase: { id: string; label: string; matchCount: number; totalCount: number }[];
 }
 
-export interface QueryResponse {
-  columns: { key: string; label: string }[];
-  rows: Record<string, string | number | boolean | null>[];
-  page: number;
-  pageSize: number;
-  totalRows: number;
+/** One field an individual's telemetry item can report (GET /api/individuals). */
+export interface IndividualField {
+  label: string;
+  type: string;
+  description: string;
+  comment: string;
+}
+
+/**
+ * One item in the vehicle telemetry data model — a signal, sensor, or piece of
+ * metadata that an entryset may hold a value for. `stats` is aggregated across
+ * the full (mock) 6-billion-entryset dataset, not just the sample the mock
+ * server actually holds.
+ */
+export interface Individual {
+  label: string;
+  group: string;
+  tags: string[];
+  id_number: number;
+  name: string;
+  description: string;
+  comment: string;
+  stats: { percentage: number; count: number };
+  fields: IndividualField[];
+}
+
+export interface IndividualsResponse {
+  individuals: Individual[];
+}
+
+/**
+ * A telemetry entryset: a snapshot of one vehicle event, holding actual values
+ * for a subset of `individual.json`'s items. `items` is keyed by an
+ * Individual's `label`; each item's value object is keyed by one of that
+ * item's field labels — see docs/ARCHITECTURE.md for the full shape.
+ *
+ * Transitional: POST /api/query currently always returns the mock server's one
+ * entryset, regardless of the query/databases sent.
+ */
+export interface EntrysetResponse {
+  id: number;
+  items: Record<string, Record<string, string | number | boolean>>;
 }
 
 /** The databases the query can be scoped to (GET /api/databases). */

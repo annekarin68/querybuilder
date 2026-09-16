@@ -1,59 +1,87 @@
 import type { AppState } from "../state";
-import type { SchemaResponse } from "../api/types";
+import type { Individual } from "../api/types";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
+import { compact, matchRatio } from "./format";
 
-function sectionHtml(schema: SchemaResponse, field: SchemaResponse["fields"][number]): string {
-  const ops = field.operatorIds
-    .map((id) => schema.operators.find((o) => o.id === id))
-    .filter((o): o is SchemaResponse["operators"][number] => Boolean(o));
+const TOTAL_ENTRYSETS = 6_000_000_000;
+
+function groupLabel(group: string): string {
+  return group.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function itemHtml(item: Individual): string {
+  const tags = item.tags.length
+    ? `<div class="ui mini labels">${item.tags.map((t) => `<span class="ui mini label">${escapeHtml(t)}</span>`).join("")}</div>`
+    : "";
+  const fields = item.fields
+    .map(
+      (f) =>
+        `<code>${escapeHtml(f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type)}</span>`,
+    )
+    .join(" ");
+  const ratio = matchRatio(item.stats.count, TOTAL_ENTRYSETS);
   return `
-    <div class="title" data-field-label="${escapeHtml(field.label.toLowerCase())}">
-      <i class="dropdown icon"></i> ${escapeHtml(field.label)}
-      <span class="ui mini label">${escapeHtml(field.valueType)}</span>
+    <div class="item" data-item-label="${escapeHtml(item.name.toLowerCase())}">
+      <div class="content">
+        <div class="header">${escapeHtml(item.name)}</div>
+        ${tags}
+        <div class="description">${escapeHtml(item.description)}</div>
+        ${item.comment ? `<p class="ui small text"><i>${escapeHtml(item.comment)}</i></p>` : ""}
+        <p class="ui small text" title="${escapeHtml(item.stats.count.toLocaleString())} of ${TOTAL_ENTRYSETS.toLocaleString()} entrysets">
+          In ${compact(item.stats.count)} entrysets (${ratio})
+        </p>
+        <p class="ui small text">${fields}</p>
+      </div>
+    </div>`;
+}
+
+function groupSectionHtml(group: string, items: Individual[]): string {
+  return `
+    <div class="title" data-group-label="${escapeHtml(group.toLowerCase())}">
+      <i class="dropdown icon"></i> ${escapeHtml(groupLabel(group))}
+      <span class="ui mini label">${items.length}</span>
     </div>
-    <div class="content" data-field-label="${escapeHtml(field.label.toLowerCase())}">
-      <p>${escapeHtml(field.description)}</p>
-      <div class="ui relaxed list">
-        ${ops
-          .map(
-            (o) => `<div class="item"><div class="content">
-              <div class="header">${escapeHtml(o.label)}</div>
-              <div class="description">${escapeHtml(o.description)}</div>
-            </div></div>`,
-          )
-          .join("")}
+    <div class="content" data-group-content="${escapeHtml(group)}">
+      <div class="ui relaxed divided list">
+        ${items.map(itemHtml).join("")}
       </div>
     </div>`;
 }
 
 export function renderDocsSidebar(state: AppState): void {
   const el = panelEls().docs;
-  if (!state.schema) {
+  if (!state.individuals) {
     paint(
       el,
-      `<div class="ui segment"><div class="ui active inline loader"></div> Loading fields…</div>`,
+      `<div class="ui segment"><div class="ui active inline loader"></div> Loading individuals…</div>`,
     );
     return;
   }
-  const { schema } = state;
+  const groups = new Map<string, Individual[]>();
+  for (const item of state.individuals.individuals) {
+    const list = groups.get(item.group) ?? [];
+    list.push(item);
+    groups.set(item.group, list);
+  }
+
   paint(
     el,
-    `<h4 class="ui header">Fields &amp; operators</h4>
+    `<h4 class="ui header">Individuals</h4>
      <div class="ui fluid icon input" style="margin-bottom:.5rem">
-       <input type="text" id="qb-docs-filter" placeholder="Filter fields…" />
+       <input type="text" id="qb-docs-filter" placeholder="Filter items…" />
        <i class="search icon"></i>
      </div>
      <div class="ui styled fluid accordion">
-       ${schema.fields.map((f) => sectionHtml(schema, f)).join("")}
+       ${[...groups.entries()].map(([group, items]) => groupSectionHtml(group, items)).join("")}
      </div>`,
   );
 
   const filter = el.querySelector<HTMLInputElement>("#qb-docs-filter");
   filter?.addEventListener("input", () => {
     const q = filter.value.trim().toLowerCase();
-    el.querySelectorAll<HTMLElement>("[data-field-label]").forEach((node) => {
-      node.style.display = node.dataset.fieldLabel!.includes(q) ? "" : "none";
+    el.querySelectorAll<HTMLElement>("[data-item-label]").forEach((node) => {
+      node.style.display = node.dataset.itemLabel!.includes(q) ? "" : "none";
     });
   });
 }

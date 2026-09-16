@@ -1,6 +1,12 @@
 import type { Issue, QueryNode } from "./query/types";
 import { emptyQuery } from "./query/tree";
-import type { DatabasesResponse, QueryResponse, SchemaResponse, StatsResponse } from "./api/types";
+import type {
+  DatabasesResponse,
+  EntrysetResponse,
+  IndividualsResponse,
+  SchemaResponse,
+  StatsResponse,
+} from "./api/types";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 export type AsyncStatus = "idle" | "loading" | "ok" | "error";
@@ -9,6 +15,8 @@ export interface AppState {
   schema: SchemaResponse | null;
   /** The databases the query can be scoped to (loaded once). */
   databases: DatabasesResponse["databases"] | null;
+  /** The vehicle telemetry data model backing the docs sidebar (loaded once). */
+  individuals: IndividualsResponse | null;
   /** Which databases the query currently runs against. Empty = nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;
@@ -17,7 +25,7 @@ export interface AppState {
   issues: Issue[];
 
   stats: { status: AsyncStatus; data: StatsResponse | null; error: string | null };
-  preview: { status: AsyncStatus; data: QueryResponse | null; error: string | null; page: number };
+  preview: { status: AsyncStatus; data: EntrysetResponse | null; error: string | null };
 
   sidebarCollapsed: boolean;
 }
@@ -25,12 +33,13 @@ export interface AppState {
 export const initialState: AppState = {
   schema: null,
   databases: null,
+  individuals: null,
   selectedDatabaseIds: [],
   activeView: "filter",
   query: emptyQuery(),
   issues: [],
   stats: { status: "idle", data: null, error: null },
-  preview: { status: "idle", data: null, error: null, page: 1 },
+  preview: { status: "idle", data: null, error: null },
   sidebarCollapsed: false,
 };
 
