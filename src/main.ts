@@ -154,7 +154,12 @@ store.subscribe((state, changed) => {
     renderDatabasePicker(state);
     wireDatabasePicker(panelEls().dbpicker, onDatabasesChange);
   }
-  if (changed.has("schema") || changed.has("query") || changed.has("issues")) {
+  if (
+    changed.has("schema") ||
+    changed.has("query") ||
+    changed.has("issues") ||
+    changed.has("individuals")
+  ) {
     renderQueryBuilder(state);
     wireQueryBuilder(panelEls().center, onQueryChange);
   }

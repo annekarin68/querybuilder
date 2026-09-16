@@ -1,6 +1,6 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
-import type { SchemaResponse } from "../api/types";
+import type { IndividualsResponse, SchemaResponse } from "../api/types";
 import {
   addChild,
   emptyQuery,
@@ -23,14 +23,28 @@ function issuesFor(nodeId: string, issues: Issue[]): string {
     .join(" · ")}</div>`;
 }
 
-function fieldDropdown(schema: SchemaResponse, c: Condition): string {
-  const opts = schema.fields
+function individualDropdown(individuals: IndividualsResponse | null, c: Condition): string {
+  const opts = (individuals?.individuals ?? [])
     .map(
-      (f) =>
-        `<option value="${escapeHtml(f.id)}"${f.id === c.fieldId ? " selected" : ""}>${escapeHtml(f.label)}</option>`,
+      (ind) =>
+        `<option value="${escapeHtml(ind.label)}"${ind.label === c.individualId ? " selected" : ""}>${escapeHtml(ind.name)}</option>`,
     )
     .join("");
-  return `<select class="ui selection dropdown" data-part="field"><option value="">Field…</option>${opts}</select>`;
+  return `<select class="ui selection dropdown" data-part="individual"><option value="">Item…</option>${opts}</select>`;
+}
+
+function fieldDropdown(schema: SchemaResponse, c: Condition): string {
+  const prefix = c.individualId ? `${c.individualId}.` : null;
+  const opts = prefix
+    ? schema.fields
+        .filter((f) => f.id.startsWith(prefix))
+        .map(
+          (f) =>
+            `<option value="${escapeHtml(f.id)}"${f.id === c.fieldId ? " selected" : ""}>${escapeHtml(f.id.slice(prefix.length))}</option>`,
+        )
+        .join("")
+    : "";
+  return `<select class="ui selection dropdown" data-part="field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
 function operatorDropdown(schema: SchemaResponse, c: Condition): string {
@@ -50,10 +64,16 @@ function operatorDropdown(schema: SchemaResponse, c: Condition): string {
     <option value="">Operator…</option>${opts}</select>`;
 }
 
-function conditionHtml(schema: SchemaResponse, c: Condition, issues: Issue[]): string {
+function conditionHtml(
+  schema: SchemaResponse,
+  individuals: IndividualsResponse | null,
+  c: Condition,
+  issues: Issue[],
+): string {
   const field = schema.fields.find((f) => f.id === c.fieldId);
   const operator = schema.operators.find((o) => o.id === c.operatorId);
   return `<div class="qb-condition" data-node-id="${c.id}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.35rem 0">
+    ${individualDropdown(individuals, c)}
     ${fieldDropdown(schema, c)}
     ${operatorDropdown(schema, c)}
     <span class="qb-value">${renderValueControl(field, operator, c.value)}</span>
@@ -62,11 +82,17 @@ function conditionHtml(schema: SchemaResponse, c: Condition, issues: Issue[]): s
   </div>`;
 }
 
-function groupHtml(schema: SchemaResponse, g: Group, issues: Issue[], isRoot: boolean): string {
+function groupHtml(
+  schema: SchemaResponse,
+  individuals: IndividualsResponse | null,
+  g: Group,
+  issues: Issue[],
+  isRoot: boolean,
+): string {
   const body = g.collapsed
     ? ""
     : `<div class="qb-children" style="padding-left:${isRoot ? 0 : 1}rem">
-        ${g.children.map((child) => nodeHtml(schema, child, issues, false)).join("")}
+        ${g.children.map((child) => nodeHtml(schema, individuals, child, issues, false)).join("")}
       </div>`;
   return `<div class="ui segment qb-group" data-node-id="${g.id}">
     <div class="qb-group-head" style="display:flex;gap:.5rem;align-items:center">
@@ -92,13 +118,14 @@ function groupHtml(schema: SchemaResponse, g: Group, issues: Issue[], isRoot: bo
 
 function nodeHtml(
   schema: SchemaResponse,
+  individuals: IndividualsResponse | null,
   node: QueryNode,
   issues: Issue[],
   isRoot: boolean,
 ): string {
   return node.kind === "group"
-    ? groupHtml(schema, node, issues, isRoot)
-    : conditionHtml(schema, node, issues);
+    ? groupHtml(schema, individuals, node, issues, isRoot)
+    : conditionHtml(schema, individuals, node, issues);
 }
 
 export function renderQueryBuilder(state: AppState): void {
@@ -109,7 +136,7 @@ export function renderQueryBuilder(state: AppState): void {
   }
   paint(
     el,
-    `<h4 class="ui header">Build your query</h4>${nodeHtml(state.schema, state.query, state.issues, true)}`,
+    `<h4 class="ui header">Build your query</h4>${nodeHtml(state.schema, state.individuals, state.query, state.issues, true)}`,
   );
   // Keep the once-wired delegated handlers acting on the current tree/schema.
   _setBuilderRefs(state.query as Group, state.schema);
@@ -147,12 +174,16 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     const cond = findNode(q, nodeId);
     if (!cond || cond.kind !== "condition") return;
 
+    const individualSel = row.querySelector<HTMLSelectElement>('[data-part="individual"]');
     const fieldSel = row.querySelector<HTMLSelectElement>('[data-part="field"]');
     const opSel = row.querySelector<HTMLSelectElement>('[data-part="operator"]');
-    const newFieldId = fieldSel ? fieldSel.value || null : cond.fieldId;
-    const fieldChanged = newFieldId !== cond.fieldId;
-    let newOperatorId = opSel ? opSel.value || null : cond.operatorId;
-    if (fieldChanged) newOperatorId = null; // operators depend on field
+
+    const newIndividualId = individualSel ? individualSel.value || null : cond.individualId;
+    const individualChanged = newIndividualId !== cond.individualId;
+
+    const newFieldId = individualChanged ? null : fieldSel ? fieldSel.value || null : cond.fieldId;
+    const fieldChanged = individualChanged || newFieldId !== cond.fieldId;
+    const newOperatorId = fieldChanged ? null : opSel ? opSel.value || null : cond.operatorId;
 
     const field = schemaRef?.fields.find((f) => f.id === newFieldId);
     const operator = schemaRef?.operators.find((o) => o.id === newOperatorId);
@@ -168,7 +199,14 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     if (field?.valueType === "boolean" && operator?.arity === "one" && value == null) {
       value = false;
     }
-    onChange(updateNode(q, nodeId, { fieldId: newFieldId, operatorId: newOperatorId, value }));
+    onChange(
+      updateNode(q, nodeId, {
+        individualId: newIndividualId,
+        fieldId: newFieldId,
+        operatorId: newOperatorId,
+        value,
+      }),
+    );
   }
 
   if (container.dataset.qbWired !== "1") {
@@ -221,7 +259,7 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
       // silently dropped and the query would stop updating as the user types.
       if (
         target.matches(
-          'select[data-part="field"], select[data-part="operator"], select[data-part="value"]',
+          'select[data-part="individual"], select[data-part="field"], select[data-part="operator"], select[data-part="value"]',
         )
       ) {
         return;

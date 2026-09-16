@@ -22,6 +22,14 @@ describe("tree", () => {
     expect(newGroup().id).not.toBe(newGroup().id);
   });
 
+  it("newCondition starts with no individual, field, operator, or value", () => {
+    const c = newCondition();
+    expect(c.individualId).toBeNull();
+    expect(c.fieldId).toBeNull();
+    expect(c.operatorId).toBeNull();
+    expect(c.value).toBeNull();
+  });
+
   it("addChild returns a new tree with the node appended, original unchanged", () => {
     const root = emptyQuery();
     const c = newCondition();

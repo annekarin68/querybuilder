@@ -1,6 +1,8 @@
 import type { Condition, Group, QueryNode } from "./types";
 
-export type NodePatch = Partial<Pick<Condition, "fieldId" | "operatorId" | "value">> &
+export type NodePatch = Partial<
+  Pick<Condition, "individualId" | "fieldId" | "operatorId" | "value">
+> &
   Partial<Pick<Group, "operator" | "collapsed">>;
 
 let counter = 0;
@@ -14,7 +16,14 @@ export function emptyQuery(): Group {
 }
 
 export function newCondition(): Condition {
-  return { kind: "condition", id: id("c"), fieldId: null, operatorId: null, value: null };
+  return {
+    kind: "condition",
+    id: id("c"),
+    individualId: null,
+    fieldId: null,
+    operatorId: null,
+    value: null,
+  };
 }
 
 export function newGroup(): Group {
