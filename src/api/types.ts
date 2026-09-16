@@ -65,8 +65,8 @@ export interface IndividualField {
 /**
  * One item in the vehicle telemetry data model — a signal, sensor, or piece of
  * metadata that an entryset may hold a value for. `stats` is aggregated across
- * the full (mock) 6-billion-entryset dataset, not just the sample the mock
- * server actually holds.
+ * the full dataset the server tracks, not just the entrysets it actually
+ * returns for browsing/preview.
  */
 export interface Individual {
   label: string;
@@ -86,9 +86,9 @@ export interface IndividualsResponse {
 
 /**
  * A telemetry entryset: a snapshot of one vehicle event, holding actual values
- * for a subset of `individual.json`'s items. `items` is keyed by an
- * Individual's `label`; each item's value object is keyed by one of that
- * item's field labels — see docs/ARCHITECTURE.md for the full shape.
+ * for a subset of the items returned by GET /api/individuals. `items` is keyed
+ * by an Individual's `label`; each item's value object is keyed by one of
+ * that item's field labels — see docs/ARCHITECTURE.md for the full shape.
  */
 export interface Entryset {
   id: number;

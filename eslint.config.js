@@ -33,6 +33,41 @@ export default tseslint.config(
     },
   },
 
+  // The mock-server airlock (docs/ARCHITECTURE.md §2/§10): src/ reaches the
+  // backend only through src/api/client.ts + src/api/types.ts, never by
+  // importing mock-server's modules directly. This keeps src/ swappable onto
+  // a real backend without knowing anything about the mock's internals.
+  {
+    files: ["src/**/*.{ts,cts,mts}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "jquery",
+              message:
+                "jQuery may only be imported in src/ui/fomantic.ts (the airlock) or src/setup-jquery.ts (the global bootstrap). See docs/ARCHITECTURE.md §3.",
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                "../mock-server",
+                "../mock-server/*",
+                "../../mock-server",
+                "../../mock-server/*",
+                "**/mock-server/**",
+              ],
+              message:
+                "src/ must not import mock-server directly — go through src/api/client.ts + src/api/types.ts. See docs/ARCHITECTURE.md §2/§10.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // The two files that legitimately import jQuery.
   {
     files: ["src/ui/fomantic.ts", "src/setup-jquery.ts"],
