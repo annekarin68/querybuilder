@@ -1142,8 +1142,8 @@
         "is_fastened": true
       },
       "ambient_light_level": {
-        "lux": 5.0,
-        "is_daytime": false
+        "lux": 45000.0,
+        "is_daytime": true
       }
     }
   },
