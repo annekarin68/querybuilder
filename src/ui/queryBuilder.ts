@@ -11,9 +11,9 @@ import {
   updateNode,
 } from "../query/tree";
 import { panelEls } from "./layout";
-import { escapeHtml, paint } from "./panel";
+import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange } from "./fomantic";
-import { readValueControl, renderValueControl } from "./valueControl";
+import { defaultValueFor, readValueControl, renderValueControl } from "./valueControl";
 
 function issuesFor(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
@@ -24,25 +24,24 @@ function issuesFor(nodeId: string, issues: Issue[]): string {
 }
 
 function individualDropdown(individuals: IndividualsResponse | null, c: Condition): string {
-  const opts = (individuals?.individuals ?? [])
-    .map(
-      (ind) =>
-        `<option value="${escapeHtml(ind.label)}"${ind.label === c.individualId ? " selected" : ""}>${escapeHtml(ind.name)}</option>`,
-    )
-    .join("");
+  const opts = optionsHtml(
+    individuals?.individuals ?? [],
+    (ind) => ind.label,
+    (ind) => ind.name,
+    (ind) => ind.label === c.individualId,
+  );
   return `<select class="ui selection dropdown" data-part="individual"><option value="">Item…</option>${opts}</select>`;
 }
 
 function fieldDropdown(schema: SchemaResponse, c: Condition): string {
   const prefix = c.individualId ? `${c.individualId}.` : null;
   const opts = prefix
-    ? schema.fields
-        .filter((f) => f.id.startsWith(prefix))
-        .map(
-          (f) =>
-            `<option value="${escapeHtml(f.id)}"${f.id === c.fieldId ? " selected" : ""}>${escapeHtml(f.id.slice(prefix.length))}</option>`,
-        )
-        .join("")
+    ? optionsHtml(
+        schema.fields.filter((f) => f.id.startsWith(prefix)),
+        (f) => f.id,
+        (f) => f.id.slice(prefix.length),
+        (f) => f.id === c.fieldId,
+      )
     : "";
   return `<select class="ui selection dropdown" data-part="field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
@@ -54,12 +53,12 @@ function operatorDropdown(schema: SchemaResponse, c: Condition): string {
         .map((id) => schema.operators.find((o) => o.id === id))
         .filter((o): o is SchemaResponse["operators"][number] => o !== undefined)
     : [];
-  const opts = ops
-    .map(
-      (o) =>
-        `<option value="${escapeHtml(o.id)}"${o.id === c.operatorId ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
-    )
-    .join("");
+  const opts = optionsHtml(
+    ops,
+    (o) => o.id,
+    (o) => o.label,
+    (o) => o.id === c.operatorId,
+  );
   return `<select class="ui selection dropdown" data-part="operator"${field ? "" : " disabled"}>
     <option value="">Operator…</option>${opts}</select>`;
 }
@@ -187,17 +186,18 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
 
     const field = schemaRef?.fields.find((f) => f.id === newFieldId);
     const operator = schemaRef?.operators.find((o) => o.id === newOperatorId);
-    let value: unknown = cond.value;
-    if (fieldChanged || !operator) {
-      value = null;
-    } else {
-      value = readValueControl(row, operator.arity, field?.valueType ?? "string");
-    }
-    // A boolean toggle has no "unset" state on screen: an unchecked toggle IS `false`.
-    // Default a null value to `false` so the rendered control and the validated value
-    // agree, instead of showing an unchecked toggle under an "Enter a value." error.
-    if (field?.valueType === "boolean" && operator?.arity === "one" && value == null) {
-      value = false;
+    // The value control's DOM shape (one input, two, a multi-select, or none)
+    // depends on the operator's arity. If only the operator changed but its arity
+    // differs from before, `row` still holds the OLD shape until the next paint()
+    // — reading it would silently pull garbage from the wrong control. Only trust
+    // the DOM when the shape it currently has actually matches `operator`.
+    const oldOperator = schemaRef?.operators.find((o) => o.id === cond.operatorId);
+    const arityChanged =
+      newOperatorId !== cond.operatorId && oldOperator?.arity !== operator?.arity;
+
+    let value: unknown = defaultValueFor(field, operator);
+    if (!fieldChanged && !arityChanged && operator) {
+      value = readValueControl(row, operator.arity, field?.valueType ?? "string") ?? value;
     }
     onChange(
       updateNode(q, nodeId, {

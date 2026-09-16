@@ -12,9 +12,9 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import { getDatabases, getIndividuals, getSchema, getStats, runQuery } from "./api/client";
-import { store } from "./state";
-import { addChild, countConditions, newCondition } from "./query/tree";
-import { hasBlockingErrors, validateQuery } from "./query/validate";
+import { canRunQuery, store, type AppState } from "./state";
+import { addChild, newCondition, stripCollapsed } from "./query/tree";
+import { validateQuery } from "./query/validate";
 import type { Group, QueryNode } from "./query/types";
 import { debounce } from "./util/debounce";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
@@ -24,13 +24,19 @@ import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview } from "./ui/dataPreview";
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Stale-guard key for /api/stats and /api/query. A request depends on BOTH the
  * query tree and the selected databases, so a change to either must invalidate an
- * in-flight response (§6). Databases are sorted so selection order doesn't matter.
+ * in-flight response (§6). `collapsed` is stripped first: it's a pure UI display
+ * flag, not part of the query's semantics, so toggling it must never invalidate an
+ * in-flight request. Databases are sorted so selection order doesn't matter.
  */
 const requestKey = (query: QueryNode, databases: string[]): string =>
-  JSON.stringify({ query, databases: [...databases].sort() });
+  JSON.stringify({ query: stripCollapsed(query), databases: [...databases].sort() });
 
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
@@ -43,83 +49,79 @@ onMenu({
 
 const PAGE_SIZE = 25;
 
-function runPreview(): void {
-  const { query, issues, schema, selectedDatabaseIds } = store.getState();
-  if (
-    !schema ||
-    hasBlockingErrors(issues) ||
-    countConditions(query) === 0 ||
-    selectedDatabaseIds.length === 0
-  )
-    return;
+/**
+ * Runs `fetcher` behind the shared §6 stale-response guard: bail out unless
+ * `canRunQuery` says the current query/scope is runnable, mark loading, then apply
+ * `onSuccess`/`onError` only if the query/scope hasn't changed since the request
+ * was made. `runPreview` and `refreshStats` are this same shape twice over — this
+ * is the one place that shape needs to be correct.
+ */
+function runGuarded<T>(
+  fetcher: (query: QueryNode, databases: string[]) => Promise<T>,
+  onLoading: () => void,
+  onSuccess: (data: T) => void,
+  onError: (message: string) => void,
+): void {
+  const state = store.getState();
+  if (!canRunQuery(state)) return;
+  const { query, selectedDatabaseIds } = state;
   const key = requestKey(query, selectedDatabaseIds);
-  store.setState({ preview: { status: "loading", data: null, error: null } });
-  // page/pageSize are sent for API-shape stability, but the mock server does
-  // not paginate — it filters query/databases for real and returns every
-  // matching entryset (capped at 25) in one response (see mock-server §10).
-  runQuery(query, selectedDatabaseIds, 1, PAGE_SIZE)
+  onLoading();
+  fetcher(query, selectedDatabaseIds)
     .then((data) => {
       const s = store.getState();
-      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return; // scope changed since Run
-      store.setState({ preview: { status: "ok", data, error: null } });
+      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return; // scope changed since the request
+      onSuccess(data);
     })
     .catch((err) => {
       const s = store.getState();
       if (key !== requestKey(s.query, s.selectedDatabaseIds)) return;
-      store.setState({
-        preview: {
-          status: "error",
-          data: null,
-          error: err instanceof Error ? err.message : String(err),
-        },
-      });
+      onError(errorMessage(err));
     });
+}
+
+function runPreview(): void {
+  // page/pageSize are sent for API-shape stability, but the mock server does
+  // not paginate — it filters query/databases for real and returns every
+  // matching entryset (capped at 25) in one response (see mock-server §10).
+  runGuarded(
+    (query, databases) => runQuery(query, databases, 1, PAGE_SIZE),
+    () => store.setState({ preview: { status: "loading", data: null, error: null } }),
+    (data) => store.setState({ preview: { status: "ok", data, error: null } }),
+    (error) => store.setState({ preview: { status: "error", data: null, error } }),
+  );
 }
 
 function syncRunButton(state = store.getState()): void {
   const btn = document.querySelector<HTMLButtonElement>('[data-menu="run"]');
   if (!btn) return;
-  const ready =
-    !!state.schema &&
-    !hasBlockingErrors(state.issues) &&
-    countConditions(state.query) > 0 &&
-    state.selectedDatabaseIds.length > 0 &&
-    state.preview.status !== "loading";
-  btn.disabled = !ready;
+  btn.disabled = !(canRunQuery(state) && state.preview.status !== "loading");
 }
 
 const refreshStats = debounce(() => {
-  const { query, issues, schema, selectedDatabaseIds } = store.getState();
-  if (
-    !schema ||
-    hasBlockingErrors(issues) ||
-    countConditions(query) === 0 ||
-    selectedDatabaseIds.length === 0
-  )
-    return;
-  const key = requestKey(query, selectedDatabaseIds);
-  store.setState({ stats: { status: "loading", data: null, error: null } });
-  getStats(query, selectedDatabaseIds)
-    .then((data) => {
-      const s = store.getState();
-      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return; // stale — a newer change won
-      store.setState({ stats: { status: "ok", data, error: null } });
-    })
-    .catch((err) => {
-      const s = store.getState();
-      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return;
-      store.setState({
-        stats: {
-          status: "error",
-          data: null,
-          error: err instanceof Error ? err.message : String(err),
-        },
-      });
-    });
+  runGuarded(
+    (query, databases) => getStats(query, databases),
+    () => store.setState({ stats: { status: "loading", data: null, error: null } }),
+    (data) => store.setState({ stats: { status: "ok", data, error: null } }),
+    (error) => store.setState({ stats: { status: "error", data: null, error } }),
+  );
 }, 400);
 
+/**
+ * A tree edit that changes only a group's `collapsed` flag is a pure display
+ * change, not a semantic one (§6): it must not reset stats/preview or trigger a
+ * refetch — `requestKey` already ignores `collapsed` too, so an in-flight request
+ * survives a collapse toggle instead of being wrongly treated as stale.
+ */
 function onQueryChange(nextQuery: Group): void {
-  if (nextQuery === store.getState().query) return;
+  const prevQuery = store.getState().query;
+  if (nextQuery === prevQuery) return;
+  const onlyCollapsedChanged =
+    JSON.stringify(stripCollapsed(nextQuery)) === JSON.stringify(stripCollapsed(prevQuery));
+  if (onlyCollapsedChanged) {
+    store.setState({ query: nextQuery });
+    return;
+  }
   const schema = store.getState().schema;
   const issues = schema
     ? validateQuery(nextQuery, { fields: schema.fields, operators: schema.operators })
@@ -146,42 +148,45 @@ function onDatabasesChange(nextIds: string[]): void {
   refreshStats();
 }
 
+/**
+ * Each panel's re-render trigger: which AppState keys it depends on, and how to
+ * (re)render it. One list to read and extend instead of several hand-maintained
+ * `changed.has(...)` chains that repeat the same keys.
+ */
+const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
+  { keys: ["activeView"], run: (s) => setActiveView(s.activeView) },
+  { keys: ["sidebarCollapsed"], run: (s) => setSidebarCollapsed(s.sidebarCollapsed) },
+  { keys: ["individuals"], run: (s) => renderDocsSidebar(s) },
+  {
+    keys: ["databases", "selectedDatabaseIds"],
+    run: (s) => {
+      renderDatabasePicker(s);
+      wireDatabasePicker(panelEls().dbpicker, onDatabasesChange);
+    },
+  },
+  {
+    keys: ["schema", "query", "issues", "individuals"],
+    run: (s) => {
+      renderQueryBuilder(s);
+      wireQueryBuilder(panelEls().center, onQueryChange);
+    },
+  },
+  {
+    keys: ["schema", "query", "issues", "stats", "selectedDatabaseIds"],
+    run: (s) => renderStatsPanel(s),
+  },
+  {
+    keys: ["preview", "query", "issues", "schema", "selectedDatabaseIds", "individuals"],
+    run: (s) => {
+      renderDataPreview(s);
+      syncRunButton(s);
+    },
+  },
+];
+
 store.subscribe((state, changed) => {
-  if (changed.has("activeView")) setActiveView(state.activeView);
-  if (changed.has("sidebarCollapsed")) setSidebarCollapsed(state.sidebarCollapsed);
-  if (changed.has("individuals")) renderDocsSidebar(state);
-  if (changed.has("databases") || changed.has("selectedDatabaseIds")) {
-    renderDatabasePicker(state);
-    wireDatabasePicker(panelEls().dbpicker, onDatabasesChange);
-  }
-  if (
-    changed.has("schema") ||
-    changed.has("query") ||
-    changed.has("issues") ||
-    changed.has("individuals")
-  ) {
-    renderQueryBuilder(state);
-    wireQueryBuilder(panelEls().center, onQueryChange);
-  }
-  if (
-    changed.has("schema") ||
-    changed.has("query") ||
-    changed.has("issues") ||
-    changed.has("stats") ||
-    changed.has("selectedDatabaseIds")
-  ) {
-    renderStatsPanel(state);
-  }
-  if (
-    changed.has("preview") ||
-    changed.has("query") ||
-    changed.has("issues") ||
-    changed.has("schema") ||
-    changed.has("selectedDatabaseIds") ||
-    changed.has("individuals")
-  ) {
-    renderDataPreview(state);
-    syncRunButton(state);
+  for (const { keys, run } of panelRenderers) {
+    if (keys.some((k) => changed.has(k))) run(state);
   }
 });
 
@@ -214,7 +219,7 @@ Promise.all([getSchema(), getDatabases(), getIndividuals()])
   .catch((err) => {
     root.innerHTML = `<div class="ui negative message" style="margin:2rem">
       <div class="header">Could not load field list</div>
-      <p>${err instanceof Error ? err.message : String(err)}</p>
+      <p>${errorMessage(err)}</p>
       <button class="ui button" onclick="location.reload()">Reload</button>
     </div>`;
   });

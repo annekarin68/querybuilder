@@ -75,3 +75,16 @@ export function countConditions(tree: QueryNode): number {
   if (tree.kind === "condition") return 1;
   return tree.children.reduce((sum, c) => sum + countConditions(c), 0);
 }
+
+/**
+ * A copy of `tree` with every group's `collapsed` flag removed. `collapsed` is a
+ * pure UI display flag, not part of the query's semantics — callers that need to
+ * tell "did the actual filter change?" from "did the user just expand/collapse a
+ * group?" compare trees through this first.
+ */
+export function stripCollapsed(tree: QueryNode): QueryNode {
+  return mapTree(tree, (n) => {
+    if (n.kind === "group") delete n.collapsed;
+    return n;
+  });
+}

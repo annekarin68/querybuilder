@@ -1,36 +1,37 @@
 import type { SchemaResponse } from "../api/types";
-import { escapeHtml } from "./panel";
+import { escapeHtml, optionsHtml } from "./panel";
 
 type Field = SchemaResponse["fields"][number];
 type Operator = SchemaResponse["operators"][number];
 
-function enumDropdown(field: Field, current: unknown, multiple: boolean): string {
+function enumDropdown(field: Field, current: unknown, multiple: boolean, extraAttrs = ""): string {
   const values = multiple
     ? Array.isArray(current)
       ? current.map(String)
       : []
     : [String(current ?? "")];
-  const opts = (field.options ?? [])
-    .map(
-      (o) =>
-        `<option value="${escapeHtml(o.value)}"${
-          values.includes(o.value) ? " selected" : ""
-        }>${escapeHtml(o.label)}</option>`,
-    )
-    .join("");
-  return `<select class="ui ${multiple ? "multiple " : ""}selection dropdown" data-part="value"${
+  const opts = optionsHtml(
+    field.options ?? [],
+    (o) => o.value,
+    (o) => o.label,
+    (o) => values.includes(o.value),
+  );
+  const attrs = extraAttrs ? ` ${extraAttrs}` : "";
+  return `<select class="ui ${multiple ? "multiple " : ""}selection dropdown" data-part="value"${attrs}${
     multiple ? " multiple" : ""
   }>
     ${multiple ? "" : `<option value="">Choose…</option>`}${opts}
   </select>`;
 }
 
-function scalarInput(field: Field, current: unknown, part: string): string {
+function scalarInput(field: Field, current: unknown, part: string, extraAttrs = ""): string {
   const v = escapeHtml(current ?? "");
+  const attrs = extraAttrs ? ` ${extraAttrs}` : "";
   if (field.valueType === "number")
-    return `<input type="number" data-part="${part}" value="${v}" />`;
-  if (field.valueType === "date") return `<input type="date" data-part="${part}" value="${v}" />`;
-  return `<input type="text" data-part="${part}" value="${v}" />`;
+    return `<input type="number" data-part="${part}"${attrs} value="${v}" />`;
+  if (field.valueType === "date")
+    return `<input type="date" data-part="${part}"${attrs} value="${v}" />`;
+  return `<input type="text" data-part="${part}"${attrs} value="${v}" />`;
 }
 
 export function renderValueControl(
@@ -54,28 +55,15 @@ export function renderValueControl(
     if (field.valueType === "enum") {
       const from = Array.isArray(value) ? value[0] : undefined;
       const to = Array.isArray(value) ? value[1] : undefined;
-      return `${enumDropdown(field, from, false).replace(
-        'data-part="value"',
-        'data-part="value" data-range="from"',
-      )}
+      return `${enumDropdown(field, from, false, 'data-range="from"')}
               <span style="margin:0 .4rem">to</span>
-              ${enumDropdown(field, to, false).replace(
-                'data-part="value"',
-                'data-part="value" data-range="to"',
-              )}`;
+              ${enumDropdown(field, to, false, 'data-range="to"')}`;
     }
     const from = Array.isArray(value) ? value[0] : "";
     const to = Array.isArray(value) ? value[1] : "";
-    return `<div class="ui input" style="margin-right:.3rem">${scalarInput(
-      field,
-      from,
-      "value",
-    ).replace('data-part="value"', 'data-part="value" data-range="from"')}</div>
+    return `<div class="ui input" style="margin-right:.3rem">${scalarInput(field, from, "value", 'data-range="from"')}</div>
       <span style="margin:0 .4rem">to</span>
-      <div class="ui input">${scalarInput(field, to, "value").replace(
-        'data-part="value"',
-        'data-part="value" data-range="to"',
-      )}</div>`;
+      <div class="ui input">${scalarInput(field, to, "value", 'data-range="to"')}</div>`;
   }
   // arity "one"
   if (field.valueType === "boolean") {
@@ -85,6 +73,19 @@ export function renderValueControl(
   }
   if (field.valueType === "enum") return enumDropdown(field, value, false);
   return `<div class="ui input">${scalarInput(field, value, "value")}</div>`;
+}
+
+/**
+ * The value a condition should hold when it has no meaningful selection yet — not
+ * every control can represent "unset" on screen (a boolean toggle is always either
+ * true or false), so this is where a field/operator's real default lives. Kept
+ * next to `renderValueControl`/`readValueControl` since it's the same arity ×
+ * valueType dispatch table, just answering "what's the default" instead of
+ * "how do I render/read this".
+ */
+export function defaultValueFor(field: Field | undefined, operator: Operator | undefined): unknown {
+  if (field?.valueType === "boolean" && operator?.arity === "one") return false;
+  return null;
 }
 
 export function readValueControl(

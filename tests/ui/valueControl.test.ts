@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { SchemaResponse } from "../../src/api/types";
-import { renderValueControl } from "../../src/ui/valueControl";
+import { defaultValueFor, renderValueControl } from "../../src/ui/valueControl";
 
 type Field = SchemaResponse["fields"][number];
 type Operator = SchemaResponse["operators"][number];
@@ -65,5 +65,23 @@ describe("renderValueControl", () => {
     expect(html).toContain('data-multi="1"');
     expect(html).toContain("placeholder");
     expect(html).toContain('value="a, b"');
+  });
+});
+
+describe("defaultValueFor", () => {
+  it("boolean field + arity one defaults to false (a toggle can't represent unset)", () => {
+    expect(defaultValueFor(field({ valueType: "boolean" }), op("one"))).toBe(false);
+  });
+
+  it("every other field/arity combination defaults to null", () => {
+    expect(defaultValueFor(field({ valueType: "string" }), op("one"))).toBeNull();
+    expect(defaultValueFor(field({ valueType: "boolean" }), op("two"))).toBeNull();
+    expect(defaultValueFor(field({ valueType: "boolean" }), op("many"))).toBeNull();
+    expect(defaultValueFor(field({ valueType: "number" }), op("one"))).toBeNull();
+  });
+
+  it("no field or no operator defaults to null", () => {
+    expect(defaultValueFor(undefined, op("one"))).toBeNull();
+    expect(defaultValueFor(field({ valueType: "boolean" }), undefined)).toBeNull();
   });
 });
