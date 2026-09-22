@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getDatabases, getSchema, getStats, runQuery } from "../../src/api/client";
+import { getDatabases, getStats, runQuery } from "../../src/api/client";
 import { emptyQuery } from "../../src/query/tree";
 
 function mockFetchOnce(status: number, body: unknown) {
@@ -31,19 +31,15 @@ function mockStreamFetch(status: number, chunks: string[]) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("api client", () => {
-  it("getSchema GETs /api/schema and returns the parsed body", async () => {
-    const f = mockFetchOnce(200, { fields: [], operators: [] });
-    vi.stubGlobal("fetch", f);
-    const out = await getSchema();
-    expect(out).toEqual({ fields: [], operators: [] });
-    expect(f).toHaveBeenCalledWith("/api/schema", undefined);
-  });
-
-  it("getDatabases GETs /api/databases and returns the parsed body", async () => {
-    const f = mockFetchOnce(200, { databases: [{ label: "fern", name: "Fern" }] });
+  it("getDatabases GETs /api/databases and returns the parsed bare array", async () => {
+    const f = mockFetchOnce(200, [
+      { label: "fern", name: "Fern", description: "", owner: "", totalEntrysets: 1, percentageOfTotal: 100 },
+    ]);
     vi.stubGlobal("fetch", f);
     const out = await getDatabases();
-    expect(out).toEqual({ databases: [{ label: "fern", name: "Fern" }] });
+    expect(out).toEqual([
+      { label: "fern", name: "Fern", description: "", owner: "", totalEntrysets: 1, percentageOfTotal: 100 },
+    ]);
     expect(f).toHaveBeenCalledWith("/api/databases", undefined);
   });
 
@@ -63,8 +59,8 @@ describe("api client", () => {
 
   it("getStats streams NDJSON lines, calling onLine once per line, even split across chunks", async () => {
     const lines = [
-      { label: "alpha", success: true, matchCount: 1, totalCount: 2, infoMessages: [] },
-      { label: "beta", success: false, validationErrors: ["bad query"], infoMessages: [] },
+      { label: "alpha", success: true, matchCount: 1 },
+      { label: "beta", success: false, errorMessages: ["bad query"] },
     ];
     const ndjson = lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
     const splitAt = ndjson.indexOf("\n") + 3; // cut mid-way into the second line
@@ -84,7 +80,7 @@ describe("api client", () => {
   });
 
   it("runQuery POSTs query + databases + paging", async () => {
-    const f = mockFetchOnce(200, { columns: [], rows: [], page: 2, pageSize: 25, totalRows: 0 });
+    const f = mockFetchOnce(200, { entrysets: [] });
     vi.stubGlobal("fetch", f);
     await runQuery(emptyQuery(), ["rose"], 2, 25);
     const [, init] = f.mock.calls[0]!;
@@ -93,6 +89,6 @@ describe("api client", () => {
 
   it("falls back to status text when there is no error field", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, {}));
-    await expect(getSchema()).rejects.toThrow("500 STATUS");
+    await expect(getDatabases()).rejects.toThrow("500 STATUS");
   });
 });

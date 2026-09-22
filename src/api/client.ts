@@ -1,11 +1,5 @@
 import type { QueryNode } from "../query/types";
-import type {
-  DatabasesResponse,
-  EntrysetsResponse,
-  IndividualsResponse,
-  SchemaResponse,
-  StatsResponse,
-} from "./types";
+import type { DatabasesResponse, EntrysetsResponse, Individual, StatsResponse } from "./types";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -26,16 +20,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function getSchema(): Promise<SchemaResponse> {
-  return request<SchemaResponse>("/schema");
+export function getDatabases(): Promise<DatabasesResponse[]> {
+  return request<DatabasesResponse[]>("/databases");
 }
 
-export function getDatabases(): Promise<DatabasesResponse> {
-  return request<DatabasesResponse>("/databases");
-}
-
-export function getIndividuals(): Promise<IndividualsResponse> {
-  return request<IndividualsResponse>("/individuals");
+export function getIndividuals(): Promise<Individual[]> {
+  return request<Individual[]>("/individuals");
 }
 
 /**
