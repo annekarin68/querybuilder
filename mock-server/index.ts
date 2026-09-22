@@ -67,8 +67,8 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   try {
     if (req.method === "GET" && url.pathname === "/api/databases") {
-      // `size` is mock-internal (drives the reported magnitudes) — not part of the contract.
-      sendJson(res, 200, { databases: DATABASES.map(({ label, name }) => ({ label, name })) });
+      // Every field on DatabaseDef IS the wire contract now — send the array directly.
+      sendJson(res, 200, DATABASES);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/individuals") {
@@ -95,30 +95,27 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8" });
       for (const c of counts) {
         const db = DATABASES.find((d) => d.label === c.label);
-        const size = db?.size ?? 0;
-        // Dev-only: occasionally simulate a database that can't answer, so the
-        // UI's per-database failure path gets exercised without a real backend.
+        const totalEntrysets = db?.totalEntrysets ?? 0;
+        // Dev-only: occasionally (~5%) simulate a database that can't answer, so
+        // the UI's per-database failure path gets exercised without a real backend.
         const line = buildStatsLine(
           Math.random() < 0.05
             ? {
                 label: c.label,
-                matchCount: 0,
-                totalCount: 0,
                 fail: {
-                  validationErrors: [],
+                  errorMessages: [],
                   infoMessages: ["This database could not be reached. Try again shortly."],
                 },
               }
             : {
                 label: c.label,
-                // The sample drives match RATES; DATABASES[].size drives the
-                // MAGNITUDE the API reports, so the UI sees realistic large numbers.
-                matchCount: scaleCount(c.matchCount, c.totalCount, size),
-                totalCount: size,
+                // The sample drives match RATES; DATABASES[].totalEntrysets drives
+                // the MAGNITUDE the API reports, so the UI sees realistic numbers.
+                matchCount: scaleCount(c.matchCount, c.totalCount, totalEntrysets),
               },
         );
         res.write(JSON.stringify(line) + "\n");
-        await delay(150 + Math.random() * 250); // visibly stream in dev
+        await delay(150 + Math.random() * 250); // visibly stream in dev, roughly 150-400ms
       }
       res.end();
       return;
