@@ -4,14 +4,14 @@ import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../
 
 const schema = {
   fields: [
-    { id: "species", valueType: "enum", operatorIds: ["eq", "in", "isEmpty"] },
-    { id: "branches", valueType: "number", operatorIds: ["eq", "between", "isEmpty"] },
+    { label: "species", valueType: "enum", operatorIds: ["eq", "in", "isEmpty"] },
+    { label: "branches", valueType: "number", operatorIds: ["eq", "between", "isEmpty"] },
   ],
   operators: [
-    { id: "eq", arity: "one" as const },
-    { id: "between", arity: "two" as const },
-    { id: "in", arity: "many" as const },
-    { id: "isEmpty", arity: "none" as const },
+    { label: "eq", arity: "one" as const },
+    { label: "between", arity: "two" as const },
+    { label: "in", arity: "many" as const },
+    { label: "isEmpty", arity: "none" as const },
   ],
 };
 
