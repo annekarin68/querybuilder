@@ -9,19 +9,21 @@ export interface IndividualField {
   type: string;
   description: string;
   comment: string;
+  cardinality: number;
+  values: string[];
+  format: string;
   name?: string;
-  values?: string[];
 }
 
 export interface Individual {
   label: string;
   group: string;
   tags: string[];
-  id_number: number;
+  idNumber: number;
   name: string;
   description: string;
   comment: string;
-  stats: { percentage: number; count: number };
+  totalCount: number;
   fields: IndividualField[];
 }
 

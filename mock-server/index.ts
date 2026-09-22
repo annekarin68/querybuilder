@@ -1,6 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { argv } from "node:process";
-import { buildFields, OPERATORS } from "./schema";
 import { DATABASES } from "./databases";
 import {
   matches,
@@ -12,8 +11,6 @@ import {
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { ROWS } from "./rows";
-
-const FIELDS = buildFields(INDIVIDUALS);
 
 const PORT = 3001;
 
@@ -69,10 +66,6 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   try {
-    if (req.method === "GET" && url.pathname === "/api/schema") {
-      sendJson(res, 200, { fields: FIELDS, operators: OPERATORS });
-      return;
-    }
     if (req.method === "GET" && url.pathname === "/api/databases") {
       // `size` is mock-internal (drives the reported magnitudes) — not part of the contract.
       sendJson(res, 200, { databases: DATABASES.map(({ label, name }) => ({ label, name })) });
