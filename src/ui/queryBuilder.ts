@@ -37,27 +37,27 @@ function fieldDropdown(schema: SchemaResponse, c: Condition): string {
   const prefix = c.individualId ? `${c.individualId}.` : null;
   const opts = prefix
     ? optionsHtml(
-        schema.fields.filter((f) => f.id.startsWith(prefix)),
-        (f) => f.id,
-        (f) => f.id.slice(prefix.length),
-        (f) => f.id === c.fieldId,
+        schema.fields.filter((f) => f.label.startsWith(prefix)),
+        (f) => f.label,
+        (f) => f.label.slice(prefix.length),
+        (f) => f.label === c.fieldId,
       )
     : "";
   return `<select class="ui selection dropdown" data-part="field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
 function operatorDropdown(schema: SchemaResponse, c: Condition): string {
-  const field = schema.fields.find((f) => f.id === c.fieldId);
+  const field = schema.fields.find((f) => f.label === c.fieldId);
   const ops = field
     ? field.operatorIds
-        .map((id) => schema.operators.find((o) => o.id === id))
+        .map((label) => schema.operators.find((o) => o.label === label))
         .filter((o): o is SchemaResponse["operators"][number] => o !== undefined)
     : [];
   const opts = optionsHtml(
     ops,
-    (o) => o.id,
     (o) => o.label,
-    (o) => o.id === c.operatorId,
+    (o) => o.name,
+    (o) => o.label === c.operatorId,
   );
   return `<select class="ui selection dropdown" data-part="operator"${field ? "" : " disabled"}>
     <option value="">Operator…</option>${opts}</select>`;
@@ -69,8 +69,8 @@ function conditionHtml(
   c: Condition,
   issues: Issue[],
 ): string {
-  const field = schema.fields.find((f) => f.id === c.fieldId);
-  const operator = schema.operators.find((o) => o.id === c.operatorId);
+  const field = schema.fields.find((f) => f.label === c.fieldId);
+  const operator = schema.operators.find((o) => o.label === c.operatorId);
   return `<div class="qb-condition" data-node-id="${c.id}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.35rem 0">
     ${individualDropdown(individuals, c)}
     ${fieldDropdown(schema, c)}
@@ -184,14 +184,14 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     const fieldChanged = individualChanged || newFieldId !== cond.fieldId;
     const newOperatorId = fieldChanged ? null : opSel ? opSel.value || null : cond.operatorId;
 
-    const field = schemaRef?.fields.find((f) => f.id === newFieldId);
-    const operator = schemaRef?.operators.find((o) => o.id === newOperatorId);
+    const field = schemaRef?.fields.find((f) => f.label === newFieldId);
+    const operator = schemaRef?.operators.find((o) => o.label === newOperatorId);
     // The value control's DOM shape (one input, two, a multi-select, or none)
     // depends on the operator's arity. If only the operator changed but its arity
     // differs from before, `row` still holds the OLD shape until the next paint()
     // — reading it would silently pull garbage from the wrong control. Only trust
     // the DOM when the shape it currently has actually matches `operator`.
-    const oldOperator = schemaRef?.operators.find((o) => o.id === cond.operatorId);
+    const oldOperator = schemaRef?.operators.find((o) => o.label === cond.operatorId);
     const arityChanged =
       newOperatorId !== cond.operatorId && oldOperator?.arity !== operator?.arity;
 

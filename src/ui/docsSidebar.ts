@@ -22,7 +22,7 @@ function itemHtml(item: Individual): string {
   const fields = item.fields
     .map(
       (f) =>
-        `<code>${escapeHtml(f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type)}</span>`,
+        `<code>${escapeHtml(f.name || f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type)}</span>`,
     )
     .join(" ");
   const total = impliedTotal(item.stats);

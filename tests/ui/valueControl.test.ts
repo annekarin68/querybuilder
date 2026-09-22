@@ -7,8 +7,8 @@ type Operator = SchemaResponse["operators"][number];
 
 function field(overrides: Partial<Field> = {}): Field {
   return {
-    id: "f",
-    label: "F",
+    label: "f",
+    name: "F",
     valueType: "string",
     description: "",
     operatorIds: [],
@@ -17,7 +17,7 @@ function field(overrides: Partial<Field> = {}): Field {
 }
 
 function op(arity: Operator["arity"]): Operator {
-  return { id: "o", label: "O", description: "", arity };
+  return { label: "o", name: "O", description: "", arity };
 }
 
 const enumField = field({
