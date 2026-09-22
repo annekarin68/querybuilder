@@ -1278,7 +1278,11 @@ const wrappers = JSON.parse(readFileSync(file, "utf8"));
 const TYPE_MAP = { str: "VARCHAR", int: "BIGINT", float: "DOUBLE", bool: "BOOLEAN" };
 
 function migrateField(wrapperKey, f) {
-  const isTimestamp = /timestamp/i.test(f.label);
+  // Only a field whose ORIGINAL declared type was "str" can be a real
+  // timestamp (an ISO date string) — a numeric field matching /timestamp/i
+  // in its label (e.g. "timestamp_offset_s") is a numeric offset, not a
+  // date, regardless of its name.
+  const isTimestamp = f.type === "str" && /timestamp/i.test(f.label);
   const backendType = isTimestamp ? "TIMESTAMP" : (TYPE_MAP[f.type] ?? "VARCHAR");
   const isVehicleType = wrapperKey === "vehicle_identity" && f.label === "vehicle_type";
   const isFallbackExample = wrapperKey === "observation_window" && f.label === "from_timestamp";
