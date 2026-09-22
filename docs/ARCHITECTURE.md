@@ -206,6 +206,7 @@ src/
     tree.ts            Pure tree helpers: emptyQuery, newCondition, newGroup, addChild, updateNode, removeNode, findNode, countConditions.
     validate.ts        validateQuery(tree, schema) -> Issue[]; hasBlockingErrors(issues).
     summary.ts         queryToText(tree, schema) -> human-readable string (display only).
+    fieldCatalog.ts    buildFieldCatalog(individuals) -> { fields, operators } — derives the query builder's field catalog client-side; the real API has no schema/operators endpoint.
   ui/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
     panel.ts           paint() helper + escapeHtml().
@@ -223,11 +224,6 @@ src/
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate().
                        Starts only when run as the entrypoint.
-  schema.ts            FieldDef/OperatorDef/ValueType/Arity types, OPERATORS,
-                       and buildFields(individuals) — the generic field
-                       catalog, derived purely from individual.json's
-                       declared item/field shape (never from specific
-                       item/field names or values).
   databases.ts         DatabaseDef type, DATABASES (7 synthetic, arbitrarily
                        named ALPHA..ETA partitions with mock-only sizes),
                        dbIndexForEntrysetId(id) / databaseIdForEntrysetId(id)
@@ -276,9 +272,9 @@ index.html
 
 ```ts
 export interface AppState {
-  schema: SchemaResponse | null;      // loaded once at startup
-  databases: Array<{ label: string; name: string }> | null;   // loaded once (GET /api/databases)
-  individuals: IndividualsResponse | null;  // loaded once (GET /api/individuals); drives docsSidebar and the query builder's Item dropdown
+  schema: ReturnType<typeof buildFieldCatalog> | null;  // derived client-side from `individuals` — no schema endpoint exists
+  databases: DatabasesResponse[] | null;    // loaded once (GET /api/databases, a bare array)
+  individuals: Individual[] | null;         // loaded once (GET /api/individuals, a bare array); drives docsSidebar and the query builder's Item dropdown
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
 
@@ -308,7 +304,7 @@ of the keys that changed.
 
 | Trigger | Effect |
 |---|---|
-| App starts | `getSchema()` + `getDatabases()` + `getIndividuals()` → `setState({ schema, databases, individuals, ... })` → every panel renders once. Schema (or individuals/databases) load failure is fatal (full-page error + Reload). |
+| App starts | `getDatabases()` + `getIndividuals()`, then `buildFieldCatalog(individuals)` synchronously → `setState({ schema, databases, individuals, ... })` → every panel renders once. Individuals/databases load failure is fatal (full-page error + Reload). |
 | User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
 | `getStats()` reports a streamed line | stale-response guard (below); if current, appended to `stats.lines` via `setState` → **only** `statsPanel` repaints, showing partial results while more lines are still arriving. When the stream ends, `status` becomes `ok`; a non-2xx response instead sets `status: "error"`. |
 | User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and scrolls internally. |
@@ -380,45 +376,72 @@ and throws a plain `Error` (message unwrapped from `{ error }`) on any non-2xx
 response.
 
 ```ts
-getSchema(): Promise<SchemaResponse>
-getDatabases(): Promise<DatabasesResponse>
-getIndividuals(): Promise<IndividualsResponse>
+getDatabases(): Promise<DatabasesResponse[]>
+getIndividuals(): Promise<Individual[]>
 getStats(query: QueryNode, databases: string[], onLine: (line: StatsResponse) => void): Promise<void>
 runQuery(query: QueryNode, databases: string[], page: number, pageSize: number): Promise<EntrysetsResponse>
 ```
 
-### `GET /api/schema`
+### There is no schema/operators endpoint
+
+The real backend has no `GET /api/schema` and never did — an earlier revision
+of this document guessed at one that doesn't exist in the actual API (see §13,
+2026-09-22 Revision 2). The query builder's field catalog is instead derived
+**client-side**, synchronously at startup, by `src/query/fieldCatalog.ts`'s
+`buildFieldCatalog(individuals)` from the `Individual[]` data already fetched
+via `GET /api/individuals` — one `CatalogField` per (individual, field) pair,
+label `"individualLabel.fieldLabel"`, plus a fixed, hardcoded `CatalogOperator[]`
+(`OPERATORS`) that never varies. `AppState.schema` holds this derived value
+(`ReturnType<typeof buildFieldCatalog>`), not a fetched response.
 
 ```ts
-interface SchemaResponse {
-  fields: Array<{
-    label: string;
-    name: string;
-    valueType: "string" | "number" | "boolean" | "date" | "enum";
-    description: string;                                   // shown in docs sidebar
-    options?: Array<{ value: string; label: string }>;     // enum only
-    operatorIds: string[];                                 // operators this field allows
-  }>;
-  operators: Array<{
-    label: string;
-    name: string;
-    description: string;                                   // shown in docs sidebar
-    arity: "none" | "one" | "two" | "many";                // how many values the UI collects
-  }>;
+export interface CatalogField {
+  label: string;
+  name: string;
+  valueType: ValueType;
+  description: string;
+  options?: { value: string; label: string }[];
+  operatorIds: string[];
+}
+
+export interface CatalogOperator {
+  label: string;
+  name: string;
+  description: string;
+  arity: Arity;
 }
 ```
 
+`valueType` is mapped from each `IndividualField.type` (falling back to
+`format`); **enum detection is `values.length > 0`, deliberately never
+`cardinality`** — `cardinality` is informational-only telemetry from the real
+backend, and branching the frontend on it would couple the UI to a backend
+implementation detail (the frontend/backend decoupling rule; see §13).
+`operatorIds` come from a fixed per-`valueType` profile (`OPERATOR_PROFILE`),
+never from a specific field.
+
 ### `GET /api/databases`
 
-The databases the query can be scoped to: 7 arbitrary, content-agnostic
-partitions (`mock-server/databases.ts`). An entryset's database is a pure
-function of its own numeric id (`dbIndexForEntrysetId`) — never of anything
-inside it — which is what keeps this mock decoupled from the concrete shape
-of `entrysets.json`'s content.
+The databases the query can be scoped to. Returns a **bare array**, no
+wrapper object.
 
 ```ts
-interface DatabasesResponse {
-  databases: Array<{ label: string; name: string }>;
+/** The databases the query can be scoped to (GET /api/databases). Returns
+ *  DatabasesResponse[] directly — no wrapper object. */
+export interface DatabasesResponse {
+  /** A short summary of what this database contains or what makes it unique. */
+  description: string;
+  /** User-friendly display name. */
+  name: string;
+  /** The title of this database's owner — the company that reported the data. */
+  owner: string;
+  /** Total entrysets in this database. */
+  totalEntrysets: number;
+  /** This database's share of the total data across all databases — sums
+   *  to 100% across every database returned. */
+  percentageOfTotal: number;
+  /** API-friendly "ID", not meant to be displayed. */
+  label: string;
 }
 ```
 
@@ -426,30 +449,64 @@ interface DatabasesResponse {
 
 The vehicle/fleet telemetry data model — every "individual" (signal, sensor, or
 piece of event metadata) an entryset may hold a value for. Loaded once at
-startup, alongside schema/databases; drives the **left** docs sidebar (§9).
-Unrelated to `FIELDS`/`DATABASES` above — this is a separate, newer mock
-dataset (`mock-server/data/individual.json`, see §4 and §10).
+startup, alongside databases; drives the **left** docs sidebar (§9) and, via
+`buildFieldCatalog`, the query builder's field catalog. Returns a **bare
+array**, no wrapper object.
 
 ```ts
-interface IndividualsResponse {
-  individuals: Array<{
-    label: string;                      // slug; also the key used in an entryset's `items`
-    group: string;                      // one of 18 subsystem groups, or "metadata"
-    tags: string[];                     // 0-4, from a shared vocabulary
-    id_number: number;
-    name: string;
-    description: string;
-    comment: string;
-    stats: { percentage: number; count: number }; // share of a mock 6,000,000,000-entryset universe
-    fields: Array<{
-      label: string;
-      type: string;
-      description: string;
-      comment: string;
-      name?: string;    // reserved for a future human-readable name; not populated yet — UI falls back to `label`
-      values?: string[]; // the field's valid values, when it has a fixed domain; drives an enum SchemaResponse field
-    }>;
-  }>;
+/** One field an individual's telemetry item can report (GET /api/individuals). */
+export interface IndividualField {
+  /** This field's locally unique, API-friendly "ID" within this individual. */
+  label: string;
+  /** The field's actual type, defined by the backend (e.g. VARCHAR, BIGINT,
+   *  TIMESTAMP). Takes precedence over `format` when both are present. */
+  type: string;
+  /** A third-party technical description. May contain errors — present it
+   *  visually distinct from `comment`. */
+  description: string;
+  /** The backend's own, always-correct description — present it visually
+   *  distinct from `description`. */
+  comment: string;
+  /** Distinct values for this field across all databases, as of right now.
+   *  Can be 0 to several billion. Informational only — NEVER branch on this
+   *  to decide whether a field is enum-like; check `values.length` instead. */
+  cardinality: number;
+  /** The field's actual distinct values, when the backend chooses to supply
+   *  them. Empty when not supplied — that emptiness, not `cardinality`, is
+   *  what determines whether a field is treated as an enum. */
+  values: string[];
+  /** A third-party type hint, used only when `type` is empty. */
+  format: string;
+  /** Reserved for a future human-readable name; not populated by the backend
+   *  yet. Anywhere this is displayed, fall back to `label` when absent/empty. */
+  name?: string;
+}
+
+/**
+ * One item in the vehicle telemetry data model — a signal, sensor, or piece
+ * of metadata that an entryset may hold a value for.
+ */
+export interface Individual {
+  /** Unique "ID" for API requests — a permutation of `name` with special
+   *  characters removed. */
+  label: string;
+  /** A third-party grouping tag. Less useful than our own `tags`. */
+  group: string;
+  /** Our own tags, from a limited reusable pool. More useful than `group`. */
+  tags: string[];
+  /** This individual's unique identification number. */
+  idNumber: number;
+  /** Descriptive name, shown to the user in place of `label`. */
+  name: string;
+  /** A third-party technical description — present distinct from `comment`. */
+  description: string;
+  /** The backend's own, always-correct description. */
+  comment: string;
+  /** How many times this individual appears across ALL databases. No
+   *  percentage is supplied — the frontend derives one from
+   *  DatabasesResponse[].totalEntrysets (see docsSidebar.ts). */
+  totalCount: number;
+  fields: IndividualField[];
 }
 ```
 
@@ -469,32 +526,45 @@ some databases are slower than others, or can fail independently — rather
 than one combined response after every database finishes.
 
 ```ts
-type StatsResponse =
-  | {
-      label: string;          // matches DatabasesResponse.databases[].label
-      success: true;
-      matchCount: number;     // rows in this database matching the query
-      totalCount: number;     // rows in this database, regardless of the query
-      infoMessages: string[]; // non-blocking notices, e.g. "running slower than usual"
-    }
-  | {
-      label: string;
-      success: false;
-      validationErrors: string[]; // the query was malformed for this database
-      infoMessages: string[];     // the database itself couldn't handle the request
-    };
+/**
+ * One database's result from the POST /api/stats stream. The endpoint's
+ * response body is newline-delimited JSON today (the backend may change the
+ * streaming format later): one of these per selected database, written as
+ * soon as that database's result is ready — some databases are slower than
+ * others, or can fail independently.
+ */
+export interface StatsResponse {
+  /** Database ID — matches DatabasesResponse.label. */
+  label: string;
+  /** Whether the query to this specific database succeeded. There is no
+   *  per-database HTTP status in an NDJSON stream, so this is how failure
+   *  is signaled instead. */
+  success: boolean;
+  /** Individuals matched by this query in this database. Only meaningful
+   *  when `success` is true — optional rather than a fabricated 0, so a
+   *  failed database can never be misread as "zero rows matched." */
+  matchCount?: number;
+  /** Errors from the query itself — malformed dates, too-large numbers,
+   *  too-long strings, etc. */
+  errorMessages?: string[];
+  /** Other information or error messages — a database timeout, an internal
+   *  server error, or a non-blocking notice. */
+  infoMessages?: string[];
+}
 ```
 
-There is no combined-totals line and no `name` field on each line: the frontend
-derives the headline by summing `matchCount`/`totalCount` across the successful
-lines received so far, and looks up each line's display name from
-`AppState.databases` (loaded once from `GET /api/databases`) by `label` —
-resending the name on every line would be redundant network traffic. A missing
-/ empty `databases` array → `400 { error: "Select at least one database." }`.
+There is no `totalCount` on the wire at all, and no `name` field on each line:
+the frontend derives the headline by summing `matchCount` across the
+successful lines received so far, and derives each line's **denominator**
+from `DatabasesResponse.totalEntrysets` — looked up in `AppState.databases`
+(loaded once from `GET /api/databases`) by `label`. `success: false` lines
+carry `errorMessages`/`infoMessages` instead of a count. A missing / empty
+`databases` array → `400 { error: "Select at least one database." }`.
 
 `statsPanel.ts` renders a running headline, a per-database list (success:
-counts + bar; failure: `validationErrors`/`infoMessages`), and a "waiting on N
-more" indicator while `status` is `"loading"`.
+`matchCount` against that database's `totalEntrysets` + bar; failure:
+`errorMessages`/`infoMessages`), and a "waiting on N more" indicator while
+`status` is `"loading"`.
 
 ### `POST /api/query`
 
@@ -608,8 +678,10 @@ model (see §7, §10), just via two separate API responses/state slices, so the
 docs sidebar renders independently of the query builder's field catalog. A
 Fomantic `ui accordion`: one section per `group` (18 subsystem groups, e.g.
 `engine`, `tires_wheels`, `metadata`), each listing its items — name, tags,
-`description`/`comment`, `stats.count`/`percentage` (via `matchRatio()` from
-`format.ts`, treating `6_000_000_000` as the total), and its `fields` (`name`,
+`description`/`comment`, and a percentage computed client-side (`matchRatio()`
+from `format.ts`) as `Individual.totalCount` divided by the sum of every
+loaded database's `DatabasesResponse.totalEntrysets` — the backend supplies no
+percentage directly, only the raw `totalCount` — and its `fields` (`name`,
 falling back to `label`, + `type`). A plain `ui input` at the top filters items
 by name (`String.includes`, no plugin) — matching items stay visible, others
 get `display:none`; empty
@@ -664,12 +736,14 @@ Every number in this panel goes through `src/ui/format.ts` so it stays inside a
 - **`barWidth(match, total)`** — a CSS `max(…%, 2px)`, so any nonzero match shows a
   2 px sliver, visibly distinct from zero.
 
-Layout, top to bottom: a compact headline (sum of `matchCount`/`totalCount`
-across the successful lines received so far, big + `of … · matchRatio` small)
+Layout, top to bottom: a compact headline (sum of `matchCount` across the
+successful lines received so far against a denominator summed from those
+lines' `DatabasesResponse.totalEntrysets`, big + `of … · matchRatio` small)
 and a thin bar; the **By database** segment — one row per streamed line so
-far, success (`compact(match) / compact(total) · matchRatio`, thin bar, exact
-figures on hover, any `infoMessages`) or failure (`validationErrors` +
-`infoMessages` as a red message) — inside a `.qb-stat-perdb` scroll region
+far, success (`compact(matchCount) / compact(totalEntrysets) · matchRatio`,
+thin bar, exact figures on hover, any `infoMessages`) or failure
+(`errorMessages` + `infoMessages` as a red message) — inside a
+`.qb-stat-perdb` scroll region
 (`max-height: 45vh`, replacing the old per-field-block scroll region now that
 there are no field blocks); then, while `status` is `"loading"`, a "Waiting on
 N more database(s)…" line. The whole stats column is `position: sticky` so it
@@ -822,3 +896,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-16 | Query builder's condition row now cascades **Item → Field → Operator** (previously just Field → Operator): the user first picks an individual from `state.individuals`, which filters the Field dropdown to that item's fields, shown by short slug. `Condition` gained `individualId: string | null` (UI-staging only; `fieldId` remains the sole authoritative target, so `validate.ts`, `summary.ts`, and the mock backend needed no changes). Changing Item resets Field/Operator/value, mirroring the existing Field→Operator reset. No backend or schema-contract changes. |
 | 2026-09-16 | Frontend/backend separation audit: `src/` had no runtime coupling to `mock-server/` (no imports; the contract already ran entirely through `src/api/types.ts` + `src/api/client.ts`), but several comments named mock-server internals directly (`mock-server/databases.ts`, `individual.json`, "the mock server does not paginate", a hardcoded "7 databases" / "(mock) 6-billion-entryset" fact) — these would go stale or mislead once swapped for a real backend. Reworded them to describe only the API contract (`GET /api/databases`, `GET /api/individuals`, `EntrysetsResponse`). Added a second ESLint airlock (`eslint.config.js`, alongside the existing jQuery one, §3): `src/**` may not import `mock-server/*` at all — must go through `src/api/*`. |
 | 2026-09-22 | API contract rename + streaming stats: `id`/`label` renamed to `label`/`name` across `SchemaResponse`, `DatabasesResponse`, and the (now per-database) `StatsResponse`, matching the convention `Individual`/`IndividualField` already used. `StatBlock` removed — the real backend can currently only return counts, not aggregated min/max/avg/buckets/earliest/latest. `IndividualField` gained `name` (reserved, unpopulated; UI falls back to `label`) and `values` (a field's declared domain, wired into `buildFields` as an enum `SchemaResponse` field with real `options` — exercised end to end via `vehicle_identity.vehicle_type`). `POST /api/stats` now streams newline-delimited JSON, one `StatsResponse` per selected database as it finishes, instead of waiting for every database and returning one combined response; the frontend derives the combined headline by summing the lines received so far, and reports per-database success/failure/info independently (§6, §7, §9, §10). Design: `docs/superpowers/specs/2026-09-22-api-types-refactoring-design.md`. |
+| 2026-09-22 | API contract correction (Revision 2): the initial rename (id/label -> label/name, streamed StatsResponse) guessed at shapes that didn't match the real production backend. Corrected against the actual contract: StatsResponse's identifier is `label` (not the guessed `database`), `matchCount` is optional (not a discriminated union), `errorMessages` (not `validationErrors`), and `totalCount` doesn't exist on the wire at all — the stats panel now derives its per-database denominator from `DatabasesResponse.totalEntrysets`. `DatabasesResponse` gained `description`/`owner`/`percentageOfTotal` and dropped its `{databases:[...]}` wrapper (GET /api/databases now returns a bare array, as does GET /api/individuals). `Individual.id_number`/`stats.{percentage,count}` became `idNumber`/`totalCount`; `IndividualField` gained `cardinality`/`values`/`format`. `GET /api/schema` was removed entirely — it was never part of the real API — and replaced by `src/query/fieldCatalog.ts`'s client-side `buildFieldCatalog`, which derives the same field catalog from `Individual[]` data already being fetched; enum detection is `values.length > 0`, deliberately never `cardinality`, per the frontend/backend decoupling requirement (the real backend's cardinality-20 threshold is an implementation detail the frontend must not depend on). Design: `docs/superpowers/specs/2026-09-22-api-types-refactoring-design.md` (Revision 2). |
