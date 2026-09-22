@@ -8,7 +8,9 @@ interface IndividualField {
   type: string;
   description: string;
   comment: string;
-  values?: string[];
+  cardinality: number;
+  values: string[];
+  format: string;
 }
 interface Individual {
   label: string;
@@ -61,10 +63,11 @@ const EXPECTED_DB_INDEX: Record<number, number> = {
   21: 3,
 };
 
-function typeMatches(declared: string, value: unknown): boolean {
-  if (declared === "str") return typeof value === "string";
-  if (declared === "int" || declared === "float") return typeof value === "number";
-  if (declared === "bool") return typeof value === "boolean";
+function typeMatches(field: IndividualField, value: unknown): boolean {
+  const declared = field.type || field.format;
+  if (declared === "VARCHAR" || declared === "TIMESTAMP") return typeof value === "string";
+  if (declared === "BIGINT" || declared === "DOUBLE") return typeof value === "number";
+  if (declared === "BOOLEAN") return typeof value === "boolean";
   return false;
 }
 
@@ -92,7 +95,7 @@ describe("entrysets.json sample data", () => {
         for (const [fieldLabel, value] of Object.entries(fields)) {
           const fieldDef = fieldsByLabel.get(fieldLabel);
           expect(fieldDef, `${individualLabel}.${fieldLabel} is not a declared field`).toBeTruthy();
-          expect(typeMatches(fieldDef!.type, value)).toBe(true);
+          expect(typeMatches(fieldDef!, value)).toBe(true);
         }
       }
     }
@@ -131,5 +134,22 @@ describe("entrysets.json sample data", () => {
         .filter((v): v is string => typeof v === "string"),
     );
     for (const v of used) expect(declared.has(v)).toBe(true);
+  });
+
+  it("every field has cardinality, values, and format after migration", () => {
+    for (const ind of individualsByLabel.values()) {
+      for (const f of ind.fields) {
+        expect(typeof f.cardinality).toBe("number");
+        expect(Array.isArray(f.values)).toBe(true);
+        expect(typeof f.format).toBe("string");
+      }
+    }
+  });
+
+  it("observation_window.from_timestamp exercises the type-empty/format-fallback path", () => {
+    const observationWindow = individualsByLabel.get("observation_window")!;
+    const fromTimestamp = observationWindow.fields.find((f) => f.label === "from_timestamp")!;
+    expect(fromTimestamp.type).toBe("");
+    expect(fromTimestamp.format).toBe("TIMESTAMP");
   });
 });

@@ -3,27 +3,34 @@
     "observation_window": {
       "label": "observation_window",
       "group": "metadata",
-      "tags": ["rear", "front", "hybrid"],
-      "id_number": 1,
+      "tags": [
+        "rear",
+        "front",
+        "hybrid"
+      ],
+      "idNumber": 1,
       "name": "Observation window",
       "description": "The time span covered by a single telemetry entryset, marking when the reported values were captured.",
       "comment": "Always present; used to index entrysets by time",
-      "stats": {
-        "percentage": 0.961666,
-        "count": 5769996496
-      },
+      "totalCount": 5769996496,
       "fields": [
         {
           "label": "from_timestamp",
-          "type": "str",
+          "type": "",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": "TIMESTAMP"
         },
         {
           "label": "to_timestamp",
-          "type": "str",
+          "type": "TIMESTAMP",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -32,33 +39,39 @@
     "vehicle_identity": {
       "label": "vehicle_identity",
       "group": "metadata",
-      "tags": ["right"],
-      "id_number": 2,
+      "tags": [
+        "right"
+      ],
+      "idNumber": 2,
       "name": "Vehicle identity",
       "description": "Identifying information for the specific vehicle a telemetry entryset belongs to.",
       "comment": "Always present; used to index entrysets by vehicle",
-      "stats": {
-        "percentage": 0.923636,
-        "count": 5541815749
-      },
+      "totalCount": 5541815749,
       "fields": [
         {
           "label": "vin",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "fleet_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "vehicle_type",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
           "comment": "",
+          "cardinality": 19,
           "values": [
             "sedan",
             "electric_sedan",
@@ -79,7 +92,8 @@
             "rideshare_sedan",
             "rideshare_ev",
             "rental_car"
-          ]
+          ],
+          "format": ""
         }
       ]
     }
@@ -88,33 +102,44 @@
     "trip_context": {
       "label": "trip_context",
       "group": "metadata",
-      "tags": ["hybrid", "gasoline", "diagnostic", "aftermarket"],
-      "id_number": 3,
+      "tags": [
+        "hybrid",
+        "gasoline",
+        "diagnostic",
+        "aftermarket"
+      ],
+      "idNumber": 3,
       "name": "Trip context",
       "description": "Identifiers linking a telemetry entryset to a specific trip, driver, and route.",
       "comment": "Usually present; missing for unattended or test drives",
-      "stats": {
-        "percentage": 0.955057,
-        "count": 5730340368
-      },
+      "totalCount": 5730340368,
       "fields": [
         {
           "label": "trip_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "driver_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "route_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -123,39 +148,51 @@
     "gps_position": {
       "label": "gps_position",
       "group": "metadata",
-      "tags": ["requires_calibration", "critical"],
-      "id_number": 4,
+      "tags": [
+        "requires_calibration",
+        "critical"
+      ],
+      "idNumber": 4,
       "name": "GPS position",
       "description": "The vehicle's geographic position at the time of the entryset, from its onboard GPS receiver.",
       "comment": "Nearly always present; occasionally missing on GPS signal loss",
-      "stats": {
-        "percentage": 0.98097,
-        "count": 5885822143
-      },
+      "totalCount": 5885822143,
       "fields": [
         {
           "label": "latitude",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "longitude",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "altitude_m",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "heading_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -164,33 +201,43 @@
     "engine_rpm": {
       "label": "engine_rpm",
       "group": "engine",
-      "tags": ["safety_related", "high_frequency", "aftermarket"],
-      "id_number": 5,
+      "tags": [
+        "safety_related",
+        "high_frequency",
+        "aftermarket"
+      ],
+      "idNumber": 5,
       "name": "Engine RPM",
       "description": "The rotational speed of the engine's crankshaft, one of the most frequently sampled engine signals.",
       "comment": "Core engine load indicator",
-      "stats": {
-        "percentage": 0.502585,
-        "count": 3015512373
-      },
+      "totalCount": 3015512373,
       "fields": [
         {
           "label": "value_rpm",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "redline_rpm",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_over_rev",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -200,32 +247,38 @@
       "label": "engine_oil_temperature",
       "group": "engine",
       "tags": [],
-      "id_number": 6,
+      "idNumber": 6,
       "name": "Engine oil temperature",
       "description": "The temperature of the engine oil, used to gauge lubrication effectiveness and engine wear risk.",
       "comment": "Rises with sustained high load",
-      "stats": {
-        "percentage": 0.151459,
-        "count": 908753287
-      },
+      "totalCount": 908753287,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "sensor_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_within_normal_range",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -234,27 +287,35 @@
     "engine_oil_pressure": {
       "label": "engine_oil_pressure",
       "group": "engine",
-      "tags": ["critical", "diesel", "experimental", "oem"],
-      "id_number": 7,
+      "tags": [
+        "critical",
+        "diesel",
+        "experimental",
+        "oem"
+      ],
+      "idNumber": 7,
       "name": "Engine oil pressure",
       "description": "The pressure of oil circulating through the engine, critical to preventing bearing and component wear.",
       "comment": "Low pressure can indicate a pump or leak fault",
-      "stats": {
-        "percentage": 0.0287432,
-        "count": 172459125
-      },
+      "totalCount": 172459125,
       "fields": [
         {
           "label": "value_kpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low_pressure_warning",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -263,27 +324,33 @@
     "engine_coolant_temperature": {
       "label": "engine_coolant_temperature",
       "group": "engine",
-      "tags": ["gasoline", "low_frequency"],
-      "id_number": 8,
+      "tags": [
+        "gasoline",
+        "low_frequency"
+      ],
+      "idNumber": 8,
       "name": "Engine coolant temperature",
       "description": "The temperature of coolant flowing through the engine block, a key overheating indicator.",
       "comment": "Feeds the thermostat and cooling fan logic",
-      "stats": {
-        "percentage": 0.312012,
-        "count": 1872070481
-      },
+      "totalCount": 1872070481,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "thermostat_open",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -292,27 +359,35 @@
     "engine_load": {
       "label": "engine_load",
       "group": "engine",
-      "tags": ["oem", "right", "front", "redundant"],
-      "id_number": 9,
+      "tags": [
+        "oem",
+        "right",
+        "front",
+        "redundant"
+      ],
+      "idNumber": 9,
       "name": "Engine load",
       "description": "The calculated percentage of available engine torque currently being used.",
       "comment": "Correlates with throttle position and fuel use",
-      "stats": {
-        "percentage": 0.16165,
-        "count": 969901197
-      },
+      "totalCount": 969901197,
       "fields": [
         {
           "label": "load_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "throttle_position_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -321,27 +396,33 @@
     "turbocharger_boost_pressure": {
       "label": "turbocharger_boost_pressure",
       "group": "engine",
-      "tags": ["diagnostic", "safety_related"],
-      "id_number": 10,
+      "tags": [
+        "diagnostic",
+        "safety_related"
+      ],
+      "idNumber": 10,
       "name": "Turbocharger boost pressure",
       "description": "The intake pressure produced by the turbocharger above atmospheric pressure.",
       "comment": "Higher boost means more power, more heat",
-      "stats": {
-        "percentage": 0.000384654,
-        "count": 2307925
-      },
+      "totalCount": 2307925,
       "fields": [
         {
           "label": "boost_psi",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "wastegate_open",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -350,33 +431,41 @@
     "spark_plug_condition": {
       "label": "spark_plug_condition",
       "group": "engine",
-      "tags": ["diagnostic"],
-      "id_number": 11,
+      "tags": [
+        "diagnostic"
+      ],
+      "idNumber": 11,
       "name": "Spark plug condition",
       "description": "The wear and firing condition of an individual cylinder's spark plug.",
       "comment": "Worn plugs cause misfires",
-      "stats": {
-        "percentage": 0.0394732,
-        "count": 236839028
-      },
+      "totalCount": 236839028,
       "fields": [
         {
           "label": "cylinder_number",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "electrode_gap_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_misfiring",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -385,27 +474,32 @@
     "camshaft_position": {
       "label": "camshaft_position",
       "group": "engine",
-      "tags": ["wear_item"],
-      "id_number": 12,
+      "tags": [
+        "wear_item"
+      ],
+      "idNumber": 12,
       "name": "Camshaft position",
       "description": "The rotational angle of the camshaft relative to top dead center, used for valve timing.",
       "comment": "Feeds variable valve timing control",
-      "stats": {
-        "percentage": 0.0311667,
-        "count": 187000353
-      },
+      "totalCount": 187000353,
       "fields": [
         {
           "label": "angle_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "bank_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -415,26 +509,29 @@
       "label": "crankshaft_position",
       "group": "engine",
       "tags": [],
-      "id_number": 13,
+      "idNumber": 13,
       "name": "Crankshaft position",
       "description": "The rotational angle and speed of the crankshaft, the primary timing reference for engine control.",
       "comment": "Loss of signal typically stalls the engine",
-      "stats": {
-        "percentage": 0.0743678,
-        "count": 446206978
-      },
+      "totalCount": 446206978,
       "fields": [
         {
           "label": "angle_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "rotation_speed_rpm",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -443,27 +540,32 @@
     "transmission_gear": {
       "label": "transmission_gear",
       "group": "powertrain_transmission",
-      "tags": ["critical"],
-      "id_number": 14,
+      "tags": [
+        "critical"
+      ],
+      "idNumber": 14,
       "name": "Transmission gear",
       "description": "The currently engaged gear in the transmission.",
       "comment": "Changes with speed and load demand",
-      "stats": {
-        "percentage": 0.0149799,
-        "count": 89879327
-      },
+      "totalCount": 89879327,
       "fields": [
         {
           "label": "current_gear",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_in_manual_mode",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -473,26 +575,29 @@
       "label": "transmission_fluid_temperature",
       "group": "powertrain_transmission",
       "tags": [],
-      "id_number": 15,
+      "idNumber": 15,
       "name": "Transmission fluid temperature",
       "description": "The temperature of the fluid lubricating and cooling the transmission.",
       "comment": "Overheating shortens transmission life",
-      "stats": {
-        "percentage": 0.0701838,
-        "count": 421102585
-      },
+      "totalCount": 421102585,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_overheating",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -501,27 +606,33 @@
     "clutch_wear": {
       "label": "clutch_wear",
       "group": "powertrain_transmission",
-      "tags": ["diesel", "high_frequency"],
-      "id_number": 16,
+      "tags": [
+        "diesel",
+        "high_frequency"
+      ],
+      "idNumber": 16,
       "name": "Clutch wear",
       "description": "The estimated wear level of the clutch assembly based on engagement history.",
       "comment": "High engagement counts accelerate wear",
-      "stats": {
-        "percentage": 0.0725032,
-        "count": 435019059
-      },
+      "totalCount": 435019059,
       "fields": [
         {
           "label": "wear_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "engagement_count",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -530,27 +641,32 @@
     "differential_temperature": {
       "label": "differential_temperature",
       "group": "powertrain_transmission",
-      "tags": ["critical"],
-      "id_number": 17,
+      "tags": [
+        "critical"
+      ],
+      "idNumber": 17,
       "name": "Differential temperature",
       "description": "The temperature of a drive axle's differential housing and gear oil.",
       "comment": "Tracked per axle on multi-axle vehicles",
-      "stats": {
-        "percentage": 0.113664,
-        "count": 681983976
-      },
+      "totalCount": 681983976,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "axle_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -560,20 +676,20 @@
       "label": "driveshaft_torque",
       "group": "powertrain_transmission",
       "tags": [],
-      "id_number": 18,
+      "idNumber": 18,
       "name": "Driveshaft torque",
       "description": "The torque currently being transmitted through the driveshaft to the wheels.",
       "comment": "Spikes under hard acceleration or towing",
-      "stats": {
-        "percentage": 0.0297554,
-        "count": 178532440
-      },
+      "totalCount": 178532440,
       "fields": [
         {
           "label": "torque_nm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -582,27 +698,32 @@
     "cv_joint_condition": {
       "label": "cv_joint_condition",
       "group": "powertrain_transmission",
-      "tags": ["requires_calibration"],
-      "id_number": 19,
+      "tags": [
+        "requires_calibration"
+      ],
+      "idNumber": 19,
       "name": "CV joint condition",
       "description": "The condition of a constant-velocity joint's protective boot and grease seal.",
       "comment": "A torn boot leads to rapid joint failure",
-      "stats": {
-        "percentage": 0.00535592,
-        "count": 32135545
-      },
+      "totalCount": 32135545,
       "fields": [
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "boot_intact",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -611,27 +732,35 @@
     "transfer_case_mode": {
       "label": "transfer_case_mode",
       "group": "powertrain_transmission",
-      "tags": ["safety_related", "wear_item", "gasoline", "regulatory"],
-      "id_number": 20,
+      "tags": [
+        "safety_related",
+        "wear_item",
+        "gasoline",
+        "regulatory"
+      ],
+      "idNumber": 20,
       "name": "Transfer case mode",
       "description": "The currently selected drive mode on a vehicle's transfer case, for multi-axle drive vehicles.",
       "comment": "Relevant to 4x4 and AWD fleet vehicles",
-      "stats": {
-        "percentage": 4.33207e-5,
-        "count": 259924
-      },
+      "totalCount": 259924,
       "fields": [
         {
           "label": "mode",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_locked",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -640,27 +769,34 @@
     "torque_converter_lockup": {
       "label": "torque_converter_lockup",
       "group": "powertrain_transmission",
-      "tags": ["wear_item", "aftermarket", "requires_calibration"],
-      "id_number": 21,
+      "tags": [
+        "wear_item",
+        "aftermarket",
+        "requires_calibration"
+      ],
+      "idNumber": 21,
       "name": "Torque converter lockup",
       "description": "Whether the automatic transmission's torque converter is mechanically locked for direct drive.",
       "comment": "Improves efficiency once locked",
-      "stats": {
-        "percentage": 0.000349082,
-        "count": 2094493
-      },
+      "totalCount": 2094493,
       "fields": [
         {
           "label": "is_locked",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "slip_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -669,27 +805,35 @@
     "fuel_level": {
       "label": "fuel_level",
       "group": "fuel_system",
-      "tags": ["aftermarket", "gasoline", "safety_related", "hybrid"],
-      "id_number": 22,
+      "tags": [
+        "aftermarket",
+        "gasoline",
+        "safety_related",
+        "hybrid"
+      ],
+      "idNumber": 22,
       "name": "Fuel level",
       "description": "The amount of fuel remaining in the tank.",
       "comment": "One of the most frequently reported signals",
-      "stats": {
-        "percentage": 0.61131,
-        "count": 3667860170
-      },
+      "totalCount": 3667860170,
       "fields": [
         {
           "label": "percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "liters_remaining",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -698,27 +842,33 @@
     "fuel_pressure": {
       "label": "fuel_pressure",
       "group": "fuel_system",
-      "tags": ["requires_calibration", "electric"],
-      "id_number": 23,
+      "tags": [
+        "requires_calibration",
+        "electric"
+      ],
+      "idNumber": 23,
       "name": "Fuel pressure",
       "description": "The pressure of fuel delivered to the injectors by the fuel pump.",
       "comment": "Out-of-spec pressure causes poor combustion",
-      "stats": {
-        "percentage": 0.0740088,
-        "count": 444052520
-      },
+      "totalCount": 444052520,
       "fields": [
         {
           "label": "value_kpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_within_spec",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -727,33 +877,41 @@
     "fuel_injector_status": {
       "label": "fuel_injector_status",
       "group": "fuel_system",
-      "tags": ["high_frequency"],
-      "id_number": 24,
+      "tags": [
+        "high_frequency"
+      ],
+      "idNumber": 24,
       "name": "Fuel injector status",
       "description": "The operating condition and pulse timing of an individual fuel injector.",
       "comment": "Clogged injectors reduce efficiency",
-      "stats": {
-        "percentage": 0.0171222,
-        "count": 102733291
-      },
+      "totalCount": 102733291,
       "fields": [
         {
           "label": "cylinder_number",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "pulse_width_ms",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_clogged",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -762,27 +920,33 @@
     "fuel_pump_status": {
       "label": "fuel_pump_status",
       "group": "fuel_system",
-      "tags": ["high_frequency", "requires_calibration"],
-      "id_number": 25,
+      "tags": [
+        "high_frequency",
+        "requires_calibration"
+      ],
+      "idNumber": 25,
       "name": "Fuel pump status",
       "description": "The operating state and delivery rate of the fuel pump.",
       "comment": "A failing pump causes intermittent stalling",
-      "stats": {
-        "percentage": 0.0530455,
-        "count": 318272749
-      },
+      "totalCount": 318272749,
       "fields": [
         {
           "label": "is_running",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "flow_rate_lph",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -791,27 +955,32 @@
     "fuel_consumption_rate": {
       "label": "fuel_consumption_rate",
       "group": "fuel_system",
-      "tags": ["high_frequency"],
-      "id_number": 26,
+      "tags": [
+        "high_frequency"
+      ],
+      "idNumber": 26,
       "name": "Fuel consumption rate",
       "description": "The rate at which the vehicle is currently consuming fuel.",
       "comment": "Key metric for fleet efficiency reporting",
-      "stats": {
-        "percentage": 0.113169,
-        "count": 679015663
-      },
+      "totalCount": 679015663,
       "fields": [
         {
           "label": "liters_per_100km",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "instant_mpg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -820,27 +989,32 @@
     "fuel_tank_pressure": {
       "label": "fuel_tank_pressure",
       "group": "fuel_system",
-      "tags": ["left"],
-      "id_number": 27,
+      "tags": [
+        "left"
+      ],
+      "idNumber": 27,
       "name": "Fuel tank pressure",
       "description": "The internal pressure of the sealed fuel tank, monitored for evaporative emissions control.",
       "comment": "Abnormal pressure suggests a vapor leak",
-      "stats": {
-        "percentage": 0.201031,
-        "count": 1206186416
-      },
+      "totalCount": 1206186416,
       "fields": [
         {
           "label": "value_kpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_evap_leak_detected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -849,27 +1023,32 @@
     "fuel_type_detected": {
       "label": "fuel_type_detected",
       "group": "fuel_system",
-      "tags": ["aftermarket"],
-      "id_number": 28,
+      "tags": [
+        "aftermarket"
+      ],
+      "idNumber": 28,
       "name": "Fuel type detected",
       "description": "The type and quality grade of fuel identified in the tank.",
       "comment": "Relevant for flex-fuel fleet vehicles",
-      "stats": {
-        "percentage": 0.000186874,
-        "count": 1121241
-      },
+      "totalCount": 1121241,
       "fields": [
         {
           "label": "fuel_type",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "octane_rating",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -878,27 +1057,34 @@
     "fuel_filter_status": {
       "label": "fuel_filter_status",
       "group": "fuel_system",
-      "tags": ["front", "experimental", "rear"],
-      "id_number": 29,
+      "tags": [
+        "front",
+        "experimental",
+        "rear"
+      ],
+      "idNumber": 29,
       "name": "Fuel filter status",
       "description": "The restriction level of the fuel filter, indicating how soon it needs replacement.",
       "comment": "High restriction starves the engine of fuel",
-      "stats": {
-        "percentage": 0.0248261,
-        "count": 148956613
-      },
+      "totalCount": 148956613,
       "fields": [
         {
           "label": "restriction_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "replacement_due",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -907,27 +1093,33 @@
     "exhaust_gas_temperature": {
       "label": "exhaust_gas_temperature",
       "group": "exhaust_emissions",
-      "tags": ["deprecated", "safety_related"],
-      "id_number": 30,
+      "tags": [
+        "deprecated",
+        "safety_related"
+      ],
+      "idNumber": 30,
       "name": "Exhaust gas temperature",
       "description": "The temperature of exhaust gases leaving a cylinder bank.",
       "comment": "Used to protect the turbo and catalyst",
-      "stats": {
-        "percentage": 0.0139457,
-        "count": 83674442
-      },
+      "totalCount": 83674442,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "bank_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -936,27 +1128,33 @@
     "nox_emission_level": {
       "label": "nox_emission_level",
       "group": "exhaust_emissions",
-      "tags": ["gasoline", "oem"],
-      "id_number": 31,
+      "tags": [
+        "gasoline",
+        "oem"
+      ],
+      "idNumber": 31,
       "name": "NOx emission level",
       "description": "The concentration of nitrogen oxides measured in the exhaust stream.",
       "comment": "Subject to regulatory emission limits",
-      "stats": {
-        "percentage": 0.0032075,
-        "count": 19245023
-      },
+      "totalCount": 19245023,
       "fields": [
         {
           "label": "value_ppm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_over_limit",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -965,27 +1163,32 @@
     "particulate_filter_status": {
       "label": "particulate_filter_status",
       "group": "exhaust_emissions",
-      "tags": ["experimental"],
-      "id_number": 32,
+      "tags": [
+        "experimental"
+      ],
+      "idNumber": 32,
       "name": "Particulate filter status",
       "description": "The soot loading and regeneration state of the diesel particulate filter.",
       "comment": "Periodically self-cleans via regeneration",
-      "stats": {
-        "percentage": 0.000348069,
-        "count": 2088414
-      },
+      "totalCount": 2088414,
       "fields": [
         {
           "label": "soot_load_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "regeneration_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -994,27 +1197,32 @@
     "catalytic_converter_temperature": {
       "label": "catalytic_converter_temperature",
       "group": "exhaust_emissions",
-      "tags": ["hybrid"],
-      "id_number": 33,
+      "tags": [
+        "hybrid"
+      ],
+      "idNumber": 33,
       "name": "Catalytic converter temperature",
       "description": "The operating temperature of the catalytic converter, which must reach a threshold to be effective.",
       "comment": "Cold converters emit more pollutants",
-      "stats": {
-        "percentage": 0.134819,
-        "count": 808911862
-      },
+      "totalCount": 808911862,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "efficiency_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1023,21 +1231,23 @@
     "co2_emission_rate": {
       "label": "co2_emission_rate",
       "group": "exhaust_emissions",
-      "tags": ["high_frequency"],
-      "id_number": 34,
+      "tags": [
+        "high_frequency"
+      ],
+      "idNumber": 34,
       "name": "CO2 emission rate",
       "description": "The estimated rate of carbon dioxide emitted per distance traveled.",
       "comment": "Reported for fleet sustainability tracking",
-      "stats": {
-        "percentage": 0.175866,
-        "count": 1055198345
-      },
+      "totalCount": 1055198345,
       "fields": [
         {
           "label": "grams_per_km",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1046,21 +1256,24 @@
     "exhaust_backpressure": {
       "label": "exhaust_backpressure",
       "group": "exhaust_emissions",
-      "tags": ["aftermarket", "redundant"],
-      "id_number": 35,
+      "tags": [
+        "aftermarket",
+        "redundant"
+      ],
+      "idNumber": 35,
       "name": "Exhaust backpressure",
       "description": "The resistance to exhaust flow measured in the exhaust system.",
       "comment": "High backpressure reduces engine efficiency",
-      "stats": {
-        "percentage": 0.0401531,
-        "count": 240918327
-      },
+      "totalCount": 240918327,
       "fields": [
         {
           "label": "value_kpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1069,33 +1282,42 @@
     "oxygen_sensor_reading": {
       "label": "oxygen_sensor_reading",
       "group": "exhaust_emissions",
-      "tags": ["regulatory", "experimental"],
-      "id_number": 36,
+      "tags": [
+        "regulatory",
+        "experimental"
+      ],
+      "idNumber": 36,
       "name": "Oxygen sensor reading",
       "description": "The voltage output of an exhaust oxygen sensor, used to trim the fuel mixture.",
       "comment": "Drives closed-loop fuel correction",
-      "stats": {
-        "percentage": 0.167104,
-        "count": 1002623744
-      },
+      "totalCount": 1002623744,
       "fields": [
         {
           "label": "sensor_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "voltage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_lean",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1104,27 +1326,33 @@
     "egr_valve_position": {
       "label": "egr_valve_position",
       "group": "exhaust_emissions",
-      "tags": ["redundant", "regulatory"],
-      "id_number": 37,
+      "tags": [
+        "redundant",
+        "regulatory"
+      ],
+      "idNumber": 37,
       "name": "EGR valve position",
       "description": "The position of the exhaust gas recirculation valve, used to reduce combustion temperatures.",
       "comment": "A stuck valve raises NOx output",
-      "stats": {
-        "percentage": 0.000383515,
-        "count": 2301087
-      },
+      "totalCount": 2301087,
       "fields": [
         {
           "label": "position_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_stuck",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1133,27 +1361,32 @@
     "radiator_temperature": {
       "label": "radiator_temperature",
       "group": "cooling_system",
-      "tags": ["rear"],
-      "id_number": 38,
+      "tags": [
+        "rear"
+      ],
+      "idNumber": 38,
       "name": "Radiator temperature",
       "description": "The temperature of coolant as it passes through the radiator.",
       "comment": "Drives cooling fan activation",
-      "stats": {
-        "percentage": 0.01748,
-        "count": 104880232
-      },
+      "totalCount": 104880232,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "fan_speed_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1162,27 +1395,33 @@
     "coolant_level": {
       "label": "coolant_level",
       "group": "cooling_system",
-      "tags": ["aftermarket", "redundant"],
-      "id_number": 39,
+      "tags": [
+        "aftermarket",
+        "redundant"
+      ],
+      "idNumber": 39,
       "name": "Coolant level",
       "description": "The level of coolant remaining in the reservoir.",
       "comment": "Low coolant risks overheating",
-      "stats": {
-        "percentage": 0.0246912,
-        "count": 148146937
-      },
+      "totalCount": 148146937,
       "fields": [
         {
           "label": "percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1191,27 +1430,33 @@
     "cooling_fan_status": {
       "label": "cooling_fan_status",
       "group": "cooling_system",
-      "tags": ["deprecated", "front"],
-      "id_number": 40,
+      "tags": [
+        "deprecated",
+        "front"
+      ],
+      "idNumber": 40,
       "name": "Cooling fan status",
       "description": "The operating state and speed of the engine cooling fan.",
       "comment": "Activates under high coolant temperature",
-      "stats": {
-        "percentage": 0.0506482,
-        "count": 303889357
-      },
+      "totalCount": 303889357,
       "fields": [
         {
           "label": "is_running",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "speed_rpm",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1220,21 +1465,23 @@
     "thermostat_position": {
       "label": "thermostat_position",
       "group": "cooling_system",
-      "tags": ["critical"],
-      "id_number": 41,
+      "tags": [
+        "critical"
+      ],
+      "idNumber": 41,
       "name": "Thermostat position",
       "description": "How far open the engine thermostat valve currently is.",
       "comment": "Controls coolant flow to the radiator",
-      "stats": {
-        "percentage": 0.269332,
-        "count": 1615989551
-      },
+      "totalCount": 1615989551,
       "fields": [
         {
           "label": "percentage_open",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1244,26 +1491,29 @@
       "label": "water_pump_status",
       "group": "cooling_system",
       "tags": [],
-      "id_number": 42,
+      "idNumber": 42,
       "name": "Water pump status",
       "description": "The operating state and flow output of the coolant water pump.",
       "comment": "A failed pump causes rapid overheating",
-      "stats": {
-        "percentage": 0.0363065,
-        "count": 217839222
-      },
+      "totalCount": 217839222,
       "fields": [
         {
           "label": "is_running",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "flow_rate_lpm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1272,21 +1522,24 @@
     "radiator_cap_pressure": {
       "label": "radiator_cap_pressure",
       "group": "cooling_system",
-      "tags": ["diesel", "critical"],
-      "id_number": 43,
+      "tags": [
+        "diesel",
+        "critical"
+      ],
+      "idNumber": 43,
       "name": "Radiator cap pressure",
       "description": "The pressure the radiator cap is maintaining in the cooling system.",
       "comment": "Maintains coolant boiling point under pressure",
-      "stats": {
-        "percentage": 0.159178,
-        "count": 955065694
-      },
+      "totalCount": 955065694,
       "fields": [
         {
           "label": "value_kpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1295,27 +1548,32 @@
     "coolant_leak_detected": {
       "label": "coolant_leak_detected",
       "group": "cooling_system",
-      "tags": ["deprecated"],
-      "id_number": 44,
+      "tags": [
+        "deprecated"
+      ],
+      "idNumber": 44,
       "name": "Coolant leak detected",
       "description": "Whether a coolant leak has been detected, and its approximate location.",
       "comment": "Early warning ahead of overheating",
-      "stats": {
-        "percentage": 0.0169321,
-        "count": 101592351
-      },
+      "totalCount": 101592351,
       "fields": [
         {
           "label": "is_detected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "location",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1324,27 +1582,33 @@
     "battery_12v_voltage": {
       "label": "battery_12v_voltage",
       "group": "electrical_system",
-      "tags": ["experimental", "critical"],
-      "id_number": 45,
+      "tags": [
+        "experimental",
+        "critical"
+      ],
+      "idNumber": 45,
       "name": "12V battery voltage",
       "description": "The voltage of the vehicle's low-voltage starting and accessory battery.",
       "comment": "Low voltage predicts starting failure",
-      "stats": {
-        "percentage": 0.772357,
-        "count": 4634140002
-      },
+      "totalCount": 4634140002,
       "fields": [
         {
           "label": "voltage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_charging",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1353,27 +1617,35 @@
     "alternator_output": {
       "label": "alternator_output",
       "group": "electrical_system",
-      "tags": ["hybrid", "wear_item", "safety_related", "rear"],
-      "id_number": 46,
+      "tags": [
+        "hybrid",
+        "wear_item",
+        "safety_related",
+        "rear"
+      ],
+      "idNumber": 46,
       "name": "Alternator output",
       "description": "The current and voltage being generated by the alternator to power accessories and charge the battery.",
       "comment": "Falls off as the alternator wears",
-      "stats": {
-        "percentage": 0.125797,
-        "count": 754781762
-      },
+      "totalCount": 754781762,
       "fields": [
         {
           "label": "current_amps",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "voltage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1382,27 +1654,32 @@
     "starter_motor_status": {
       "label": "starter_motor_status",
       "group": "electrical_system",
-      "tags": ["diesel"],
-      "id_number": 47,
+      "tags": [
+        "diesel"
+      ],
+      "idNumber": 47,
       "name": "Starter motor status",
       "description": "The engagement state and current draw of the starter motor during engine start.",
       "comment": "High draw can indicate a failing starter",
-      "stats": {
-        "percentage": 0.0112465,
-        "count": 67478798
-      },
+      "totalCount": 67478798,
       "fields": [
         {
           "label": "is_engaged",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "draw_amps",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1411,27 +1688,35 @@
     "fuse_box_status": {
       "label": "fuse_box_status",
       "group": "electrical_system",
-      "tags": ["oem", "electric", "diagnostic", "hybrid"],
-      "id_number": 48,
+      "tags": [
+        "oem",
+        "electric",
+        "diagnostic",
+        "hybrid"
+      ],
+      "idNumber": 48,
       "name": "Fuse box status",
       "description": "The status of an individual fuse in the vehicle's fuse box.",
       "comment": "A blown fuse disables its circuit",
-      "stats": {
-        "percentage": 0.0149073,
-        "count": 89443917
-      },
+      "totalCount": 89443917,
       "fields": [
         {
           "label": "fuse_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_blown",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1440,27 +1725,33 @@
     "wiring_harness_integrity": {
       "label": "wiring_harness_integrity",
       "group": "electrical_system",
-      "tags": ["gasoline", "deprecated"],
-      "id_number": 49,
+      "tags": [
+        "gasoline",
+        "deprecated"
+      ],
+      "idNumber": 49,
       "name": "Wiring harness integrity",
       "description": "The measured resistance of a monitored wiring circuit, used to detect chafing or corrosion.",
       "comment": "Rising resistance suggests a failing connection",
-      "stats": {
-        "percentage": 0.0228478,
-        "count": 137086543
-      },
+      "totalCount": 137086543,
       "fields": [
         {
           "label": "circuit_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "resistance_ohms",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1469,27 +1760,34 @@
     "ground_connection_status": {
       "label": "ground_connection_status",
       "group": "electrical_system",
-      "tags": ["electric", "oem", "safety_related"],
-      "id_number": 50,
+      "tags": [
+        "electric",
+        "oem",
+        "safety_related"
+      ],
+      "idNumber": 50,
       "name": "Ground connection status",
       "description": "The resistance of a chassis ground connection point.",
       "comment": "Poor grounding causes intermittent faults",
-      "stats": {
-        "percentage": 0.0291114,
-        "count": 174668464
-      },
+      "totalCount": 174668464,
       "fields": [
         {
           "label": "location",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "resistance_ohms",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1499,26 +1797,29 @@
       "label": "voltage_regulator_status",
       "group": "electrical_system",
       "tags": [],
-      "id_number": 51,
+      "idNumber": 51,
       "name": "Voltage regulator status",
       "description": "The output stability of the alternator's voltage regulator.",
       "comment": "Instability can damage electronics",
-      "stats": {
-        "percentage": 0.0654361,
-        "count": 392616842
-      },
+      "totalCount": 392616842,
       "fields": [
         {
           "label": "output_voltage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_faulty",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1527,21 +1828,25 @@
     "ignition_switch_position": {
       "label": "ignition_switch_position",
       "group": "electrical_system",
-      "tags": ["regulatory", "requires_calibration", "hybrid"],
-      "id_number": 52,
+      "tags": [
+        "regulatory",
+        "requires_calibration",
+        "hybrid"
+      ],
+      "idNumber": 52,
       "name": "Ignition switch position",
       "description": "The current position of the ignition switch (off, accessory, run, start).",
       "comment": "Basic vehicle power-state signal",
-      "stats": {
-        "percentage": 0.825754,
-        "count": 4954525331
-      },
+      "totalCount": 4954525331,
       "fields": [
         {
           "label": "position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1551,26 +1856,29 @@
       "label": "battery_state_of_charge",
       "group": "battery_ev",
       "tags": [],
-      "id_number": 53,
+      "idNumber": 53,
       "name": "Battery state of charge",
       "description": "The remaining usable energy in an electric vehicle's traction battery pack, as a percentage of capacity.",
       "comment": "Only reported by electric fleet vehicles",
-      "stats": {
-        "percentage": 0.00184167,
-        "count": 11050021
-      },
+      "totalCount": 11050021,
       "fields": [
         {
           "label": "percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "estimated_range_km",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1579,27 +1887,32 @@
     "battery_pack_temperature": {
       "label": "battery_pack_temperature",
       "group": "battery_ev",
-      "tags": ["critical"],
-      "id_number": 54,
+      "tags": [
+        "critical"
+      ],
+      "idNumber": 54,
       "name": "Battery pack temperature",
       "description": "The temperature of a cell group within the traction battery pack.",
       "comment": "Thermal management keeps this in a safe band",
-      "stats": {
-        "percentage": 0.00110742,
-        "count": 6644507
-      },
+      "totalCount": 6644507,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "cell_group_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1608,27 +1921,32 @@
     "battery_voltage": {
       "label": "battery_voltage",
       "group": "battery_ev",
-      "tags": ["redundant"],
-      "id_number": 55,
+      "tags": [
+        "redundant"
+      ],
+      "idNumber": 55,
       "name": "Battery voltage",
       "description": "The total voltage output of the traction battery pack.",
       "comment": "Drops slightly as the pack discharges",
-      "stats": {
-        "percentage": 0.00689413,
-        "count": 41364781
-      },
+      "totalCount": 41364781,
       "fields": [
         {
           "label": "value_volts",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_within_spec",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1637,27 +1955,34 @@
     "charging_status": {
       "label": "charging_status",
       "group": "battery_ev",
-      "tags": ["redundant", "low_frequency", "safety_related"],
-      "id_number": 56,
+      "tags": [
+        "redundant",
+        "low_frequency",
+        "safety_related"
+      ],
+      "idNumber": 56,
       "name": "Charging status",
       "description": "Whether the vehicle is currently charging and at what rate.",
       "comment": "Reported while connected to a charger",
-      "stats": {
-        "percentage": 0.000223178,
-        "count": 1339067
-      },
+      "totalCount": 1339067,
       "fields": [
         {
           "label": "is_charging",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "charge_rate_kw",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1666,27 +1991,34 @@
     "regenerative_braking_output": {
       "label": "regenerative_braking_output",
       "group": "battery_ev",
-      "tags": ["redundant", "hybrid", "wear_item"],
-      "id_number": 57,
+      "tags": [
+        "redundant",
+        "hybrid",
+        "wear_item"
+      ],
+      "idNumber": 57,
       "name": "Regenerative braking output",
       "description": "The power being recovered and returned to the battery during regenerative braking.",
       "comment": "Improves efficiency in stop-and-go driving",
-      "stats": {
-        "percentage": 0.000272913,
-        "count": 1637478
-      },
+      "totalCount": 1637478,
       "fields": [
         {
           "label": "power_kw",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "efficiency_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1695,27 +2027,32 @@
     "battery_health": {
       "label": "battery_health",
       "group": "battery_ev",
-      "tags": ["deprecated"],
-      "id_number": 58,
+      "tags": [
+        "deprecated"
+      ],
+      "idNumber": 58,
       "name": "Battery health",
       "description": "The long-term degradation state of the traction battery relative to its original capacity.",
       "comment": "Declines gradually over the battery's life",
-      "stats": {
-        "percentage": 0.000347767,
-        "count": 2086601
-      },
+      "totalCount": 2086601,
       "fields": [
         {
           "label": "state_of_health_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "cycle_count",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1724,27 +2061,32 @@
     "inverter_temperature": {
       "label": "inverter_temperature",
       "group": "battery_ev",
-      "tags": ["gasoline"],
-      "id_number": 59,
+      "tags": [
+        "gasoline"
+      ],
+      "idNumber": 59,
       "name": "Inverter temperature",
       "description": "The operating temperature of the power inverter converting battery DC to motor AC.",
       "comment": "Overheating triggers power derating",
-      "stats": {
-        "percentage": 0.0040888,
-        "count": 24532785
-      },
+      "totalCount": 24532785,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_derated",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1753,27 +2095,35 @@
     "charging_port_status": {
       "label": "charging_port_status",
       "group": "battery_ev",
-      "tags": ["diesel", "requires_calibration", "rear", "deprecated"],
-      "id_number": 60,
+      "tags": [
+        "diesel",
+        "requires_calibration",
+        "rear",
+        "deprecated"
+      ],
+      "idNumber": 60,
       "name": "Charging port status",
       "description": "Whether a charging connector is plugged into the vehicle, and its type.",
       "comment": "Gates the charging_status item",
-      "stats": {
-        "percentage": 0.00218425,
-        "count": 13105489
-      },
+      "totalCount": 13105489,
       "fields": [
         {
           "label": "is_connected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "connector_type",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1782,33 +2132,41 @@
     "tire_pressure_front_left": {
       "label": "tire_pressure_front_left",
       "group": "tires_wheels",
-      "tags": ["deprecated"],
-      "id_number": 61,
+      "tags": [
+        "deprecated"
+      ],
+      "idNumber": 61,
       "name": "Tire pressure (front left)",
       "description": "The inflation pressure and tread depth of the front-left tire.",
       "comment": "One of the most commonly equipped sensors",
-      "stats": {
-        "percentage": 0.591394,
-        "count": 3548366177
-      },
+      "totalCount": 3548366177,
       "fields": [
         {
           "label": "pressure_psi",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "tread_depth_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low_pressure_warning",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1817,33 +2175,41 @@
     "tire_pressure_front_right": {
       "label": "tire_pressure_front_right",
       "group": "tires_wheels",
-      "tags": ["deprecated"],
-      "id_number": 62,
+      "tags": [
+        "deprecated"
+      ],
+      "idNumber": 62,
       "name": "Tire pressure (front right)",
       "description": "The inflation pressure and tread depth of the front-right tire.",
       "comment": "Mirrors the front-left sensor",
-      "stats": {
-        "percentage": 0.888037,
-        "count": 5328220152
-      },
+      "totalCount": 5328220152,
       "fields": [
         {
           "label": "pressure_psi",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "tread_depth_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low_pressure_warning",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1852,33 +2218,43 @@
     "tire_pressure_rear_left": {
       "label": "tire_pressure_rear_left",
       "group": "tires_wheels",
-      "tags": ["diesel", "right", "safety_related"],
-      "id_number": 63,
+      "tags": [
+        "diesel",
+        "right",
+        "safety_related"
+      ],
+      "idNumber": 63,
       "name": "Tire pressure (rear left)",
       "description": "The inflation pressure and tread depth of the rear-left tire.",
       "comment": "Rear tires often wear differently than front",
-      "stats": {
-        "percentage": 0.661439,
-        "count": 3968636421
-      },
+      "totalCount": 3968636421,
       "fields": [
         {
           "label": "pressure_psi",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "tread_depth_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low_pressure_warning",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1888,32 +2264,38 @@
       "label": "tire_pressure_rear_right",
       "group": "tires_wheels",
       "tags": [],
-      "id_number": 64,
+      "idNumber": 64,
       "name": "Tire pressure (rear right)",
       "description": "The inflation pressure and tread depth of the rear-right tire.",
       "comment": "Completes the four-corner pressure set",
-      "stats": {
-        "percentage": 0.824324,
-        "count": 4945943800
-      },
+      "totalCount": 4945943800,
       "fields": [
         {
           "label": "pressure_psi",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "tread_depth_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low_pressure_warning",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1922,27 +2304,32 @@
     "wheel_diameter": {
       "label": "wheel_diameter",
       "group": "tires_wheels",
-      "tags": ["requires_calibration"],
-      "id_number": 65,
+      "tags": [
+        "requires_calibration"
+      ],
+      "idNumber": 65,
       "name": "Wheel diameter",
       "description": "The diameter of the fitted wheel, used to calibrate speed and odometer readings.",
       "comment": "Changes if a different wheel size is fitted",
-      "stats": {
-        "percentage": 0.0473658,
-        "count": 284194532
-      },
+      "totalCount": 284194532,
       "fields": [
         {
           "label": "diameter_inches",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "wheel_position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1952,26 +2339,29 @@
       "label": "wheel_speed",
       "group": "tires_wheels",
       "tags": [],
-      "id_number": 66,
+      "idNumber": 66,
       "name": "Wheel speed",
       "description": "The rotational speed of an individual wheel, used by ABS and traction control.",
       "comment": "Discrepancies between wheels indicate slip",
-      "stats": {
-        "percentage": 0.55452,
-        "count": 3327120838
-      },
+      "totalCount": 3327120838,
       "fields": [
         {
           "label": "speed_kmh",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "wheel_position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -1980,27 +2370,32 @@
     "wheel_alignment_angle": {
       "label": "wheel_alignment_angle",
       "group": "tires_wheels",
-      "tags": ["right"],
-      "id_number": 67,
+      "tags": [
+        "right"
+      ],
+      "idNumber": 67,
       "name": "Wheel alignment angle",
       "description": "The camber and toe angle of a wheel relative to the vehicle's chassis.",
       "comment": "Poor alignment causes uneven tire wear",
-      "stats": {
-        "percentage": 0.0494536,
-        "count": 296721640
-      },
+      "totalCount": 296721640,
       "fields": [
         {
           "label": "camber_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "toe_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2009,27 +2404,32 @@
     "tire_temperature": {
       "label": "tire_temperature",
       "group": "tires_wheels",
-      "tags": ["diagnostic"],
-      "id_number": 68,
+      "tags": [
+        "diagnostic"
+      ],
+      "idNumber": 68,
       "name": "Tire temperature",
       "description": "The surface temperature of a tire, which rises with speed and load.",
       "comment": "Excess heat accelerates tire wear",
-      "stats": {
-        "percentage": 0.0208259,
-        "count": 124955610
-      },
+      "totalCount": 124955610,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "wheel_position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2038,27 +2438,33 @@
     "spare_tire_status": {
       "label": "spare_tire_status",
       "group": "tires_wheels",
-      "tags": ["high_frequency", "oem"],
-      "id_number": 69,
+      "tags": [
+        "high_frequency",
+        "oem"
+      ],
+      "idNumber": 69,
       "name": "Spare tire status",
       "description": "Whether a spare tire is present and its inflation pressure.",
       "comment": "Not all fleet vehicles carry a spare",
-      "stats": {
-        "percentage": 0.000769522,
-        "count": 4617133
-      },
+      "totalCount": 4617133,
       "fields": [
         {
           "label": "is_present",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "pressure_psi",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2067,27 +2473,35 @@
     "brake_pad_wear_front": {
       "label": "brake_pad_wear_front",
       "group": "brakes",
-      "tags": ["safety_related", "hybrid", "redundant", "high_frequency"],
-      "id_number": 70,
+      "tags": [
+        "safety_related",
+        "hybrid",
+        "redundant",
+        "high_frequency"
+      ],
+      "idNumber": 70,
       "name": "Brake pad wear (front)",
       "description": "The remaining thickness of the front brake pads, as a percentage of new.",
       "comment": "Front pads typically wear faster than rear",
-      "stats": {
-        "percentage": 0.229148,
-        "count": 1374887322
-      },
+      "totalCount": 1374887322,
       "fields": [
         {
           "label": "wear_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2096,27 +2510,35 @@
     "brake_pad_wear_rear": {
       "label": "brake_pad_wear_rear",
       "group": "brakes",
-      "tags": ["regulatory", "hybrid", "critical", "aftermarket"],
-      "id_number": 71,
+      "tags": [
+        "regulatory",
+        "hybrid",
+        "critical",
+        "aftermarket"
+      ],
+      "idNumber": 71,
       "name": "Brake pad wear (rear)",
       "description": "The remaining thickness of the rear brake pads, as a percentage of new.",
       "comment": "Wears more slowly than front pads",
-      "stats": {
-        "percentage": 0.215553,
-        "count": 1293317777
-      },
+      "totalCount": 1293317777,
       "fields": [
         {
           "label": "wear_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2125,27 +2547,32 @@
     "brake_fluid_level": {
       "label": "brake_fluid_level",
       "group": "brakes",
-      "tags": ["electric"],
-      "id_number": 72,
+      "tags": [
+        "electric"
+      ],
+      "idNumber": 72,
       "name": "Brake fluid level",
       "description": "The level of brake fluid remaining in the reservoir.",
       "comment": "Low fluid can indicate a leak or worn pads",
-      "stats": {
-        "percentage": 0.0202829,
-        "count": 121697433
-      },
+      "totalCount": 121697433,
       "fields": [
         {
           "label": "percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2155,26 +2582,29 @@
       "label": "brake_temperature",
       "group": "brakes",
       "tags": [],
-      "id_number": 73,
+      "idNumber": 73,
       "name": "Brake temperature",
       "description": "The temperature of a brake rotor or caliper, which rises under heavy or repeated braking.",
       "comment": "Excess heat can cause brake fade",
-      "stats": {
-        "percentage": 0.062884,
-        "count": 377304070
-      },
+      "totalCount": 377304070,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "wheel_position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2183,27 +2613,35 @@
     "abs_activation_count": {
       "label": "abs_activation_count",
       "group": "brakes",
-      "tags": ["low_frequency", "hybrid", "gasoline", "deprecated"],
-      "id_number": 74,
+      "tags": [
+        "low_frequency",
+        "hybrid",
+        "gasoline",
+        "deprecated"
+      ],
+      "idNumber": 74,
       "name": "ABS activation count",
       "description": "The number of times the anti-lock braking system has intervened, and the speed of the last intervention.",
       "comment": "Frequent activation may indicate low-grip conditions",
-      "stats": {
-        "percentage": 0.0143519,
-        "count": 86111465
-      },
+      "totalCount": 86111465,
       "fields": [
         {
           "label": "count",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "last_activation_speed_kmh",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2212,27 +2650,32 @@
     "brake_pressure": {
       "label": "brake_pressure",
       "group": "brakes",
-      "tags": ["diesel"],
-      "id_number": 75,
+      "tags": [
+        "diesel"
+      ],
+      "idNumber": 75,
       "name": "Brake pressure",
       "description": "The hydraulic pressure applied to the brakes, correlated with pedal position.",
       "comment": "Feeds brake force distribution logic",
-      "stats": {
-        "percentage": 0.257695,
-        "count": 1546172337
-      },
+      "totalCount": 1546172337,
       "fields": [
         {
           "label": "value_kpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "pedal_position_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2241,21 +2684,23 @@
     "parking_brake_status": {
       "label": "parking_brake_status",
       "group": "brakes",
-      "tags": ["gasoline"],
-      "id_number": 76,
+      "tags": [
+        "gasoline"
+      ],
+      "idNumber": 76,
       "name": "Parking brake status",
       "description": "Whether the parking brake is currently engaged.",
       "comment": "Simple engaged/disengaged signal",
-      "stats": {
-        "percentage": 0.254141,
-        "count": 1524843014
-      },
+      "totalCount": 1524843014,
       "fields": [
         {
           "label": "is_engaged",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2264,27 +2709,33 @@
     "brake_rotor_thickness": {
       "label": "brake_rotor_thickness",
       "group": "brakes",
-      "tags": ["wear_item", "electric"],
-      "id_number": 77,
+      "tags": [
+        "wear_item",
+        "electric"
+      ],
+      "idNumber": 77,
       "name": "Brake rotor thickness",
       "description": "The remaining thickness of a brake rotor, which thins over its service life.",
       "comment": "Below-minimum rotors require replacement",
-      "stats": {
-        "percentage": 0.215691,
-        "count": 1294145390
-      },
+      "totalCount": 1294145390,
       "fields": [
         {
           "label": "thickness_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "wheel_position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2293,27 +2744,33 @@
     "suspension_travel_front": {
       "label": "suspension_travel_front",
       "group": "suspension",
-      "tags": ["diagnostic", "oem"],
-      "id_number": 78,
+      "tags": [
+        "diagnostic",
+        "oem"
+      ],
+      "idNumber": 78,
       "name": "Suspension travel (front)",
       "description": "The current vertical travel of a front suspension corner relative to its resting position.",
       "comment": "Large travel indicates rough terrain",
-      "stats": {
-        "percentage": 0.03579,
-        "count": 214740023
-      },
+      "totalCount": 214740023,
       "fields": [
         {
           "label": "travel_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2322,27 +2779,35 @@
     "suspension_travel_rear": {
       "label": "suspension_travel_rear",
       "group": "suspension",
-      "tags": ["aftermarket", "diesel", "oem", "critical"],
-      "id_number": 79,
+      "tags": [
+        "aftermarket",
+        "diesel",
+        "oem",
+        "critical"
+      ],
+      "idNumber": 79,
       "name": "Suspension travel (rear)",
       "description": "The current vertical travel of a rear suspension corner relative to its resting position.",
       "comment": "Tracks load and road surface response",
-      "stats": {
-        "percentage": 0.0636748,
-        "count": 382049014
-      },
+      "totalCount": 382049014,
       "fields": [
         {
           "label": "travel_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2351,27 +2816,33 @@
     "shock_absorber_condition": {
       "label": "shock_absorber_condition",
       "group": "suspension",
-      "tags": ["redundant", "regulatory"],
-      "id_number": 80,
+      "tags": [
+        "redundant",
+        "regulatory"
+      ],
+      "idNumber": 80,
       "name": "Shock absorber condition",
       "description": "The estimated wear level of a shock absorber based on its damping response.",
       "comment": "Worn shocks reduce ride control",
-      "stats": {
-        "percentage": 0.0118533,
-        "count": 71119972
-      },
+      "totalCount": 71119972,
       "fields": [
         {
           "label": "wear_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2380,27 +2851,33 @@
     "ride_height": {
       "label": "ride_height",
       "group": "suspension",
-      "tags": ["aftermarket", "deprecated"],
-      "id_number": 81,
+      "tags": [
+        "aftermarket",
+        "deprecated"
+      ],
+      "idNumber": 81,
       "name": "Ride height",
       "description": "The vehicle's current ground clearance, which can vary on adjustable suspension.",
       "comment": "Lowered ride height may indicate overload",
-      "stats": {
-        "percentage": 0.144865,
-        "count": 869190665
-      },
+      "totalCount": 869190665,
       "fields": [
         {
           "label": "height_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_lowered",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2410,26 +2887,29 @@
       "label": "sway_bar_load",
       "group": "suspension",
       "tags": [],
-      "id_number": 82,
+      "idNumber": 82,
       "name": "Sway bar load",
       "description": "The torsional load currently on the anti-roll (sway) bar during cornering.",
       "comment": "Rises with lateral load in turns",
-      "stats": {
-        "percentage": 0.0291744,
-        "count": 175046539
-      },
+      "totalCount": 175046539,
       "fields": [
         {
           "label": "load_nm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2438,27 +2918,32 @@
     "air_suspension_pressure": {
       "label": "air_suspension_pressure",
       "group": "suspension",
-      "tags": ["regulatory"],
-      "id_number": 83,
+      "tags": [
+        "regulatory"
+      ],
+      "idNumber": 83,
       "name": "Air suspension pressure",
       "description": "The air pressure in an air suspension bag, for vehicles so equipped.",
       "comment": "Only present on air-suspension-equipped vehicles",
-      "stats": {
-        "percentage": 1.50833e-7,
-        "count": 905
-      },
+      "totalCount": 905,
       "fields": [
         {
           "label": "pressure_kpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_leaking",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2467,27 +2952,34 @@
     "strut_mount_condition": {
       "label": "strut_mount_condition",
       "group": "suspension",
-      "tags": ["aftermarket", "gasoline", "diesel"],
-      "id_number": 84,
+      "tags": [
+        "aftermarket",
+        "gasoline",
+        "diesel"
+      ],
+      "idNumber": 84,
       "name": "Strut mount condition",
       "description": "Whether a strut mount bushing shows signs of wear or looseness.",
       "comment": "Worn mounts cause clunking noises",
-      "stats": {
-        "percentage": 0.0441015,
-        "count": 264608724
-      },
+      "totalCount": 264608724,
       "fields": [
         {
           "label": "is_worn",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "position",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2496,27 +2988,32 @@
     "steering_angle": {
       "label": "steering_angle",
       "group": "steering",
-      "tags": ["diesel"],
-      "id_number": 85,
+      "tags": [
+        "diesel"
+      ],
+      "idNumber": 85,
       "name": "Steering angle",
       "description": "The current angle of the steering wheel relative to center.",
       "comment": "Used by stability control and ADAS",
-      "stats": {
-        "percentage": 0.0384309,
-        "count": 230585518
-      },
+      "totalCount": 230585518,
       "fields": [
         {
           "label": "angle_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "direction",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2525,21 +3022,26 @@
     "steering_torque": {
       "label": "steering_torque",
       "group": "steering",
-      "tags": ["rear", "regulatory", "redundant", "oem"],
-      "id_number": 86,
+      "tags": [
+        "rear",
+        "regulatory",
+        "redundant",
+        "oem"
+      ],
+      "idNumber": 86,
       "name": "Steering torque",
       "description": "The torque the driver is applying to the steering wheel.",
       "comment": "Feeds power steering assist calculation",
-      "stats": {
-        "percentage": 0.0876276,
-        "count": 525765853
-      },
+      "totalCount": 525765853,
       "fields": [
         {
           "label": "torque_nm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2548,27 +3050,32 @@
     "power_steering_fluid_level": {
       "label": "power_steering_fluid_level",
       "group": "steering",
-      "tags": ["critical"],
-      "id_number": 87,
+      "tags": [
+        "critical"
+      ],
+      "idNumber": 87,
       "name": "Power steering fluid level",
       "description": "The level of hydraulic fluid in the power steering reservoir, for hydraulic-assist systems.",
       "comment": "Not applicable to electric power steering",
-      "stats": {
-        "percentage": 0.000468121,
-        "count": 2808726
-      },
+      "totalCount": 2808726,
       "fields": [
         {
           "label": "percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_low",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2577,21 +3084,23 @@
     "steering_response_time": {
       "label": "steering_response_time",
       "group": "steering",
-      "tags": ["left"],
-      "id_number": 88,
+      "tags": [
+        "left"
+      ],
+      "idNumber": 88,
       "name": "Steering response time",
       "description": "The measured delay between steering input and a change in vehicle heading.",
       "comment": "Increases can indicate a linkage issue",
-      "stats": {
-        "percentage": 0.015117,
-        "count": 90701788
-      },
+      "totalCount": 90701788,
       "fields": [
         {
           "label": "milliseconds",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2600,21 +3109,24 @@
     "steering_rack_condition": {
       "label": "steering_rack_condition",
       "group": "steering",
-      "tags": ["rear", "regulatory"],
-      "id_number": 89,
+      "tags": [
+        "rear",
+        "regulatory"
+      ],
+      "idNumber": 89,
       "name": "Steering rack condition",
       "description": "Whether the steering rack shows signs of a fluid leak.",
       "comment": "Leaks eventually cause assist loss",
-      "stats": {
-        "percentage": 0.126765,
-        "count": 760591743
-      },
+      "totalCount": 760591743,
       "fields": [
         {
           "label": "is_leaking",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2623,27 +3135,33 @@
     "steering_wheel_position_sensor": {
       "label": "steering_wheel_position_sensor",
       "group": "steering",
-      "tags": ["gasoline", "wear_item"],
-      "id_number": 90,
+      "tags": [
+        "gasoline",
+        "wear_item"
+      ],
+      "idNumber": 90,
       "name": "Steering wheel position sensor",
       "description": "The raw angle reading and calibration state of the steering position sensor.",
       "comment": "Must be recalibrated after alignment work",
-      "stats": {
-        "percentage": 0.0554661,
-        "count": 332796497
-      },
+      "totalCount": 332796497,
       "fields": [
         {
           "label": "angle_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_calibrated",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2652,27 +3170,32 @@
     "chassis_stress_level": {
       "label": "chassis_stress_level",
       "group": "body_chassis",
-      "tags": ["wear_item"],
-      "id_number": 91,
+      "tags": [
+        "wear_item"
+      ],
+      "idNumber": 91,
       "name": "Chassis stress level",
       "description": "The estimated structural stress on the chassis, from strain gauges on heavy-duty fleet vehicles.",
       "comment": "Relevant mainly to trucks and trailers",
-      "stats": {
-        "percentage": 6.7e-8,
-        "count": 402
-      },
+      "totalCount": 402,
       "fields": [
         {
           "label": "stress_mpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_over_threshold",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2682,26 +3205,29 @@
       "label": "door_status",
       "group": "body_chassis",
       "tags": [],
-      "id_number": 92,
+      "idNumber": 92,
       "name": "Door status",
       "description": "Whether a specific door is currently open or closed.",
       "comment": "One entry per door on the vehicle",
-      "stats": {
-        "percentage": 0.0111383,
-        "count": 66829961
-      },
+      "totalCount": 66829961,
       "fields": [
         {
           "label": "door_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_open",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2711,26 +3237,29 @@
       "label": "window_position",
       "group": "body_chassis",
       "tags": [],
-      "id_number": 93,
+      "idNumber": 93,
       "name": "Window position",
       "description": "How far open a specific window currently is.",
       "comment": "Tracked per window",
-      "stats": {
-        "percentage": 0.0666801,
-        "count": 400080804
-      },
+      "totalCount": 400080804,
       "fields": [
         {
           "label": "window_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "percentage_open",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2739,27 +3268,32 @@
     "sunroof_status": {
       "label": "sunroof_status",
       "group": "body_chassis",
-      "tags": ["redundant"],
-      "id_number": 94,
+      "tags": [
+        "redundant"
+      ],
+      "idNumber": 94,
       "name": "Sunroof status",
       "description": "Whether the sunroof is open and by how much.",
       "comment": "Only present on sunroof-equipped vehicles",
-      "stats": {
-        "percentage": 0.00170944,
-        "count": 10256651
-      },
+      "totalCount": 10256651,
       "fields": [
         {
           "label": "is_open",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "percentage_open",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2768,21 +3302,25 @@
     "hood_latch_status": {
       "label": "hood_latch_status",
       "group": "body_chassis",
-      "tags": ["rear", "high_frequency", "requires_calibration"],
-      "id_number": 95,
+      "tags": [
+        "rear",
+        "high_frequency",
+        "requires_calibration"
+      ],
+      "idNumber": 95,
       "name": "Hood latch status",
       "description": "Whether the hood latch is securely closed.",
       "comment": "Safety-relevant while driving",
-      "stats": {
-        "percentage": 0.0871731,
-        "count": 523038822
-      },
+      "totalCount": 523038822,
       "fields": [
         {
           "label": "is_closed",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2791,21 +3329,25 @@
     "trunk_latch_status": {
       "label": "trunk_latch_status",
       "group": "body_chassis",
-      "tags": ["aftermarket", "regulatory", "low_frequency"],
-      "id_number": 96,
+      "tags": [
+        "aftermarket",
+        "regulatory",
+        "low_frequency"
+      ],
+      "idNumber": 96,
       "name": "Trunk latch status",
       "description": "Whether the trunk or cargo door latch is securely closed.",
       "comment": "Important for cargo security",
-      "stats": {
-        "percentage": 0.0873319,
-        "count": 523991346
-      },
+      "totalCount": 523991346,
       "fields": [
         {
           "label": "is_closed",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2814,27 +3356,35 @@
     "chassis_corrosion_level": {
       "label": "chassis_corrosion_level",
       "group": "body_chassis",
-      "tags": ["requires_calibration", "regulatory", "low_frequency", "diesel"],
-      "id_number": 97,
+      "tags": [
+        "requires_calibration",
+        "regulatory",
+        "low_frequency",
+        "diesel"
+      ],
+      "idNumber": 97,
       "name": "Chassis corrosion level",
       "description": "The estimated severity of corrosion detected at a monitored chassis location.",
       "comment": "More relevant to older fleet vehicles",
-      "stats": {
-        "percentage": 0.000501206,
-        "count": 3007237
-      },
+      "totalCount": 3007237,
       "fields": [
         {
           "label": "severity_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "location",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2843,27 +3393,32 @@
     "frame_alignment": {
       "label": "frame_alignment",
       "group": "body_chassis",
-      "tags": ["oem"],
-      "id_number": 98,
+      "tags": [
+        "oem"
+      ],
+      "idNumber": 98,
       "name": "Frame alignment",
       "description": "The measured deviation of the vehicle frame from factory specification.",
       "comment": "Large deviations suggest prior collision damage",
-      "stats": {
-        "percentage": 0.00475071,
-        "count": 28504238
-      },
+      "totalCount": 28504238,
       "fields": [
         {
           "label": "deviation_mm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_within_spec",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2872,33 +3427,41 @@
     "headlight_status": {
       "label": "headlight_status",
       "group": "lighting",
-      "tags": ["wear_item"],
-      "id_number": 99,
+      "tags": [
+        "wear_item"
+      ],
+      "idNumber": 99,
       "name": "Headlight status",
       "description": "Whether a headlight is on and its current brightness.",
       "comment": "Tracked per side",
-      "stats": {
-        "percentage": 0.653123,
-        "count": 3918737773
-      },
+      "totalCount": 3918737773,
       "fields": [
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_on",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "brightness_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2907,27 +3470,34 @@
     "taillight_status": {
       "label": "taillight_status",
       "group": "lighting",
-      "tags": ["regulatory", "diesel", "left"],
-      "id_number": 100,
+      "tags": [
+        "regulatory",
+        "diesel",
+        "left"
+      ],
+      "idNumber": 100,
       "name": "Taillight status",
       "description": "Whether a taillight is currently on.",
       "comment": "Tracked per side",
-      "stats": {
-        "percentage": 0.883309,
-        "count": 5299853082
-      },
+      "totalCount": 5299853082,
       "fields": [
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_on",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2936,27 +3506,34 @@
     "turn_signal_status": {
       "label": "turn_signal_status",
       "group": "lighting",
-      "tags": ["high_frequency", "deprecated", "left"],
-      "id_number": 101,
+      "tags": [
+        "high_frequency",
+        "deprecated",
+        "left"
+      ],
+      "idNumber": 101,
       "name": "Turn signal status",
       "description": "Whether a turn signal is currently flashing.",
       "comment": "Tracked per side",
-      "stats": {
-        "percentage": 0.676029,
-        "count": 4056172406
-      },
+      "totalCount": 4056172406,
       "fields": [
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2965,21 +3542,23 @@
     "hazard_light_status": {
       "label": "hazard_light_status",
       "group": "lighting",
-      "tags": ["experimental"],
-      "id_number": 102,
+      "tags": [
+        "experimental"
+      ],
+      "idNumber": 102,
       "name": "Hazard light status",
       "description": "Whether the hazard warning lights are currently active.",
       "comment": "Simple on/off signal",
-      "stats": {
-        "percentage": 0.342629,
-        "count": 2055771741
-      },
+      "totalCount": 2055771741,
       "fields": [
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -2988,27 +3567,32 @@
     "interior_light_status": {
       "label": "interior_light_status",
       "group": "lighting",
-      "tags": ["gasoline"],
-      "id_number": 103,
+      "tags": [
+        "gasoline"
+      ],
+      "idNumber": 103,
       "name": "Interior light status",
       "description": "Whether an interior cabin light zone is currently on.",
       "comment": "Tracked per cabin zone",
-      "stats": {
-        "percentage": 0.707014,
-        "count": 4242083317
-      },
+      "totalCount": 4242083317,
       "fields": [
         {
           "label": "zone",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_on",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3017,27 +3601,34 @@
     "fog_light_status": {
       "label": "fog_light_status",
       "group": "lighting",
-      "tags": ["aftermarket", "safety_related", "deprecated"],
-      "id_number": 104,
+      "tags": [
+        "aftermarket",
+        "safety_related",
+        "deprecated"
+      ],
+      "idNumber": 104,
       "name": "Fog light status",
       "description": "Whether a fog light is currently on.",
       "comment": "Only present on fog-light-equipped vehicles",
-      "stats": {
-        "percentage": 0.000203662,
-        "count": 1221972
-      },
+      "totalCount": 1221972,
       "fields": [
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_on",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3047,26 +3638,29 @@
       "label": "daytime_running_light_status",
       "group": "lighting",
       "tags": [],
-      "id_number": 105,
+      "idNumber": 105,
       "name": "Daytime running light status",
       "description": "Whether daytime running lights are active and their brightness.",
       "comment": "Active whenever the vehicle is running",
-      "stats": {
-        "percentage": 0.790824,
-        "count": 4744944158
-      },
+      "totalCount": 4744944158,
       "fields": [
         {
           "label": "is_on",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "brightness_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3075,27 +3669,33 @@
     "cabin_temperature": {
       "label": "cabin_temperature",
       "group": "hvac_cabin",
-      "tags": ["low_frequency", "left"],
-      "id_number": 106,
+      "tags": [
+        "low_frequency",
+        "left"
+      ],
+      "idNumber": 106,
       "name": "Cabin temperature",
       "description": "The measured air temperature within a cabin climate zone.",
       "comment": "Tracked per zone on dual-zone systems",
-      "stats": {
-        "percentage": 0.0416927,
-        "count": 250156093
-      },
+      "totalCount": 250156093,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "zone",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3105,20 +3705,20 @@
       "label": "hvac_fan_speed",
       "group": "hvac_cabin",
       "tags": [],
-      "id_number": 107,
+      "idNumber": 107,
       "name": "HVAC fan speed",
       "description": "The current blower fan speed setting for the climate control system.",
       "comment": "Discrete speed level, not continuous",
-      "stats": {
-        "percentage": 0.0495827,
-        "count": 297496277
-      },
+      "totalCount": 297496277,
       "fields": [
         {
           "label": "speed_level",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3127,27 +3727,33 @@
     "air_conditioning_status": {
       "label": "air_conditioning_status",
       "group": "hvac_cabin",
-      "tags": ["low_frequency", "aftermarket"],
-      "id_number": 108,
+      "tags": [
+        "low_frequency",
+        "aftermarket"
+      ],
+      "idNumber": 108,
       "name": "Air conditioning status",
       "description": "Whether the air conditioning compressor is active and its current load.",
       "comment": "Increases engine or battery load when active",
-      "stats": {
-        "percentage": 0.279971,
-        "count": 1679828413
-      },
+      "totalCount": 1679828413,
       "fields": [
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "compressor_load_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3156,21 +3762,24 @@
     "cabin_humidity": {
       "label": "cabin_humidity",
       "group": "hvac_cabin",
-      "tags": ["experimental", "diesel"],
-      "id_number": 109,
+      "tags": [
+        "experimental",
+        "diesel"
+      ],
+      "idNumber": 109,
       "name": "Cabin humidity",
       "description": "The relative humidity measured inside the cabin.",
       "comment": "Used for automatic defog control",
-      "stats": {
-        "percentage": 0.0215264,
-        "count": 129158174
-      },
+      "totalCount": 129158174,
       "fields": [
         {
           "label": "percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3180,26 +3789,29 @@
       "label": "air_filter_status",
       "group": "hvac_cabin",
       "tags": [],
-      "id_number": 110,
+      "idNumber": 110,
       "name": "Cabin air filter status",
       "description": "The restriction level of the cabin air filter.",
       "comment": "High restriction reduces airflow",
-      "stats": {
-        "percentage": 0.144651,
-        "count": 867908429
-      },
+      "totalCount": 867908429,
       "fields": [
         {
           "label": "restriction_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "replacement_due",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3208,27 +3820,32 @@
     "defroster_status": {
       "label": "defroster_status",
       "group": "hvac_cabin",
-      "tags": ["experimental"],
-      "id_number": 111,
+      "tags": [
+        "experimental"
+      ],
+      "idNumber": 111,
       "name": "Defroster status",
       "description": "Whether a defroster zone (windshield or rear) is currently active.",
       "comment": "Tracked per defroster zone",
-      "stats": {
-        "percentage": 0.103412,
-        "count": 620470635
-      },
+      "totalCount": 620470635,
       "fields": [
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "zone",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3237,33 +3854,43 @@
     "seat_heater_status": {
       "label": "seat_heater_status",
       "group": "hvac_cabin",
-      "tags": ["experimental", "oem", "wear_item"],
-      "id_number": 112,
+      "tags": [
+        "experimental",
+        "oem",
+        "wear_item"
+      ],
+      "idNumber": 112,
       "name": "Seat heater status",
       "description": "Whether a seat heater is active and at what level.",
       "comment": "Tracked per seat",
-      "stats": {
-        "percentage": 0.00338191,
-        "count": 20291459
-      },
+      "totalCount": 20291459,
       "fields": [
         {
           "label": "seat_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "level",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3273,26 +3900,29 @@
       "label": "infotainment_volume",
       "group": "infotainment_telematics",
       "tags": [],
-      "id_number": 113,
+      "idNumber": 113,
       "name": "Infotainment volume",
       "description": "The current audio volume level of the infotainment system.",
       "comment": "Simple in-cabin convenience signal",
-      "stats": {
-        "percentage": 0.115554,
-        "count": 693321122
-      },
+      "totalCount": 693321122,
       "fields": [
         {
           "label": "level_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_muted",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3301,27 +3931,33 @@
     "gps_signal_strength": {
       "label": "gps_signal_strength",
       "group": "infotainment_telematics",
-      "tags": ["rear", "requires_calibration"],
-      "id_number": 114,
+      "tags": [
+        "rear",
+        "requires_calibration"
+      ],
+      "idNumber": 114,
       "name": "GPS signal strength",
       "description": "The strength of the GPS signal, distinct from the position fix itself.",
       "comment": "Low signal degrades gps_position accuracy",
-      "stats": {
-        "percentage": 0.0109355,
-        "count": 65613099
-      },
+      "totalCount": 65613099,
       "fields": [
         {
           "label": "signal_bars",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "satellites_locked",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3330,27 +3966,33 @@
     "cellular_signal_strength": {
       "label": "cellular_signal_strength",
       "group": "infotainment_telematics",
-      "tags": ["rear", "wear_item"],
-      "id_number": 115,
+      "tags": [
+        "rear",
+        "wear_item"
+      ],
+      "idNumber": 115,
       "name": "Cellular signal strength",
       "description": "The strength of the cellular connection used for telematics reporting.",
       "comment": "Weak signal can delay entryset uploads",
-      "stats": {
-        "percentage": 0.0820934,
-        "count": 492560324
-      },
+      "totalCount": 492560324,
       "fields": [
         {
           "label": "signal_dbm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "network_type",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3359,27 +4001,35 @@
     "bluetooth_connection_status": {
       "label": "bluetooth_connection_status",
       "group": "infotainment_telematics",
-      "tags": ["oem", "regulatory", "deprecated", "left"],
-      "id_number": 116,
+      "tags": [
+        "oem",
+        "regulatory",
+        "deprecated",
+        "left"
+      ],
+      "idNumber": 116,
       "name": "Bluetooth connection status",
       "description": "Whether a Bluetooth device is currently connected.",
       "comment": "Usually a paired driver phone",
-      "stats": {
-        "percentage": 0.326034,
-        "count": 1956203607
-      },
+      "totalCount": 1956203607,
       "fields": [
         {
           "label": "is_connected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "device_name",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3388,27 +4038,32 @@
     "software_version": {
       "label": "software_version",
       "group": "infotainment_telematics",
-      "tags": ["safety_related"],
-      "id_number": 117,
+      "tags": [
+        "safety_related"
+      ],
+      "idNumber": 117,
       "name": "Infotainment software version",
       "description": "The currently installed software version of the infotainment head unit.",
       "comment": "Used to track fleet-wide rollout status",
-      "stats": {
-        "percentage": 0.0436055,
-        "count": 261633267
-      },
+      "totalCount": 261633267,
       "fields": [
         {
           "label": "version",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "update_available",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3417,27 +4072,32 @@
     "wifi_hotspot_status": {
       "label": "wifi_hotspot_status",
       "group": "infotainment_telematics",
-      "tags": ["rear"],
-      "id_number": 118,
+      "tags": [
+        "rear"
+      ],
+      "idNumber": 118,
       "name": "WiFi hotspot status",
       "description": "Whether the vehicle's onboard WiFi hotspot is active and how many devices are connected.",
       "comment": "Only present on hotspot-equipped vehicles",
-      "stats": {
-        "percentage": 0.000197676,
-        "count": 1186053
-      },
+      "totalCount": 1186053,
       "fields": [
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "connected_devices",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3446,27 +4106,33 @@
     "voice_assistant_status": {
       "label": "voice_assistant_status",
       "group": "infotainment_telematics",
-      "tags": ["aftermarket", "hybrid"],
-      "id_number": 119,
+      "tags": [
+        "aftermarket",
+        "hybrid"
+      ],
+      "idNumber": 119,
       "name": "Voice assistant status",
       "description": "Whether the voice assistant is actively listening and its most recent recognized command.",
       "comment": "Reflects in-cabin voice interaction",
-      "stats": {
-        "percentage": 0.00103294,
-        "count": 6197636
-      },
+      "totalCount": 6197636,
       "fields": [
         {
           "label": "is_listening",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "last_command",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3475,27 +4141,35 @@
     "media_playback_status": {
       "label": "media_playback_status",
       "group": "infotainment_telematics",
-      "tags": ["rear", "safety_related", "experimental", "high_frequency"],
-      "id_number": 120,
+      "tags": [
+        "rear",
+        "safety_related",
+        "experimental",
+        "high_frequency"
+      ],
+      "idNumber": 120,
       "name": "Media playback status",
       "description": "The current media source and whether playback is active.",
       "comment": "Cabin entertainment state",
-      "stats": {
-        "percentage": 0.0111589,
-        "count": 66953353
-      },
+      "totalCount": 66953353,
       "fields": [
         {
           "label": "source",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_playing",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3505,26 +4179,29 @@
       "label": "lane_departure_warning_status",
       "group": "adas_safety",
       "tags": [],
-      "id_number": 121,
+      "idNumber": 121,
       "name": "Lane departure warning status",
       "description": "Whether the lane departure warning system has recently triggered, and on which side.",
       "comment": "Camera-based lane tracking feature",
-      "stats": {
-        "percentage": 0.00138366,
-        "count": 8301965
-      },
+      "totalCount": 8301965,
       "fields": [
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "last_trigger_side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3533,27 +4210,33 @@
     "forward_collision_warning_status": {
       "label": "forward_collision_warning_status",
       "group": "adas_safety",
-      "tags": ["rear", "safety_related"],
-      "id_number": 122,
+      "tags": [
+        "rear",
+        "safety_related"
+      ],
+      "idNumber": 122,
       "name": "Forward collision warning status",
       "description": "Whether a forward collision warning is active and the estimated time to collision.",
       "comment": "Precedes automatic emergency braking",
-      "stats": {
-        "percentage": 0.000801153,
-        "count": 4806917
-      },
+      "totalCount": 4806917,
       "fields": [
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "time_to_collision_s",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3562,27 +4245,33 @@
     "blind_spot_monitor_status": {
       "label": "blind_spot_monitor_status",
       "group": "adas_safety",
-      "tags": ["electric", "hybrid"],
-      "id_number": 123,
+      "tags": [
+        "electric",
+        "hybrid"
+      ],
+      "idNumber": 123,
       "name": "Blind spot monitor status",
       "description": "Whether an object has been detected in a blind spot zone.",
       "comment": "Tracked per side",
-      "stats": {
-        "percentage": 0.00427376,
-        "count": 25642535
-      },
+      "totalCount": 25642535,
       "fields": [
         {
           "label": "side",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "object_detected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3591,27 +4280,35 @@
     "adaptive_cruise_control_status": {
       "label": "adaptive_cruise_control_status",
       "group": "adas_safety",
-      "tags": ["right", "safety_related", "diagnostic", "aftermarket"],
-      "id_number": 124,
+      "tags": [
+        "right",
+        "safety_related",
+        "diagnostic",
+        "aftermarket"
+      ],
+      "idNumber": 124,
       "name": "Adaptive cruise control status",
       "description": "Whether adaptive cruise control is engaged and its currently set speed.",
       "comment": "Maintains following distance automatically",
-      "stats": {
-        "percentage": 0.00025015,
-        "count": 1500899
-      },
+      "totalCount": 1500899,
       "fields": [
         {
           "label": "is_engaged",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "set_speed_kmh",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3620,27 +4317,33 @@
     "driver_attention_level": {
       "label": "driver_attention_level",
       "group": "adas_safety",
-      "tags": ["aftermarket", "deprecated"],
-      "id_number": 125,
+      "tags": [
+        "aftermarket",
+        "deprecated"
+      ],
+      "idNumber": 125,
       "name": "Driver attention level",
       "description": "An estimated attentiveness score derived from driver-facing camera monitoring.",
       "comment": "Low scores can trigger an alert",
-      "stats": {
-        "percentage": 0.00559303,
-        "count": 33558196
-      },
+      "totalCount": 33558196,
       "fields": [
         {
           "label": "score_percentage",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_drowsy",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3650,26 +4353,29 @@
       "label": "automatic_emergency_braking_status",
       "group": "adas_safety",
       "tags": [],
-      "id_number": 126,
+      "idNumber": 126,
       "name": "Automatic emergency braking status",
       "description": "Whether automatic emergency braking has been triggered, and the resulting deceleration.",
       "comment": "A last-resort collision mitigation feature",
-      "stats": {
-        "percentage": 0.000873532,
-        "count": 5241195
-      },
+      "totalCount": 5241195,
       "fields": [
         {
           "label": "is_triggered",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "deceleration_g",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3678,27 +4384,32 @@
     "parking_assist_status": {
       "label": "parking_assist_status",
       "group": "adas_safety",
-      "tags": ["critical"],
-      "id_number": 127,
+      "tags": [
+        "critical"
+      ],
+      "idNumber": 127,
       "name": "Parking assist status",
       "description": "Whether parking assist is active and the distance to the nearest detected object.",
       "comment": "Combines ultrasonic sensor readings",
-      "stats": {
-        "percentage": 0.00495233,
-        "count": 29713974
-      },
+      "totalCount": 29713974,
       "fields": [
         {
           "label": "is_active",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "distance_to_object_cm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3707,27 +4418,33 @@
     "traffic_sign_recognition": {
       "label": "traffic_sign_recognition",
       "group": "adas_safety",
-      "tags": ["safety_related", "deprecated"],
-      "id_number": 128,
+      "tags": [
+        "safety_related",
+        "deprecated"
+      ],
+      "idNumber": 128,
       "name": "Traffic sign recognition",
       "description": "The most recently recognized traffic sign and its associated speed limit.",
       "comment": "Feeds speed limit warnings",
-      "stats": {
-        "percentage": 0.00497573,
-        "count": 29854402
-      },
+      "totalCount": 29854402,
       "fields": [
         {
           "label": "sign_type",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "speed_limit_kmh",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3736,33 +4453,44 @@
     "radar_front": {
       "label": "radar_front",
       "group": "radar_lidar_sensors",
-      "tags": ["redundant", "experimental", "regulatory", "front"],
-      "id_number": 129,
+      "tags": [
+        "redundant",
+        "experimental",
+        "regulatory",
+        "front"
+      ],
+      "idNumber": 129,
       "name": "Front radar",
       "description": "Readings from the forward-facing radar unit used for object detection and ranging.",
       "comment": "Only present on ADAS-equipped vehicles",
-      "stats": {
-        "percentage": 5.00333e-6,
-        "count": 30020
-      },
+      "totalCount": 30020,
       "fields": [
         {
           "label": "frequency_ghz",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "detection_range_m",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "objects_detected",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3771,33 +4499,44 @@
     "radar_rear": {
       "label": "radar_rear",
       "group": "radar_lidar_sensors",
-      "tags": ["hybrid", "right", "redundant", "wear_item"],
-      "id_number": 130,
+      "tags": [
+        "hybrid",
+        "right",
+        "redundant",
+        "wear_item"
+      ],
+      "idNumber": 130,
       "name": "Rear radar",
       "description": "Readings from the rear-facing radar unit used for blind spot and cross-traffic detection.",
       "comment": "Complements the front radar unit",
-      "stats": {
-        "percentage": 3.14033e-6,
-        "count": 18842
-      },
+      "totalCount": 18842,
       "fields": [
         {
           "label": "frequency_ghz",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "detection_range_m",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "objects_detected",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3807,26 +4546,29 @@
       "label": "lidar_roof",
       "group": "radar_lidar_sensors",
       "tags": [],
-      "id_number": 131,
+      "idNumber": 131,
       "name": "Roof-mounted lidar",
       "description": "Readings from a roof-mounted lidar unit, producing a 3D point cloud of the surroundings.",
       "comment": "Rare; present only on advanced test vehicles",
-      "stats": {
-        "percentage": 5.78333e-8,
-        "count": 347
-      },
+      "totalCount": 347,
       "fields": [
         {
           "label": "scan_rate_hz",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "point_density",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3835,27 +4577,35 @@
     "ultrasonic_sensor_front": {
       "label": "ultrasonic_sensor_front",
       "group": "radar_lidar_sensors",
-      "tags": ["electric", "left", "wear_item", "oem"],
-      "id_number": 132,
+      "tags": [
+        "electric",
+        "left",
+        "wear_item",
+        "oem"
+      ],
+      "idNumber": 132,
       "name": "Front ultrasonic sensor",
       "description": "Short-range ultrasonic distance readings from the front bumper.",
       "comment": "Used for parking assist",
-      "stats": {
-        "percentage": 7.8e-8,
-        "count": 468
-      },
+      "totalCount": 468,
       "fields": [
         {
           "label": "range_cm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_obstructed",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3864,27 +4614,35 @@
     "ultrasonic_sensor_rear": {
       "label": "ultrasonic_sensor_rear",
       "group": "radar_lidar_sensors",
-      "tags": ["rear", "safety_related", "electric", "deprecated"],
-      "id_number": 133,
+      "tags": [
+        "rear",
+        "safety_related",
+        "electric",
+        "deprecated"
+      ],
+      "idNumber": 133,
       "name": "Rear ultrasonic sensor",
       "description": "Short-range ultrasonic distance readings from the rear bumper.",
       "comment": "Used for parking assist and reversing",
-      "stats": {
-        "percentage": 6.47825e-5,
-        "count": 388695
-      },
+      "totalCount": 388695,
       "fields": [
         {
           "label": "range_cm",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_obstructed",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3894,26 +4652,29 @@
       "label": "camera_front_vision",
       "group": "radar_lidar_sensors",
       "tags": [],
-      "id_number": 134,
+      "idNumber": 134,
       "name": "Front vision camera",
       "description": "Readings from the forward-facing vision camera used for lane and object detection.",
       "comment": "Feeds several ADAS features",
-      "stats": {
-        "percentage": 3.06097e-5,
-        "count": 183658
-      },
+      "totalCount": 183658,
       "fields": [
         {
           "label": "resolution_mp",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "objects_detected",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3922,27 +4683,33 @@
     "camera_surround_view": {
       "label": "camera_surround_view",
       "group": "radar_lidar_sensors",
-      "tags": ["front", "critical"],
-      "id_number": 135,
+      "tags": [
+        "front",
+        "critical"
+      ],
+      "idNumber": 135,
       "name": "Surround view camera system",
       "description": "The status of the multi-camera surround view system used for low-speed maneuvering.",
       "comment": "Combines several camera feeds into one view",
-      "stats": {
-        "percentage": 8.475e-6,
-        "count": 50850
-      },
+      "totalCount": 50850,
       "fields": [
         {
           "label": "active_cameras",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_calibrated",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3951,27 +4718,33 @@
     "engine_control_unit_status": {
       "label": "engine_control_unit_status",
       "group": "diagnostics_control_units",
-      "tags": ["gasoline", "oem"],
-      "id_number": 136,
+      "tags": [
+        "gasoline",
+        "oem"
+      ],
+      "idNumber": 136,
       "name": "Engine control unit status",
       "description": "The health and firmware version of the engine control unit.",
       "comment": "Central controller for engine management",
-      "stats": {
-        "percentage": 0.583118,
-        "count": 3498709750
-      },
+      "totalCount": 3498709750,
       "fields": [
         {
           "label": "is_faulty",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "firmware_version",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -3981,26 +4754,29 @@
       "label": "transmission_control_unit_status",
       "group": "diagnostics_control_units",
       "tags": [],
-      "id_number": 137,
+      "idNumber": 137,
       "name": "Transmission control unit status",
       "description": "The health and firmware version of the transmission control unit.",
       "comment": "Manages shift timing and logic",
-      "stats": {
-        "percentage": 0.392162,
-        "count": 2352974459
-      },
+      "totalCount": 2352974459,
       "fields": [
         {
           "label": "is_faulty",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "firmware_version",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4009,27 +4785,34 @@
     "body_control_unit_status": {
       "label": "body_control_unit_status",
       "group": "diagnostics_control_units",
-      "tags": ["left", "deprecated", "redundant"],
-      "id_number": 138,
+      "tags": [
+        "left",
+        "deprecated",
+        "redundant"
+      ],
+      "idNumber": 138,
       "name": "Body control unit status",
       "description": "The health and firmware version of the body control unit, which manages lighting, locks, and windows.",
       "comment": "A common point of integration for body electronics",
-      "stats": {
-        "percentage": 0.604193,
-        "count": 3625157783
-      },
+      "totalCount": 3625157783,
       "fields": [
         {
           "label": "is_faulty",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "firmware_version",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4038,27 +4821,32 @@
     "fault_code_count": {
       "label": "fault_code_count",
       "group": "diagnostics_control_units",
-      "tags": ["deprecated"],
-      "id_number": 139,
+      "tags": [
+        "deprecated"
+      ],
+      "idNumber": 139,
       "name": "Fault code count",
       "description": "The number of active and pending diagnostic trouble codes currently stored.",
       "comment": "A quick fleet health summary metric",
-      "stats": {
-        "percentage": 0.601723,
-        "count": 3610340858
-      },
+      "totalCount": 3610340858,
       "fields": [
         {
           "label": "active_codes",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "pending_codes",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4067,27 +4855,35 @@
     "diagnostic_trouble_code": {
       "label": "diagnostic_trouble_code",
       "group": "diagnostics_control_units",
-      "tags": ["hybrid", "wear_item", "gasoline", "safety_related"],
-      "id_number": 140,
+      "tags": [
+        "hybrid",
+        "wear_item",
+        "gasoline",
+        "safety_related"
+      ],
+      "idNumber": 140,
       "name": "Diagnostic trouble code",
       "description": "An individual stored diagnostic trouble code and its severity.",
       "comment": "One entry per distinct fault code",
-      "stats": {
-        "percentage": 0.516141,
-        "count": 3096846078
-      },
+      "totalCount": 3096846078,
       "fields": [
         {
           "label": "code",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "severity",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4096,33 +4892,43 @@
     "can_bus_status": {
       "label": "can_bus_status",
       "group": "diagnostics_control_units",
-      "tags": ["front", "critical", "redundant"],
-      "id_number": 141,
+      "tags": [
+        "front",
+        "critical",
+        "redundant"
+      ],
+      "idNumber": 141,
       "name": "CAN bus status",
       "description": "The error rate and health of a controller area network bus segment.",
       "comment": "High error counts suggest wiring issues",
-      "stats": {
-        "percentage": 0.698421,
-        "count": 4190523115
-      },
+      "totalCount": 4190523115,
       "fields": [
         {
           "label": "bus_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "error_count",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_healthy",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4131,27 +4937,34 @@
     "telematics_control_unit_status": {
       "label": "telematics_control_unit_status",
       "group": "diagnostics_control_units",
-      "tags": ["rear", "left", "experimental"],
-      "id_number": 142,
+      "tags": [
+        "rear",
+        "left",
+        "experimental"
+      ],
+      "idNumber": 142,
       "name": "Telematics control unit status",
       "description": "Whether the telematics control unit is online and its firmware version.",
       "comment": "Responsible for uploading entrysets",
-      "stats": {
-        "percentage": 0.872383,
-        "count": 5234296080
-      },
+      "totalCount": 5234296080,
       "fields": [
         {
           "label": "is_online",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "firmware_version",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4160,21 +4973,24 @@
     "onboard_diagnostics_port_status": {
       "label": "onboard_diagnostics_port_status",
       "group": "diagnostics_control_units",
-      "tags": ["left", "redundant"],
-      "id_number": 143,
+      "tags": [
+        "left",
+        "redundant"
+      ],
+      "idNumber": 143,
       "name": "Onboard diagnostics port status",
       "description": "Whether an external diagnostic tool is currently connected to the OBD port.",
       "comment": "Typically only active during service visits",
-      "stats": {
-        "percentage": 0.00213309,
-        "count": 12798563
-      },
+      "totalCount": 12798563,
       "fields": [
         {
           "label": "is_connected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4183,27 +4999,32 @@
     "harsh_braking_event": {
       "label": "harsh_braking_event",
       "group": "driver_behavior",
-      "tags": ["regulatory"],
-      "id_number": 144,
+      "tags": [
+        "regulatory"
+      ],
+      "idNumber": 144,
       "name": "Harsh braking event",
       "description": "A detected instance of unusually hard braking, with its measured deceleration.",
       "comment": "Fleet safety scorecards track these events",
-      "stats": {
-        "percentage": 0.230923,
-        "count": 1385538312
-      },
+      "totalCount": 1385538312,
       "fields": [
         {
           "label": "deceleration_g",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "timestamp_offset_s",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4212,27 +5033,32 @@
     "harsh_acceleration_event": {
       "label": "harsh_acceleration_event",
       "group": "driver_behavior",
-      "tags": ["low_frequency"],
-      "id_number": 145,
+      "tags": [
+        "low_frequency"
+      ],
+      "idNumber": 145,
       "name": "Harsh acceleration event",
       "description": "A detected instance of unusually hard acceleration.",
       "comment": "Also feeds fleet safety scoring",
-      "stats": {
-        "percentage": 0.0949489,
-        "count": 569693231
-      },
+      "totalCount": 569693231,
       "fields": [
         {
           "label": "acceleration_g",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "timestamp_offset_s",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4241,27 +5067,32 @@
     "seatbelt_status": {
       "label": "seatbelt_status",
       "group": "driver_behavior",
-      "tags": ["diagnostic"],
-      "id_number": 146,
+      "tags": [
+        "diagnostic"
+      ],
+      "idNumber": 146,
       "name": "Seatbelt status",
       "description": "Whether a specific seat's seatbelt is currently fastened.",
       "comment": "Tracked per seat position",
-      "stats": {
-        "percentage": 0.428579,
-        "count": 2571472209
-      },
+      "totalCount": 2571472209,
       "fields": [
         {
           "label": "seat_id",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_fastened",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4271,26 +5102,29 @@
       "label": "speeding_event",
       "group": "driver_behavior",
       "tags": [],
-      "id_number": 147,
+      "idNumber": 147,
       "name": "Speeding event",
       "description": "A detected instance of travel above the posted speed limit.",
       "comment": "Compares vehicle speed to sign recognition data",
-      "stats": {
-        "percentage": 0.141127,
-        "count": 846764974
-      },
+      "totalCount": 846764974,
       "fields": [
         {
           "label": "speed_kmh",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "speed_limit_kmh",
-          "type": "int",
+          "type": "BIGINT",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4299,27 +5133,32 @@
     "idle_time": {
       "label": "idle_time",
       "group": "driver_behavior",
-      "tags": ["aftermarket"],
-      "id_number": 148,
+      "tags": [
+        "aftermarket"
+      ],
+      "idNumber": 148,
       "name": "Idle time",
       "description": "The duration the engine has been idling without the vehicle moving.",
       "comment": "Excessive idling wastes fuel",
-      "stats": {
-        "percentage": 0.0962266,
-        "count": 577359371
-      },
+      "totalCount": 577359371,
       "fields": [
         {
           "label": "minutes",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_excessive",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4328,27 +5167,34 @@
     "harsh_cornering_event": {
       "label": "harsh_cornering_event",
       "group": "driver_behavior",
-      "tags": ["critical", "aftermarket", "safety_related"],
-      "id_number": 149,
+      "tags": [
+        "critical",
+        "aftermarket",
+        "safety_related"
+      ],
+      "idNumber": 149,
       "name": "Harsh cornering event",
       "description": "A detected instance of unusually high lateral force while cornering.",
       "comment": "High lateral g suggests aggressive driving",
-      "stats": {
-        "percentage": 0.0125569,
-        "count": 75341524
-      },
+      "totalCount": 75341524,
       "fields": [
         {
           "label": "lateral_g",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "direction",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4357,27 +5203,32 @@
     "phone_usage_detected": {
       "label": "phone_usage_detected",
       "group": "driver_behavior",
-      "tags": ["wear_item"],
-      "id_number": 150,
+      "tags": [
+        "wear_item"
+      ],
+      "idNumber": 150,
       "name": "Phone usage detected",
       "description": "Whether driver phone use was detected while the vehicle was in motion.",
       "comment": "A distracted-driving safety signal",
-      "stats": {
-        "percentage": 0.00237317,
-        "count": 14239000
-      },
+      "totalCount": 14239000,
       "fields": [
         {
           "label": "is_detected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "duration_s",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4387,20 +5238,20 @@
       "label": "ambient_temperature",
       "group": "environment_context",
       "tags": [],
-      "id_number": 151,
+      "idNumber": 151,
       "name": "Ambient temperature",
       "description": "The outside air temperature measured near the vehicle.",
       "comment": "Affects tire pressure and battery performance",
-      "stats": {
-        "percentage": 0.790818,
-        "count": 4744906117
-      },
+      "totalCount": 4744906117,
       "fields": [
         {
           "label": "value_celsius",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4409,27 +5260,32 @@
     "road_surface_condition": {
       "label": "road_surface_condition",
       "group": "environment_context",
-      "tags": ["electric"],
-      "id_number": 152,
+      "tags": [
+        "electric"
+      ],
+      "idNumber": 152,
       "name": "Road surface condition",
       "description": "The estimated condition of the road surface currently being driven on.",
       "comment": "Feeds traction control strategy",
-      "stats": {
-        "percentage": 0.0636071,
-        "count": 381642670
-      },
+      "totalCount": 381642670,
       "fields": [
         {
           "label": "condition",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "friction_coefficient",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4438,27 +5294,33 @@
     "precipitation_detected": {
       "label": "precipitation_detected",
       "group": "environment_context",
-      "tags": ["gasoline", "aftermarket"],
-      "id_number": 153,
+      "tags": [
+        "gasoline",
+        "aftermarket"
+      ],
+      "idNumber": 153,
       "name": "Precipitation detected",
       "description": "Whether precipitation is currently detected, and its intensity.",
       "comment": "Typically from a rain sensor",
-      "stats": {
-        "percentage": 0.0721788,
-        "count": 433073090
-      },
+      "totalCount": 433073090,
       "fields": [
         {
           "label": "is_detected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         },
         {
           "label": "intensity",
-          "type": "str",
+          "type": "VARCHAR",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4467,27 +5329,33 @@
     "wind_speed_relative": {
       "label": "wind_speed_relative",
       "group": "environment_context",
-      "tags": ["safety_related", "low_frequency"],
-      "id_number": 154,
+      "tags": [
+        "safety_related",
+        "low_frequency"
+      ],
+      "idNumber": 154,
       "name": "Relative wind speed",
       "description": "The wind speed and direction relative to the moving vehicle.",
       "comment": "Affects fuel efficiency at highway speed",
-      "stats": {
-        "percentage": 0.0458501,
-        "count": 275100705
-      },
+      "totalCount": 275100705,
       "fields": [
         {
           "label": "speed_kmh",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "direction_deg",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4496,27 +5364,34 @@
     "visibility_range": {
       "label": "visibility_range",
       "group": "environment_context",
-      "tags": ["requires_calibration", "diagnostic", "rear"],
-      "id_number": 155,
+      "tags": [
+        "requires_calibration",
+        "diagnostic",
+        "rear"
+      ],
+      "idNumber": 155,
       "name": "Visibility range",
       "description": "The estimated visibility distance, reduced by fog, rain, or darkness.",
       "comment": "Feeds automatic headlight and fog light logic",
-      "stats": {
-        "percentage": 0.0776514,
-        "count": 465908177
-      },
+      "totalCount": 465908177,
       "fields": [
         {
           "label": "distance_m",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_fog_detected",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4525,27 +5400,33 @@
     "ambient_light_level": {
       "label": "ambient_light_level",
       "group": "environment_context",
-      "tags": ["aftermarket", "diesel"],
-      "id_number": 156,
+      "tags": [
+        "aftermarket",
+        "diesel"
+      ],
+      "idNumber": 156,
       "name": "Ambient light level",
       "description": "The measured ambient light level outside the vehicle.",
       "comment": "Drives automatic headlight activation",
-      "stats": {
-        "percentage": 0.0189627,
-        "count": 113776276
-      },
+      "totalCount": 113776276,
       "fields": [
         {
           "label": "lux",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         },
         {
           "label": "is_daytime",
-          "type": "bool",
+          "type": "BOOLEAN",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
         }
       ]
     }
@@ -4554,21 +5435,24 @@
     "barometric_pressure": {
       "label": "barometric_pressure",
       "group": "environment_context",
-      "tags": ["experimental", "regulatory"],
-      "id_number": 157,
+      "tags": [
+        "experimental",
+        "regulatory"
+      ],
+      "idNumber": 157,
       "name": "Barometric pressure",
       "description": "The ambient atmospheric pressure, used to correct altitude and engine air intake calculations.",
       "comment": "Also varies with weather and elevation",
-      "stats": {
-        "percentage": 0.76668,
-        "count": 4600081739
-      },
+      "totalCount": 4600081739,
       "fields": [
         {
           "label": "value_hpa",
-          "type": "float",
+          "type": "DOUBLE",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
         }
       ]
     }
