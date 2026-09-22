@@ -42,8 +42,6 @@ Applied to every entity-identifying pair in the contract, to match
 - `SchemaResponse.fields[].options[]` (`{ value, label }`) — this is an enum
   *value*/display-label pair, not an entity id/name pair, so it keeps its
   current shape. See §4 for how it gets populated.
-- `IndividualField` — stays `label`-only. No `name` field; there's no plan to
-  add one.
 - `src/query/types.ts` (`Condition.fieldId`, `Condition.id`, etc.) — these are
   internal frontend query-tree concepts, not part of the wire contract, and
   are out of scope.
@@ -61,9 +59,9 @@ Consequences:
 - `docs/ARCHITECTURE.md` §7/§9 lose the `StatBlock` description and the
   "`statsPanel.ts` has one render function per `kind`" note.
 
-## 4. `IndividualField.values` and `options`
+## 4. `IndividualField` gains `name` and `values`
 
-`IndividualField` gains an optional field:
+`IndividualField` gains two optional fields:
 
 ```ts
 export interface IndividualField {
@@ -71,10 +69,20 @@ export interface IndividualField {
   type: string;
   description: string;
   comment: string;
+  /** Reserved for a future human-readable name; not populated by the backend
+   *  yet. Anywhere this is displayed, fall back to `label` when absent/empty
+   *  so the UI already works once the backend starts sending real values. */
+  name?: string;
   /** The field's valid values, when it has a fixed domain. Absent = not an enum. */
   values?: string[];
 }
 ```
+
+**`name`** is added now purely so the shape exists for later; today it will
+never be populated. `docsSidebar.ts` is the only place that currently
+displays an `IndividualField` (by `label` + `type`); it should show
+`field.name || field.label` so nothing needs to change there once the
+backend starts populating `name`.
 
 `SchemaResponse.fields[].options` is unchanged in shape
 (`{ value: string; label: string }[]`) but is now actually populated: when a
@@ -101,6 +109,12 @@ export type StatsResponse =
       label: string; // matches DatabasesResponse.databases[].label
       success: true;
       matchCount: number;
+      /** Entrysets in THIS database, regardless of the query. Computed directly
+       *  (a real per-database row count) — NOT derived from `Individual.stats.count`,
+       *  which is a different, coarser thing: how many entrysets across the WHOLE
+       *  dataset contain a value for one particular Individual (item) at all. That
+       *  says nothing about a single database's row count, and nothing about
+       *  whether a specific IndividualField within that Individual is populated. */
       totalCount: number;
       /** Non-blocking notices, e.g. "this database is running slower than usual". */
       infoMessages: string[];
@@ -167,6 +181,8 @@ gets missed when planning, not part of the type design itself:
   failure (`validationErrors`), or info notices, plus some indication that
   more databases are still pending until the stream ends. Loses the
   `StatBlock` rendering per §3.
+- **`src/ui/docsSidebar.ts`** — the per-field listing switches from showing
+  just `field.label` to `field.name || field.label` (§4).
 - **`mock-server/`** — `/api/stats`'s handler switches from a single JSON
   response to writing NDJSON lines, one per selected database, with an
   artificial per-database delay (so the UI visibly streams in dev) and an
@@ -184,4 +200,5 @@ gets missed when planning, not part of the type design itself:
 
 - `POST /api/query` / `EntrysetsResponse` streaming — not requested.
 - Any change to `src/query/types.ts` or the query-tree model.
-- Adding a `name` field to `IndividualField`.
+- Populating `IndividualField.name` — the field is added now (§4) but stays
+  unpopulated; that's separate future work.
