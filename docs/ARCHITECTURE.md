@@ -365,7 +365,7 @@ Concretely:
   resolves, if `getState().query` no longer equals that snapshot, the response is
   discarded. A slow earlier request can never overwrite results for a newer query.
 
-**Streaming and "never stale" are compatible.** While `stats.status` is `"loading"`, `stats.lines` legitimately holds fewer entries than `selectedDatabaseIds` — that's a query result still arriving, not a stale one. The invariant this section protects is that every line in `stats.lines` belongs to the `(query, selectedDatabaseIds)` pair currently on screen; the stale-response guard is checked once per streamed line (not just once per request), so a line that arrives after the user has changed the query/scope is discarded before it reaches `AppState`.
+> **Streaming and "never stale" are compatible.** While `stats.status` is `"loading"`, `stats.lines` legitimately holds fewer entries than `selectedDatabaseIds` — that's a query result still arriving, not a stale one. The invariant this section protects is that every line in `stats.lines` belongs to the `(query, selectedDatabaseIds)` pair currently on screen; the stale-response guard is checked once per streamed line (not just once per request), so a line that arrives after the user has changed the query/scope is discarded before it reaches `AppState`.
 
 ---
 
@@ -378,8 +378,9 @@ response.
 ```ts
 getSchema(): Promise<SchemaResponse>
 getDatabases(): Promise<DatabasesResponse>
-getStats(query: QueryNode, databases: string[]): Promise<StatsResponse>
-runQuery(query: QueryNode, databases: string[], page: number, pageSize: number): Promise<QueryResponse>
+getIndividuals(): Promise<IndividualsResponse>
+getStats(query: QueryNode, databases: string[], onLine: (line: StatsResponse) => void): Promise<void>
+runQuery(query: QueryNode, databases: string[], page: number, pageSize: number): Promise<EntrysetsResponse>
 ```
 
 ### `GET /api/schema`
@@ -387,16 +388,16 @@ runQuery(query: QueryNode, databases: string[], page: number, pageSize: number):
 ```ts
 interface SchemaResponse {
   fields: Array<{
-    id: string;
     label: string;
+    name: string;
     valueType: "string" | "number" | "boolean" | "date" | "enum";
     description: string;                                   // shown in docs sidebar
     options?: Array<{ value: string; label: string }>;     // enum only
     operatorIds: string[];                                 // operators this field allows
   }>;
   operators: Array<{
-    id: string;                                            // "eq", "gte", "between", "in", "isEmpty", ...
     label: string;
+    name: string;
     description: string;                                   // shown in docs sidebar
     arity: "none" | "one" | "two" | "many";                // how many values the UI collects
   }>;
@@ -413,7 +414,7 @@ of `entrysets.json`'s content.
 
 ```ts
 interface DatabasesResponse {
-  databases: Array<{ id: string; label: string }>;
+  databases: Array<{ label: string; name: string }>;
 }
 ```
 
@@ -686,7 +687,7 @@ and the union across many varied entrysets can easily reach 60-100+, needing
 horizontal scroll — worse UX than vertical). A summary list sidesteps the
 problem entirely: no per-item columns, so it scales to 20+ entrysets just by
 scrolling vertically (`.qb-entryset-list`, `max-height: 45vh`, same pattern as
-`.qb-stat-blocks`).
+`.qb-stat-perdb`).
 
 Each row is a native `<details>/<summary>` element (no JS wiring needed for
 expand/collapse):
@@ -728,15 +729,15 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
   `"individualLabel.fieldLabel"` keys matching the schema's field ids, plus
   a synthetic `__db` key from `databaseIdForEntrysetId` — once at startup
   (`ROWS`).
-- `POST /api/stats` scopes `ROWS` to the selected databases
-  (`filterByDatabases`) and computes each database's match/total counts
-  (`perDatabaseCounts`), scaling the sample's match rate onto that database's
-  `size` (`scaleCount`, unchanged). Rather than returning one combined
-  response, it writes one `StatsResponse` line per database
-  (`buildStatsLine`) as newline-delimited JSON, with a small artificial delay
-  between lines so the streaming is visible in `npm run dev`, and — dev-only —
-  occasionally (~5%) simulates a database that couldn't be reached, to
-  exercise the UI's per-database failure path without a real backend.
+- `POST /api/stats` computes each database's match/total counts via
+  `perDatabaseCounts` (which scopes `ROWS` to each database inline via
+  `rows.filter((r) => String(r.__db) === label)`), scaling the sample's match
+  rate onto that database's `size` (`scaleCount`, unchanged). Rather than
+  returning one combined response, it writes one `StatsResponse` line per
+  database (`buildStatsLine`) as newline-delimited JSON, with a small
+  artificial delay between lines so the streaming is visible in `npm run dev`,
+  and — dev-only — occasionally (~5%) simulates a database that couldn't be
+  reached, to exercise the UI's per-database failure path without a real backend.
 - `POST /api/query` scopes and evaluates the same way, then maps matching
   rows back to their source `Entryset` objects via `ENTRYSETS[id]`, capped
   at 25.
