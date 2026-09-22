@@ -791,18 +791,21 @@ and selected databases. No pagination (§7). `status: "idle"` → hint from §6.
 Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
 `http`, no Express, heavily commented top to bottom.
 
-- `mock-server/schema.ts` builds the field/operator catalog purely from
-  `individual.json`'s declared item/field shape: one field per
-  (individual, field) pair, id `"individualLabel.fieldLabel"`, `valueType`
-  mapped from the declared `str`/`int`/`float`/`bool` type, and
-  `operatorIds` assigned by a generic per-valueType profile (never per
-  specific field). `GET /api/schema` returns this catalog.
-- `mock-server/databases.ts` defines 7 synthetic databases (`ALPHA`..`ETA`),
-  each with a mock-only `size` spanning several orders of magnitude, and
-  `dbIndexForEntrysetId(id)` — a hash of the entryset's own numeric id that
-  assigns it to exactly one database, independent of its content.
-  `GET /api/databases` returns these **without** `size` (it isn't part of
-  the contract).
+- There is no `/api/schema` route — it was removed entirely, since the real
+  API never had one (see §7). `mock-server/vehicleData.ts` declares its own
+  local `IndividualField`/`Individual` types — field-identical to
+  `src/api/types.ts`'s `IndividualField`/`Individual` (`mock-server/` shares
+  no code with `src/`, so the shapes are duplicated, not imported) — and
+  `individual.json`'s data conforms to them, matching the real contract.
+- `mock-server/databases.ts` defines 7 synthetic databases (`ALPHA`..`ETA`)
+  as `DatabaseDef` objects (`description`/`name`/`owner`/`totalEntrysets`/
+  `percentageOfTotal`/`label`, each `totalEntrysets` spanning several orders
+  of magnitude), and `dbIndexForEntrysetId(id)` — a hash of the entryset's
+  own numeric id that assigns it to exactly one database, independent of its
+  content. `DatabaseDef` is field-identical to the wire `DatabasesResponse`
+  shape, so `GET /api/databases` sends `DATABASES` directly with no filtering
+  step — every field, including `totalEntrysets`/`percentageOfTotal`, is part
+  of the real contract.
 - `mock-server/rows.ts` flattens every entryset in `ENTRYSETS`
   (`mock-server/vehicleData.ts`) into a flat `Row` — dotted
   `"individualLabel.fieldLabel"` keys matching the schema's field labels, plus
@@ -811,7 +814,7 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
 - `POST /api/stats` computes each database's match/total counts via
   `perDatabaseCounts` (which scopes `ROWS` to each database inline via
   `rows.filter((r) => String(r.__db) === label)`), scaling the sample's match
-  rate onto that database's `size` (`scaleCount`, unchanged). Rather than
+  rate onto that database's `totalEntrysets` (`scaleCount`, unchanged). Rather than
   returning one combined response, it writes one `StatsResponse` line per
   database (`buildStatsLine`) as newline-delimited JSON, with a small
   artificial delay between lines so the streaming is visible in `npm run dev`,
