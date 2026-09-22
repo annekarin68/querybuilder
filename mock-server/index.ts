@@ -4,7 +4,7 @@ import { buildFields, OPERATORS } from "./schema";
 import { DATABASES } from "./databases";
 import {
   matches,
-  computeBlocks,
+  buildStatsLine,
   filterByDatabases,
   perDatabaseCounts,
   scaleCount,
@@ -16,6 +16,10 @@ import { ROWS } from "./rows";
 const FIELDS = buildFields(INDIVIDUALS);
 
 const PORT = 3001;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function paginate<T>(items: T[], page: number, pageSize: number) {
   const size = Math.min(Math.max(1, Math.floor(pageSize) || 1), 100);
@@ -71,7 +75,7 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/databases") {
       // `size` is mock-internal (drives the reported magnitudes) — not part of the contract.
-      sendJson(res, 200, { databases: DATABASES.map(({ id, label }) => ({ id, label })) });
+      sendJson(res, 200, { databases: DATABASES.map(({ label, name }) => ({ label, name })) });
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/individuals") {
@@ -91,28 +95,36 @@ const server = createServer(async (req, res) => {
       const query = body.query as JsonNode;
       const ids = body.databases as string[];
 
-      // The sample drives match RATES; DATABASES[].size drives the
-      // MAGNITUDE the API reports, so the UI sees realistic large numbers.
-      const perDatabase = perDatabaseCounts(query, ROWS, ids).map((c) => {
-        const size = DATABASES.find((d) => d.id === c.id)?.size ?? 0;
-        return {
-          id: c.id,
-          label: DATABASES.find((d) => d.id === c.id)?.label ?? c.id,
-          totalCount: size,
-          matchCount: scaleCount(c.matchCount, c.totalCount, size),
-        };
-      });
-      const totalCount = perDatabase.reduce((s, d) => s + d.totalCount, 0);
-      const matchCount = perDatabase.reduce((s, d) => s + d.matchCount, 0);
-
-      const scoped = filterByDatabases(ROWS, ids);
-      const sampleMatch = scoped.filter((r) => matches(query, r)).length;
-      const blocks = computeBlocks(query, scoped, FIELDS, {
-        total: scoped.length ? totalCount / scoped.length : 1,
-        match: sampleMatch ? matchCount / sampleMatch : 1,
-      });
-
-      sendJson(res, 200, { matchCount, totalCount, blocks, perDatabase });
+      res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8" });
+      const counts = perDatabaseCounts(query, ROWS, ids);
+      for (const c of counts) {
+        const db = DATABASES.find((d) => d.label === c.label);
+        const size = db?.size ?? 0;
+        // Dev-only: occasionally simulate a database that can't answer, so the
+        // UI's per-database failure path gets exercised without a real backend.
+        const line = buildStatsLine(
+          Math.random() < 0.05
+            ? {
+                label: c.label,
+                matchCount: 0,
+                totalCount: 0,
+                fail: {
+                  validationErrors: [],
+                  infoMessages: ["This database could not be reached. Try again shortly."],
+                },
+              }
+            : {
+                label: c.label,
+                // The sample drives match RATES; DATABASES[].size drives the
+                // MAGNITUDE the API reports, so the UI sees realistic large numbers.
+                matchCount: scaleCount(c.matchCount, c.totalCount, size),
+                totalCount: size,
+              },
+        );
+        res.write(JSON.stringify(line) + "\n");
+        await delay(150 + Math.random() * 250); // visibly stream in dev
+      }
+      res.end();
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/query") {
