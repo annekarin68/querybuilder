@@ -7,7 +7,7 @@ import {
 
 describe("DATABASES", () => {
   it("has exactly 7 entries named ALPHA..ETA", () => {
-    expect(DATABASES.map((d) => d.label)).toEqual([
+    expect(DATABASES.map((d) => d.name)).toEqual([
       "ALPHA",
       "BETA",
       "GAMMA",
@@ -16,7 +16,7 @@ describe("DATABASES", () => {
       "ZETA",
       "ETA",
     ]);
-    expect(DATABASES.map((d) => d.id)).toEqual([
+    expect(DATABASES.map((d) => d.label)).toEqual([
       "alpha",
       "beta",
       "gamma",

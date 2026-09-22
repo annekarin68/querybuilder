@@ -1,6 +1,6 @@
 export interface DatabaseDef {
-  id: string;
   label: string;
+  name: string;
   /**
    * Mock-only: the pretend real size of this database. Spans several orders
    * of magnitude so the stats panel exercises billion-scale formatting, the
@@ -17,13 +17,13 @@ export interface DatabaseDef {
  * ~12K to ~5.6B, mirroring the old catalog's spread.
  */
 export const DATABASES: DatabaseDef[] = [
-  { id: "alpha", label: "ALPHA", size: 12_345 },
-  { id: "beta", label: "BETA", size: 88_000 },
-  { id: "gamma", label: "GAMMA", size: 4_600_000 },
-  { id: "delta", label: "DELTA", size: 41_000_000 },
-  { id: "epsilon", label: "EPSILON", size: 892_000_000 },
-  { id: "zeta", label: "ZETA", size: 1_234_000_000 },
-  { id: "eta", label: "ETA", size: 5_600_000_000 },
+  { label: "alpha", name: "ALPHA", size: 12_345 },
+  { label: "beta", name: "BETA", size: 88_000 },
+  { label: "gamma", name: "GAMMA", size: 4_600_000 },
+  { label: "delta", name: "DELTA", size: 41_000_000 },
+  { label: "epsilon", name: "EPSILON", size: 892_000_000 },
+  { label: "zeta", name: "ZETA", size: 1_234_000_000 },
+  { label: "eta", name: "ETA", size: 5_600_000_000 },
 ];
 
 /**
@@ -38,5 +38,5 @@ export function dbIndexForEntrysetId(entrysetId: number): number {
 }
 
 export function databaseIdForEntrysetId(entrysetId: number): string {
-  return DATABASES[dbIndexForEntrysetId(entrysetId)]!.id;
+  return DATABASES[dbIndexForEntrysetId(entrysetId)]!.label;
 }
