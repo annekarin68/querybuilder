@@ -72,7 +72,7 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/individuals") {
-      sendJson(res, 200, { individuals: INDIVIDUALS });
+      sendJson(res, 200, INDIVIDUALS);
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/stats") {
