@@ -38,6 +38,14 @@ function errorMessage(err: unknown): string {
 const requestKey = (query: QueryNode, databases: string[]): string =>
   JSON.stringify({ query: stripCollapsed(query), databases: [...databases].sort() });
 
+/** A closure over the query/scope a request was made for — call it after the
+ * request settles (or after each streamed line) to check whether the user has
+ * since changed the query/scope, per §6's stale-response guard. */
+function staleGuard(query: QueryNode, databases: string[]): () => boolean {
+  const key = requestKey(query, databases);
+  return () => key !== requestKey(store.getState().query, store.getState().selectedDatabaseIds);
+}
+
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
 
@@ -65,18 +73,14 @@ function runGuarded<T>(
   const state = store.getState();
   if (!canRunQuery(state)) return;
   const { query, selectedDatabaseIds } = state;
-  const key = requestKey(query, selectedDatabaseIds);
+  const isStale = staleGuard(query, selectedDatabaseIds);
   onLoading();
   fetcher(query, selectedDatabaseIds)
     .then((data) => {
-      const s = store.getState();
-      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return; // scope changed since the request
-      onSuccess(data);
+      if (!isStale()) onSuccess(data);
     })
     .catch((err) => {
-      const s = store.getState();
-      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return;
-      onError(errorMessage(err));
+      if (!isStale()) onError(errorMessage(err));
     });
 }
 
@@ -98,12 +102,25 @@ function syncRunButton(state = store.getState()): void {
 }
 
 const refreshStats = debounce(() => {
-  runGuarded(
-    (query, databases) => getStats(query, databases),
-    () => store.setState({ stats: { status: "loading", data: null, error: null } }),
-    (data) => store.setState({ stats: { status: "ok", data, error: null } }),
-    (error) => store.setState({ stats: { status: "error", data: null, error } }),
-  );
+  const state = store.getState();
+  if (!canRunQuery(state)) return;
+  const { query, selectedDatabaseIds } = state;
+  const isStale = staleGuard(query, selectedDatabaseIds);
+  store.setState({ stats: { status: "loading", lines: [], error: null } });
+  getStats(query, selectedDatabaseIds, (line) => {
+    if (isStale()) return;
+    store.setState({
+      stats: { status: "loading", lines: [...store.getState().stats.lines, line], error: null },
+    });
+  })
+    .then(() => {
+      if (isStale()) return;
+      store.setState({ stats: { status: "ok", lines: store.getState().stats.lines, error: null } });
+    })
+    .catch((err) => {
+      if (isStale()) return;
+      store.setState({ stats: { status: "error", lines: [], error: errorMessage(err) } });
+    });
 }, 400);
 
 /**
@@ -129,7 +146,7 @@ function onQueryChange(nextQuery: Group): void {
   store.setState({
     query: nextQuery,
     issues,
-    stats: { status: "idle", data: null, error: null },
+    stats: { status: "idle", lines: [], error: null },
     preview: { status: "idle", data: null, error: null },
   });
   refreshStats();
@@ -141,7 +158,7 @@ function onDatabasesChange(nextIds: string[]): void {
   if (nextIds.length === cur.length && nextIds.every((id) => cur.includes(id))) return;
   store.setState({
     selectedDatabaseIds: nextIds,
-    stats: { status: "idle", data: null, error: null },
+    stats: { status: "idle", lines: [], error: null },
     preview: { status: "idle", data: null, error: null },
   });
   refreshStats();
@@ -210,7 +227,7 @@ Promise.all([getSchema(), getDatabases(), getIndividuals()])
       schema,
       databases: dbResp.databases,
       individuals,
-      selectedDatabaseIds: dbResp.databases.map((d) => d.id),
+      selectedDatabaseIds: dbResp.databases.map((d) => d.label),
       query: seeded,
       issues,
     });
