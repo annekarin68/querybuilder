@@ -11,7 +11,8 @@ import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
-import { getDatabases, getIndividuals, getSchema, getStats, runQuery } from "./api/client";
+import { getDatabases, getIndividuals, getStats, runQuery } from "./api/client";
+import { buildFieldCatalog } from "./query/fieldCatalog";
 import { canRunQuery, store, type AppState } from "./state";
 import { addChild, newCondition, stripCollapsed } from "./query/tree";
 import { validateQuery } from "./query/validate";
@@ -223,8 +224,9 @@ renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
 syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
-Promise.all([getSchema(), getDatabases(), getIndividuals()])
-  .then(([schema, dbResp, individuals]) => {
+Promise.all([getDatabases(), getIndividuals()])
+  .then(([databases, individuals]) => {
+    const schema = buildFieldCatalog(individuals);
     const seeded = addChild(
       store.getState().query as Group,
       (store.getState().query as Group).id,
@@ -236,9 +238,9 @@ Promise.all([getSchema(), getDatabases(), getIndividuals()])
     const issues = validateQuery(seeded, { fields: schema.fields, operators: schema.operators });
     store.setState({
       schema,
-      databases: dbResp.databases,
+      databases,
       individuals,
-      selectedDatabaseIds: dbResp.databases.map((d) => d.label),
+      selectedDatabaseIds: databases.map((d) => d.label),
       query: seeded,
       issues,
     });
