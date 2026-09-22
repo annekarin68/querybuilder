@@ -102,28 +102,25 @@ export function scaleCount(part: number, whole: number, target: number): number 
 
 export interface DatabaseOutcome {
   label: string;
-  matchCount: number;
-  totalCount: number;
+  /** Present only on success. */
+  matchCount?: number;
   infoMessages?: string[];
-  /** When set, this database's line reports failure instead of counts. */
-  fail?: { validationErrors: string[]; infoMessages: string[] };
+  /** When set, this database's line reports failure instead of a count. */
+  fail?: { errorMessages: string[]; infoMessages: string[] };
 }
 
 /** Turns one database's raw outcome into the StatsResponse line /api/stats streams for it. */
 export function buildStatsLine(outcome: DatabaseOutcome): StatsResponse {
   if (outcome.fail) {
-    return {
+    const line: StatsResponse = {
       label: outcome.label,
       success: false,
-      validationErrors: outcome.fail.validationErrors,
+      errorMessages: outcome.fail.errorMessages,
       infoMessages: outcome.fail.infoMessages,
     };
+    return line;
   }
-  return {
-    label: outcome.label,
-    success: true,
-    matchCount: outcome.matchCount,
-    totalCount: outcome.totalCount,
-    infoMessages: outcome.infoMessages ?? [],
-  };
+  const line: StatsResponse = { label: outcome.label, success: true, matchCount: outcome.matchCount };
+  if (outcome.infoMessages) line.infoMessages = outcome.infoMessages;
+  return line;
 }
