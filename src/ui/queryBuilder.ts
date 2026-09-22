@@ -1,6 +1,7 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
-import type { IndividualsResponse, SchemaResponse } from "../api/types";
+import type { Individual } from "../api/types";
+import type { CatalogField, CatalogOperator } from "../query/fieldCatalog";
 import {
   addChild,
   emptyQuery,
@@ -15,6 +16,8 @@ import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange } from "./fomantic";
 import { defaultValueFor, readValueControl, renderValueControl } from "./valueControl";
 
+type FieldCatalog = { fields: CatalogField[]; operators: CatalogOperator[] };
+
 function issuesFor(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
   if (!mine.length) return "";
@@ -23,9 +26,9 @@ function issuesFor(nodeId: string, issues: Issue[]): string {
     .join(" · ")}</div>`;
 }
 
-function individualDropdown(individuals: IndividualsResponse | null, c: Condition): string {
+function individualDropdown(individuals: Individual[] | null, c: Condition): string {
   const opts = optionsHtml(
-    individuals?.individuals ?? [],
+    individuals ?? [],
     (ind) => ind.label,
     (ind) => ind.name,
     (ind) => ind.label === c.individualId,
@@ -33,7 +36,7 @@ function individualDropdown(individuals: IndividualsResponse | null, c: Conditio
   return `<select class="ui selection dropdown" data-part="individual"><option value="">Item…</option>${opts}</select>`;
 }
 
-function fieldDropdown(schema: SchemaResponse, c: Condition): string {
+function fieldDropdown(schema: FieldCatalog, c: Condition): string {
   const prefix = c.individualId ? `${c.individualId}.` : null;
   const opts = prefix
     ? optionsHtml(
@@ -46,12 +49,12 @@ function fieldDropdown(schema: SchemaResponse, c: Condition): string {
   return `<select class="ui selection dropdown" data-part="field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
-function operatorDropdown(schema: SchemaResponse, c: Condition): string {
+function operatorDropdown(schema: FieldCatalog, c: Condition): string {
   const field = schema.fields.find((f) => f.label === c.fieldId);
   const ops = field
     ? field.operatorIds
         .map((label) => schema.operators.find((o) => o.label === label))
-        .filter((o): o is SchemaResponse["operators"][number] => o !== undefined)
+        .filter((o): o is CatalogOperator => o !== undefined)
     : [];
   const opts = optionsHtml(
     ops,
@@ -64,8 +67,8 @@ function operatorDropdown(schema: SchemaResponse, c: Condition): string {
 }
 
 function conditionHtml(
-  schema: SchemaResponse,
-  individuals: IndividualsResponse | null,
+  schema: FieldCatalog,
+  individuals: Individual[] | null,
   c: Condition,
   issues: Issue[],
 ): string {
@@ -82,8 +85,8 @@ function conditionHtml(
 }
 
 function groupHtml(
-  schema: SchemaResponse,
-  individuals: IndividualsResponse | null,
+  schema: FieldCatalog,
+  individuals: Individual[] | null,
   g: Group,
   issues: Issue[],
   isRoot: boolean,
@@ -116,8 +119,8 @@ function groupHtml(
 }
 
 function nodeHtml(
-  schema: SchemaResponse,
-  individuals: IndividualsResponse | null,
+  schema: FieldCatalog,
+  individuals: Individual[] | null,
   node: QueryNode,
   issues: Issue[],
   isRoot: boolean,
@@ -144,9 +147,9 @@ export function renderQueryBuilder(state: AppState): void {
 // module-scope refs set by renderQueryBuilder; the delegated handlers below read
 // these so a single wiring keeps working across every paint().
 let currentQuery: Group = emptyQuery();
-let schemaRef: SchemaResponse | null = null;
+let schemaRef: FieldCatalog | null = null;
 
-export function _setBuilderRefs(query: Group, schema: SchemaResponse | null): void {
+export function _setBuilderRefs(query: Group, schema: FieldCatalog | null): void {
   currentQuery = query;
   schemaRef = schema;
 }

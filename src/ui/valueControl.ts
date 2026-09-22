@@ -1,8 +1,8 @@
-import type { SchemaResponse } from "../api/types";
+import type { CatalogField, CatalogOperator } from "../query/fieldCatalog";
 import { escapeHtml, optionsHtml } from "./panel";
 
-type Field = SchemaResponse["fields"][number];
-type Operator = SchemaResponse["operators"][number];
+type Field = CatalogField;
+type Operator = CatalogOperator;
 
 function enumDropdown(field: Field, current: unknown, multiple: boolean, extraAttrs = ""): string {
   const values = multiple

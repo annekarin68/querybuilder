@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import type { SchemaResponse } from "../../src/api/types";
+import type { CatalogField, CatalogOperator } from "../../src/query/fieldCatalog";
 import { defaultValueFor, renderValueControl } from "../../src/ui/valueControl";
 
-type Field = SchemaResponse["fields"][number];
-type Operator = SchemaResponse["operators"][number];
+type Field = CatalogField;
+type Operator = CatalogOperator;
 
 function field(overrides: Partial<Field> = {}): Field {
   return {
