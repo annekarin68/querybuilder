@@ -1,23 +1,18 @@
 import type { Issue, QueryNode } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
 import { hasBlockingErrors } from "./query/validate";
-import type {
-  DatabasesResponse,
-  EntrysetsResponse,
-  IndividualsResponse,
-  SchemaResponse,
-  StatsResponse,
-} from "./api/types";
+import type { DatabasesResponse, EntrysetsResponse, Individual, StatsResponse } from "./api/types";
+import { buildFieldCatalog } from "./query/fieldCatalog";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 export type AsyncStatus = "idle" | "loading" | "ok" | "error";
 
 export interface AppState {
-  schema: SchemaResponse | null;
+  schema: ReturnType<typeof buildFieldCatalog> | null;
   /** The databases the query can be scoped to (loaded once). */
-  databases: DatabasesResponse["databases"] | null;
+  databases: DatabasesResponse[] | null;
   /** The vehicle telemetry data model backing the docs sidebar (loaded once). */
-  individuals: IndividualsResponse | null;
+  individuals: Individual[] | null;
   /** Which databases the query currently runs against. Empty = nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;
