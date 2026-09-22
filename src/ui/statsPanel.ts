@@ -121,6 +121,13 @@ export function renderStatsPanel(state: AppState): void {
     );
     return;
   }
+  if (status === "loading" && lines.length === 0) {
+    paint(
+      el,
+      `<h4 class="ui header">Statistics</h4><div class="ui segment"><div class="ui active inline loader"></div> Updating…</div>`,
+    );
+    return;
+  }
   // Order matters: the combined headline stays pinned at the top; the
   // per-database list — the only dynamic content left once StatBlock is gone —
   // scrolls internally via .qb-stat-perdb. See src/styles.css.

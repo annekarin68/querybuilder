@@ -59,6 +59,10 @@ export async function getStats(
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  // A chunk boundary from the underlying stream has no relation to line
+  // boundaries (or even UTF-8 character boundaries) in the NDJSON body, so a
+  // chunk may end mid-line — buffer text across read() calls and only emit
+  // complete lines, split on "\n".
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -70,6 +74,7 @@ export async function getStats(
       if (line) onLine(JSON.parse(line) as StatsResponse);
     }
   }
+  buffer += decoder.decode(); // flush a trailing partial multi-byte sequence, if any
   const rest = buffer.trim();
   if (rest) onLine(JSON.parse(rest) as StatsResponse);
 }

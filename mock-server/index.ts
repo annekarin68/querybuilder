@@ -95,8 +95,11 @@ const server = createServer(async (req, res) => {
       const query = body.query as JsonNode;
       const ids = body.databases as string[];
 
-      res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8" });
+      // Compute before committing the response header: if this (pure, cheap)
+      // computation ever threw, the catch block below must still be able to
+      // send a normal JSON error response — which requires no header sent yet.
       const counts = perDatabaseCounts(query, ROWS, ids);
+      res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8" });
       for (const c of counts) {
         const db = DATABASES.find((d) => d.label === c.label);
         const size = db?.size ?? 0;
@@ -156,6 +159,14 @@ const server = createServer(async (req, res) => {
     }
     sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });
   } catch (err) {
+    // A throw after the /api/stats route has already written its 200 NDJSON
+    // header (e.g. mid-stream) can't be turned into a JSON error response —
+    // sendJson's own res.writeHead would throw ERR_HTTP_HEADERS_SENT. Just end
+    // the response instead of trying (and failing) to report the error.
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
     if (err instanceof BadBodyError) {
       sendJson(res, 400, { error: err.message });
       return;

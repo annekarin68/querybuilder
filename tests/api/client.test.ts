@@ -40,10 +40,10 @@ describe("api client", () => {
   });
 
   it("getDatabases GETs /api/databases and returns the parsed body", async () => {
-    const f = mockFetchOnce(200, { databases: [{ id: "fern", label: "Fern" }] });
+    const f = mockFetchOnce(200, { databases: [{ label: "fern", name: "Fern" }] });
     vi.stubGlobal("fetch", f);
     const out = await getDatabases();
-    expect(out).toEqual({ databases: [{ id: "fern", label: "Fern" }] });
+    expect(out).toEqual({ databases: [{ label: "fern", name: "Fern" }] });
     expect(f).toHaveBeenCalledWith("/api/databases", undefined);
   });
 

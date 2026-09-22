@@ -237,11 +237,11 @@ mock-server/
                        dotted "individualLabel.fieldLabel" keys + a
                        synthetic __db key) and ROWS, every entryset
                        flattened once at startup.
-  evaluate.ts          matches(node, row) recursive evaluator + computeBlocks(query, rows, fields)
-                       + filterByDatabases(rows, ids) / perDatabaseCounts(query, rows, ids)
-                       (keyed on row.__db). Fully generic: takes FieldDef[]
-                       as a parameter rather than importing a data-specific
-                       catalog.
+  evaluate.ts          matches(node, row) recursive evaluator + filterByDatabases(rows, ids) /
+                       perDatabaseCounts(query, rows, ids) (keyed on row.__db) +
+                       scaleCount(part, whole, target) + buildStatsLine(outcome) — turns one
+                       database's raw outcome into the StatsResponse line /api/stats streams
+                       for it.
   vehicleData.ts       Loads data/individual.json + data/entrysets.json via
                        fs.readFileSync -> INDIVIDUALS, ENTRYSETS.
   data/
@@ -277,7 +277,7 @@ index.html
 ```ts
 export interface AppState {
   schema: SchemaResponse | null;      // loaded once at startup
-  databases: Array<{ id; label }> | null;   // loaded once (GET /api/databases)
+  databases: Array<{ label: string; name: string }> | null;   // loaded once (GET /api/databases)
   individuals: IndividualsResponse | null;  // loaded once (GET /api/individuals); drives docsSidebar and the query builder's Item dropdown
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
@@ -356,10 +356,14 @@ Concretely:
     *"Fix the errors in your query to see statistics."*
   - **Run** is disabled. Preview shows the same hint, no rows.
 - **If the query is valid:** debounced `getStats()` fires; while in flight the
-  panel shows a loader with nothing behind it.
-- **If the backend returns an error** (either endpoint): that panel goes to
-  `{ status: "error", data: null, error }` and shows a `ui negative message` with
-  the text. No numbers, no rows.
+  panel shows partial results as each database's line streams in (headline +
+  per-database list so far), plus a "Waiting on N more" indicator for the
+  databases that haven't reported yet — see §9. Before the first line arrives,
+  it shows a plain loader instead.
+- **If the backend returns an error:** stats goes to
+  `{ status: "error", lines: [], error }`; preview goes to
+  `{ status: "error", data: null, error }`. Both show a `ui negative message`
+  with the text. No numbers, no rows.
 - **Stale-response guard:** each `getStats()` / `runQuery()` call captures a
   snapshot (deep copy or stable stringify) of the query it was made for. When it
   resolves, if `getState().query` no longer equals that snapshot, the response is
@@ -605,9 +609,10 @@ docs sidebar renders independently of the query builder's field catalog. A
 Fomantic `ui accordion`: one section per `group` (18 subsystem groups, e.g.
 `engine`, `tires_wheels`, `metadata`), each listing its items — name, tags,
 `description`/`comment`, `stats.count`/`percentage` (via `matchRatio()` from
-`format.ts`, treating `6_000_000_000` as the total), and its `fields` (label +
-type). A plain `ui input` at the top filters items by name (`String.includes`,
-no plugin) — matching items stay visible, others get `display:none`; empty
+`format.ts`, treating `6_000_000_000` as the total), and its `fields` (`name`,
+falling back to `label`, + `type`). A plain `ui input` at the top filters items
+by name (`String.includes`, no plugin) — matching items stay visible, others
+get `display:none`; empty
 group sections are not hidden. Collapse is a CSS class toggled in `layout.ts`
 (`sidebarCollapsed`) — sets the left column to `display:none` and widens the
 centre; no repaint.
@@ -726,7 +731,7 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
   the contract).
 - `mock-server/rows.ts` flattens every entryset in `ENTRYSETS`
   (`mock-server/vehicleData.ts`) into a flat `Row` — dotted
-  `"individualLabel.fieldLabel"` keys matching the schema's field ids, plus
+  `"individualLabel.fieldLabel"` keys matching the schema's field labels, plus
   a synthetic `__db` key from `databaseIdForEntrysetId` — once at startup
   (`ROWS`).
 - `POST /api/stats` computes each database's match/total counts via
