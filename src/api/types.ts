@@ -1,58 +1,58 @@
 export interface SchemaResponse {
   fields: {
-    id: string;
     label: string;
+    name: string;
     valueType: "string" | "number" | "boolean" | "date" | "enum";
     description: string;
     options?: { value: string; label: string }[];
     operatorIds: string[];
   }[];
   operators: {
-    id: string;
     label: string;
+    name: string;
     description: string;
     arity: "none" | "one" | "two" | "many";
   }[];
 }
 
 /**
- * One statistic block per field referenced in the query. min/max/avg/buckets/earliest/latest
- * are computed over the query's matching rows; nullCount is dataset-wide (rows missing this
- * field across all records) — a data-quality indicator independent of the query.
+ * One database's result from the POST /api/stats stream. The endpoint's
+ * response body is newline-delimited JSON: one of these per selected
+ * database, written as soon as that database's result is ready — some
+ * databases are slower than others, or can fail independently — never one
+ * combined response after every database finishes.
+ *
+ * There is no `name` field: it was already returned once by
+ * GET /api/databases and is loaded into AppState.databases at startup, so
+ * repeating it on every line would be redundant network traffic — look it up
+ * by `label` instead.
+ *
+ * Discriminated on `success` rather than a `matchCount: 0` sentinel, so a
+ * database that couldn't be queried can never be silently misread as "zero
+ * rows matched."
  */
-export type StatBlock =
+export type StatsResponse =
   | {
-      kind: "number-summary";
-      fieldLabel: string;
-      min: number;
-      max: number;
-      avg: number;
-      /** Rows in the WHOLE dataset (not just query matches) that have no value for this field — a data-quality indicator. */
-      nullCount: number;
+      label: string; // matches DatabasesResponse.databases[].label
+      success: true;
+      matchCount: number;
+      /** Entrysets in THIS database, regardless of the query. A real per-database
+       *  row count — NOT derived from Individual.stats.count, which is a different,
+       *  coarser thing: how many entrysets across the WHOLE dataset contain a value
+       *  for one particular Individual (item) at all. That says nothing about a
+       *  single database's row count, and nothing about a specific IndividualField. */
+      totalCount: number;
+      /** Non-blocking notices, e.g. "this database is running slower than usual". */
+      infoMessages: string[];
     }
   | {
-      kind: "distribution";
-      fieldLabel: string;
-      buckets: { label: string; count: number }[];
-      /** Rows in the WHOLE dataset (not just query matches) that have no value for this field — a data-quality indicator. */
-      nullCount: number;
-    }
-  | {
-      kind: "date-range";
-      fieldLabel: string;
-      earliest: string;
-      latest: string;
-      /** Rows in the WHOLE dataset (not just query matches) that have no value for this field — a data-quality indicator. */
-      nullCount: number;
+      label: string;
+      success: false;
+      /** Why the query couldn't be evaluated for this database — a malformed query. */
+      validationErrors: string[];
+      /** Why the database itself couldn't be reached/handle the request. */
+      infoMessages: string[];
     };
-
-export interface StatsResponse {
-  matchCount: number;
-  totalCount: number;
-  blocks: StatBlock[];
-  /** One entry per selected database: its own match / total counts (counts only — cheap at any scale). */
-  perDatabase: { id: string; label: string; matchCount: number; totalCount: number }[];
-}
 
 /** One field an individual's telemetry item can report (GET /api/individuals). */
 export interface IndividualField {
@@ -60,6 +60,12 @@ export interface IndividualField {
   type: string;
   description: string;
   comment: string;
+  /** Reserved for a future human-readable name; not populated by the backend
+   *  yet. Anywhere this is displayed, fall back to `label` when absent/empty
+   *  so the UI already works once the backend starts sending real values. */
+  name?: string;
+  /** The field's valid values, when it has a fixed domain. Absent = not an enum. */
+  values?: string[];
 }
 
 /**
@@ -105,5 +111,5 @@ export interface EntrysetsResponse {
 
 /** The databases the query can be scoped to (GET /api/databases). */
 export interface DatabasesResponse {
-  databases: { id: string; label: string }[];
+  databases: { label: string; name: string }[];
 }
