@@ -2341,6 +2341,57 @@ git commit -m "docs: sync ARCHITECTURE.md with the corrected (Revision 2) API co
 
 ---
 
+### Task 14b: Fix `GET /api/individuals`'s missed wrapper (plan gap found during Task 14)
+
+**Files:**
+- Modify: `mock-server/index.ts`
+
+**Interfaces:**
+- No dedicated test (route handlers untested, per convention).
+
+No task in this plan's original 15 ever updated `GET /api/individuals`'s route body to match the real bare-array contract (Task 1 corrected the type, Task 8 correctly updated the client to expect a bare array, but nothing updated the mock route itself). This is a load-bearing bug: the mock currently returns `{ individuals: INDIVIDUALS }`, which `src/api/client.ts`'s `getIndividuals()` (typed `Promise<Individual[]>`, no unwrapping) would hand straight to `main.ts`'s `buildFieldCatalog(individuals)` as if it were an array — `for (const ind of individuals)` would throw at runtime, since a plain object isn't iterable.
+
+- [ ] **Step 1: Fix the route**
+
+Current:
+
+```ts
+    if (req.method === "GET" && url.pathname === "/api/individuals") {
+      sendJson(res, 200, { individuals: INDIVIDUALS });
+      return;
+    }
+```
+
+Change to:
+
+```ts
+    if (req.method === "GET" && url.pathname === "/api/individuals") {
+      sendJson(res, 200, INDIVIDUALS);
+      return;
+    }
+```
+
+- [ ] **Step 2: Manually verify**
+
+Run: `npm run mock` (one terminal), then `curl -s http://localhost:3001/api/individuals | head -c 200` (another). Expected: output starts with `[{"label":...` — a bare array, not `{"individuals":[...`.
+
+- [ ] **Step 3: Run the full test suite**
+
+Run: `npm run test`
+Expected: all suites still pass (no test asserts on this route's wire shape directly, so this should be a no-op on the suite, but confirm nothing else broke).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add mock-server/index.ts
+git commit -m "fix(mock): GET /api/individuals returns a bare array, matching the real contract
+
+Plan gap: no earlier task updated this route when the contract moved
+to a bare Individual[] (Task 1) and the client stopped unwrapping
+(Task 8). Was silently returning { individuals: [...] }, which would
+crash buildFieldCatalog's for...of at runtime."
+```
+
 ### Task 15: Final verification
 
 **Files:** none (verification only)
