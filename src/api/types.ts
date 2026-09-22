@@ -1,93 +1,100 @@
-export interface SchemaResponse {
-  fields: {
-    label: string;
-    name: string;
-    valueType: "string" | "number" | "boolean" | "date" | "enum";
-    description: string;
-    options?: { value: string; label: string }[];
-    operatorIds: string[];
-  }[];
-  operators: {
-    label: string;
-    name: string;
-    description: string;
-    arity: "none" | "one" | "two" | "many";
-  }[];
-}
-
 /**
  * One database's result from the POST /api/stats stream. The endpoint's
- * response body is newline-delimited JSON: one of these per selected
- * database, written as soon as that database's result is ready — some
- * databases are slower than others, or can fail independently — never one
- * combined response after every database finishes.
- *
- * There is no `name` field: it was already returned once by
- * GET /api/databases and is loaded into AppState.databases at startup, so
- * repeating it on every line would be redundant network traffic — look it up
- * by `label` instead.
- *
- * Discriminated on `success` rather than a `matchCount: 0` sentinel, so a
- * database that couldn't be queried can never be silently misread as "zero
- * rows matched."
+ * response body is newline-delimited JSON today (the backend may change the
+ * streaming format later): one of these per selected database, written as
+ * soon as that database's result is ready — some databases are slower than
+ * others, or can fail independently.
  */
-export type StatsResponse =
-  | {
-      label: string; // matches DatabasesResponse.databases[].label
-      success: true;
-      matchCount: number;
-      /** Entrysets in THIS database, regardless of the query. A real per-database
-       *  row count — NOT derived from Individual.stats.count, which is a different,
-       *  coarser thing: how many entrysets across the WHOLE dataset contain a value
-       *  for one particular Individual (item) at all. That says nothing about a
-       *  single database's row count, and nothing about a specific IndividualField. */
-      totalCount: number;
-      /** Non-blocking notices, e.g. "this database is running slower than usual". */
-      infoMessages: string[];
-    }
-  | {
-      label: string;
-      success: false;
-      /** Why the query couldn't be evaluated for this database — a malformed query. */
-      validationErrors: string[];
-      /** Why the database itself couldn't be reached/handle the request. */
-      infoMessages: string[];
-    };
+export interface StatsResponse {
+  /** Database ID — matches DatabasesResponse.label. */
+  label: string;
+  /** Whether the query to this specific database succeeded. There is no
+   *  per-database HTTP status in an NDJSON stream, so this is how failure
+   *  is signaled instead. */
+  success: boolean;
+  /** Individuals matched by this query in this database. Only meaningful
+   *  when `success` is true — optional rather than a fabricated 0, so a
+   *  failed database can never be misread as "zero rows matched." */
+  matchCount?: number;
+  /** Errors from the query itself — malformed dates, too-large numbers,
+   *  too-long strings, etc. */
+  errorMessages?: string[];
+  /** Other information or error messages — a database timeout, an internal
+   *  server error, or a non-blocking notice. */
+  infoMessages?: string[];
+}
+
+/** The databases the query can be scoped to (GET /api/databases). Returns
+ *  DatabasesResponse[] directly — no wrapper object. */
+export interface DatabasesResponse {
+  /** A short summary of what this database contains or what makes it unique. */
+  description: string;
+  /** User-friendly display name. */
+  name: string;
+  /** The title of this database's owner — the company that reported the data. */
+  owner: string;
+  /** Total entrysets in this database. */
+  totalEntrysets: number;
+  /** This database's share of the total data across all databases — sums
+   *  to 100% across every database returned. */
+  percentageOfTotal: number;
+  /** API-friendly "ID", not meant to be displayed. */
+  label: string;
+}
 
 /** One field an individual's telemetry item can report (GET /api/individuals). */
 export interface IndividualField {
+  /** This field's locally unique, API-friendly "ID" within this individual. */
   label: string;
+  /** The field's actual type, defined by the backend (e.g. VARCHAR, BIGINT,
+   *  TIMESTAMP). Takes precedence over `format` when both are present. */
   type: string;
+  /** A third-party technical description. May contain errors — present it
+   *  visually distinct from `comment`. */
   description: string;
+  /** The backend's own, always-correct description — present it visually
+   *  distinct from `description`. */
   comment: string;
+  /** Distinct values for this field across all databases, as of right now.
+   *  Can be 0 to several billion. Informational only — NEVER branch on this
+   *  to decide whether a field is enum-like; check `values.length` instead. */
+  cardinality: number;
+  /** The field's actual distinct values, when the backend chooses to supply
+   *  them. Empty when not supplied — that emptiness, not `cardinality`, is
+   *  what determines whether a field is treated as an enum. */
+  values: string[];
+  /** A third-party type hint, used only when `type` is empty. */
+  format: string;
   /** Reserved for a future human-readable name; not populated by the backend
-   *  yet. Anywhere this is displayed, fall back to `label` when absent/empty
-   *  so the UI already works once the backend starts sending real values. */
+   *  yet. Anywhere this is displayed, fall back to `label` when absent/empty. */
   name?: string;
-  /** The field's valid values, when it has a fixed domain. Absent = not an enum. */
-  values?: string[];
 }
 
 /**
- * One item in the vehicle telemetry data model — a signal, sensor, or piece of
- * metadata that an entryset may hold a value for. `stats` is aggregated across
- * the full dataset the server tracks, not just the entrysets it actually
- * returns for browsing/preview.
+ * One item in the vehicle telemetry data model — a signal, sensor, or piece
+ * of metadata that an entryset may hold a value for.
  */
 export interface Individual {
+  /** Unique "ID" for API requests — a permutation of `name` with special
+   *  characters removed. */
   label: string;
+  /** A third-party grouping tag. Less useful than our own `tags`. */
   group: string;
+  /** Our own tags, from a limited reusable pool. More useful than `group`. */
   tags: string[];
-  id_number: number;
+  /** This individual's unique identification number. */
+  idNumber: number;
+  /** Descriptive name, shown to the user in place of `label`. */
   name: string;
+  /** A third-party technical description — present distinct from `comment`. */
   description: string;
+  /** The backend's own, always-correct description. */
   comment: string;
-  stats: { percentage: number; count: number };
+  /** How many times this individual appears across ALL databases. No
+   *  percentage is supplied — the frontend derives one from
+   *  DatabasesResponse[].totalEntrysets (see docsSidebar.ts). */
+  totalCount: number;
   fields: IndividualField[];
-}
-
-export interface IndividualsResponse {
-  individuals: Individual[];
 }
 
 /**
@@ -107,9 +114,4 @@ export interface Entryset {
  */
 export interface EntrysetsResponse {
   entrysets: Entryset[];
-}
-
-/** The databases the query can be scoped to (GET /api/databases). */
-export interface DatabasesResponse {
-  databases: { label: string; name: string }[];
 }
