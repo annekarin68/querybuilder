@@ -58,7 +58,28 @@
           "label": "vehicle_type",
           "type": "str",
           "description": "",
-          "comment": ""
+          "comment": "",
+          "values": [
+            "sedan",
+            "electric_sedan",
+            "delivery_van",
+            "semi_truck",
+            "box_truck",
+            "light_truck",
+            "dump_truck",
+            "garbage_truck",
+            "tow_truck",
+            "motorcycle",
+            "transit_bus",
+            "school_bus",
+            "farm_tractor",
+            "ambulance",
+            "police_cruiser",
+            "taxi",
+            "rideshare_sedan",
+            "rideshare_ev",
+            "rental_car"
+          ]
         }
       ]
     }

@@ -8,6 +8,7 @@ interface IndividualField {
   type: string;
   description: string;
   comment: string;
+  values?: string[];
 }
 interface Individual {
   label: string;
@@ -115,5 +116,20 @@ describe("entrysets.json sample data", () => {
   it("every one of the 7 databases has at least one sample entryset", () => {
     const dbIndexes = new Set(Object.values(entrysets).map((e) => dbIndexForEntrysetId(e.id)));
     expect(dbIndexes.size).toBe(7);
+  });
+
+  it("vehicle_identity.vehicle_type declares values covering every value used in the sample data", () => {
+    const vehicleIdentity = individualsByLabel.get("vehicle_identity")!;
+    const vehicleType = vehicleIdentity.fields.find((f) => f.label === "vehicle_type") as
+      | { values?: string[] }
+      | undefined;
+    expect(vehicleType?.values?.length).toBeGreaterThan(0);
+    const declared = new Set(vehicleType!.values);
+    const used = new Set(
+      Object.values(entrysets)
+        .map((e) => e.items.vehicle_identity?.vehicle_type)
+        .filter((v): v is string => typeof v === "string"),
+    );
+    for (const v of used) expect(declared.has(v)).toBe(true);
   });
 });
