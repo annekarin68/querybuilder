@@ -13,7 +13,10 @@ function hint(text: string): string {
 /** GET /api/databases is loaded once into AppState.databases; a stats line only
  * carries a `label`, so its display name and totalEntrysets are looked up here
  * rather than resent on every line. */
-function databaseFor(databases: DatabasesResponse[] | null, label: string): DatabasesResponse | undefined {
+function databaseFor(
+  databases: DatabasesResponse[] | null,
+  label: string,
+): DatabasesResponse | undefined {
   return databases?.find((d) => d.label === label);
 }
 
@@ -63,9 +66,7 @@ function perDatabaseHtml(state: AppState): string {
 
 function headlineHtml(state: AppState): string {
   const { lines } = state.stats;
-  const matchCount = lines
-    .filter((l) => l.success)
-    .reduce((s, l) => s + (l.matchCount ?? 0), 0);
+  const matchCount = lines.filter((l) => l.success).reduce((s, l) => s + (l.matchCount ?? 0), 0);
   const total = lines.reduce((s, l) => {
     const db = databaseFor(state.databases, l.label);
     return s + (l.success && db ? db.totalEntrysets : 0);

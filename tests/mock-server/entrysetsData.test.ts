@@ -124,8 +124,7 @@ describe("entrysets.json sample data", () => {
   it("vehicle_identity.vehicle_type declares values covering every value used in the sample data", () => {
     const vehicleIdentity = individualsByLabel.get("vehicle_identity")!;
     const vehicleType = vehicleIdentity.fields.find((f) => f.label === "vehicle_type") as
-      | { values?: string[] }
-      | undefined;
+      { values?: string[] } | undefined;
     expect(vehicleType?.values?.length).toBeGreaterThan(0);
     const declared = new Set(vehicleType!.values);
     const used = new Set(

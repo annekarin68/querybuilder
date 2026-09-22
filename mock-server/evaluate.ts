@@ -120,7 +120,11 @@ export function buildStatsLine(outcome: DatabaseOutcome): StatsResponse {
     };
     return line;
   }
-  const line: StatsResponse = { label: outcome.label, success: true, matchCount: outcome.matchCount };
+  const line: StatsResponse = {
+    label: outcome.label,
+    success: true,
+    matchCount: outcome.matchCount,
+  };
   if (outcome.infoMessages) line.infoMessages = outcome.infoMessages;
   return line;
 }

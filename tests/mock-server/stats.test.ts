@@ -11,9 +11,12 @@ describe("buildStatsLine", () => {
   });
 
   it("carries through infoMessages on a successful line", () => {
-    expect(
-      buildStatsLine({ label: "alpha", matchCount: 3, infoMessages: ["slow"] }),
-    ).toEqual({ label: "alpha", success: true, matchCount: 3, infoMessages: ["slow"] });
+    expect(buildStatsLine({ label: "alpha", matchCount: 3, infoMessages: ["slow"] })).toEqual({
+      label: "alpha",
+      success: true,
+      matchCount: 3,
+      infoMessages: ["slow"],
+    });
   });
 
   it("builds a failure line when fail is given, omitting matchCount entirely", () => {

@@ -20,7 +20,12 @@ export interface CatalogOperator {
 }
 
 export const OPERATORS: CatalogOperator[] = [
-  { label: "eq", name: "Equals", description: "The field exactly matches the value.", arity: "one" },
+  {
+    label: "eq",
+    name: "Equals",
+    description: "The field exactly matches the value.",
+    arity: "one",
+  },
   {
     label: "neq",
     name: "Not equals",
@@ -58,7 +63,12 @@ export const OPERATORS: CatalogOperator[] = [
     arity: "one",
   },
   { label: "after", name: "After", description: "The date is later than the value.", arity: "one" },
-  { label: "contains", name: "Contains", description: "The text includes the value.", arity: "one" },
+  {
+    label: "contains",
+    name: "Contains",
+    description: "The text includes the value.",
+    arity: "one",
+  },
   {
     label: "between",
     name: "Between",
@@ -72,7 +82,12 @@ export const OPERATORS: CatalogOperator[] = [
     arity: "many",
   },
   { label: "isEmpty", name: "Is empty", description: "The field has no value.", arity: "none" },
-  { label: "isNotEmpty", name: "Is not empty", description: "The field has a value.", arity: "none" },
+  {
+    label: "isNotEmpty",
+    name: "Is not empty",
+    description: "The field has a value.",
+    arity: "none",
+  },
 ];
 
 /**
