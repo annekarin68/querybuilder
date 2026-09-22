@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getDatabases, getStats, runQuery } from "../../src/api/client";
+import { getDatabases, getIndividuals, getStats, runQuery } from "../../src/api/client";
 import { emptyQuery } from "../../src/query/tree";
 
 function mockFetchOnce(status: number, body: unknown) {
@@ -33,14 +33,50 @@ afterEach(() => vi.unstubAllGlobals());
 describe("api client", () => {
   it("getDatabases GETs /api/databases and returns the parsed bare array", async () => {
     const f = mockFetchOnce(200, [
-      { label: "fern", name: "Fern", description: "", owner: "", totalEntrysets: 1, percentageOfTotal: 100 },
+      {
+        label: "fern",
+        name: "Fern",
+        description: "",
+        owner: "",
+        totalEntrysets: 1,
+        percentageOfTotal: 100,
+      },
     ]);
     vi.stubGlobal("fetch", f);
     const out = await getDatabases();
     expect(out).toEqual([
-      { label: "fern", name: "Fern", description: "", owner: "", totalEntrysets: 1, percentageOfTotal: 100 },
+      {
+        label: "fern",
+        name: "Fern",
+        description: "",
+        owner: "",
+        totalEntrysets: 1,
+        percentageOfTotal: 100,
+      },
     ]);
     expect(f).toHaveBeenCalledWith("/api/databases", undefined);
+  });
+
+  it("getIndividuals GETs /api/individuals and returns the parsed bare array", async () => {
+    const f = mockFetchOnce(200, [
+      {
+        label: "engine_rpm",
+        group: "engine",
+        tags: [],
+        idNumber: 1,
+        name: "Engine RPM",
+        description: "",
+        comment: "",
+        totalCount: 100,
+        fields: [],
+      },
+    ]);
+    vi.stubGlobal("fetch", f);
+    const out = await getIndividuals();
+    expect(Array.isArray(out)).toBe(true);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.label).toBe("engine_rpm");
+    expect(f).toHaveBeenCalledWith("/api/individuals", undefined);
   });
 
   it("getStats POSTs the query tree + selected databases as JSON", async () => {

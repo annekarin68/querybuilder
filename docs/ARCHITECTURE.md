@@ -247,8 +247,8 @@ mock-server/
                        tires/wheels, brakes, suspension, steering, body/chassis,
                        lighting, HVAC, infotainment, ADAS, radar/lidar, diagnostics,
                        driver behavior, environment context), each with
-                       label/group/tags/id_number/name/description/comment/stats/
-                       fields. stats.count/percentage is that item's share of a mock
+                       label/group/tags/idNumber/name/description/comment/
+                       totalCount/fields. totalCount is that item's count within a mock
                        6-billion-entryset universe, tiered by real-world commonality
                        (near-universal/common/uncommon/rare) so it agrees with the
                        item's own description.

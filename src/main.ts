@@ -219,7 +219,7 @@ store.subscribe((state, changed) => {
 });
 
 renderDatabasePicker(store.getState()); // "" while databases is null
-renderQueryBuilder(store.getState()); // initial loader (centre panel spinner during schema fetch)
+renderQueryBuilder(store.getState()); // initial loader (centre panel spinner while individuals/databases load)
 renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
 syncRunButton(); // top-menu Run starts disabled

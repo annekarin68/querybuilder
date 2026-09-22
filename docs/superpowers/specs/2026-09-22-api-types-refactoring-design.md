@@ -362,5 +362,6 @@ of a discriminated union.
 - Any change to `src/query/types.ts` or the query-tree model.
 - Populating `IndividualField.name` — stays reserved/unpopulated.
 - Any new UI surface for `DatabasesResponse.description`/`owner`/
-  `percentageOfTotal` — typed and plumbed through, `percentageOfTotal` used
-  internally for §5b, but none of the three are rendered anywhere yet.
+  `percentageOfTotal` — typed and plumbed through (§5b sums `totalEntrysets`,
+  not `percentageOfTotal`, for its percentage calculation), but none of the
+  three are rendered anywhere yet.

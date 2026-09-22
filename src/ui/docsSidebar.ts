@@ -22,7 +22,7 @@ function itemHtml(item: Individual, total: number): string {
   const fields = item.fields
     .map(
       (f) =>
-        `<code>${escapeHtml(f.name || f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type)}</span>`,
+        `<code>${escapeHtml(f.name || f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type || f.format)}</span>`,
     )
     .join(" ");
   const ratio = matchRatio(item.totalCount, total);
