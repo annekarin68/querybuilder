@@ -39,22 +39,22 @@ describe("filterByDatabases", () => {
 describe("perDatabaseCounts", () => {
   it("returns match/total per database in the given id order", () => {
     expect(perDatabaseCounts(matchAll, rows, ["beta", "alpha"])).toEqual([
-      { id: "beta", matchCount: 1, totalCount: 1 },
-      { id: "alpha", matchCount: 2, totalCount: 2 },
+      { label: "beta", matchCount: 1, totalCount: 1 },
+      { label: "alpha", matchCount: 2, totalCount: 2 },
     ]);
   });
 
   it("matchCount reflects the query; totalCount is the whole database", () => {
     expect(perDatabaseCounts(branchesGte10, rows, ["alpha", "beta", "gamma"])).toEqual([
-      { id: "alpha", matchCount: 1, totalCount: 2 }, // only branches:30
-      { id: "beta", matchCount: 1, totalCount: 1 }, // branches:20
-      { id: "gamma", matchCount: 0, totalCount: 1 }, // branches:1
+      { label: "alpha", matchCount: 1, totalCount: 2 }, // only branches:30
+      { label: "beta", matchCount: 1, totalCount: 1 }, // branches:20
+      { label: "gamma", matchCount: 0, totalCount: 1 }, // branches:1
     ]);
   });
 
   it("an unknown database id yields zero counts", () => {
     expect(perDatabaseCounts(matchAll, rows, ["zeta"])).toEqual([
-      { id: "zeta", matchCount: 0, totalCount: 0 },
+      { label: "zeta", matchCount: 0, totalCount: 0 },
     ]);
   });
 });

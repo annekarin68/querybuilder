@@ -1,5 +1,4 @@
-import type { FieldDef } from "./schema";
-import type { StatBlock } from "../src/api/types";
+import type { StatsResponse } from "../src/api/types";
 
 export type Row = Record<string, string | number | boolean | null>;
 
@@ -77,11 +76,11 @@ export function perDatabaseCounts(
   query: JsonNode,
   rows: Row[],
   databaseIds: string[],
-): { id: string; matchCount: number; totalCount: number }[] {
-  return databaseIds.map((id) => {
-    const inDb = rows.filter((r) => String(r.__db) === id);
+): { label: string; matchCount: number; totalCount: number }[] {
+  return databaseIds.map((label) => {
+    const inDb = rows.filter((r) => String(r.__db) === label);
     return {
-      id,
+      label,
       totalCount: inDb.length,
       matchCount: inDb.filter((r) => matches(query, r)).length,
     };
@@ -96,76 +95,35 @@ export function matches(node: JsonNode, row: Row): boolean {
     : node.children.some((c) => matches(c, row));
 }
 
-function referencedFieldIds(node: JsonNode, acc = new Set<string>()): Set<string> {
-  if (node.kind === "condition") {
-    if (node.fieldId) acc.add(node.fieldId);
-  } else {
-    for (const c of node.children) referencedFieldIds(c, acc);
-  }
-  return acc;
-}
-
 /** part / whole, scaled to `target`, rounded. Zero whole → zero. */
 export function scaleCount(part: number, whole: number, target: number): number {
   return whole ? Math.round((part / whole) * target) : 0;
 }
 
-/**
- * `scale` lets the mock report counts at real database scale while still
- * evaluating the sample: `total` multiplies row-population counts
- * (nullCount), `match` multiplies match-population counts (distribution buckets).
- * min/max/avg are field *values*, never scaled. Both default to 1 (no scaling).
- */
-export function computeBlocks(
-  query: JsonNode,
-  rows: Row[],
-  fields: FieldDef[],
-  scale: { total?: number; match?: number } = {},
-): StatBlock[] {
-  const totalScale = scale.total ?? 1;
-  const matchScale = scale.match ?? 1;
-  const matching = rows.filter((r) => matches(query, r));
-  const blocks: StatBlock[] = [];
+export interface DatabaseOutcome {
+  label: string;
+  matchCount: number;
+  totalCount: number;
+  infoMessages?: string[];
+  /** When set, this database's line reports failure instead of counts. */
+  fail?: { validationErrors: string[]; infoMessages: string[] };
+}
 
-  for (const fieldId of referencedFieldIds(query)) {
-    const field = fields.find((f) => f.id === fieldId);
-    if (!field) continue;
-    const matchingValues = matching.map((r) => r[fieldId]);
-    const present = matchingValues.filter((v) => v !== null && v !== undefined && v !== "");
-
-    // nullCount is computed across ALL rows in the (scoped) dataset — Ruling 9.
-    const allValues = rows.map((r) => r[fieldId]);
-    const allPresent = allValues.filter((v) => v !== null && v !== undefined && v !== "");
-    const nullCount = Math.round((allValues.length - allPresent.length) * totalScale);
-
-    if (field.valueType === "number") {
-      const nums = present.map(Number);
-      blocks.push({
-        kind: "number-summary",
-        fieldLabel: field.label,
-        min: nums.length ? Math.min(...nums) : 0,
-        max: nums.length ? Math.max(...nums) : 0,
-        avg: nums.length ? Number((nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2)) : 0,
-        nullCount,
-      });
-    } else if (field.valueType === "date") {
-      const dates = present.map(String).sort();
-      blocks.push({
-        kind: "date-range",
-        fieldLabel: field.label,
-        earliest: dates[0] ?? "",
-        latest: dates[dates.length - 1] ?? "",
-        nullCount,
-      });
-    } else {
-      const counts = new Map<string, number>();
-      for (const v of present) counts.set(String(v), (counts.get(String(v)) ?? 0) + 1);
-      let buckets = [...counts.entries()]
-        .map(([label, count]) => ({ label, count: Math.round(count * matchScale) }))
-        .sort((a, b) => b.count - a.count);
-      if (field.valueType === "string") buckets = buckets.slice(0, 10);
-      blocks.push({ kind: "distribution", fieldLabel: field.label, buckets, nullCount });
-    }
+/** Turns one database's raw outcome into the StatsResponse line /api/stats streams for it. */
+export function buildStatsLine(outcome: DatabaseOutcome): StatsResponse {
+  if (outcome.fail) {
+    return {
+      label: outcome.label,
+      success: false,
+      validationErrors: outcome.fail.validationErrors,
+      infoMessages: outcome.fail.infoMessages,
+    };
   }
-  return blocks;
+  return {
+    label: outcome.label,
+    success: true,
+    matchCount: outcome.matchCount,
+    totalCount: outcome.totalCount,
+    infoMessages: outcome.infoMessages ?? [],
+  };
 }
