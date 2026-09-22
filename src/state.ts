@@ -25,7 +25,7 @@ export interface AppState {
   query: QueryNode;
   issues: Issue[];
 
-  stats: { status: AsyncStatus; data: StatsResponse | null; error: string | null };
+  stats: { status: AsyncStatus; lines: StatsResponse[]; error: string | null };
   preview: { status: AsyncStatus; data: EntrysetsResponse | null; error: string | null };
 
   sidebarCollapsed: boolean;
@@ -39,7 +39,7 @@ export const initialState: AppState = {
   activeView: "filter",
   query: emptyQuery(),
   issues: [],
-  stats: { status: "idle", data: null, error: null },
+  stats: { status: "idle", lines: [], error: null },
   preview: { status: "idle", data: null, error: null },
   sidebarCollapsed: false,
 };
