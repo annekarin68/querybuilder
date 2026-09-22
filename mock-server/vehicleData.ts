@@ -9,6 +9,8 @@ export interface IndividualField {
   type: string;
   description: string;
   comment: string;
+  name?: string;
+  values?: string[];
 }
 
 export interface Individual {

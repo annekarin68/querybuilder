@@ -35,10 +35,10 @@ const individuals: Individual[] = [
 ];
 
 describe("buildFields", () => {
-  it("ids are dotted individualLabel.fieldLabel", () => {
+  it("labels are dotted individualLabel.fieldLabel", () => {
     const fields = buildFields(individuals);
-    const ids = fields.map((f) => f.id);
-    expect(ids).toEqual([
+    const labels = fields.map((f) => f.label);
+    expect(labels).toEqual([
       "engine_rpm.value_rpm",
       "engine_rpm.redline_rpm",
       "engine_rpm.is_over_rev",
@@ -49,40 +49,40 @@ describe("buildFields", () => {
 
   it("maps declared types to valueType", () => {
     const fields = buildFields(individuals);
-    expect(fields.find((f) => f.id === "engine_rpm.value_rpm")?.valueType).toBe("number");
-    expect(fields.find((f) => f.id === "engine_rpm.is_over_rev")?.valueType).toBe("boolean");
-    expect(fields.find((f) => f.id === "vehicle_identity.vin")?.valueType).toBe("string");
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.valueType).toBe("number");
+    expect(fields.find((f) => f.label === "engine_rpm.is_over_rev")?.valueType).toBe("boolean");
+    expect(fields.find((f) => f.label === "vehicle_identity.vin")?.valueType).toBe("string");
   });
 
-  it("label combines the individual's name and the field's label", () => {
+  it("name combines the individual's name and the field's label", () => {
     const fields = buildFields(individuals);
-    expect(fields.find((f) => f.id === "engine_rpm.value_rpm")?.label).toBe(
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.name).toBe(
       "Engine RPM: value_rpm",
     );
   });
 
   it("description falls back to the individual's description when the field's is empty", () => {
     const fields = buildFields(individuals);
-    expect(fields.find((f) => f.id === "engine_rpm.value_rpm")?.description).toBe(
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.description).toBe(
       "Engine rotational speed.",
     );
-    expect(fields.find((f) => f.id === "engine_rpm.redline_rpm")?.description).toBe(
+    expect(fields.find((f) => f.label === "engine_rpm.redline_rpm")?.description).toBe(
       "Redline for this engine.",
     );
   });
 
-  it("assigns operatorIds per valueType, all of which are real operator ids", () => {
+  it("assigns operatorIds per valueType, all of which are real operator labels", () => {
     const fields = buildFields(individuals);
-    const opIds = new Set(OPERATORS.map((o) => o.id));
+    const opLabels = new Set(OPERATORS.map((o) => o.label));
     for (const f of fields) {
       expect(f.operatorIds.length).toBeGreaterThan(0);
-      for (const id of f.operatorIds) expect(opIds.has(id)).toBe(true);
+      for (const label of f.operatorIds) expect(opLabels.has(label)).toBe(true);
     }
-    expect(fields.find((f) => f.id === "engine_rpm.is_over_rev")?.operatorIds).toEqual([
+    expect(fields.find((f) => f.label === "engine_rpm.is_over_rev")?.operatorIds).toEqual([
       "eq",
       "neq",
     ]);
-    expect(fields.find((f) => f.id === "engine_rpm.value_rpm")?.operatorIds).toEqual([
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.operatorIds).toEqual([
       "eq",
       "neq",
       "gt",
@@ -95,10 +95,28 @@ describe("buildFields", () => {
     ]);
   });
 
-  it("any field with valueType enum has options (future-proofing; none exist today)", () => {
-    for (const f of buildFields(individuals)) {
-      if (f.valueType === "enum") expect(f.options && f.options.length).toBeTruthy();
-    }
+  it("a field with declared values becomes an enum field with matching options", () => {
+    const withValues: Individual[] = [
+      {
+        ...individuals[1]!,
+        fields: [
+          { label: "vehicle_type", type: "str", description: "", comment: "", values: ["sedan", "van"] },
+        ],
+      },
+    ];
+    const fields = buildFields(withValues);
+    const field = fields.find((f) => f.label === "vehicle_identity.vehicle_type");
+    expect(field?.valueType).toBe("enum");
+    expect(field?.options).toEqual([
+      { value: "sedan", label: "sedan" },
+      { value: "van", label: "van" },
+    ]);
+    expect(field?.operatorIds).toEqual(["eq", "neq", "in", "isEmpty", "isNotEmpty"]);
+  });
+
+  it("a field with no declared values is never valueType enum", () => {
+    const fields = buildFields(individuals);
+    expect(fields.every((f) => f.valueType !== "enum")).toBe(true);
   });
 });
 
