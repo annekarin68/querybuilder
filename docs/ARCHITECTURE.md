@@ -287,7 +287,7 @@ export interface AppState {
 
   stats: {
     status: "idle" | "loading" | "ok" | "error";
-    data: StatsResponse | null;
+    lines: StatsResponse[];   // one entry per database that has reported so far (streamed)
     error: string | null;
   };
   preview: {
@@ -310,7 +310,7 @@ of the keys that changed.
 |---|---|
 | App starts | `getSchema()` + `getDatabases()` + `getIndividuals()` → `setState({ schema, databases, individuals, ... })` → every panel renders once. Schema (or individuals/databases) load failure is fatal (full-page error + Reload). |
 | User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
-| `getStats()` resolves/rejects | stale-response guard (below); if current, `setState({ stats })` → **only** `statsPanel` repaints. |
+| `getStats()` reports a streamed line | stale-response guard (below); if current, appended to `stats.lines` via `setState` → **only** `statsPanel` repaints, showing partial results while more lines are still arriving. When the stream ends, `status` becomes `ok`; a non-2xx response instead sets `status: "error"`. |
 | User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and scrolls internally. |
 | User toggles docs sidebar | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class. No repaint. |
 | User clicks a secondary-menu tab | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
@@ -364,6 +364,8 @@ Concretely:
   snapshot (deep copy or stable stringify) of the query it was made for. When it
   resolves, if `getState().query` no longer equals that snapshot, the response is
   discarded. A slow earlier request can never overwrite results for a newer query.
+
+**Streaming and "never stale" are compatible.** While `stats.status` is `"loading"`, `stats.lines` legitimately holds fewer entries than `selectedDatabaseIds` — that's a query result still arriving, not a stale one. The invariant this section protects is that every line in `stats.lines` belongs to the `(query, selectedDatabaseIds)` pair currently on screen; the stale-response guard is checked once per streamed line (not just once per request), so a line that arrives after the user has changed the query/scope is discarded before it reaches `AppState`.
 
 ---
 
@@ -434,7 +436,14 @@ interface IndividualsResponse {
     description: string;
     comment: string;
     stats: { percentage: number; count: number }; // share of a mock 6,000,000,000-entryset universe
-    fields: Array<{ label: string; type: string; description: string; comment: string }>;
+    fields: Array<{
+      label: string;
+      type: string;
+      description: string;
+      comment: string;
+      name?: string;    // reserved for a future human-readable name; not populated yet — UI falls back to `label`
+      values?: string[]; // the field's valid values, when it has a fixed domain; drives an enum SchemaResponse field
+    }>;
   }>;
 }
 ```
@@ -449,36 +458,38 @@ tracked only by convention (see git history for the design discussion).
 
 Body: `{ "query": <QueryNode tree>, "databases": string[] }`. Called live
 (debounced ~400 ms) only when the query is valid **and at least one database is
-selected**. The server scopes rows to the selected databases first, then
-evaluates the query; `totalCount` and `nullCount` are over that scoped set. A
-missing / empty `databases` array → `400 { error: "Select at least one database." }`.
+selected**. The response is **newline-delimited JSON**: one `StatsResponse`
+per selected database, written as soon as that database's result is ready —
+some databases are slower than others, or can fail independently — rather
+than one combined response after every database finishes.
 
 ```ts
-interface StatsResponse {
-  matchCount: number;                 // combined across selected databases
-  totalCount: number;                 // combined
-  blocks: StatBlock[];                // combined field blocks
-  perDatabase: Array<{                // one entry per selected database, in selection order
-    id: string;
-    label: string;
-    matchCount: number;               // rows in that database matching the query
-    totalCount: number;               // rows in that database
-  }>;                                 // counts only — cheap for a real backend at any scale
-}
-
-type StatBlock =
-  | { kind: "number-summary"; fieldLabel: string; min: number; max: number; avg: number; nullCount: number }
-  | { kind: "distribution";   fieldLabel: string; buckets: Array<{ label: string; count: number }>; nullCount: number }
-  | { kind: "date-range";     fieldLabel: string; earliest: string; latest: string; nullCount: number };
+type StatsResponse =
+  | {
+      label: string;          // matches DatabasesResponse.databases[].label
+      success: true;
+      matchCount: number;     // rows in this database matching the query
+      totalCount: number;     // rows in this database, regardless of the query
+      infoMessages: string[]; // non-blocking notices, e.g. "running slower than usual"
+    }
+  | {
+      label: string;
+      success: false;
+      validationErrors: string[]; // the query was malformed for this database
+      infoMessages: string[];     // the database itself couldn't handle the request
+    };
 ```
 
-`nullCount` is dataset-wide (rows missing this field across all records), while
-`min`/`max`/`avg`/`buckets`/`earliest`/`latest` are computed over the query's
-matching rows. This gives both query-specific stats and a data-quality metric
-independent of filtering.
+There is no combined-totals line and no `name` field on each line: the frontend
+derives the headline by summing `matchCount`/`totalCount` across the successful
+lines received so far, and looks up each line's display name from
+`AppState.databases` (loaded once from `GET /api/databases`) by `label` —
+resending the name on every line would be redundant network traffic. A missing
+/ empty `databases` array → `400 { error: "Select at least one database." }`.
 
-`statsPanel.ts` has one render function per `kind` plus a `switch`. A new block
-type later = one new case, nothing else.
+`statsPanel.ts` renders a running headline, a per-database list (success:
+counts + bar; failure: `validationErrors`/`infoMessages`), and a "waiting on N
+more" indicator while `status` is `"loading"`.
 
 ### `POST /api/query`
 
@@ -647,17 +658,19 @@ Every number in this panel goes through `src/ui/format.ts` so it stays inside a
 - **`barWidth(match, total)`** — a CSS `max(…%, 2px)`, so any nonzero match shows a
   2 px sliver, visibly distinct from zero.
 
-Layout, top to bottom: a compact headline (`compact(matchCount)` big +
-`of … · matchRatio` small) and a thin bar; the **By database** segment (per row:
-name, `compact(match) / compact(total) · matchRatio`, thin bar; exact figures on
-hover; skipped for a single selected database); then the `blocks[]` list
-(min/max/avg, distribution counts, `nullCount` all compacted) **inside a
-`.qb-stat-blocks` scroll region** (`max-height: 45vh`). The block list grows with
-the query (one block per referenced field), so it scrolls internally rather than
-pushing "By database" out of view. The whole stats column is `position: sticky`
-so it tracks the viewport while a tall query builder scrolls past. `status`
-branches: `loading` → `ui loader`; `error` → `ui negative message`, no data;
-`idle` → hint from §6.
+Layout, top to bottom: a compact headline (sum of `matchCount`/`totalCount`
+across the successful lines received so far, big + `of … · matchRatio` small)
+and a thin bar; the **By database** segment — one row per streamed line so
+far, success (`compact(match) / compact(total) · matchRatio`, thin bar, exact
+figures on hover, any `infoMessages`) or failure (`validationErrors` +
+`infoMessages` as a red message) — inside a `.qb-stat-perdb` scroll region
+(`max-height: 45vh`, replacing the old per-field-block scroll region now that
+there are no field blocks); then, while `status` is `"loading"`, a "Waiting on
+N more database(s)…" line. The whole stats column is `position: sticky` so it
+tracks the viewport while a tall query builder scrolls past. `status`
+branches: `idle` → hint from §6; `error` → `ui negative message`, no data.
+There is no longer a per-field-block list — the real backend can currently
+only return counts, not aggregated min/max/avg/buckets/earliest/latest.
 
 ### Bottom — `dataPreview.ts`
 
@@ -716,10 +729,14 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
   a synthetic `__db` key from `databaseIdForEntrysetId` — once at startup
   (`ROWS`).
 - `POST /api/stats` scopes `ROWS` to the selected databases
-  (`filterByDatabases`, keyed on `row.__db`), evaluates the query
-  (`matches`), and scales the sample's match rate onto each database's
-  `size` (`scaleCount`) so the UI sees realistic large numbers exactly as
-  before — only the underlying data changed, not the scaling technique.
+  (`filterByDatabases`) and computes each database's match/total counts
+  (`perDatabaseCounts`), scaling the sample's match rate onto that database's
+  `size` (`scaleCount`, unchanged). Rather than returning one combined
+  response, it writes one `StatsResponse` line per database
+  (`buildStatsLine`) as newline-delimited JSON, with a small artificial delay
+  between lines so the streaming is visible in `npm run dev`, and — dev-only —
+  occasionally (~5%) simulates a database that couldn't be reached, to
+  exercise the UI's per-database failure path without a real backend.
 - `POST /api/query` scopes and evaluates the same way, then maps matching
   rows back to their source `Entryset` objects via `ENTRYSETS[id]`, capped
   at 25.
@@ -798,3 +815,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-16 | Finalized the entrysets transition: the query builder, database picker, and stats panel now run against the entryset/individual model (previously only the docs sidebar and preview did). Replaced the plant/species mock (`catalog.ts`, `data.ts`) with `schema.ts` (field catalog built purely from `individual.json`'s declared shape), `databases.ts` (7 arbitrary, content-agnostic databases partitioned by a hash of each entryset's id), and `rows.ts` (flattens entrysets into the flat rows the existing matching engine expects). `POST /api/query` now filters for real instead of always returning every entryset. `evaluate.ts`'s `computeBlocks` takes `fields` as an explicit parameter instead of importing a data-specific catalog. Sample data grew from 5 to 21 entrysets so every database has real sample data. No changes to `src/` — it already consumed the API purely through its typed contract. |
 | 2026-09-16 | Query builder's condition row now cascades **Item → Field → Operator** (previously just Field → Operator): the user first picks an individual from `state.individuals`, which filters the Field dropdown to that item's fields, shown by short slug. `Condition` gained `individualId: string | null` (UI-staging only; `fieldId` remains the sole authoritative target, so `validate.ts`, `summary.ts`, and the mock backend needed no changes). Changing Item resets Field/Operator/value, mirroring the existing Field→Operator reset. No backend or schema-contract changes. |
 | 2026-09-16 | Frontend/backend separation audit: `src/` had no runtime coupling to `mock-server/` (no imports; the contract already ran entirely through `src/api/types.ts` + `src/api/client.ts`), but several comments named mock-server internals directly (`mock-server/databases.ts`, `individual.json`, "the mock server does not paginate", a hardcoded "7 databases" / "(mock) 6-billion-entryset" fact) — these would go stale or mislead once swapped for a real backend. Reworded them to describe only the API contract (`GET /api/databases`, `GET /api/individuals`, `EntrysetsResponse`). Added a second ESLint airlock (`eslint.config.js`, alongside the existing jQuery one, §3): `src/**` may not import `mock-server/*` at all — must go through `src/api/*`. |
+| 2026-09-22 | API contract rename + streaming stats: `id`/`label` renamed to `label`/`name` across `SchemaResponse`, `DatabasesResponse`, and the (now per-database) `StatsResponse`, matching the convention `Individual`/`IndividualField` already used. `StatBlock` removed — the real backend can currently only return counts, not aggregated min/max/avg/buckets/earliest/latest. `IndividualField` gained `name` (reserved, unpopulated; UI falls back to `label`) and `values` (a field's declared domain, wired into `buildFields` as an enum `SchemaResponse` field with real `options` — exercised end to end via `vehicle_identity.vehicle_type`). `POST /api/stats` now streams newline-delimited JSON, one `StatsResponse` per selected database as it finishes, instead of waiting for every database and returning one combined response; the frontend derives the combined headline by summing the lines received so far, and reports per-database success/failure/info independently (§6, §7, §9, §10). Design: `docs/superpowers/specs/2026-09-22-api-types-refactoring-design.md`. |
