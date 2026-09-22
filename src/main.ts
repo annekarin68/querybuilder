@@ -101,11 +101,22 @@ function syncRunButton(state = store.getState()): void {
   btn.disabled = !(canRunQuery(state) && state.preview.status !== "loading");
 }
 
+// Bumped once per refreshStats invocation. A content-based staleGuard key alone
+// isn't enough here: toggling a database off/on (or editing a value away and
+// back) within the 400ms debounce window can produce a NEW stream whose key is
+// equal to an OLD in-flight stream's key, so the key-based check alone would
+// treat the old stream as still current. Both streams would then append into
+// the same (freshly-reset) `stats.lines` array, doubling every row. Pairing the
+// key check with stream identity (this counter) closes that gap.
+let statsRun = 0;
+
 const refreshStats = debounce(() => {
   const state = store.getState();
   if (!canRunQuery(state)) return;
   const { query, selectedDatabaseIds } = state;
-  const isStale = staleGuard(query, selectedDatabaseIds);
+  const run = ++statsRun;
+  const keyStale = staleGuard(query, selectedDatabaseIds);
+  const isStale = () => run !== statsRun || keyStale();
   store.setState({ stats: { status: "loading", lines: [], error: null } });
   getStats(query, selectedDatabaseIds, (line) => {
     if (isStale()) return;
