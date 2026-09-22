@@ -135,14 +135,9 @@ required, not optional — empty array when not supplied), and `format`;
 confirmed keeping it despite it not being in the real contract, for forward
 compatibility).
 
-**`GET /api/individuals`'s response shape**: assumed to be a bare
-`Individual[]`, not `{ individuals: [...] }` — inferred from `DatabasesResponse`
-and the stats stream both being unwrapped (§5). Not explicitly confirmed by
-the backend team. **Flagging this assumption for spec review** — if
-`GET /api/individuals` actually still wraps its array, only
-`src/api/client.ts`'s `getIndividuals()` return type and `main.ts`'s one
-destructuring site need to change; nothing else in this document depends on
-which is correct.
+**`GET /api/individuals`'s response shape**: confirmed — a bare
+`Individual[]`, not `{ individuals: [...] }`, matching `DatabasesResponse`
+and the stats stream both being unwrapped (§5).
 
 ## 5. `StatsResponse` and `DatabasesResponse` — real shapes
 
