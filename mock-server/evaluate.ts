@@ -2,6 +2,10 @@ import type { StatsResponse } from "../src/api/types";
 
 export type Row = Record<string, string | number | boolean | null>;
 
+// The query tree as the evaluator reads it from a request body. Deliberately
+// NOT the frontend's QueryNode (src/query/types.ts): the body is untrusted
+// JSON, and these types list only what evaluation reads. The tree also
+// carries ids, `facetId` and `collapsed`, which the evaluator ignores.
 export interface JsonCondition {
   kind: "condition";
   fieldId: string | null;
@@ -20,8 +24,35 @@ function cmp(a: unknown, b: unknown): number {
   return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
 }
 
-const PARTIAL_UTC =
-  /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2})(?::(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?Z?)?)?)?$/;
+/**
+ * The parts of a full or partial ISO UTC timestamp, each one optional here:
+ *
+ *     2024  -11  -06  T14  :32  :05  .123  Z
+ *     year  mon  day  hour min  sec  frac
+ *
+ * `timestampParts` then checks what a regex can't say readably: a part only
+ * appears after the one before it ("2024T14" has no month and day), and `Z`
+ * only after a time. A copy of the pattern in src/query/dates.ts (the mock
+ * shares no runtime code with src/); tests/dateCases.ts makes both accept the
+ * same values.
+ */
+const PARTS =
+  /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?:T(\d{2}))?(?::(\d{2}))?(?::(\d{2}))?(?:\.(\d{1,3}))?(Z)?$/;
+
+/** year, month, day, hour, minute, second, fraction — `undefined` from the first part left out. */
+type Parts = [string, ...(string | undefined)[]];
+
+/** The value's parts, or null if it isn't a (partial) ISO UTC timestamp. */
+function timestampParts(v: string): Parts | null {
+  const m = PARTS.exec(v);
+  if (!m) return null;
+  const parts = m.slice(1, 8) as Parts;
+  const firstMissing = parts.indexOf(undefined);
+  if (firstMissing !== -1 && parts.slice(firstMissing).some((p) => p !== undefined)) return null;
+  const hasTime = parts[3] !== undefined;
+  if (m[8] && !hasTime) return null;
+  return parts;
+}
 
 /**
  * The span of time a full or partial ISO UTC timestamp covers, as
@@ -31,9 +62,9 @@ const PARTIAL_UTC =
  */
 export function utcSpan(v: unknown): [number, number] | null {
   if (typeof v !== "string") return null;
-  const m = PARTIAL_UTC.exec(v);
-  if (!m) return null;
-  const [, year, month, day, hour, minute, second, fraction] = m;
+  const found = timestampParts(v);
+  if (!found) return null;
+  const [year, month, day, hour, minute, second, fraction] = found;
   const parts = [
     Number(year),
     month ? Number(month) - 1 : 0,

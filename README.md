@@ -25,6 +25,11 @@ In the mock, **Log in** signs you in as `demo.user`, and any non-blank reason
 passes the compliance check. To run a second copy side by side (another
 checkout), pick other ports: `MOCK_PORT=3011 npx concurrently -k "npm:mock" "vite --port 5181"`.
 
+By default the mock streams statistics with a random 150–400 ms pause per
+database and fails about 5% of them on purpose, to show the loading and
+failure states. For reproducible behaviour (debugging, screenshots) turn both
+off: `MOCK_FAIL_RATE=0 MOCK_STREAM_DELAY_MS=0 npm run dev`.
+
 Other scripts:
 
 | Script | What |

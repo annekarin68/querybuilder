@@ -268,8 +268,12 @@ src/
     accountMenu.ts     render + wiring for the top-bar account menu (login +
                        compliance; data-panel="account"). See §9.
 mock-server/
-  index.ts             Dev-only. Plain Node http: routing + JSON/form I/O. Listens on
-                       MOCK_PORT (default 3001; vite.config.ts proxies to the same).
+  index.ts             Dev-only entry point: reads MOCK_PORT (default 3001;
+                       vite.config.ts proxies to the same), MOCK_FAIL_RATE and
+                       MOCK_STREAM_DELAY_MS, and starts the server.
+  server.ts            createMockServer(config): plain Node http. One route
+                       table ("METHOD /path" -> handler), JSON/form I/O, the
+                       stand-in IdP and compliance pages. QUERY_RESULT_CAP.
   auth.ts              Session/state/code logic for the fake-IdP login and
                        compliance round trips (in-memory, dev-only; pending
                        states/codes/tokens expire after 5 minutes) + cookie
@@ -1093,14 +1097,24 @@ and selected databases. No pagination (§7).
 
 ---
 
-## 10. Mock server (`mock-server/index.ts`)
+## 10. Mock server (`mock-server/`)
 
-Dev-only. `npm run mock` starts it; Vite proxies `/api/*`, `/mock-idp/*`, and
+Dev-only. `npm run mock` starts it (`index.ts`); Vite proxies `/api/*`, `/mock-idp/*`, and
 `/mock-compliance/*` to it (the latter two because their respective
 `GET .../login` / `GET .../start` redirects are real browser navigations,
 not fetches — proxying only `/api` would leave those hops unreachable under
-`npm run dev`). Plain Node `http`, no Express, heavily commented top to
-bottom.
+`npm run dev`). Plain Node `http`, no Express. `server.ts` has one route
+table, `routes()`, mapping `"METHOD /path"` to a named handler function —
+add a route there. `tests/mock-server/server.test.ts` drives the server
+over real HTTP.
+
+Three environment variables, read by `index.ts`:
+
+| Variable | Default | What |
+|---|---|---|
+| `MOCK_PORT` | `3001` | Port to listen on (`vite.config.ts` proxies to the same). |
+| `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/stats` lines that simulate an unreachable database. `0` turns it off. |
+| `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/stats` line. `0` = no pause. |
 
 - There is no `/api/schema` route — the real API never had one (see §7).
 - **Types, not code.** The mock types its data and responses with
@@ -1151,15 +1165,16 @@ bottom.
 - `POST /api/stats` computes each database's match/total counts via
   `perDatabaseCounts` (which scopes `ROWS` to each database inline via
   `rows.filter((r) => String(r.__db) === label)`), scaling the sample's match
-  rate onto that database's `totalEntrysets` (`scaleCount`, unchanged). Rather than
+  rate onto that database's `totalEntrysets` (`scaleCount`). Rather than
   returning one combined response, it writes one `StatsResponse` line per
   database (`buildStatsLine`) as newline-delimited JSON, with a small
   artificial delay between lines so the streaming is visible in `npm run dev`,
-  and — dev-only — occasionally (~5%) simulates a database that couldn't be
-  reached, to exercise the UI's per-database failure path without a real backend.
+  and — dev-only — now and then (`MOCK_FAIL_RATE`, default 5%) simulates a
+  database that couldn't be reached, to exercise the UI's per-database failure
+  path without a real backend.
 - `POST /api/query` scopes and evaluates the same way, then maps matching
   rows back to their source `Entryset` objects via `ENTRYSETS[id]`, capped
-  at 25.
+  at `QUERY_RESULT_CAP` (25).
 - Bad query, or missing / empty `databases` → `400 { error }`.
 
 It stands in for "a real backend in any language"; the frontend knows it only
@@ -1204,7 +1219,8 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 - `tests/api/client.test.ts` — requests, error unwrapping, NDJSON streaming, timeouts, aborts.
 - `tests/util/` — `debounce`, `pendingQuery` (save/restore, untrusted input), `requestSlot` (the stale-response rule).
 - `tests/ui/` — `docsFilter`, `dataPreview` (badges, row columns), `statsPanel` (headline), `format`, `valueControl` (markup + accessible names).
-- `tests/mock-server/` — auth flows (incl. expiry), audit, databases, rows, the evaluator (incl. `utcSpan` and date conditions at each precision), stats lines, data integrity, the bare-array wire shapes.
+- `tests/mock-server/` — the server over real HTTP (`server.test.ts`: every route's status codes, 400s, 401/403, redirects, the NDJSON stream), auth flows (incl. expiry), audit, databases, rows, the evaluator (incl. `utcSpan` and date conditions at each precision), stats lines, data integrity.
+- `tests/dateCases.ts` — date values shared by the frontend's and the mock's date tests, so their two copies of the timestamp pattern can't drift apart.
 - `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock facet, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
 - Fixture request/response objects double as contract examples.
 - No DOM/component tests: the panels only turn state into HTML strings; the behaviour lives in `app.ts` and the pure modules, which are tested.

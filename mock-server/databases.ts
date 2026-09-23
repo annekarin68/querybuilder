@@ -1,12 +1,7 @@
 import type { DatabasesResponse } from "../src/api/types";
 
-interface DatabaseSeed {
-  label: string;
-  name: string;
-  description: string;
-  owner: string;
-  totalEntrysets: number;
-}
+/** A database as written below; `percentageOfTotal` is computed from the sizes. */
+type DatabaseSeed = Omit<DatabasesResponse, "percentageOfTotal">;
 
 /**
  * Seven arbitrary, content-agnostic partitions — database identity carries

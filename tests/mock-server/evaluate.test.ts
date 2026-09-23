@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { matches, utcSpan, type JsonNode } from "../../mock-server/evaluate";
+import { MALFORMED, WELL_FORMED } from "../dateCases";
 
 const row = {
   species: "oak",
@@ -88,6 +89,14 @@ describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
   it("is null for anything else", () => {
     expect(utcSpan("oak")).toBeNull();
     expect(utcSpan(2024)).toBeNull();
+  });
+
+  it.each(WELL_FORMED)("reads %s, like the frontend", (v) => {
+    expect(utcSpan(v)).not.toBeNull();
+  });
+
+  it.each(MALFORMED)("rejects %j, like the frontend", (v) => {
+    expect(utcSpan(v)).toBeNull();
   });
 });
 
