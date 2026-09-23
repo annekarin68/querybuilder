@@ -126,7 +126,7 @@ function runBlock(message: string, enabled: boolean, note = "", label = "Run que
   </div>`;
 }
 
-/** Advisory only (§9): Run always attempts the request; main.ts reacts to the
+/** Advisory only (§9): Run always attempts the request; src/app.ts reacts to the
  *  real 401/403 by redirecting into login/compliance and back. */
 function runNote(state: AppState): string {
   if (state.auth.status === "anonymous") return "You'll be asked to log in first.";
@@ -158,7 +158,7 @@ export function renderDataPreview(state: AppState): void {
     paint(el, card(runBlock(BLOCKED_MESSAGES[blocker], false)));
     return;
   }
-  // onQueryChange/onDatabasesChange reset preview to "idle" in the same
+  // app.ts resets preview to "idle" (changeScope) in the same
   // setState that changes the query, so one run always belongs to one query.
   if (p.status === "idle") {
     paint(

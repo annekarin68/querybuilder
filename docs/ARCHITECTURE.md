@@ -74,7 +74,7 @@ backend's names internally too (`INDIVIDUALS`, `ENTRYSETS`, `individual.json`).
 - The Review / Approval / Done views. Tabs exist; content does not.
 - Any real backend. The mock server stands in and shares no code with `src/`.
 - Saving / sharing / restoring queries (URL state, persistence) — the
-  `?resume=1` sessionStorage handoff in `main.ts` is a narrow exception,
+  `?resume=1` sessionStorage handoff in `app.ts` is a narrow exception,
   scoped only to surviving the login/compliance redirect round trip; it is
   not general query persistence.
 
@@ -88,7 +88,7 @@ backend's names internally too (`INDIVIDUALS`, `ENTRYSETS`, `individual.json`).
 | **Fomantic UI (CSS + JS) + jQuery** | Consistent good-looking components with little custom CSS. We use the **jQuery components** (searchable dropdowns, chip-style multi-selects) — this is a deliberate choice; see §3 for how we keep it safe. Native elements (`<details>`, checkboxes) are preferred where they do the job without a plugin — see §3. |
 | **No framework (no React/Vue)** | One less thing to learn. State is one plain object; the view is functions that turn state into HTML strings. |
 | **Small mock server** | `npm run dev` gives a working app end to end. It is dev-only and shares no code with `src/`. |
-| **Vitest, unit tests on pure modules only** | The valuable logic (query tree, validation) is pure and easy to test. The view layer is deliberately too thin to be worth DOM testing. |
+| **Vitest, unit tests without a DOM** | The valuable logic is pure (query tree, validation) or takes its dependencies as arguments (`src/app.ts`, driven by a fake API in tests), so it is easy to test. The panels only turn state into HTML strings, so they are not DOM-tested. |
 
 **Toolchain floor: Node 20.19+.** Vite 8 / Vitest 4 / ESLint 9 (flat config,
 `eslint.config.js`). These majors clear the dev-tooling CVEs the Vite 5 / Vitest 2
@@ -230,7 +230,8 @@ are the only two files that may import jquery (ESLint enforces it).
 ```
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
-  main.ts              Bootstrap: import setup-jquery + Fomantic; render the layout shell; wire every panel once; load databases/facets/auth/compliance and derive the field catalog; the panelRenderers table; the refreshStats / runPreview orchestrators, which react to 401/403 by redirecting into login/compliance.
+  main.ts              Page setup only: import setup-jquery + Fomantic; render the layout shell; wire every panel once to `app`; the panelRenderers table; read `?resume=1`; show the fatal-error page if startup fails.
+  app.ts               createApp({ store, api, navigate }) — everything the app DOES, with no DOM: startup loading (+ restoring a saved query), live stats (debounced, streamed), Run query and its 401/403 redirects into login/compliance, logout, query/scope changes. Tested with a fake API (tests/app.test.ts).
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data (facets, fields, tags, groups); all empty by default. HIDDEN_ROW_BADGES (tags/groups never shown as Matching events badges), ROW_COLUMNS (facet.field values shown as columns on each row). Enforced by tests/noBackendDataInSrc.test.ts.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store` + runBlocker() — the one "can this query run, and if not why" check.
   util/
@@ -365,8 +366,8 @@ of the keys that changed.
 
 | Trigger | Effect |
 |---|---|
-| App starts | Every panel paints its loader. Then `getDatabases()` + `getFacets()` + `getMe()` + `getComplianceStatus()` in parallel, `buildFieldCatalog(facets)` synchronously, and one `setState({ catalog, databases, facets, query, issues, auth, compliance, ... })`. On a `?resume=1` return hop the saved query and database selection are restored (§9) and statistics fetched at once. Individuals/databases load failure is fatal (full-page error + Reload); auth/compliance failures are not. |
-| User edits the query | handler calls a `tree.ts` fn → `onQueryChange` → `changeScope`: cancel both request slots, `setState({ query, issues, stats: idle, preview: idle })` → the query builder, statistics and preview repaint. Then a **debounced** (400 ms) `getStats()` is scheduled; it does nothing unless `runBlocker` says the query can run. A collapse toggle (`sameSemantics`) only updates `query`. |
+| App starts | Every panel paints its loader. Then `app.start()` runs `getDatabases()` + `getFacets()` + `getMe()` + `getComplianceStatus()` in parallel, `buildFieldCatalog(facets)` synchronously, and one `setState({ catalog, databases, facets, query, issues, auth, compliance, ... })`. On a `?resume=1` return hop the saved query and database selection are restored (§9) and statistics fetched at once. Individuals/databases load failure is fatal (full-page error + Reload); auth/compliance failures are not. |
+| User edits the query | handler calls a `tree.ts` fn → `app.onQueryChange` → `changeScope`: cancel both request slots, `setState({ query, issues, stats: idle, preview: idle })` → the query builder, statistics and preview repaint. Then a **debounced** (400 ms) `getStats()` is scheduled; it does nothing unless `runBlocker` says the query can run. A collapse toggle (`sameSemantics`) only updates `query`. |
 | `getStats()` reports a streamed line | stale-response guard (below); if current, appended to `stats.lines` via `setState` → **only** `statsPanel` repaints, showing partial results while more lines are still arriving. When the stream ends, `status` becomes `ok`; a non-2xx response instead sets `status: "error"`. |
 | User clicks **Run query** (in Matching events) | `setState({ preview: { status: "loading" } })` → `dataPreview` repaints (the card shows a loader instead of the button) → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and flows with the page. |
 | User opens/closes the docs (rail or ✕) | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class and the rail's `aria-expanded`. No repaint. |
@@ -409,7 +410,7 @@ Concretely:
 - **On any query edit _or database-selection change_**, the same `setState` that
   writes `query` / `selectedDatabaseIds` also resets `stats` to
   `{ status: "idle", lines: [], error: null }` and `preview` to
-  `{ status: "idle" }` (`changeScope` in `main.ts`). Old numbers and rows
+  `{ status: "idle" }` (`changeScope` in `app.ts`). Old numbers and rows
   disappear the instant the scope changes on screen — before any new request
   goes out.
   - The Matching events card then shows its ready state: an enabled **Run
@@ -429,7 +430,7 @@ Concretely:
   `{ status: "error", lines: [], error }`; preview goes to
   `{ status: "error", error }`. Both show a `ui negative message`
   with the text. No numbers, no rows.
-- **Stale-response guard — one rule:** `main.ts` keeps one `requestSlot()`
+- **Stale-response guard — one rule:** `app.ts` keeps one `requestSlot()`
   (`src/util/requestSlot.ts`) per kind (stats, preview). Every query edit and
   database-selection change cancels both slots, and starting a request replaces
   the previous one. A response, a streamed line, an error — and the
@@ -481,6 +482,7 @@ making progress is never cut off. An optional `signal` lets the caller abort
 The login/compliance entry points are exported as URLs built from the same
 `VITE_API_BASE` as every fetch, so no other file hardcodes `/api/...`. Links
 into those flows carry a `data-flow-link` attribute, which is how `main.ts`
+(calling `app.saveQueryBeforeRedirect()`)
 spots them to save the in-progress query first (§9).
 
 ### There is no schema/operators endpoint
@@ -758,10 +760,10 @@ a compliance acknowledgment (`403 { error }` without one) — everything else
 (`databases`, `facets`, `stats`) stays anonymous-accessible.
 `runBlocker` is NOT auth- or compliance-aware, and neither is `dataPreview.ts`'s
 enabling of the Run button — Run always genuinely attempts the request, and
-`main.ts` reacts to whatever status code comes back (§5, §9). A `401` always redirects into login. A
+`app.ts` reacts to whatever status code comes back (§5, §9). A `401` always redirects into login. A
 `403` only means "authenticated, but some requirement is unmet", and
 compliance may not be the only such requirement (a real backend may also
-refuse a user access to a database). So on a `403`, `main.ts` first asks
+refuse a user access to a database). So on a `403`, `app.ts` first asks
 `GET /api/compliance/status`. It redirects into compliance only if that says
 `"required"`; otherwise it shows the `403`'s own error message. Redirecting on
 every `403` would send such a user round the compliance flow forever with no
@@ -918,7 +920,7 @@ badge (`✓ Compliance` or `Compliance needed`) that opens a native `<details>`
 menu: the compliance reason and when it was given + `Invalidate`, or
 `Start compliance check` (`COMPLIANCE_START_URL`, `data-flow-link`); then
 `Log out`. Outside clicks and Escape close it. **Display only:** Run is never
-gated on it — `main.ts` reacts to a `401`/`403` from `POST /api/query` (§7).
+gated on it — `app.ts` reacts to a `401`/`403` from `POST /api/query` (§7).
 If `GET /api/auth/me` fails (anything but `200`/`401`) the visitor is treated
 as anonymous and the error is logged.
 
@@ -928,7 +930,7 @@ Its own panel (`data-panel="dbpicker"`). A card with one pill toggle per
 `state.databases` entry (a native checkbox inside a styled label — no
 plugin; its hover `title` is `databaseTitle`: "owner: description", or
 whichever is non-blank, or no `title` at all), "N of M selected", and **All** / **None** buttons. Toggling calls
-`onDatabasesChange` in `main.ts`, which treats it exactly like a query edit
+`onDatabasesChange` in `app.ts`, which treats it exactly like a query edit
 (§6). Zero selected → an amber "Select at least one database." note, and the
 statistics and Matching events cards explain why they are empty.
 
@@ -1197,13 +1199,14 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 
 - `tests/query/` — `tree` (immutable edits, `sameSemantics`), `validate` (each issue type), `summary` (text), `fieldCatalog` (type mapping, enums, names, lookups), `conditionEdit` (the row cascade), `dates` (which partial UTC timestamps are accepted).
 - `tests/state.test.ts` — the store and `runBlocker`.
+- `tests/app.test.ts` — `createApp` with a fake API: Run query and its 401/403 redirects, stale responses, streamed statistics, logout, startup and restoring a saved query.
 - `tests/api/client.test.ts` — requests, error unwrapping, NDJSON streaming, timeouts, aborts.
 - `tests/util/` — `debounce`, `pendingQuery` (save/restore, untrusted input), `requestSlot` (the stale-response rule).
 - `tests/ui/` — `docsFilter`, `dataPreview` (badges, row columns), `statsPanel` (headline), `format`, `valueControl` (markup + accessible names).
 - `tests/mock-server/` — auth flows (incl. expiry), audit, databases, rows, the evaluator (incl. `utcSpan` and date conditions at each precision), stats lines, data integrity, the bare-array wire shapes.
 - `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock facet, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
 - Fixture request/response objects double as contract examples.
-- No DOM/component tests — the view layer is deliberately too thin to be worth it (repo rule).
+- No DOM/component tests: the panels only turn state into HTML strings; the behaviour lives in `app.ts` and the pure modules, which are tested.
 
 ### Scripts
 

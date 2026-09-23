@@ -178,7 +178,7 @@ export function runQuery(
 /**
  * Who's logged in, if anyone. A 401 here is a normal outcome (not logged
  * in) — resolves to `null` rather than throwing, so this can sit alongside
- * getDatabases()/getFacets() in main.ts's startup Promise.all without
+ * getDatabases()/getFacets() in app.ts's startup Promise.all without
  * an anonymous visitor tripping their fatal-load-failure path.
  */
 export function getMe(): Promise<AuthUser | null> {

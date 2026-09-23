@@ -73,7 +73,7 @@ export type RunBlocker = "loading" | "no-database" | "no-condition" | "unfinishe
 type RunInputs = Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds">;
 
 /**
- * The single source of truth for "can this query run?" (§6). main.ts uses it to
+ * The single source of truth for "can this query run?" (§6). src/app.ts uses it to
  * decide whether to fetch; the statistics and Matching events panels use the
  * reason to explain why they are empty. Checked in the order the panels explain
  * them.
@@ -104,5 +104,7 @@ export function createStore(initial: AppState) {
     },
   };
 }
+
+export type Store = ReturnType<typeof createStore>;
 
 export const store = createStore(initialState);
