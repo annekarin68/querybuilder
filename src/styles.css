@@ -911,6 +911,15 @@ body {
   gap: 0.25rem;
   margin: 0.25rem 0;
 }
+.qb-doc-untagged {
+  font-style: italic;
+  color: var(--qb-muted);
+}
+.qb-doc-source {
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
+  color: var(--qb-subtle);
+}
 .qb-doc-desc,
 .qb-doc-comment,
 .qb-doc-count {

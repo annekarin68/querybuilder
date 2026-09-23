@@ -2,8 +2,8 @@ import type { AppState } from "../state";
 import type { DatabasesResponse, Individual } from "../api/types";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
-import { compact, countLabel, displayLabel, matchRatio } from "./format";
-import { matchDocs } from "./docsFilter";
+import { compact, countLabel, displayLabel, fieldTitle, matchRatio, text } from "./format";
+import { groupByTag, matchDocs, tagsOf, UNTAGGED } from "./docsFilter";
 
 /** Total entrysets across every loaded database — the denominator for an
  * individual's percentage, since the backend no longer sends one directly
@@ -13,20 +13,25 @@ function totalEntrysets(databases: DatabasesResponse[] | null): number {
 }
 
 function itemHtml(item: Individual, total: number): string {
-  const tags = item.tags.length
-    ? `<div class="qb-doc-tags">${item.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
+  const tagList = tagsOf(item).filter((t) => t !== UNTAGGED);
+  const tags = tagList.length
+    ? `<div class="qb-doc-tags">${tagList.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
     : "";
+  const group = text(item.group);
+  const description = text(item.description);
+  const comment = text(item.comment);
   const fields = item.fields
-    .map(
-      (f) =>
-        `<span class="qb-field-chip"><code>${escapeHtml(f.name || f.label)}</code><span class="qb-field-type">${escapeHtml(f.type || f.format)}</span></span>`,
-    )
+    .map((f) => {
+      const title = fieldTitle(f);
+      return `<span class="qb-field-chip"${title ? ` title="${escapeHtml(title)}"` : ""}><code>${escapeHtml(f.name || f.label)}</code><span class="qb-field-type">${escapeHtml(f.type || f.format)}</span></span>`;
+    })
     .join("");
   return `<div class="qb-doc-item" data-item-label="${escapeHtml(item.label)}">
       <div class="qb-doc-name">${escapeHtml(item.name)}</div>
       ${tags}
-      ${item.description ? `<p class="qb-doc-desc">${escapeHtml(item.description)}</p>` : ""}
-      ${item.comment ? `<p class="qb-doc-comment">${escapeHtml(item.comment)}</p>` : ""}
+      ${group ? `<p class="qb-doc-source" title="Third-party group">Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
+      ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
+      ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
       <p class="qb-doc-count" title="${escapeHtml(item.totalCount.toLocaleString())} of ${total.toLocaleString()} entrysets">
         In ${compact(item.totalCount)} entrysets (${matchRatio(item.totalCount, total)})
       </p>
@@ -34,10 +39,15 @@ function itemHtml(item: Individual, total: number): string {
     </div>`;
 }
 
-function groupHtml(group: string, items: Individual[], total: number): string {
-  return `<details class="qb-doc-group" data-group="${escapeHtml(group)}" data-size="${items.length}">
+/** One collapsible section per tag (see groupByTag); `UNTAGGED` gets its own. */
+function groupHtml(tag: string, items: Individual[], total: number): string {
+  const name =
+    tag === UNTAGGED
+      ? `<span class="qb-doc-group-name qb-doc-untagged">Untagged</span>`
+      : `<span class="qb-doc-group-name">${escapeHtml(displayLabel(tag))}</span>`;
+  return `<details class="qb-doc-group" data-group="${escapeHtml(tag)}" data-size="${items.length}">
       <summary>
-        <span class="qb-doc-group-name">${escapeHtml(displayLabel(group))}</span>
+        ${name}
         <span class="qb-count" data-group-count>${items.length}</span>
       </summary>
       <div class="qb-doc-items">${items.map((item) => itemHtml(item, total)).join("")}</div>
@@ -51,8 +61,8 @@ function groupHtml(group: string, items: Individual[], total: number): string {
  * filter text is local to this panel (not AppState), and a repaint on every
  * keystroke would throw away the input's focus and caret.
  */
-function applyFilter(el: HTMLElement, individuals: Individual[], text: string): void {
-  const match = matchDocs(individuals, text);
+function applyFilter(el: HTMLElement, individuals: Individual[], query: string): void {
+  const match = matchDocs(individuals, query);
   el.querySelectorAll<HTMLElement>("[data-item-label]").forEach((node) => {
     node.hidden = match !== null && !match.items.has(node.dataset.itemLabel!);
   });
@@ -71,8 +81,8 @@ function applyFilter(el: HTMLElement, individuals: Individual[], text: string): 
   });
   const empty = el.querySelector<HTMLElement>(".qb-docs-empty")!;
   empty.hidden = !match || match.items.size > 0;
-  empty.textContent = `No items match “${text.trim()}”.`;
-  el.querySelector<HTMLElement>("[data-action='clear-filter']")!.hidden = text === "";
+  empty.textContent = `No items match “${query.trim()}”.`;
+  el.querySelector<HTMLElement>("[data-action='clear-filter']")!.hidden = query === "";
 }
 
 export function renderDocsSidebar(state: AppState): void {
@@ -86,12 +96,7 @@ export function renderDocsSidebar(state: AppState): void {
   }
   const individuals = state.individuals;
   const total = totalEntrysets(state.databases);
-  const groups = new Map<string, Individual[]>();
-  for (const item of individuals) {
-    const list = groups.get(item.group) ?? [];
-    list.push(item);
-    groups.set(item.group, list);
-  }
+  const groups = groupByTag(individuals);
 
   paint(
     el,

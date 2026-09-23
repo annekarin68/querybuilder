@@ -4,7 +4,7 @@ import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
-import { countLabel, displayLabel, formatWhen } from "./format";
+import { countLabel, displayLabel, formatWhen, text } from "./format";
 
 /** How many group tags to show inline before collapsing the rest into "+N". */
 const MAX_GROUP_BADGES = 3;
@@ -19,8 +19,8 @@ function groupsBadgesHtml(entryset: Entryset, byLabel: Map<string, Individual>):
   const groups = [
     ...new Set(
       Object.keys(entryset.items)
-        .map((slug) => byLabel.get(slug)?.group)
-        .filter((g): g is string => Boolean(g) && g !== "metadata"),
+        .map((slug) => text(byLabel.get(slug)?.group))
+        .filter((g) => g !== "" && g !== "metadata"),
     ),
   ].sort();
   const shown = groups.slice(0, MAX_GROUP_BADGES);

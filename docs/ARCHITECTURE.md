@@ -229,7 +229,7 @@ src/
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
-    docsFilter.ts      matchDocs(individuals, text) — which data-dictionary items/groups match the filter (pure; unit-tested).
+    docsFilter.ts      tagsOf / groupByTag (the data dictionary's per-tag sections, untagged last) + matchDocs(individuals, text) — which items/sections match the filter (pure; unit-tested).
     docsSidebar.ts     render for the data dictionary (docs column) — built
                        from state.individuals, NOT state.schema. See §9.
     statsPanel.ts      render for the pinned statistics column (data-driven from /api/stats).
@@ -840,7 +840,8 @@ as anonymous and the error is logged.
 
 Its own panel (`data-panel="dbpicker"`). A card with one pill toggle per
 `state.databases` entry (a native checkbox inside a styled label — no
-plugin), "N of M selected", and **All** / **None** buttons. Toggling calls
+plugin; its hover `title` is `databaseTitle`: "owner: description", or
+whichever is non-blank, or no `title` at all), "N of M selected", and **All** / **None** buttons. Toggling calls
 `onDatabasesChange` in `main.ts`, which treats it exactly like a query edit
 (§6). Zero selected → an amber "Select at least one database." note, and the
 statistics and Matching entrysets cards explain why they are empty.
@@ -849,16 +850,25 @@ statistics and Matching entrysets cards explain why they are empty.
 
 Built from `state.individuals` (GET /api/individuals) — not `state.schema`.
 Hidden behind the docs rail by default (`sidebarCollapsed` starts `true`);
-the rail and the card's ✕ both toggle it. One native `<details>` per `group`
-(18 subsystem groups, e.g. `engine`, `tires_wheels`, `metadata`), each
-listing its items: name, tags, `description`, italic `comment`, "In N
-entrysets (x%)" (`matchRatio` against the sum of every database's
-`totalEntrysets`), and field chips (`name`, falling back to `label`, + type).
-Group names and tags are shown in the backend's casing with underscores as
-spaces (`displayLabel`). The search box filters with `matchDocs` (item name,
-field label or name; case-insensitive): matching groups open and show "N
-matches", other groups and items are hidden, and "No items match …" appears
-when nothing does. The filter sets `hidden`/`open` on the painted DOM instead
+the rail and the card's ✕ both toggle it. Sections are built from our own
+`tags`, not the third-party `group` (`groupByTag` in `docsFilter.ts`): one
+native `<details>` per tag, sorted alphabetically, listing every item carrying
+it — so an item with several tags appears in several sections. Tags are
+trimmed and blank/duplicate tags dropped (`tagsOf`); items left with no tags
+go in a final italic **Untagged** section (key `UNTAGGED`, the empty string —
+never a real tag). Each item shows: name, tag chips, a small "Group: …" line
+with the third-party `group` (omitted when blank — the backend may send `""`),
+`description`, italic `comment`, "In N entrysets (x%)" (`matchRatio` against
+the sum of every database's `totalEntrysets`), and field chips (`name`,
+falling back to `label`, + type) whose hover `title` is `fieldTitle`: the
+field's `comment`, then "Third-party: `description`". The backend sends `""`
+for missing text, so every `description`/`comment`/`group`/`owner` goes
+through `text()` (trim) and a blank value's element or `title` is omitted
+rather than rendered empty. Tags and group names are shown in the backend's
+casing with underscores as spaces (`displayLabel`). The search box filters
+with `matchDocs` (item name, field label or name; case-insensitive): matching
+sections open and show "N matches", other sections and items are hidden, and
+"No items match …" appears when nothing does. The filter sets `hidden`/`open` on the painted DOM instead
 of repainting, so typing keeps focus.
 
 ### Centre — `queryBuilder.ts`
@@ -1142,3 +1152,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-23 | Compliance-logging redirect gate: `POST /api/query` now also requires a compliance acknowledgment (`403` without one), gated the same way login is (`401`) — via a second mock-service redirect flow (`mock-server/auth.ts`'s compliance session/token logic + `mock-server/index.ts`'s `/api/compliance/*` and `/mock-compliance/*` routes), the reason attached to the *same* session record rather than a second cookie. The frontend no longer pre-checks `auth`/`compliance` status before allowing Run — `syncRunButton` reverted to its pre-OAuth shape, and `main.ts` reacts generically to a `401`/`403` on the actual request, which will cover any future protected endpoint for free. The in-progress query survives both redirects via a new `src/util/pendingQuery.ts` (`sessionStorage`, restored on a `?resume=1` return-hop) — deliberately with no automatic retry or chaining, so the mechanism can never redirect-loop: the user always clicks Run again to retry. New top-menu widget (`src/ui/complianceStatus.ts`). Every successful extraction is also logged to a dev-only in-memory audit list (`mock-server/audit.ts`) standing in for a real audit-service call. Also rebased, alongside the OAuth2 row above, onto the API-contract-rename work — `getStats`'s streaming NDJSON shape and `buildFieldCatalog` were unaffected by this feature, so `refreshStats` kept its post-rename implementation untouched through both rebases. Design: `docs/superpowers/specs/2026-09-23-compliance-logging-design.md`. |
 | 2026-09-23 | Production-readiness hardening (review before first production deploy). **Requests:** `client.ts` gains a shared 60 s timeout (`TimeoutError`; for the `/stats` stream it is an idle timeout that restarts on each chunk) and optional `AbortSignal`s on `getStats`/`runQuery`; `main.ts` replaces the `statsRun` counter with a `requestSlot()` per request kind that aborts superseded requests and supplies the identity half of the stale guard, and `cancelInFlight()` runs on every query/scope edit and on logout (§6). **Auth/compliance:** a `403` from `/api/query` only redirects into compliance if `GET /api/compliance/status` says `"required"`, otherwise the error is shown (a non-compliance `403` used to redirect in an endless circle); a non-401 failure of `GET /api/auth/me` no longer fails startup; `LOGIN_URL`/`COMPLIANCE_START_URL` are exported from `client.ts` and follow `VITE_API_BASE` (previously hardcoded `/api/...` in five places), and flow links are marked `data-flow-link`. **Correctness/UI:** `valueTypeFor` accepts common SQL type spellings case-insensitively (previously only the mock's four); the stats headline never presents failed databases as zero and notes how many it excludes; a restored pending query is structurally validated and its database ids filtered to ones that still exist; the startup error page escapes the server's message and drops its inline `onclick`; node ids and entryset ids are escaped in markup; menu tabs, the Docs toggle and Select all/none are keyboard-focusable (`href="#"` + `preventDefault`). **Build:** `THIRD-PARTY-NOTICES.txt` is emitted into `dist/` by a Vite plugin (exempted by exact path in `check:offline`), removing the manual copy step. **Decision:** re-examined bringing back `GET /api/schema` and kept the client-side catalog (§7). |
 | 2026-09-23 | UI/UX refresh (`docs/superpowers/specs/2026-09-23-ui-ux-refresh-design.md`). Layout: dark top bar with workflow steps and an account menu (replaces `authStatus.ts` + `complianceStatus.ts` with `accountMenu.ts`, a native `<details>` menu); docs collapsed into a rail (`sidebarCollapsed` starts `true`); main column stacks databases (pill toggles), the query card and "Matching entrysets"; a pinned ~15rem statistics column. Query builder: ALL/ANY groups as coloured brackets with tint + hover highlight, AND/OR joiners between children, collapsed groups summarised with `queryToText`, a plain-English footer, CSS-grid condition rows with a container query. `Issue.kind` (`incomplete` → grey hint, `invalid` → red); `newGroup()` now holds one empty condition. Run moved from the top bar into the Matching entrysets card (`syncRunButton` removed; `wireDataPreview` added) — request handling unchanged. Data dictionary: `<details>` groups instead of the Fomantic accordion, a filter (`docsFilter.ts`) that opens matching groups, backend casing with underscores as spaces. `format.ts` gains `displayLabel` / `countLabel` / `formatWhen`. |
+| 2026-09-23 | Data dictionary sectioned by our own `tags` instead of the third-party `group` (`docsFilter.ts` `tagsOf`/`groupByTag`; `matchDocs` counts per tag): alphabetical tag sections, multi-tag items listed under each, untagged items in a final **Untagged** section; `group` is now a small "Group: …" line, omitted when blank (the backend may send `""`). Blank-safe text everywhere via `format.ts` `text()`: database pills' hover is `databaseTitle` ("owner: description", either, or none); field chips gain a hover `fieldTitle` (comment, then "Third-party: description"); blank item `description`/`comment` are omitted. Mock: `speeding_event` has a blank `group`/`description` and one field `comment`, to exercise these paths. |
