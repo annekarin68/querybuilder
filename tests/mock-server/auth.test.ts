@@ -290,3 +290,23 @@ describe("compliance-state binding cookie", () => {
     expect(clearComplianceStateCookieHeader()).toContain("Max-Age=0");
   });
 });
+
+describe("login and compliance flows don't cross-validate", () => {
+  it("a compliance token cannot be exchanged against a login state", () => {
+    const loginState = startLogin();
+    const complianceToken = issueFakeComplianceToken("some reason");
+    expect(exchangeComplianceToken(complianceToken, loginState, undefined)).toEqual({
+      ok: false,
+      error: "Invalid or expired compliance attempt.",
+    });
+  });
+
+  it("a login code cannot be exchanged against a compliance state", () => {
+    const complianceState = startCompliance();
+    const loginCode = issueFakeCode();
+    expect(exchangeCodeForSession(loginCode, complianceState)).toEqual({
+      ok: false,
+      error: "Invalid or expired login attempt.",
+    });
+  });
+});

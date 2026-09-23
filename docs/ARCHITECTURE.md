@@ -203,8 +203,8 @@ src/
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
     pendingQuery.ts    Save/restore the in-progress query across the login or
-                       compliance redirect (sessionStorage only). See §7 of the
-                       compliance-logging design spec.
+                       compliance redirect (sessionStorage only). See §2 and
+                       §5 of the compliance-logging design spec.
   api/
     client.ts          The ONLY file that calls fetch(). One function per endpoint.
     types.ts           Request/response types. This IS the API contract.
@@ -549,7 +549,8 @@ interface AuthUser {
 - `GET /api/auth/callback?code=&state=` — exchanges the code server-to-server
   (client secret never leaves the backend), sets a `qb_session` `HttpOnly`/
   `SameSite=Lax` cookie (`Secure` too, in production — see §10), redirects
-  to `/`.
+  to `/?resume=1` (so a restored, saved query — see §5 — can be picked back
+  up after login).
 - `GET /api/auth/me` — `200 AuthUser` with a valid session cookie, `401`
   otherwise.
 - `POST /api/auth/logout` — clears the session, `204`.
@@ -559,9 +560,12 @@ a compliance acknowledgment (`403 { error }` without one) — everything else
 (`schema`, `databases`, `individuals`, `stats`) stays anonymous-accessible.
 `canRunQuery` is NOT auth- or compliance-aware; neither is `syncRunButton` —
 Run always genuinely attempts the request, and `main.ts` reacts to whatever
-status code comes back (§5, §9). Any future protected endpoint gets both
-redirect flows for free as long as it returns `401`/`403` under the same
-conditions.
+status code comes back (§5, §9). This pattern would generalize to a future
+protected endpoint returning the same `401`/`403` conditions — but only from
+a call site triggered by an explicit user gesture, same as `runPreview`'s own
+Run-click origin. It must never wrap an automatically-fired request (e.g. the
+debounced `refreshStats`), which would redirect the browser without a click
+and break the "never redirects itself" loop-safety this feature depends on.
 
 ### Compliance (`GET /api/compliance/start`, `GET /api/compliance/callback`, `GET /api/compliance/status`, `POST /api/compliance/invalidate`)
 

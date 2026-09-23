@@ -12,6 +12,12 @@ import { escapeHtml, paint } from "./panel";
  */
 export function renderComplianceStatus(state: AppState): void {
   const el = panelEls().compliance;
+  if (state.auth.status !== "authenticated") {
+    // Compliance is meaningless without a session — showing this widget while
+    // anonymous would offer a "Start compliance check" link that just 401s.
+    paint(el, "");
+    return;
+  }
   if (state.compliance.status === "loading") {
     paint(el, "");
     return;

@@ -266,6 +266,27 @@ None of this exists today. A real backend team must implement, for real:
   (not authenticated) / `403` (authenticated, requirement unmet) under
   the same conditions for the frontend's generic redirect handling to
   keep working automatically without new frontend code.**
+- `GET /api/auth/callback`'s redirect target changed from `/` to `/?resume=1`
+  as part of this feature (a pre-existing OAuth-PR route, modified here) — a
+  production implementation of the login callback must redirect to
+  `/?resume=1` too, or a saved query can never be restored after a plain
+  login (only after the compliance flow would work).
+- The frontend currently treats EVERY `403` from `POST /api/query` as "compliance
+  required" and redirects into the compliance flow accordingly. If a future
+  protected endpoint ever needs to return `403` for a DIFFERENT, unrelated
+  reason (e.g. a role-based permission failure with no compliance angle at
+  all), that endpoint cannot reuse this exact contract as-is — it would
+  incorrectly send the user into the compliance flow. This wasn't addressed
+  now because no such second endpoint exists yet (YAGNI); a real fix would
+  need the 403 response to carry a discriminator (e.g. a `code` field) so the
+  frontend can tell compliance-related 403s apart from others.
+- The compliance CSRF `state` is bound to the initiating BROWSER (via the
+  short-lived cookie), not to the specific session that started the flow. In
+  the mock this is harmless (single demo user). A production implementation
+  should additionally bind the state to the session id that started the
+  compliance flow, so a logout-then-different-login in the same browser
+  within the state's short validity window can't attach the first user's
+  submitted reason to the second user's session.
 
 ## 8. Out of scope
 

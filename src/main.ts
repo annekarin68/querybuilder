@@ -24,7 +24,7 @@ import {
   runQuery,
 } from "./api/client";
 import { canRunQuery, store, type AppState } from "./state";
-import { addChild, newCondition, stripCollapsed } from "./query/tree";
+import { addChild, countConditions, newCondition, stripCollapsed } from "./query/tree";
 import { validateQuery } from "./query/validate";
 import type { Group, QueryNode } from "./query/types";
 import { debounce } from "./util/debounce";
@@ -59,6 +59,22 @@ onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
   run: () => runPreview(),
+});
+
+/**
+ * Any link that navigates straight into the login or compliance flow (the
+ * top-menu widgets, the data-preview hints) must save the in-progress query
+ * first too, not just the Run button's own redirect path (§2 of the
+ * compliance-logging design spec) — otherwise a user who follows the
+ * on-screen guidance loses their query on a hop Run itself protects.
+ */
+document.addEventListener("click", (e) => {
+  const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>(
+    "a[href='/api/auth/login'], a[href='/api/compliance/start']",
+  );
+  if (!anchor) return;
+  const s = store.getState();
+  if (countConditions(s.query) > 0) savePendingQuery(s.query, s.selectedDatabaseIds);
 });
 
 const PAGE_SIZE = 25;
@@ -98,9 +114,13 @@ function runPreview(): void {
   // No longer gated on auth.status: Run always genuinely attempts the request now,
   // and reacts to whatever comes back. A 401 (not authenticated) or 403
   // (authenticated, some requirement unmet — e.g. compliance) saves the current
-  // query/selection and navigates into the matching flow. This generalizes to any
-  // future protected endpoint that returns the same status codes under the same
-  // conditions, without new frontend wiring per endpoint.
+  // query/selection and navigates into the matching flow. This pattern would
+  // generalize to a future protected endpoint returning the same status codes —
+  // but ONLY from a call site triggered by an explicit user gesture, same as
+  // this one (a Run click). Never wrap this pattern around an automatically-
+  // fired request (e.g. refreshStats's debounced calls) — that would redirect
+  // the browser without a click, breaking the "never redirects itself"
+  // loop-safety property this whole feature depends on.
   runGuarded(
     (query, databases) => runQuery(query, databases, 1, PAGE_SIZE),
     () => store.setState({ preview: { status: "loading", data: null, error: null } }),
@@ -255,7 +275,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     },
   },
   {
-    keys: ["compliance"],
+    keys: ["compliance", "auth"],
     run: (s) => {
       renderComplianceStatus(s);
       wireComplianceStatus(panelEls().compliance, onInvalidateCompliance);
@@ -284,7 +304,12 @@ function consumeResumeParam(): boolean {
   return true;
 }
 
-const pending = consumeResumeParam() ? takePendingQuery() : null;
+const resumed = consumeResumeParam();
+// Always clear a saved entry, even on a non-resume load — a stale one from an
+// abandoned attempt (backed out of login, or a widget link clicked on an
+// unrelated later visit) must not silently resurface on some future,
+// unrelated resume-hop (spec §2).
+const pending = resumed ? takePendingQuery() : (takePendingQuery(), null);
 
 renderDatabasePicker(store.getState()); // "" while databases is null
 renderQueryBuilder(store.getState()); // initial loader (centre panel spinner during schema fetch)
@@ -294,7 +319,13 @@ syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
 renderAuthStatus(store.getState()); // "" while auth.status is "loading"
 renderComplianceStatus(store.getState()); // "" while compliance.status is "loading"
-Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe(), getComplianceStatus()])
+Promise.all([
+  getSchema(),
+  getDatabases(),
+  getIndividuals(),
+  getMe(),
+  getComplianceStatus().catch(() => ({ status: "required" }) as const),
+])
   .then(([schema, dbResp, individuals, user, complianceStatus]) => {
     // A restored query replaces the normal empty-condition seed entirely — it
     // already has whatever conditions the user built before being redirected.
@@ -328,6 +359,12 @@ Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe(), getComplian
             }
           : { status: "required", reason: null, ackedAt: null },
     });
+    // A restored query already has real conditions and databases selected —
+    // unlike the default empty seed, it needs its stats fetched immediately,
+    // the same way any other in-app edit would trigger refreshStats() via
+    // onQueryChange. The default-seed path never needed this since it starts
+    // with nothing runnable.
+    if (pending) refreshStats();
   })
   .catch((err) => {
     root.innerHTML = `<div class="ui negative message" style="margin:2rem">
