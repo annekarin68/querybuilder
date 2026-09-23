@@ -1,0 +1,211 @@
+import { describe, it, expect } from "vitest";
+import { buildFieldCatalog, OPERATORS } from "../../src/query/fieldCatalog";
+import type { Individual } from "../../src/api/types";
+
+const individuals: Individual[] = [
+  {
+    label: "engine_rpm",
+    group: "engine",
+    tags: [],
+    idNumber: 1,
+    name: "Engine RPM",
+    description: "Engine rotational speed.",
+    comment: "",
+    totalCount: 100,
+    fields: [
+      {
+        label: "value_rpm",
+        type: "BIGINT",
+        description: "",
+        comment: "",
+        cardinality: 5000,
+        values: [],
+        format: "",
+      },
+      {
+        label: "redline_rpm",
+        type: "BIGINT",
+        description: "Redline for this engine.",
+        comment: "",
+        cardinality: 5000,
+        values: [],
+        format: "",
+      },
+      {
+        label: "is_over_rev",
+        type: "BOOLEAN",
+        description: "",
+        comment: "",
+        cardinality: 2,
+        values: [],
+        format: "",
+      },
+    ],
+  },
+  {
+    label: "vehicle_identity",
+    group: "metadata",
+    tags: [],
+    idNumber: 2,
+    name: "Vehicle identity",
+    description: "Identifying info for the vehicle.",
+    comment: "",
+    totalCount: 100,
+    fields: [
+      {
+        label: "vin",
+        type: "VARCHAR",
+        description: "",
+        comment: "",
+        cardinality: 5000,
+        values: [],
+        format: "",
+      },
+      {
+        label: "vehicle_type",
+        type: "VARCHAR",
+        description: "",
+        comment: "",
+        cardinality: 5000,
+        values: [],
+        format: "",
+      },
+    ],
+  },
+];
+
+describe("buildFieldCatalog", () => {
+  it("labels are dotted individualLabel.fieldLabel", () => {
+    const { fields } = buildFieldCatalog(individuals);
+    expect(fields.map((f) => f.label)).toEqual([
+      "engine_rpm.value_rpm",
+      "engine_rpm.redline_rpm",
+      "engine_rpm.is_over_rev",
+      "vehicle_identity.vin",
+      "vehicle_identity.vehicle_type",
+    ]);
+  });
+
+  it("maps backend type to valueType", () => {
+    const { fields } = buildFieldCatalog(individuals);
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.valueType).toBe("number");
+    expect(fields.find((f) => f.label === "engine_rpm.is_over_rev")?.valueType).toBe("boolean");
+    expect(fields.find((f) => f.label === "vehicle_identity.vin")?.valueType).toBe("string");
+  });
+
+  it("falls back to format when type is empty", () => {
+    const withFallback: Individual[] = [
+      {
+        ...individuals[0]!,
+        fields: [
+          {
+            label: "observed_at",
+            type: "",
+            description: "",
+            comment: "",
+            cardinality: 100_000,
+            values: [],
+            format: "TIMESTAMP",
+          },
+        ],
+      },
+    ];
+    const { fields } = buildFieldCatalog(withFallback);
+    expect(fields[0]?.valueType).toBe("date");
+  });
+
+  it("name combines the individual's name and the field's label", () => {
+    const { fields } = buildFieldCatalog(individuals);
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.name).toBe(
+      "Engine RPM: value_rpm",
+    );
+  });
+
+  it("description falls back to the individual's description when the field's is empty", () => {
+    const { fields } = buildFieldCatalog(individuals);
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.description).toBe(
+      "Engine rotational speed.",
+    );
+    expect(fields.find((f) => f.label === "engine_rpm.redline_rpm")?.description).toBe(
+      "Redline for this engine.",
+    );
+  });
+
+  it("assigns operatorIds per valueType, all of which are real operator labels", () => {
+    const { fields } = buildFieldCatalog(individuals);
+    const opLabels = new Set(OPERATORS.map((o) => o.label));
+    for (const f of fields) {
+      expect(f.operatorIds.length).toBeGreaterThan(0);
+      for (const label of f.operatorIds) expect(opLabels.has(label)).toBe(true);
+    }
+    expect(fields.find((f) => f.label === "engine_rpm.is_over_rev")?.operatorIds).toEqual([
+      "eq",
+      "neq",
+    ]);
+    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.operatorIds).toEqual([
+      "eq",
+      "neq",
+      "gt",
+      "gte",
+      "lt",
+      "lte",
+      "between",
+      "isEmpty",
+      "isNotEmpty",
+    ]);
+  });
+
+  it("a field with non-empty values becomes an enum field with matching options, regardless of cardinality", () => {
+    const withValues: Individual[] = [
+      {
+        ...individuals[1]!,
+        fields: [
+          {
+            label: "vehicle_type",
+            type: "VARCHAR",
+            description: "",
+            comment: "",
+            cardinality: 500, // deliberately high — must be ignored
+            values: ["sedan", "van"],
+            format: "",
+          },
+        ],
+      },
+    ];
+    const { fields } = buildFieldCatalog(withValues);
+    const field = fields.find((f) => f.label === "vehicle_identity.vehicle_type");
+    expect(field?.valueType).toBe("enum");
+    expect(field?.options).toEqual([
+      { value: "sedan", label: "sedan" },
+      { value: "van", label: "van" },
+    ]);
+    expect(field?.operatorIds).toEqual(["eq", "neq", "in", "isEmpty", "isNotEmpty"]);
+  });
+
+  it("a field with empty values is never valueType enum, no matter its cardinality", () => {
+    const lowCardinalityNoValues: Individual[] = [
+      {
+        ...individuals[1]!,
+        fields: [
+          {
+            label: "vehicle_type",
+            type: "VARCHAR",
+            description: "",
+            comment: "",
+            cardinality: 3, // deliberately low — must still be ignored
+            values: [],
+            format: "",
+          },
+        ],
+      },
+    ];
+    const { fields } = buildFieldCatalog(lowCardinalityNoValues);
+    expect(fields.every((f) => f.valueType !== "enum")).toBe(true);
+  });
+});
+
+describe("OPERATORS", () => {
+  it("arities are from the allowed set", () => {
+    for (const o of OPERATORS) expect(["none", "one", "two", "many"]).toContain(o.arity);
+  });
+});

@@ -4,11 +4,11 @@ import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../
 
 const schema = {
   fields: [
-    { id: "heightCm", label: "Height (cm)" },
-    { id: "foliage", label: "Has foliage" },
+    { label: "heightCm", name: "Height (cm)" },
+    { label: "foliage", name: "Has foliage" },
     {
-      id: "species",
-      label: "Species",
+      label: "species",
+      name: "Species",
       options: [
         { value: "oak", label: "Oak" },
         { value: "fern", label: "Fern" },
@@ -16,10 +16,10 @@ const schema = {
     },
   ],
   operators: [
-    { id: "gte", label: "≥", arity: "one" as const },
-    { id: "eq", label: "is", arity: "one" as const },
-    { id: "in", label: "is any of", arity: "many" as const },
-    { id: "isEmpty", label: "is empty", arity: "none" as const },
+    { label: "gte", name: "≥", arity: "one" as const },
+    { label: "eq", name: "is", arity: "one" as const },
+    { label: "in", name: "is any of", arity: "many" as const },
+    { label: "isEmpty", name: "is empty", arity: "none" as const },
   ],
 };
 

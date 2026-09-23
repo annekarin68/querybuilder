@@ -1,8 +1,8 @@
 import type { Condition, Issue, QueryNode } from "./types";
 
 export interface ValidationSchema {
-  fields: { id: string; valueType: string; operatorIds: string[] }[];
-  operators: { id: string; arity: "none" | "one" | "two" | "many" }[];
+  fields: { label: string; valueType: string; operatorIds: string[] }[];
+  operators: { label: string; arity: "none" | "one" | "two" | "many" }[];
 }
 
 export function hasBlockingErrors(issues: Issue[]): boolean {
@@ -18,7 +18,7 @@ function checkCondition(c: Condition, schema: ValidationSchema, out: Issue[]): v
     out.push({ nodeId: c.id, message: "Choose a field.", severity: "error" });
     return;
   }
-  const fieldDef = schema.fields.find((f) => f.id === c.fieldId);
+  const fieldDef = schema.fields.find((f) => f.label === c.fieldId);
   if (!fieldDef) {
     out.push({ nodeId: c.id, message: "Unknown field.", severity: "error" });
     return;
@@ -27,7 +27,7 @@ function checkCondition(c: Condition, schema: ValidationSchema, out: Issue[]): v
     out.push({ nodeId: c.id, message: "Choose an operator.", severity: "error" });
     return;
   }
-  const op = schema.operators.find((o) => o.id === c.operatorId);
+  const op = schema.operators.find((o) => o.label === c.operatorId);
   if (!op) {
     out.push({ nodeId: c.id, message: "Unknown operator.", severity: "error" });
     return;

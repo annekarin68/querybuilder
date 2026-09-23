@@ -1,5 +1,5 @@
 import type { AppState } from "../state";
-import type { StatBlock, StatsResponse } from "../api/types";
+import type { DatabasesResponse, StatsResponse } from "../api/types";
 import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
@@ -10,82 +10,84 @@ function hint(text: string): string {
   return `<div class="ui info message">${escapeHtml(text)}</div>`;
 }
 
-/** "N missing" line under a block; N can be billions, so compact it (exact on hover). */
-function missing(nullCount: number): string {
-  return `<div class="ui small text" title="${escapeHtml(exact(nullCount))} missing">${escapeHtml(compact(nullCount))} missing in dataset</div>`;
+/** GET /api/databases is loaded once into AppState.databases; a stats line only
+ * carries a `label`, so its display name and totalEntrysets are looked up here
+ * rather than resent on every line. */
+function databaseFor(
+  databases: DatabasesResponse[] | null,
+  label: string,
+): DatabasesResponse | undefined {
+  return databases?.find((d) => d.label === label);
 }
 
-function numberSummary(b: Extract<StatBlock, { kind: "number-summary" }>): string {
-  return `<div class="ui tiny statistics" title="min ${escapeHtml(exact(b.min))} · max ${escapeHtml(exact(b.max))} · avg ${escapeHtml(exact(b.avg))}">
-    <div class="statistic"><div class="value">${escapeHtml(compact(b.min))}</div><div class="label">min</div></div>
-    <div class="statistic"><div class="value">${escapeHtml(compact(b.max))}</div><div class="label">max</div></div>
-    <div class="statistic"><div class="value">${escapeHtml(compact(b.avg))}</div><div class="label">avg</div></div>
-  </div>${missing(b.nullCount)}`;
+function successRowHtml(line: StatsResponse, db: DatabasesResponse | undefined): string {
+  const name = db?.name ?? line.label;
+  const total = db?.totalEntrysets ?? 0;
+  const matchCount = line.matchCount ?? 0;
+  const info = line.infoMessages?.length
+    ? `<div class="ui small text">${line.infoMessages.map(escapeHtml).join(" · ")}</div>`
+    : "";
+  return `<div class="item" title="${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
+    <div class="qb-db-name">${escapeHtml(name)}</div>
+    <div class="qb-db-nums">${escapeHtml(compact(matchCount))} / ${escapeHtml(compact(total))} · ${escapeHtml(matchRatio(matchCount, total))}</div>
+    <div class="ui tiny progress" style="margin:.1rem 0 0">
+      <div class="bar" style="width:${barWidth(matchCount, total)}"></div>
+    </div>
+    ${info}
+  </div>`;
 }
 
-function distribution(b: Extract<StatBlock, { kind: "distribution" }>): string {
-  const max = Math.max(1, ...b.buckets.map((x) => x.count));
-  return `<div class="ui relaxed list">
-    ${b.buckets
-      .map(
-        (x) => `<div class="item" title="${escapeHtml(exact(x.count))}">
-          <div class="ui tiny progress" style="margin:.15rem 0">
-            <div class="bar" style="width:${Math.round((x.count / max) * 100)}%"></div>
-            <div class="label" style="text-align:left">${escapeHtml(x.label)} — ${escapeHtml(compact(x.count))}</div>
-          </div>
-        </div>`,
-      )
-      .join("")}
-  </div>${missing(b.nullCount)}`;
+function failureRowHtml(line: StatsResponse, db: DatabasesResponse | undefined): string {
+  const name = db?.name ?? line.label;
+  const messages = [...(line.errorMessages ?? []), ...(line.infoMessages ?? [])];
+  return `<div class="item">
+    <div class="qb-db-name">${escapeHtml(name)}</div>
+    <div class="ui negative small text">${messages.length ? messages.map(escapeHtml).join(" · ") : "Failed."}</div>
+  </div>`;
 }
 
-function dateRange(b: Extract<StatBlock, { kind: "date-range" }>): string {
-  return `<div>${escapeHtml(b.earliest)} → ${escapeHtml(b.latest)}</div>${missing(b.nullCount)}`;
-}
-
-function blockHtml(b: StatBlock): string {
-  const inner =
-    b.kind === "number-summary"
-      ? numberSummary(b)
-      : b.kind === "distribution"
-        ? distribution(b)
-        : dateRange(b);
-  return `<div class="ui segment"><h5 class="ui header">${escapeHtml(b.fieldLabel)}</h5>${inner}</div>`;
-}
-
-/** Per-database match counts. Skipped for a single database — the combined header already says it. */
-function perDatabaseHtml(rows: StatsResponse["perDatabase"]): string {
-  if (rows.length < 2) return "";
+/** One row per database that has reported so far — success (counts), failure
+ * (errorMessages/infoMessages), shown as each streamed line arrives. */
+function perDatabaseHtml(state: AppState): string {
+  const { lines } = state.stats;
+  if (!lines.length) return "";
   return `<div class="ui segment">
     <h5 class="ui header">By database</h5>
-    <div class="ui relaxed list">
-      ${rows
-        .map(
-          (
-            r,
-          ) => `<div class="item" title="${escapeHtml(exact(r.matchCount))} of ${escapeHtml(exact(r.totalCount))}">
-            <div class="qb-db-name">${escapeHtml(r.label)}</div>
-            <div class="qb-db-nums">${escapeHtml(compact(r.matchCount))} / ${escapeHtml(compact(r.totalCount))} · ${escapeHtml(matchRatio(r.matchCount, r.totalCount))}</div>
-            <div class="ui tiny progress" style="margin:.1rem 0 0">
-              <div class="bar" style="width:${barWidth(r.matchCount, r.totalCount)}"></div>
-            </div>
-          </div>`,
-        )
+    <div class="ui relaxed list qb-stat-perdb">
+      ${lines
+        .map((line) => {
+          const db = databaseFor(state.databases, line.label);
+          return line.success ? successRowHtml(line, db) : failureRowHtml(line, db);
+        })
         .join("")}
     </div>
   </div>`;
 }
 
-function headlineHtml(d: StatsResponse): string {
+function headlineHtml(state: AppState): string {
+  const { lines } = state.stats;
+  const matchCount = lines.filter((l) => l.success).reduce((s, l) => s + (l.matchCount ?? 0), 0);
+  const total = lines.reduce((s, l) => {
+    const db = databaseFor(state.databases, l.label);
+    return s + (l.success && db ? db.totalEntrysets : 0);
+  }, 0);
   return `<div class="ui segment">
-    <div class="qb-stat-headline" title="${escapeHtml(exact(d.matchCount))} of ${escapeHtml(exact(d.totalCount))}">
-      <span class="qb-stat-big">${escapeHtml(compact(d.matchCount))}</span>
-      <span class="qb-stat-sub">of ${escapeHtml(compact(d.totalCount))} · ${escapeHtml(matchRatio(d.matchCount, d.totalCount))}</span>
+    <div class="qb-stat-headline" title="${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
+      <span class="qb-stat-big">${escapeHtml(compact(matchCount))}</span>
+      <span class="qb-stat-sub">of ${escapeHtml(compact(total))} · ${escapeHtml(matchRatio(matchCount, total))}</span>
     </div>
     <div class="ui tiny progress" style="margin:.35rem 0 0">
-      <div class="bar" style="width:${barWidth(d.matchCount, d.totalCount)}"></div>
+      <div class="bar" style="width:${barWidth(matchCount, total)}"></div>
     </div>
   </div>`;
+}
+
+/** While loading, how many selected databases haven't reported a line yet. */
+function pendingHtml(state: AppState): string {
+  if (state.stats.status !== "loading") return "";
+  const remaining = state.selectedDatabaseIds.length - state.stats.lines.length;
+  if (remaining <= 0) return "";
+  return `<div class="ui segment"><div class="ui active inline loader tiny"></div> Waiting on ${remaining} more database${remaining === 1 ? "" : "s"}…</div>`;
 }
 
 export function renderStatsPanel(state: AppState): void {
@@ -112,41 +114,36 @@ export function renderStatsPanel(state: AppState): void {
     );
     return;
   }
-  const s = state.stats;
-  if (s.status === "loading") {
-    paint(
-      el,
-      `<h4 class="ui header">Statistics</h4><div class="ui segment"><div class="ui active inline loader"></div> Updating…</div>`,
-    );
-    return;
-  }
-  if (s.status === "idle") {
+  const { status, lines, error } = state.stats;
+  if (status === "idle") {
     paint(
       el,
       `<h4 class="ui header">Statistics</h4>${hint("Finish the query to see statistics.")}`,
     );
     return;
   }
-  if (s.status === "error") {
+  if (status === "error") {
     paint(
       el,
-      `<h4 class="ui header">Statistics</h4><div class="ui negative message"><div class="header">Statistics failed</div><p>${escapeHtml(s.error)}</p></div>`,
+      `<h4 class="ui header">Statistics</h4><div class="ui negative message"><div class="header">Statistics failed</div><p>${escapeHtml(error ?? "")}</p></div>`,
     );
     return;
   }
-  if (s.status !== "ok" || !s.data) {
-    paint(el, "");
+  if (status === "loading" && lines.length === 0) {
+    paint(
+      el,
+      `<h4 class="ui header">Statistics</h4><div class="ui segment"><div class="ui active inline loader"></div> Updating…</div>`,
+    );
     return;
   }
-  const d = s.data;
-  // Order matters: the combined headline and the per-database breakdown stay
-  // pinned at the top; only the field-block list (one per referenced field —
-  // grows with the query) scrolls, inside .qb-stat-blocks. See src/styles.css.
+  // Order matters: the combined headline stays pinned at the top; the
+  // per-database list — the only dynamic content left once StatBlock is gone —
+  // scrolls internally via .qb-stat-perdb. See src/styles.css.
   paint(
     el,
     `<h4 class="ui header">Statistics</h4>
-     ${headlineHtml(d)}
-     ${perDatabaseHtml(d.perDatabase)}
-     <div class="qb-stat-blocks">${d.blocks.map(blockHtml).join("")}</div>`,
+     ${headlineHtml(state)}
+     ${perDatabaseHtml(state)}
+     ${pendingHtml(state)}`,
   );
 }

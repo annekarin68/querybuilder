@@ -19,8 +19,8 @@ export function renderDatabasePicker(state: AppState): void {
     .map(
       (d) => `<div class="inline field" style="margin:0 1rem .25rem 0">
         <div class="ui checkbox">
-          <input type="checkbox" data-db-id="${escapeHtml(d.id)}"${selected.has(d.id) ? " checked" : ""} />
-          <label>${escapeHtml(d.label)}</label>
+          <input type="checkbox" data-db-id="${escapeHtml(d.label)}"${selected.has(d.label) ? " checked" : ""} />
+          <label>${escapeHtml(d.name)}</label>
         </div>
       </div>`,
     )

@@ -1,32 +1,31 @@
 import type { AppState } from "../state";
-import type { Individual } from "../api/types";
+import type { DatabasesResponse, Individual } from "../api/types";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { compact, matchRatio } from "./format";
 
-/** The universe size implied by this item's own count/percentage — derived rather
- * than hardcoded, so this stays correct however large the real dataset is (the API
- * already tells us the ratio; we only need it back in absolute terms for display). */
-function impliedTotal(stats: Individual["stats"]): number {
-  return stats.percentage > 0 ? Math.round(stats.count / stats.percentage) : stats.count;
+/** Total entrysets across every loaded database — the denominator for an
+ * individual's percentage, since the backend no longer sends one directly
+ * (Individual only carries totalCount, an absolute figure). */
+function totalEntrysets(databases: DatabasesResponse[] | null): number {
+  return databases?.reduce((s, d) => s + d.totalEntrysets, 0) ?? 0;
 }
 
 function groupLabel(group: string): string {
   return group.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function itemHtml(item: Individual): string {
+function itemHtml(item: Individual, total: number): string {
   const tags = item.tags.length
     ? `<div class="ui mini labels">${item.tags.map((t) => `<span class="ui mini label">${escapeHtml(t)}</span>`).join("")}</div>`
     : "";
   const fields = item.fields
     .map(
       (f) =>
-        `<code>${escapeHtml(f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type)}</span>`,
+        `<code>${escapeHtml(f.name || f.label)}</code> <span class="ui mini basic label">${escapeHtml(f.type || f.format)}</span>`,
     )
     .join(" ");
-  const total = impliedTotal(item.stats);
-  const ratio = matchRatio(item.stats.count, total);
+  const ratio = matchRatio(item.totalCount, total);
   return `
     <div class="item" data-item-label="${escapeHtml(item.name.toLowerCase())}">
       <div class="content">
@@ -34,15 +33,15 @@ function itemHtml(item: Individual): string {
         ${tags}
         <div class="description">${escapeHtml(item.description)}</div>
         ${item.comment ? `<p class="ui small text"><i>${escapeHtml(item.comment)}</i></p>` : ""}
-        <p class="ui small text" title="${escapeHtml(item.stats.count.toLocaleString())} of ${total.toLocaleString()} entrysets">
-          In ${compact(item.stats.count)} entrysets (${ratio})
+        <p class="ui small text" title="${escapeHtml(item.totalCount.toLocaleString())} of ${total.toLocaleString()} entrysets">
+          In ${compact(item.totalCount)} entrysets (${ratio})
         </p>
         <p class="ui small text">${fields}</p>
       </div>
     </div>`;
 }
 
-function groupSectionHtml(group: string, items: Individual[]): string {
+function groupSectionHtml(group: string, items: Individual[], total: number): string {
   return `
     <div class="title" data-group-label="${escapeHtml(group.toLowerCase())}">
       <i class="dropdown icon"></i> ${escapeHtml(groupLabel(group))}
@@ -50,7 +49,7 @@ function groupSectionHtml(group: string, items: Individual[]): string {
     </div>
     <div class="content" data-group-content="${escapeHtml(group)}">
       <div class="ui relaxed divided list">
-        ${items.map(itemHtml).join("")}
+        ${items.map((item) => itemHtml(item, total)).join("")}
       </div>
     </div>`;
 }
@@ -64,8 +63,9 @@ export function renderDocsSidebar(state: AppState): void {
     );
     return;
   }
+  const total = totalEntrysets(state.databases);
   const groups = new Map<string, Individual[]>();
-  for (const item of state.individuals.individuals) {
+  for (const item of state.individuals) {
     const list = groups.get(item.group) ?? [];
     list.push(item);
     groups.set(item.group, list);
@@ -79,7 +79,7 @@ export function renderDocsSidebar(state: AppState): void {
        <i class="search icon"></i>
      </div>
      <div class="ui styled fluid accordion">
-       ${[...groups.entries()].map(([group, items]) => groupSectionHtml(group, items)).join("")}
+       ${[...groups.entries()].map(([group, items]) => groupSectionHtml(group, items, total)).join("")}
      </div>`,
   );
 
