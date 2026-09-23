@@ -295,14 +295,61 @@ body {
   outline: 2px solid var(--qb-and);
 }
 
-/* Database scope selector (src/ui/databasePicker.ts) */
-[data-panel="dbpicker"] a[data-db-all],
-[data-panel="dbpicker"] a[data-db-none] {
+/* ---- Databases (src/ui/databasePicker.ts) ---- */
+.qb-dbpicker .qb-card-title .ui.button {
+  margin: 0;
+}
+.qb-db-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.qb-db-pill {
+  position: relative;
+  display: inline-flex;
   cursor: pointer;
-  text-decoration: underline;
+}
+.qb-db-pill input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.qb-db-pill span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 999px;
+  background: var(--qb-surface);
+  color: var(--qb-muted);
+  font-size: 0.85rem;
+  user-select: none;
+}
+.qb-db-pill span::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.qb-db-pill input:checked + span {
+  border-color: var(--qb-and-soft);
+  background: #eaf4fc;
+  color: #1f5f8f;
+}
+.qb-db-pill input:checked + span::before {
+  border-color: var(--qb-and);
+  background: var(--qb-and);
+}
+.qb-db-pill input:focus-visible + span {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
 }
 .qb-db-warn {
-  color: #9f3a38;
+  margin: 0.5rem 0 0;
+  color: var(--qb-warn);
 }
 
 /* Statistics panel (src/ui/statsPanel.ts + format.ts) — must stay inside a ~20rem column */
