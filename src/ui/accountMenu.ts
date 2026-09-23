@@ -51,7 +51,7 @@ export function renderAccountMenu(state: AppState): void {
   paint(
     el,
     `<details class="qb-account">
-       <summary class="qb-account-chip" aria-label="Account menu">
+       <summary class="qb-account-chip">
          <i class="user circle icon"></i>
          <span class="qb-account-name">${escapeHtml(state.auth.user!.name)}</span>
          ${badgeHtml(state)}
@@ -90,6 +90,13 @@ export function wireAccountMenu(
     if (!container.contains(e.target as Node)) close();
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
+    if (e.key !== "Escape") return;
+    const details = container.querySelector<HTMLDetailsElement>("details.qb-account[open]");
+    if (!details) return;
+    const focusWasInMenu = details.contains(document.activeElement);
+    close();
+    if (focusWasInMenu) {
+      details.querySelector<HTMLElement>("summary.qb-account-chip")?.focus();
+    }
   });
 }

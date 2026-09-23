@@ -120,6 +120,19 @@ describe("validateQuery", () => {
     });
   });
 
+  it("an operator that is not in the schema is an error", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    let tree = addChild(root, root.id, c);
+    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "nope", value: "x" });
+    expect(validateQuery(tree, schema)).toContainEqual({
+      nodeId: c.id,
+      message: "Unknown operator.",
+      severity: "error",
+      kind: "invalid",
+    });
+  });
+
   it("a non-root empty group is an error", () => {
     const root = emptyQuery();
     const g = { ...newGroup(), children: [] };

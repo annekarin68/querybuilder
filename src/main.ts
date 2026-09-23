@@ -74,7 +74,7 @@ wireDataPreview(panelEls().preview, () => runPreview());
 
 /**
  * Any link that navigates straight into the login or compliance flow (the
- * top-menu widgets, the data-preview hints) must save the in-progress query
+ * account menu, the Matching entrysets card's notes) must save the in-progress query
  * first too, not just the Run button's own redirect path (§2 of the
  * compliance-logging design spec) — otherwise a user who follows the
  * on-screen guidance loses their query on a hop Run itself protects. Those

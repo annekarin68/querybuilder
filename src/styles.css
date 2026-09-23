@@ -642,7 +642,7 @@ body {
 .qb-hint {
   margin: 0.2rem 0 0 0.1rem;
   font-size: 0.8rem;
-  color: var(--qb-subtle);
+  color: var(--qb-muted);
 }
 .qb-invalid {
   margin: 0.2rem 0 0;
@@ -773,7 +773,7 @@ body {
 .qb-run-note {
   margin: 0.6rem 0 0;
   font-size: 0.8rem;
-  color: var(--qb-subtle);
+  color: var(--qb-muted);
 }
 .qb-preview .ui.negative.message {
   margin: 0 0 0.75rem;

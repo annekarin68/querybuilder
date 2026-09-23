@@ -23,7 +23,7 @@ export interface AppState {
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
   /** Compliance acknowledgment for this session, if any — populated once at
    *  startup via GET /api/compliance/status. Display-only, same as `auth`:
-   *  it drives the top-menu widget and an advisory hint, never gating logic. */
+   *  it drives the account menu and an advisory hint, never gating logic. */
   compliance: {
     status: "loading" | "required" | "acknowledged";
     reason: string | null;

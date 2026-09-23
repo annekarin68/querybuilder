@@ -112,7 +112,7 @@ function card(state: AppState, body: string): string {
     state.stats.status === "loading"
       ? `<span class="ui active mini inline loader" aria-label="Updating"></span>`
       : "";
-  return `<div class="qb-card qb-stats"><h2 class="qb-card-title">Statistics ${busy}</h2>${body}</div>`;
+  return `<div class="qb-card qb-stats"><h2 class="qb-card-title">Statistics${busy ? " " + busy : ""}</h2>${body}</div>`;
 }
 
 const placeholder = (text: string) => `<p class="qb-placeholder">${escapeHtml(text)}</p>`;
