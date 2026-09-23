@@ -1,13 +1,23 @@
 import type { Condition, QueryNode } from "./types";
-import { findField, findOperator, type FieldCatalog } from "./fieldCatalog";
+import { findField, findOperator, type Arity, type FieldCatalog } from "./fieldCatalog";
 
-function formatValue(c: Condition, arity: string): string {
+/** Stands in for a value the user hasn't entered yet, like "(field?)" below. */
+const MISSING = "(value?)";
+
+function valueText(v: unknown): string {
+  return v === null || v === undefined || v === "" ? MISSING : String(v);
+}
+
+function formatValue(c: Condition, arity: Arity): string {
   if (arity === "none") return "";
-  if (arity === "two" && Array.isArray(c.value)) {
-    return `${String(c.value[0])} to ${String(c.value[1])}`;
+  if (arity === "two") {
+    const [from, to]: unknown[] = Array.isArray(c.value) ? c.value : [];
+    return `${valueText(from)} to ${valueText(to)}`;
   }
-  if (arity === "many" && Array.isArray(c.value)) return c.value.map(String).join(", ");
-  return String(c.value);
+  if (arity === "many") {
+    return Array.isArray(c.value) && c.value.length > 0 ? c.value.map(String).join(", ") : MISSING;
+  }
+  return valueText(c.value);
 }
 
 function conditionText(catalog: FieldCatalog, c: Condition): string {

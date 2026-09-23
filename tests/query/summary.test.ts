@@ -58,3 +58,34 @@ describe("queryToText", () => {
     expect(queryToText(t, catalog)).toBe("Species Is empty");
   });
 });
+
+// A collapsed group shows its summary even while a condition is unfinished.
+describe("queryToText with a value not entered yet", () => {
+  const withValue = (fieldId: string, operatorId: string, value: unknown) => {
+    const root = emptyQuery();
+    const c = newCondition();
+    return queryToText(
+      updateNode(addChild(root, root.id, c), c.id, { fieldId, operatorId, value }),
+      catalog,
+    );
+  };
+
+  it("shows (value?) for a missing single value", () => {
+    expect(withValue("heightCm", "gte", null)).toBe("Height (cm) Greater than or equal (value?)");
+    expect(withValue("heightCm", "gte", "")).toBe("Height (cm) Greater than or equal (value?)");
+  });
+
+  it("shows (value?) for each missing end of a range", () => {
+    expect(withValue("heightCm", "between", null)).toBe("Height (cm) Between (value?) to (value?)");
+    expect(withValue("heightCm", "between", [5, ""])).toBe("Height (cm) Between 5 to (value?)");
+  });
+
+  it("shows (value?) when no value of a list is chosen", () => {
+    expect(withValue("species", "in", [])).toBe("Species Is any of (value?)");
+  });
+
+  it("still prints false and 0", () => {
+    expect(withValue("foliage", "eq", false)).toBe("Has foliage Equals false");
+    expect(withValue("heightCm", "eq", 0)).toBe("Height (cm) Equals 0");
+  });
+});
