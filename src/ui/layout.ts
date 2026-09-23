@@ -35,7 +35,6 @@ export function renderShell(root: HTMLElement): void {
         ).join("")}
       </nav>
       <div class="qb-topbar-right">
-        <button class="ui primary button" data-menu="run" disabled>Run / Refresh</button>
         <div data-panel="account"></div>
       </div>
     </header>
@@ -99,11 +98,7 @@ export function setSidebarCollapsed(collapsed: boolean): void {
  * without `href` is skipped by Tab and ignores Enter) — every handler below
  * calls preventDefault so the URL hash never changes.
  */
-export function onMenu(handler: {
-  view(v: ActiveView): void;
-  toggleSidebar(): void;
-  run(): void;
-}): void {
+export function onMenu(handler: { view(v: ActiveView): void; toggleSidebar(): void }): void {
   document.querySelector('[data-menu="views"]')!.addEventListener("click", (e) => {
     const item = (e.target as HTMLElement).closest<HTMLElement>("[data-view]");
     if (!item) return;
@@ -117,5 +112,4 @@ export function onMenu(handler: {
     e.preventDefault();
     handler.toggleSidebar();
   });
-  document.querySelector('[data-menu="run"]')!.addEventListener("click", () => handler.run());
 }

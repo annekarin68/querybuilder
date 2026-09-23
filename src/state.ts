@@ -62,8 +62,9 @@ export const initialState: AppState = {
  * Whether the current query/scope is complete and valid enough to run or
  * refresh (§6): a schema is loaded, there are no blocking validation issues,
  * at least one condition exists, and at least one database is selected. The
- * single source of truth for this check — main.ts's runPreview, refreshStats,
- * and syncRunButton all read it instead of repeating the four clauses.
+ * single source of truth for this check — main.ts's runPreview and
+ * refreshStats read it instead of repeating the four clauses (the preview
+ * panel mirrors the same checks to decide whether Run is enabled).
  */
 export function canRunQuery(
   state: Pick<AppState, "schema" | "issues" | "query" | "selectedDatabaseIds">,

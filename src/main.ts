@@ -37,7 +37,7 @@ import { renderDocsSidebar } from "./ui/docsSidebar";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
-import { renderDataPreview } from "./ui/dataPreview";
+import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
 
 function errorMessage(err: unknown): string {
@@ -68,8 +68,9 @@ renderShell(root);
 onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
-  run: () => runPreview(),
 });
+// Run lives in the "Matching entrysets" panel (the only Run control).
+wireDataPreview(panelEls().preview, () => runPreview());
 
 /**
  * Any link that navigates straight into the login or compliance flow (the
@@ -218,12 +219,6 @@ function runPreview(): void {
   );
 }
 
-function syncRunButton(state = store.getState()): void {
-  const btn = document.querySelector<HTMLButtonElement>('[data-menu="run"]');
-  if (!btn) return;
-  btn.disabled = !(canRunQuery(state) && state.preview.status !== "loading");
-}
-
 function onLogout(): void {
   cancelInFlight();
   logout()
@@ -370,10 +365,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "auth",
       "compliance",
     ],
-    run: (s) => {
-      renderDataPreview(s);
-      syncRunButton(s);
-    },
+    run: (s) => renderDataPreview(s),
   },
   {
     keys: ["auth", "compliance"],
@@ -419,7 +411,6 @@ renderDatabasePicker(store.getState()); // "" while databases is null
 renderQueryBuilder(store.getState()); // initial loader (centre panel spinner while individuals/databases load)
 renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
-syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
 renderAccountMenu(store.getState()); // "" while auth.status is "loading"
 Promise.all([
@@ -446,7 +437,7 @@ Promise.all([
           newCondition(),
         );
     // Validate in the SAME setState: this seed bypasses onQueryChange, so without
-    // it `issues` would stay [] and syncRunButton would enable Run on the empty
+    // it `issues` would stay [] and the preview panel would enable Run on the empty
     // seeded condition. Every database is selected by default, unless restored.
     const issues = validateQuery(seeded, { fields: schema.fields, operators: schema.operators });
     store.setState({

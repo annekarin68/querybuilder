@@ -352,62 +352,6 @@ body {
   color: var(--qb-warn);
 }
 
-/* Data preview (src/ui/dataPreview.ts): a scrollable list of entrysets, each
-   a native <details> row — no JS needed for expand/collapse. */
-.qb-entryset-list {
-  max-height: 45vh;
-  overflow-y: auto;
-  border: 1px solid rgba(34, 36, 38, 0.15);
-  border-radius: 0.28rem;
-}
-.qb-entryset-row {
-  border-bottom: 1px solid rgba(34, 36, 38, 0.1);
-  padding: 0.5rem 0.75rem;
-}
-.qb-entryset-row:last-child {
-  border-bottom: none;
-}
-.qb-entryset-row summary {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-.qb-er-id {
-  font-weight: 700;
-  flex: 0 0 2.5rem;
-}
-.qb-er-when {
-  flex: 0 0 11rem;
-  color: rgba(0, 0, 0, 0.6);
-}
-.qb-er-vehicle {
-  flex: 0 0 8rem;
-  font-weight: 600;
-}
-.qb-er-groups {
-  flex: 1 1 auto;
-  min-width: 10rem;
-}
-.qb-er-more {
-  color: rgba(0, 0, 0, 0.5);
-  font-size: 0.85em;
-}
-.qb-er-count {
-  flex: 0 0 5rem;
-  text-align: right;
-  color: rgba(0, 0, 0, 0.6);
-}
-.qb-er-json {
-  margin: 0.5rem 0 0;
-  padding: 0.75rem;
-  background: rgba(0, 0, 0, 0.03);
-  border-radius: 0.28rem;
-  font-size: 0.8em;
-  overflow-x: auto;
-}
-
 /* ---- Account menu (src/ui/accountMenu.ts) ---- */
 .qb-account {
   position: relative;
@@ -806,4 +750,99 @@ body {
 }
 .qb-stat-pending .ui.loader {
   margin: 0;
+}
+
+/* ---- Matching entrysets (src/ui/dataPreview.ts) ---- */
+.qb-run {
+  padding: 1.25rem 0.75rem;
+  text-align: center;
+  border: 1px dashed var(--qb-border-strong);
+  border-radius: var(--qb-radius);
+  background: var(--qb-surface-2);
+}
+.qb-run-msg {
+  margin: 0 0 0.75rem;
+  color: var(--qb-muted);
+}
+.qb-run .ui.button {
+  margin: 0;
+}
+.qb-run .ui.loader {
+  margin-bottom: 0.5rem;
+}
+.qb-run-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--qb-subtle);
+}
+.qb-preview .ui.negative.message {
+  margin: 0 0 0.75rem;
+}
+.qb-preview-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+.qb-entryset-list {
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+}
+.qb-entryset-row {
+  border-bottom: 1px solid var(--qb-border);
+}
+.qb-entryset-row:last-child {
+  border-bottom: none;
+}
+.qb-entryset-row summary {
+  display: grid;
+  grid-template-columns: 3rem 10.5rem minmax(0, 9rem) minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+.qb-entryset-row summary::-webkit-details-marker {
+  display: none;
+}
+.qb-entryset-row summary:hover {
+  background: var(--qb-surface-2);
+}
+.qb-entryset-row[open] summary {
+  background: #eef4fa;
+}
+.qb-er-id {
+  font-weight: 700;
+}
+.qb-er-when,
+.qb-er-count {
+  color: var(--qb-muted);
+  white-space: nowrap;
+}
+.qb-er-vehicle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.qb-er-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.qb-er-more {
+  font-size: 0.8rem;
+  color: var(--qb-subtle);
+}
+.qb-er-count {
+  text-align: right;
+}
+.qb-er-json {
+  max-height: 24rem;
+  margin: 0;
+  padding: 0.75rem;
+  overflow: auto;
+  border-top: 1px solid var(--qb-border);
+  background: var(--qb-surface-2);
+  font-size: 0.8em;
 }
