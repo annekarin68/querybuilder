@@ -13,11 +13,13 @@ import "./styles.css";
 
 import {
   ApiError,
+  getComplianceStatus,
   getDatabases,
   getIndividuals,
   getMe,
   getSchema,
   getStats,
+  invalidateCompliance,
   logout,
   runQuery,
 } from "./api/client";
@@ -26,8 +28,10 @@ import { addChild, newCondition, stripCollapsed } from "./query/tree";
 import { validateQuery } from "./query/validate";
 import type { Group, QueryNode } from "./query/types";
 import { debounce } from "./util/debounce";
+import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
 import { renderAuthStatus, wireAuthStatus } from "./ui/authStatus";
+import { renderComplianceStatus, wireComplianceStatus } from "./ui/complianceStatus";
 import { renderDocsSidebar } from "./ui/docsSidebar";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
@@ -91,22 +95,21 @@ function runGuarded<T>(
 }
 
 function runPreview(): void {
-  if (store.getState().auth.status !== "authenticated") return;
-  // page/pageSize are sent for API-shape stability; the response is capped at
-  // 25 entrysets regardless (see EntrysetsResponse in api/types.ts).
+  // No longer gated on auth.status: Run always genuinely attempts the request now,
+  // and reacts to whatever comes back. A 401 (not authenticated) or 403
+  // (authenticated, some requirement unmet — e.g. compliance) saves the current
+  // query/selection and navigates into the matching flow. This generalizes to any
+  // future protected endpoint that returns the same status codes under the same
+  // conditions, without new frontend wiring per endpoint.
   runGuarded(
     (query, databases) => runQuery(query, databases, 1, PAGE_SIZE),
     () => store.setState({ preview: { status: "loading", data: null, error: null } }),
     (data) => store.setState({ preview: { status: "ok", data, error: null } }),
     (err) => {
-      if (err instanceof ApiError && err.status === 401) {
-        // The session ended after Run was enabled (a session-store restart in dev, a
-        // real expiry in production) — drop back to the anonymous UI instead of a
-        // misleading "authenticated" top menu next to a permission error.
-        store.setState({
-          auth: { status: "anonymous", user: null },
-          preview: { status: "idle", data: null, error: null },
-        });
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        const s = store.getState();
+        savePendingQuery(s.query, s.selectedDatabaseIds);
+        window.location.href = err.status === 401 ? "/api/auth/login" : "/api/compliance/start";
         return;
       }
       store.setState({ preview: { status: "error", data: null, error: errorMessage(err) } });
@@ -117,18 +120,17 @@ function runPreview(): void {
 function syncRunButton(state = store.getState()): void {
   const btn = document.querySelector<HTMLButtonElement>('[data-menu="run"]');
   if (!btn) return;
-  btn.disabled = !(
-    canRunQuery(state) &&
-    state.preview.status !== "loading" &&
-    state.auth.status === "authenticated"
-  );
+  btn.disabled = !(canRunQuery(state) && state.preview.status !== "loading");
 }
 
 function onLogout(): void {
   logout()
     .then(() => {
+      // Compliance is piggybacked on the session server-side, so it's gone too
+      // once the session ends — reset the local display state to match.
       store.setState({
         auth: { status: "anonymous", user: null },
+        compliance: { status: "required", reason: null, ackedAt: null },
         preview: { status: "idle", data: null, error: null },
       });
     })
@@ -136,6 +138,19 @@ function onLogout(): void {
       // Best-effort: nothing more actionable to show beyond the button
       // still being there for the user to try again.
       console.error("Logout failed:", errorMessage(err));
+    });
+}
+
+function onInvalidateCompliance(): void {
+  invalidateCompliance()
+    .then(() => {
+      store.setState({
+        compliance: { status: "required", reason: null, ackedAt: null },
+        preview: { status: "idle", data: null, error: null },
+      });
+    })
+    .catch((err) => {
+      console.error("Invalidate compliance failed:", errorMessage(err));
     });
 }
 
@@ -217,7 +232,16 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     run: (s) => renderStatsPanel(s),
   },
   {
-    keys: ["preview", "query", "issues", "schema", "selectedDatabaseIds", "individuals", "auth"],
+    keys: [
+      "preview",
+      "query",
+      "issues",
+      "schema",
+      "selectedDatabaseIds",
+      "individuals",
+      "auth",
+      "compliance",
+    ],
     run: (s) => {
       renderDataPreview(s);
       syncRunButton(s);
@@ -230,6 +254,13 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       wireAuthStatus(panelEls().auth, onLogout);
     },
   },
+  {
+    keys: ["compliance"],
+    run: (s) => {
+      renderComplianceStatus(s);
+      wireComplianceStatus(panelEls().compliance, onInvalidateCompliance);
+    },
+  },
 ];
 
 store.subscribe((state, changed) => {
@@ -238,6 +269,23 @@ store.subscribe((state, changed) => {
   }
 });
 
+/**
+ * `?resume=1` marks a load as the direct return-hop from the login or
+ * compliance callback (both redirect here) — the ONE signal that tells this
+ * load to restore a saved query, as opposed to a generic revisit finding a
+ * stale leftover sessionStorage entry from an abandoned attempt. Stripped
+ * from the URL immediately so a manual refresh doesn't re-trigger this.
+ */
+function consumeResumeParam(): boolean {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("resume") !== "1") return false;
+  url.searchParams.delete("resume");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
+  return true;
+}
+
+const pending = consumeResumeParam() ? takePendingQuery() : null;
+
 renderDatabasePicker(store.getState()); // "" while databases is null
 renderQueryBuilder(store.getState()); // initial loader (centre panel spinner during schema fetch)
 renderStatsPanel(store.getState()); // initial state ("" while schema is null)
@@ -245,25 +293,38 @@ renderDataPreview(store.getState()); // initial idle message
 syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
 renderAuthStatus(store.getState()); // "" while auth.status is "loading"
-Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe()])
-  .then(([schema, dbResp, individuals, user]) => {
-    const seeded = addChild(
-      store.getState().query as Group,
-      (store.getState().query as Group).id,
-      newCondition(),
-    );
+renderComplianceStatus(store.getState()); // "" while compliance.status is "loading"
+Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe(), getComplianceStatus()])
+  .then(([schema, dbResp, individuals, user, complianceStatus]) => {
+    // A restored query replaces the normal empty-condition seed entirely — it
+    // already has whatever conditions the user built before being redirected.
+    const seeded = pending
+      ? pending.query
+      : addChild(
+          store.getState().query as Group,
+          (store.getState().query as Group).id,
+          newCondition(),
+        );
     // Validate in the SAME setState: this seed bypasses onQueryChange, so without
     // it `issues` would stay [] and syncRunButton would enable Run on the empty
-    // seeded condition. Every database is selected by default.
+    // seeded condition. Every database is selected by default, unless restored.
     const issues = validateQuery(seeded, { fields: schema.fields, operators: schema.operators });
     store.setState({
       schema,
       databases: dbResp.databases,
       individuals,
-      selectedDatabaseIds: dbResp.databases.map((d) => d.id),
+      selectedDatabaseIds: pending ? pending.selectedDatabaseIds : dbResp.databases.map((d) => d.id),
       query: seeded,
       issues,
       auth: { status: user ? "authenticated" : "anonymous", user },
+      compliance:
+        complianceStatus.status === "acknowledged"
+          ? {
+              status: "acknowledged",
+              reason: complianceStatus.reason ?? null,
+              ackedAt: complianceStatus.ackedAt ?? null,
+            }
+          : { status: "required", reason: null, ackedAt: null },
     });
   })
   .catch((err) => {
