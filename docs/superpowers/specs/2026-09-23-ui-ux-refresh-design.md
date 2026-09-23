@@ -109,9 +109,11 @@ toolchain for a colour change); replacing Fomantic with hand-written components
   group's left border, in the group's colour.
 - **Collapsed group:** one line — caret, ALL/ANY badge, `queryToText` of that
   group (ellipsised), `N condition(s)` (`countConditions`), `✕`.
-- **`+ Group`** inserts `newGroupWithCondition()` — a new `src/query/tree.ts`
-  helper returning an AND group with one `newCondition()` child. `newGroup()`
-  keeps returning an empty group (tests and restore paths rely on it).
+- **`+ Group`** inserts a group pre-populated with one empty condition:
+  `newGroup()` in `src/query/tree.ts` now returns an AND group with one
+  `newCondition()` child (its only `src/` caller is the `+ Group` button). A group
+  can still become empty when its last condition is removed, so the "Add a
+  condition to this group." hint stays.
 
 ### Condition rows
 
@@ -226,8 +228,11 @@ Unit tests only, per the repo's no-DOM-tests rule:
 
 - `tests/query/validate.test.ts` — each issue carries the right `kind`; both
   kinds still count as blocking.
-- `tests/query/tree.test.ts` — `newGroupWithCondition()` yields an AND group
-  containing exactly one empty condition.
+- `tests/query/tree.test.ts` — `newGroup()` yields an AND group containing
+  exactly one empty condition. Existing tests that relied on `newGroup()` being
+  empty (`tree`, `validate`, `summary`, `pendingQuery`) are updated — where they
+  need an empty group (e.g. the empty-group validation case) they build one
+  explicitly.
 - `tests/ui/format.test.ts` — entryset date format; `1 entryset` / `N entrysets`;
   the underscore → space label helper.
 - New `tests/ui/docsFilter.test.ts` — item-name and field-name matching,
