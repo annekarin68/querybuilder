@@ -1,18 +1,29 @@
 # Query Builder (frontend)
 
 A single-page query-builder UI. Build a filter with nested AND/OR groups; see live
-match statistics; browse a summary list of matching events. All data comes from our
-API (`/api/schema`, `/api/databases`, `/api/stats`, `/api/query`). A dev-only mock
-server implements those endpoints so the app runs end to end locally. The query
-can be scoped to one or more "databases" (7 arbitrary, content-agnostic partitions
-of the sample vehicle-telemetry data, ALPHA through ETA).
+match statistics; browse a summary list of matching events. Running a query
+requires login (OAuth2, via the backend) and a compliance reason for the session.
+
+All data comes from our API, under `VITE_API_BASE` (default `/api`): the facets
+of the data model (`GET /individuals` — the backend's name for them), the
+databases a query can be scoped to (`GET /databases`), live statistics
+(`POST /stats`), the matching events (`POST /query`), and the login and
+compliance flows (`/auth/*`, `/compliance/*`). The full contract is in
+`docs/ARCHITECTURE.md` §7. A dev-only mock server implements all of it so the app
+runs end to end locally, on fictional vehicle-telemetry sample data.
 
 ## Run it
+
+Needs **Node 20.19 or newer**.
 
 ```bash
 npm ci
 npm run dev        # mock API on :3001, app on http://localhost:5173
 ```
+
+In the mock, **Log in** signs you in as `demo.user`, and any non-blank reason
+passes the compliance check. To run a second copy side by side (another
+checkout), pick other ports: `MOCK_PORT=3011 npx concurrently -k "npm:mock" "vite --port 5181"`.
 
 Other scripts:
 
@@ -20,7 +31,7 @@ Other scripts:
 |---|---|
 | `npm run build` | Type-check, bundle to `dist/`, then fail if any off-origin URL leaked in. |
 | `npm run preview` | Serve the built `dist/`. |
-| `npm run test` | Vitest tests: pure-logic modules (query model, validation, summary, API client, store, debounce, the mock catalog + evaluator) plus one view smoke test (`renderValueControl`). No DOM/component tests by design. |
+| `npm run test` | Vitest unit tests: the query model, validation, summary, API client, store, utilities, the pure view helpers (formatting, value controls, stats/preview helpers), the mock server's logic, and the `noBackendDataInSrc` guard. No DOM/component tests by design. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint + Prettier check. |
 | `npm run check:offline` | Scan `dist/` for off-origin `http(s)` URLs. |
@@ -32,22 +43,30 @@ Other scripts:
    host. `npm run check:offline` is the backstop and runs inside `npm run build`.
 2. **jQuery airlock.** `import $ from "jquery"` appears in only two files:
    `src/ui/fomantic.ts` (all real jQuery use — the Fomantic plugin activate/destroy
-   airlock) and the top of `src/main.ts`, which does nothing but the sanctioned
-   `window.jQuery = window.$ = $` bootstrap that Fomantic's JS requires. To make
+   airlock) and `src/setup-jquery.ts`, which does nothing but the
+   `window.jQuery = window.$ = $` bootstrap that Fomantic's JS requires (it must
+   stay the first import of `src/main.ts`). To make
    new markup interactive, add its selector to `activate()` and `destroy()` in
    `src/ui/fomantic.ts`. ESLint blocks `jquery` imports anywhere else.
 3. **Update a panel by building an HTML string and calling `paint()`** — never
    hand-mutate a panel's DOM. `paint()` tears down old Fomantic plugins first.
 4. **One state object.** `src/state.ts`. Change it with `store.setState({...})`;
-   panels react in `src/main.ts`'s `subscribe`.
-5. **Stats & preview always match the on-screen query.** Editing the query clears
-   both immediately; slow responses are dropped by a `JSON.stringify(query)` guard.
-6. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
+   each panel re-renders when a key it lists in `panelRenderers` (`src/main.ts`)
+   changes.
+5. **Stats & preview always match the on-screen query.** Editing the query or the
+   database selection clears both immediately and cancels their requests; a
+   response is only used while its request is still current (`src/util/requestSlot.ts`).
+6. **The frontend never names backend data.** Facets, fields, tags and groups are
+   learned at runtime; the only place to name them is `src/config.ts`.
+7. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
    architectural change.
 
 ## Layout of the code
 
 See `docs/ARCHITECTURE.md` §4.
+
+CI (`.github/workflows/ci.yml`) runs typecheck, tests, lint and build on every
+pull request and push to `main`.
 
 ## Deploying `dist/`
 

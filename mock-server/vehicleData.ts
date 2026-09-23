@@ -4,33 +4,12 @@ import path from "node:path";
 
 const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 
-export interface IndividualField {
-  label: string;
-  type: string;
-  description: string;
-  comment: string;
-  cardinality: number;
-  values: string[];
-  format: string;
-  name?: string;
-}
-
-export interface Individual {
-  label: string;
-  group: string;
-  tags: string[];
-  idNumber: number;
-  name: string;
-  description: string;
-  comment: string;
-  totalCount: number;
-  fields: IndividualField[];
-}
-
-export interface Entryset {
-  id: number;
-  items: Record<string, Record<string, string | number | boolean>>;
-}
+// The wire types are the frontend's own contract (type-only import: erased at
+// build time, so the mock still shares no runtime code with src/). The mock
+// speaks the backend's vocabulary: the frontend's events and facets are its
+// entrysets and individuals.
+export type { EventRecord as Entryset, Facet as Individual } from "../src/api/types";
+import type { EventRecord as Entryset, Facet as Individual } from "../src/api/types";
 
 function loadIndividuals(): Individual[] {
   const raw = JSON.parse(readFileSync(path.join(dataDir, "individual.json"), "utf8")) as Record<

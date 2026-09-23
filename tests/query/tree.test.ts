@@ -9,6 +9,7 @@ import {
   findNode,
   countConditions,
   stripCollapsed,
+  sameSemantics,
 } from "../../src/query/tree";
 
 describe("tree", () => {
@@ -124,5 +125,16 @@ describe("tree", () => {
       const t2 = updateNode(root, root.id, { collapsed: false });
       expect(JSON.stringify(stripCollapsed(t1))).toBe(JSON.stringify(stripCollapsed(t2)));
     });
+  });
+});
+
+describe("sameSemantics", () => {
+  it("ignores a collapse toggle but not a real edit", () => {
+    const root = emptyQuery();
+    const g = newGroup();
+    const tree = addChild(root, root.id, g);
+    const collapsed = updateNode(tree, g.id, { collapsed: true });
+    expect(sameSemantics(tree, collapsed)).toBe(true);
+    expect(sameSemantics(tree, updateNode(tree, g.id, { operator: "OR" }))).toBe(false);
   });
 });

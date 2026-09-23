@@ -1,17 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { validateQuery, hasBlockingErrors } from "../../src/query/validate";
+import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
 import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../src/query/tree";
 
-const schema = {
+const field = (label: string, valueType: CatalogField["valueType"], operatorIds: string[]) => ({
+  label,
+  name: label,
+  fieldName: label,
+  valueType,
+  operatorIds,
+});
+const schema: FieldCatalog = {
   fields: [
-    { label: "species", valueType: "enum", operatorIds: ["eq", "in", "isEmpty"] },
-    { label: "branches", valueType: "number", operatorIds: ["eq", "between", "isEmpty"] },
-  ],
-  operators: [
-    { label: "eq", arity: "one" as const },
-    { label: "between", arity: "two" as const },
-    { label: "in", arity: "many" as const },
-    { label: "isEmpty", arity: "none" as const },
+    field("species", "enum", ["eq", "in", "isEmpty"]),
+    field("branches", "number", ["eq", "between", "isEmpty"]),
   ],
 };
 

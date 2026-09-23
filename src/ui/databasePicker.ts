@@ -43,13 +43,11 @@ export function renderDatabasePicker(state: AppState): void {
   );
 }
 
+/** Delegated listeners for the pills and All/None. Call once at startup. */
 export function wireDatabasePicker(
   container: HTMLElement,
   onChange: (nextSelectedIds: string[]) => void,
 ): void {
-  if (container.dataset.dbWired === "1") return;
-  container.dataset.dbWired = "1";
-
   const boxes = () => Array.from(container.querySelectorAll<HTMLInputElement>("input[data-db-id]"));
 
   container.addEventListener("change", (e) => {

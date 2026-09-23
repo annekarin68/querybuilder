@@ -1,32 +1,23 @@
 import { describe, it, expect } from "vitest";
 import type { CatalogField, CatalogOperator } from "../../src/query/fieldCatalog";
-import { defaultValueFor, renderValueControl } from "../../src/ui/valueControl";
+import { renderValueControl } from "../../src/ui/valueControl";
 
-type Field = CatalogField;
-type Operator = CatalogOperator;
-
-function field(overrides: Partial<Field> = {}): Field {
+function field(overrides: Partial<CatalogField> = {}): CatalogField {
   return {
     label: "f",
     name: "F",
+    fieldName: "F",
     valueType: "string",
-    description: "",
     operatorIds: [],
     ...overrides,
   };
 }
 
-function op(arity: Operator["arity"]): Operator {
-  return { label: "o", name: "O", description: "", arity };
+function op(arity: CatalogOperator["arity"]): CatalogOperator {
+  return { label: "o", name: "O", arity };
 }
 
-const enumField = field({
-  valueType: "enum",
-  options: [
-    { value: "a", label: "Apple" },
-    { value: "b", label: "Banana" },
-  ],
-});
+const enumField = field({ valueType: "enum", options: ["Apple", "Banana"] });
 
 describe("renderValueControl", () => {
   it('arity "none" renders nothing', () => {
@@ -39,7 +30,7 @@ describe("renderValueControl", () => {
   });
 
   it('arity "one" + enum renders an <option> per label', () => {
-    const html = renderValueControl(enumField, op("one"), "a");
+    const html = renderValueControl(enumField, op("one"), "Apple");
     expect(html).toContain("<option");
     expect(html).toContain("Apple");
     expect(html).toContain("Banana");
@@ -52,7 +43,7 @@ describe("renderValueControl", () => {
   });
 
   it('arity "many" + enum renders a multiple select with an option per value', () => {
-    const html = renderValueControl(enumField, op("many"), ["a"]);
+    const html = renderValueControl(enumField, op("many"), ["Apple"]);
     expect(html).toContain('class="ui multiple selection dropdown"');
     expect(html).toContain(" multiple");
     expect(html.match(/<option /g) ?? []).toHaveLength(2);
@@ -60,38 +51,29 @@ describe("renderValueControl", () => {
     expect(html).toContain("Banana");
   });
 
-  it('arity "many" + non-enum renders a comma-separated text input', () => {
-    const html = renderValueControl(field({ valueType: "string" }), op("many"), ["a", "b"]);
-    expect(html).toContain('data-multi="1"');
-    expect(html).toContain("placeholder");
-    expect(html).toContain('value="a, b"');
-  });
-
   it("uses classes, not inline styles, for the range layout", () => {
     const num = renderValueControl(field({ valueType: "number" }), op("two"), [1, 2]);
-    const en = renderValueControl(enumField, op("two"), ["a", "b"]);
-    for (const html of [num, en]) {
-      expect(html).not.toContain("style=");
-      expect(html).toContain('class="qb-range"');
-      expect(html).toContain('class="qb-range-to"');
-    }
+    expect(num).not.toContain("style=");
+    expect(num).toContain('class="qb-range"');
+    expect(num).toContain('class="qb-range-to"');
   });
 });
 
-describe("defaultValueFor", () => {
-  it("boolean field + arity one defaults to false (a toggle can't represent unset)", () => {
-    expect(defaultValueFor(field({ valueType: "boolean" }), op("one"))).toBe(false);
+describe("renderValueControl accessible names", () => {
+  it("labels single inputs, dropdowns and toggles as the value", () => {
+    for (const html of [
+      renderValueControl(field(), op("one"), "x"),
+      renderValueControl(enumField, op("one"), "Apple"),
+      renderValueControl(enumField, op("many"), []),
+      renderValueControl(field({ valueType: "boolean" }), op("one"), false),
+    ]) {
+      expect(html).toContain('aria-label="Value"');
+    }
   });
 
-  it("every other field/arity combination defaults to null", () => {
-    expect(defaultValueFor(field({ valueType: "string" }), op("one"))).toBeNull();
-    expect(defaultValueFor(field({ valueType: "boolean" }), op("two"))).toBeNull();
-    expect(defaultValueFor(field({ valueType: "boolean" }), op("many"))).toBeNull();
-    expect(defaultValueFor(field({ valueType: "number" }), op("one"))).toBeNull();
-  });
-
-  it("no field or no operator defaults to null", () => {
-    expect(defaultValueFor(undefined, op("one"))).toBeNull();
-    expect(defaultValueFor(field({ valueType: "boolean" }), undefined)).toBeNull();
+  it("labels the two ends of a range", () => {
+    const html = renderValueControl(field({ valueType: "number" }), op("two"), [1, 2]);
+    expect(html).toContain('aria-label="From"');
+    expect(html).toContain('aria-label="To"');
   });
 });

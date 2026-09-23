@@ -1,5 +1,4 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { argv } from "node:process";
 import { DATABASES } from "./databases";
 import {
   matches,
@@ -33,22 +32,11 @@ import {
 } from "./auth";
 import { logQueryAudit } from "./audit";
 
-const PORT = 3001;
+/** Override with MOCK_PORT to run a second copy (e.g. another checkout) side by side. */
+const PORT = Number(process.env.MOCK_PORT) || 3001;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export function paginate<T>(items: T[], page: number, pageSize: number) {
-  const size = Math.min(Math.max(1, Math.floor(pageSize) || 1), 100);
-  const p = Math.max(1, Math.floor(page) || 1);
-  const start = (p - 1) * size;
-  return {
-    slice: items.slice(start, start + size),
-    page: p,
-    pageSize: size,
-    totalRows: items.length,
-  };
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -76,17 +64,36 @@ function mockIdpAuthorizePage(state: string): string {
 </html>`;
 }
 
-/** Parses an application/x-www-form-urlencoded request body — the mock
- *  compliance page's form POST, parallel to readJson for the JSON routes. */
-async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
+async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
-  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+  return Buffer.concat(chunks).toString("utf8");
 }
 
-/** `state` is always a randomToken() output (base64url: [A-Za-z0-9_-]), so it
- *  can never actually contain an HTML-special character — this escaping is a
- *  cheap defensive habit, not a response to a real exploitable input. */
+/** Parses the mock compliance page's form POST (application/x-www-form-urlencoded). */
+async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
+  return new URLSearchParams(await readBody(req));
+}
+
+/**
+ * The login/compliance callbacks are browser NAVIGATIONS, not fetches, so a
+ * failure there must be a page the user can read and leave — not raw JSON.
+ * Also clears the flow's state-binding cookie, which is useless after a failure.
+ */
+function sendFlowError(res: ServerResponse, message: string, clearCookie: string): void {
+  res.writeHead(400, { "content-type": "text/html; charset=utf-8", "Set-Cookie": clearCookie });
+  res.end(`<!doctype html>
+<html>
+  <head><title>Something went wrong</title></head>
+  <body style="font-family: sans-serif; max-width: 28rem; margin: 4rem auto;">
+    <h1>Something went wrong</h1>
+    <p>${escapeHtmlAttr(message)}</p>
+    <p><a href="/">Back to the Query Builder</a> and try again.</p>
+  </body>
+</html>`);
+}
+
+/** Escapes text for HTML content or a double-quoted attribute. */
 function escapeHtmlAttr(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -97,13 +104,14 @@ function escapeHtmlAttr(s: string): string {
 
 /** Dev-only stand-in for a real compliance/audit service's submission form.
  *  Server-rendered HTML — never bundled by Vite, never touches dist/. */
-function mockComplianceSubmitPage(state: string): string {
+function mockComplianceSubmitPage(state: string, error = ""): string {
   return `<!doctype html>
 <html>
   <head><title>Mock Compliance Logging Service</title></head>
   <body style="font-family: sans-serif; max-width: 28rem; margin: 4rem auto;">
     <h1>Compliance Logging</h1>
     <p>This stands in for a real internal compliance/audit service during local development.</p>
+    ${error ? `<p style="color:#b00">${escapeHtmlAttr(error)}</p>` : ""}
     <form method="POST" action="/mock-compliance/submit">
       <input type="hidden" name="state" value="${escapeHtmlAttr(state)}" />
       <label for="reason">Reason for this data extraction:</label><br/>
@@ -130,9 +138,7 @@ function badDatabases(body: { databases?: unknown }): boolean {
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
-  const raw = Buffer.concat(chunks).toString("utf8");
+  const raw = await readBody(req);
   if (!raw) return {};
   try {
     return JSON.parse(raw);
@@ -146,7 +152,6 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   try {
     if (req.method === "GET" && url.pathname === "/api/databases") {
-      // Every field on DatabaseDef IS the wire contract now — send the array directly.
       sendJson(res, 200, DATABASES);
       return;
     }
@@ -182,12 +187,12 @@ const server = createServer(async (req, res) => {
       const state = url.searchParams.get("state") ?? "";
       const boundState = loginStateFromCookie(req.headers.cookie);
       if (boundState !== state) {
-        sendJson(res, 400, { error: "Invalid or expired login attempt." });
+        sendFlowError(res, "Invalid or expired login attempt.", clearLoginStateCookieHeader());
         return;
       }
       const outcome = exchangeCodeForSession(code, state);
       if (!outcome.ok) {
-        sendJson(res, 400, { error: outcome.error });
+        sendFlowError(res, outcome.error, clearLoginStateCookieHeader());
         return;
       }
       res.writeHead(302, {
@@ -213,9 +218,11 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/compliance/start") {
-      const session = sessionFor(req.headers.cookie);
-      if (!session) {
-        sendJson(res, 401, { error: "Not authenticated." });
+      // A navigation: without a session (e.g. it expired, or the mock was
+      // restarted), send the browser to log in rather than to a JSON error.
+      if (!sessionFor(req.headers.cookie)) {
+        res.writeHead(302, { Location: "/api/auth/login" });
+        res.end();
         return;
       }
       const state = startCompliance();
@@ -234,7 +241,11 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/mock-compliance/submit") {
       const form = await readFormBody(req);
       const state = form.get("state") ?? "";
-      const reason = form.get("reason") ?? "";
+      const reason = (form.get("reason") ?? "").trim();
+      if (!reason) {
+        sendHtml(res, 400, mockComplianceSubmitPage(state, "Please enter a reason."));
+        return;
+      }
       const token = issueFakeComplianceToken(reason);
       res.writeHead(302, {
         Location: `/api/compliance/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
@@ -247,12 +258,16 @@ const server = createServer(async (req, res) => {
       const state = url.searchParams.get("state") ?? "";
       const boundState = complianceStateFromCookie(req.headers.cookie);
       if (boundState !== state) {
-        sendJson(res, 400, { error: "Invalid or expired compliance attempt." });
+        sendFlowError(
+          res,
+          "Invalid or expired compliance attempt.",
+          clearComplianceStateCookieHeader(),
+        );
         return;
       }
       const outcome = exchangeComplianceToken(token, state, req.headers.cookie);
       if (!outcome.ok) {
-        sendJson(res, 400, { error: outcome.error });
+        sendFlowError(res, outcome.error, clearComplianceStateCookieHeader());
         return;
       }
       res.writeHead(302, {
@@ -327,12 +342,7 @@ const server = createServer(async (req, res) => {
         sendJson(res, 403, { error: "Compliance acknowledgment required." });
         return;
       }
-      const body = (await readJson(req)) as {
-        query?: JsonNode;
-        databases?: string[];
-        page?: number;
-        pageSize?: number;
-      };
+      const body = (await readJson(req)) as { query?: JsonNode; databases?: string[] };
       if (badQuery(body)) {
         sendJson(res, 400, { error: "Body must include a `query` tree." });
         return;
@@ -372,7 +382,4 @@ const server = createServer(async (req, res) => {
   }
 });
 
-// Exported for potential integration tests; also starts when run directly.
-export { server, readJson, sendJson };
-const isEntry = argv[1] && argv[1].endsWith("index.ts");
-if (isEntry) server.listen(PORT, () => console.log(`Mock API on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Mock API on http://localhost:${PORT}`));

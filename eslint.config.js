@@ -74,9 +74,9 @@ export default tseslint.config(
     rules: { "no-restricted-imports": "off" },
   },
 
-  // These files may publish window.jQuery but must never CALL $().
+  // The bootstrap publishes window.jQuery but must never CALL $().
   {
-    files: ["src/main.ts", "src/setup-jquery.ts"],
+    files: ["src/setup-jquery.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

@@ -1,8 +1,5 @@
 import { randomBytes } from "node:crypto";
-
-export interface AuthUser {
-  name: string;
-}
+import type { AuthUser, ComplianceStatus } from "../src/api/types";
 
 interface Session {
   user: AuthUser;
@@ -12,12 +9,37 @@ interface Session {
 /** In-memory session store — a real backend would use its own session/store mechanism. */
 const SESSIONS = new Map<string, Session>();
 
+/** How long a login/compliance round trip may take — the same 5 minutes as
+ *  the state-binding cookie (`bindingCookieHeader`). */
+const PENDING_TTL_MS = 5 * 60_000;
+
+/**
+ * Single-use values (CSRF states, codes, tokens) that expire after
+ * PENDING_TTL_MS, so abandoned attempts don't pile up in memory forever.
+ * `take` returns the value and forgets it, or undefined if unknown or expired.
+ */
+function pendingStore<V>() {
+  const entries = new Map<string, { value: V; expiresAt: number }>();
+  return {
+    put(key: string, value: V): void {
+      const now = Date.now();
+      for (const [k, e] of entries) if (e.expiresAt <= now) entries.delete(k);
+      entries.set(key, { value, expiresAt: now + PENDING_TTL_MS });
+    },
+    take(key: string): V | undefined {
+      const e = entries.get(key);
+      entries.delete(key);
+      return e && e.expiresAt > Date.now() ? e.value : undefined;
+    },
+  };
+}
+
 /** CSRF `state` values issued by /api/auth/login, valid until consumed by /api/auth/callback. */
-const PENDING_STATES = new Set<string>();
+const PENDING_STATES = pendingStore<true>();
 
 /** Fake authorization codes the mock's own fake-IdP page hands out. A real IdP issues these
  *  itself; the mock stands in for it since there's no real IdP reachable in a dev sandbox. */
-const FAKE_CODES = new Set<string>();
+const FAKE_CODES = pendingStore<true>();
 
 const SESSION_COOKIE = "qb_session";
 
@@ -28,7 +50,7 @@ function randomToken(bytes = 24): string {
 /** Starts a login attempt: a fresh CSRF `state`, valid until /api/auth/callback consumes it. */
 export function startLogin(): string {
   const state = randomToken();
-  PENDING_STATES.add(state);
+  PENDING_STATES.put(state, true);
   return state;
 }
 
@@ -38,7 +60,7 @@ export function startLogin(): string {
  *  2026-09-22-oauth2-login-design.md §7). */
 export function issueFakeCode(): string {
   const code = randomToken();
-  FAKE_CODES.add(code);
+  FAKE_CODES.put(code, true);
   return code;
 }
 
@@ -49,10 +71,8 @@ export type ExchangeOutcome = { ok: true; sessionId: string } | { ok: false; err
  *  decision left open by the design (spec §2) — the mock does not simulate it
  *  either way, which says nothing about whether production should use it. */
 export function exchangeCodeForSession(code: string, state: string): ExchangeOutcome {
-  if (!PENDING_STATES.has(state)) return { ok: false, error: "Invalid or expired login attempt." };
-  PENDING_STATES.delete(state);
-  if (!FAKE_CODES.has(code)) return { ok: false, error: "Invalid or expired authorization code." };
-  FAKE_CODES.delete(code);
+  if (!PENDING_STATES.take(state)) return { ok: false, error: "Invalid or expired login attempt." };
+  if (!FAKE_CODES.take(code)) return { ok: false, error: "Invalid or expired authorization code." };
   const sessionId = randomToken(32);
   SESSIONS.set(sessionId, { user: { name: "demo.user" } });
   return { ok: true, sessionId };
@@ -137,17 +157,17 @@ export function complianceStateFromCookie(cookieHeader: string | undefined): str
 /** CSRF `state` values issued by /api/compliance/start, valid until consumed by
  *  /api/compliance/callback. A separate set from the login flow's, so the two
  *  flows' state spaces can never cross-validate each other's tokens. */
-const PENDING_COMPLIANCE_STATES = new Set<string>();
+const PENDING_COMPLIANCE_STATES = pendingStore<true>();
 
 /** The reason text a user typed on the mock compliance page, keyed by a
  *  single-use token, until /api/compliance/callback consumes it. */
-const PENDING_COMPLIANCE_REASONS = new Map<string, string>();
+const PENDING_COMPLIANCE_REASONS = pendingStore<string>();
 
 /** Starts a compliance attempt: a fresh CSRF `state`, valid until
  *  /api/compliance/callback consumes it. */
 export function startCompliance(): string {
   const state = randomToken();
-  PENDING_COMPLIANCE_STATES.add(state);
+  PENDING_COMPLIANCE_STATES.put(state, true);
   return state;
 }
 
@@ -157,7 +177,7 @@ export function startCompliance(): string {
  *  integration (see the design spec's §7). */
 export function issueFakeComplianceToken(reason: string): string {
   const token = randomToken();
-  PENDING_COMPLIANCE_REASONS.set(token, reason);
+  PENDING_COMPLIANCE_REASONS.put(token, reason);
   return token;
 }
 
@@ -171,15 +191,13 @@ export function exchangeComplianceToken(
   state: string,
   cookieHeader: string | undefined,
 ): ComplianceExchangeOutcome {
-  if (!PENDING_COMPLIANCE_STATES.has(state)) {
+  if (!PENDING_COMPLIANCE_STATES.take(state)) {
     return { ok: false, error: "Invalid or expired compliance attempt." };
   }
-  PENDING_COMPLIANCE_STATES.delete(state);
-  const reason = PENDING_COMPLIANCE_REASONS.get(token);
+  const reason = PENDING_COMPLIANCE_REASONS.take(token);
   if (reason === undefined) {
     return { ok: false, error: "Invalid or expired compliance token." };
   }
-  PENDING_COMPLIANCE_REASONS.delete(token);
   const session = sessionFor(cookieHeader);
   if (!session) {
     return { ok: false, error: "Not authenticated." };
@@ -188,13 +206,10 @@ export function exchangeComplianceToken(
   return { ok: true };
 }
 
-export type ComplianceStatusBody =
-  { status: "required" } | { status: "acknowledged"; reason: string; ackedAt: string };
-
 /** Never errors: no session, or a session with no compliance record, both
  *  report "required" — from the caller's perspective, compliance isn't met
  *  either way. */
-export function complianceStatusFor(cookieHeader: string | undefined): ComplianceStatusBody {
+export function complianceStatusFor(cookieHeader: string | undefined): ComplianceStatus {
   const session = sessionFor(cookieHeader);
   if (!session?.compliance) return { status: "required" };
   return {

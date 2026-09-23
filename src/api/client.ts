@@ -81,18 +81,19 @@ async function errorFromResponse(res: Response): Promise<ApiError> {
 }
 
 /**
- * fetch() with the shared timeout. `read` consumes the successful response
- * inside the deadline, so a body that never finishes arriving times out too.
+ * fetch() with the shared timeout. `read` consumes the response inside the
+ * deadline, so a body that never finishes arriving times out too; a streaming
+ * reader calls `touch()` whenever data arrives to restart the idle clock.
  */
 async function send<T>(
   path: string,
   init: RequestInit | undefined,
-  read: (res: Response) => Promise<T>,
+  read: (res: Response, touch: () => void) => Promise<T>,
 ): Promise<T> {
   const d = deadline(init?.signal ?? undefined, REQUEST_TIMEOUT_MS);
   try {
     const res = await fetch(`${BASE}${path}`, { ...init, signal: d.signal });
-    return await read(res);
+    return await read(res, d.touch);
   } finally {
     d.done();
   }
@@ -119,6 +120,15 @@ export function getFacets(): Promise<Facet[]> {
   return request<Facet[]>("/individuals");
 }
 
+function postJson(body: unknown, signal?: AbortSignal): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  };
+}
+
 /**
  * POST /api/stats streams newline-delimited JSON: one StatsResponse per
  * selected database, as soon as that database's result is ready. `onLine` is
@@ -127,63 +137,42 @@ export function getFacets(): Promise<Facet[]> {
  * Aborting `signal` stops reading and rejects with the abort reason — callers
  * use it to drop a stream whose query is no longer on screen.
  */
-export async function getStats(
+export function getStats(
   query: QueryNode,
   databases: string[],
   onLine: (line: StatsResponse) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const d = deadline(signal, REQUEST_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${BASE}/stats`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query, databases }),
-      signal: d.signal,
-    });
+  return send("/stats", postJson({ query, databases }, signal), async (res, touch) => {
     if (!res.ok) throw await errorFromResponse(res);
     if (!res.body) throw new ApiError(res.status, "The server sent an empty statistics response.");
-
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    // A chunk boundary from the underlying stream has no relation to line
-    // boundaries (or even UTF-8 character boundaries) in the NDJSON body, so a
-    // chunk may end mid-line — buffer text across read() calls and only emit
-    // complete lines, split on "\n".
+    // A chunk boundary has no relation to line boundaries (or even UTF-8
+    // character boundaries) in the NDJSON body, so buffer text across read()
+    // calls and only emit complete lines.
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      d.touch(); // still making progress — restart the idle timeout
+      touch(); // still making progress — restart the idle timeout
       buffer += decoder.decode(value, { stream: true });
-      let newlineIndex: number;
-      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, newlineIndex).trim();
-        buffer = buffer.slice(newlineIndex + 1);
-        if (line) onLine(JSON.parse(line) as StatsResponse);
-      }
+      const lines = buffer.split("\n");
+      buffer = lines.pop()!; // the last piece may be an incomplete line
+      for (const line of lines) if (line.trim()) onLine(JSON.parse(line) as StatsResponse);
     }
     buffer += decoder.decode(); // flush a trailing partial multi-byte sequence, if any
-    const rest = buffer.trim();
-    if (rest) onLine(JSON.parse(rest) as StatsResponse);
-  } finally {
-    d.done();
-  }
+    if (buffer.trim()) onLine(JSON.parse(buffer) as StatsResponse);
+  });
 }
 
+/** POST /api/query: the events matching the query (capped by the backend). */
 export function runQuery(
   query: QueryNode,
   databases: string[],
-  page: number,
-  pageSize: number,
   signal?: AbortSignal,
 ): Promise<EventsResponse> {
-  return request<EventsResponse>("/query", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query, databases, page, pageSize }),
-    signal,
-  });
+  return request<EventsResponse>("/query", postJson({ query, databases }, signal));
 }
 
 /**

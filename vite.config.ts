@@ -78,9 +78,11 @@ function emitLicenseNotices(): Plugin {
   };
 }
 
+/** Where `npm run mock` listens — keep in sync with mock-server/index.ts. */
+const mockApi = `http://localhost:${Number(process.env.MOCK_PORT) || 3001}`;
+
 export default defineConfig({
   plugins: [stripRemoteCss(), stripRemoteJs(), emitLicenseNotices()],
-  esbuild: { legalComments: "eof" },
   server: {
     port: 5173,
     // /api/auth/login and /api/compliance/start both 302 the browser (a real
@@ -88,9 +90,9 @@ export default defineConfig({
     // redirect target must be proxied too, or the dev server serves the SPA
     // shell instead of the mock service's page.
     proxy: {
-      "/api": "http://localhost:3001",
-      "/mock-idp": "http://localhost:3001",
-      "/mock-compliance": "http://localhost:3001",
+      "/api": mockApi,
+      "/mock-idp": mockApi,
+      "/mock-compliance": mockApi,
     },
   },
   build: {

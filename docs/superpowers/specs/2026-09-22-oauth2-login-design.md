@@ -1,5 +1,8 @@
 # OAuth2 authorization-code login — design
 
+> **Historical design record.** This describes the design as approved at the time;
+> the code has moved on since. For current behaviour see `docs/ARCHITECTURE.md`.
+
 Status: approved, ready for implementation planning.
 
 ## 1. Problem

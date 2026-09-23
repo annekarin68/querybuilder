@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { canRunQuery, createStore, initialState, type AppState } from "../src/state";
+import { canRunQuery, createStore, initialState, runBlocker, type AppState } from "../src/state";
 import { addChild, emptyQuery, newCondition } from "../src/query/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
@@ -41,14 +41,14 @@ describe("store", () => {
 });
 
 describe("canRunQuery", () => {
-  const schema = buildFieldCatalog([]);
+  const catalog = buildFieldCatalog([]);
 
   function state(
-    overrides: Partial<Pick<AppState, "schema" | "issues" | "query" | "selectedDatabaseIds">> = {},
-  ): Pick<AppState, "schema" | "issues" | "query" | "selectedDatabaseIds"> {
+    overrides: Partial<Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds">> = {},
+  ): Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds"> {
     const root = emptyQuery();
     return {
-      schema,
+      catalog,
       issues: [],
       query: addChild(root, root.id, newCondition()),
       selectedDatabaseIds: ["alpha"],
@@ -56,12 +56,12 @@ describe("canRunQuery", () => {
     };
   }
 
-  it("true when schema is loaded, no blocking issues, a condition exists, and a database is selected", () => {
+  it("true when the catalog is loaded, no blocking issues, a condition exists, and a database is selected", () => {
     expect(canRunQuery(state())).toBe(true);
   });
 
-  it("false when schema hasn't loaded yet", () => {
-    expect(canRunQuery(state({ schema: null }))).toBe(false);
+  it("false when the catalog hasn't loaded yet", () => {
+    expect(canRunQuery(state({ catalog: null }))).toBe(false);
   });
 
   it("false when there's a blocking (error-severity) issue", () => {
@@ -86,5 +86,34 @@ describe("canRunQuery", () => {
 
   it("false when no database is selected", () => {
     expect(canRunQuery(state({ selectedDatabaseIds: [] }))).toBe(false);
+  });
+});
+
+describe("runBlocker", () => {
+  const catalog = buildFieldCatalog([]);
+  const root = emptyQuery();
+  const ready: Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds"> = {
+    catalog,
+    issues: [],
+    query: addChild(root, root.id, newCondition()),
+    selectedDatabaseIds: ["alpha"],
+  };
+
+  it("is null when the query can run", () => {
+    expect(runBlocker(ready)).toBeNull();
+  });
+
+  it("names the first reason it cannot, in the order the panels explain them", () => {
+    expect(runBlocker({ ...ready, catalog: null, selectedDatabaseIds: [] })).toBe("loading");
+    expect(runBlocker({ ...ready, selectedDatabaseIds: [], query: emptyQuery() })).toBe(
+      "no-database",
+    );
+    expect(runBlocker({ ...ready, query: emptyQuery() })).toBe("no-condition");
+    expect(
+      runBlocker({
+        ...ready,
+        issues: [{ nodeId: "x", message: "m", severity: "error", kind: "incomplete" }],
+      }),
+    ).toBe("unfinished");
   });
 });

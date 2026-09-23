@@ -89,3 +89,8 @@ export function stripCollapsed(tree: QueryNode): QueryNode {
     return n;
   });
 }
+
+/** Whether two trees filter the same way, i.e. differ at most in `collapsed`. */
+export function sameSemantics(a: QueryNode, b: QueryNode): boolean {
+  return JSON.stringify(stripCollapsed(a)) === JSON.stringify(stripCollapsed(b));
+}

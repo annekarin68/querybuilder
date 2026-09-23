@@ -1,7 +1,5 @@
-import type { AppState } from "../state";
+import { runBlocker, type AppState, type RunBlocker } from "../state";
 import type { EventRecord, Facet } from "../api/types";
-import { countConditions } from "../query/tree";
-import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, formatWhen, text } from "./format";
@@ -138,26 +136,26 @@ function runNote(state: AppState): string {
   return "";
 }
 
+/** Why Run is disabled (see `runBlocker`). */
+const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
+  "no-database": "Select at least one database, then run the query.",
+  "no-condition": "Add a condition, then run the query.",
+  unfinished: "Finish the query to run it.",
+};
+
 export function renderDataPreview(state: AppState): void {
   const el = panelEls().preview;
   const p = state.preview;
 
   // §6: this panel never shows anything that does not belong to the query on
-  // screen, and it says WHY it is empty. These checks mirror statsPanel.ts.
-  if (!state.schema) {
+  // screen, and it says WHY it is empty.
+  const blocker = runBlocker(state);
+  if (blocker === "loading") {
     paint(el, "");
     return;
   }
-  if (state.selectedDatabaseIds.length === 0) {
-    paint(el, card(runBlock("Select at least one database, then run the query.", false)));
-    return;
-  }
-  if (countConditions(state.query) === 0) {
-    paint(el, card(runBlock("Add a condition, then run the query.", false)));
-    return;
-  }
-  if (hasBlockingErrors(state.issues)) {
-    paint(el, card(runBlock("Finish the query to run it.", false)));
+  if (blocker) {
+    paint(el, card(runBlock(BLOCKED_MESSAGES[blocker], false)));
     return;
   }
   // onQueryChange/onDatabasesChange reset preview to "idle" in the same
@@ -188,10 +186,6 @@ export function renderDataPreview(state: AppState): void {
     );
     return;
   }
-  if (!p.data) {
-    paint(el, "");
-    return;
-  }
   const { entrysets: events } = p.data;
   if (events.length === 0) {
     paint(el, card(`<p class="qb-placeholder">No events match this query.</p>`, 0));
@@ -208,10 +202,8 @@ export function renderDataPreview(state: AppState): void {
   );
 }
 
-/** One delegated listener for the Run / Try again button (attached once). */
+/** One delegated listener for the Run / Try again button. Call once at startup. */
 export function wireDataPreview(container: HTMLElement, onRun: () => void): void {
-  if (container.dataset.previewWired === "1") return;
-  container.dataset.previewWired = "1";
   container.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action='run']");
     if (btn && !btn.disabled) onRun();

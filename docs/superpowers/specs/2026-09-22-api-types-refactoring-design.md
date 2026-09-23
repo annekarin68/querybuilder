@@ -1,5 +1,8 @@
 # API types refactoring — design
 
+> **Historical design record.** This describes the design as approved at the time;
+> the code has moved on since. For current behaviour see `docs/ARCHITECTURE.md`.
+
 Status: approved, ready for implementation planning.
 
 > **Revision 2.** Revision 1 (implemented, merged into this branch, PR #12)

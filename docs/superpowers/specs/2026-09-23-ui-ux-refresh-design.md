@@ -1,6 +1,9 @@
 # UI/UX refresh — design
 
-Status: approved and implemented (plan: docs/superpowers/plans/2026-09-23-ui-ux-refresh.md).
+> **Historical design record.** This describes the design as approved at the time;
+> the code has moved on since. For current behaviour see `docs/ARCHITECTURE.md`.
+
+Status: approved and implemented.
 
 Branch: `claude/frontend-ui-ux-improvements-73afba` (from `main` @ `68d7fe7`).
 

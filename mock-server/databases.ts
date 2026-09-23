@@ -1,19 +1,4 @@
-export interface DatabaseDef {
-  /** A short summary of what this database contains or what makes it unique. */
-  description: string;
-  /** User-friendly display name. */
-  name: string;
-  /** The title of this database's owner — the company that reported the data. */
-  owner: string;
-  /** Mock-only pretend real size. Spans several orders of magnitude so the
-   *  stats panel exercises billion-scale formatting. */
-  totalEntrysets: number;
-  /** This database's share of the combined totalEntrysets across all 7 —
-   *  computed below so the set always sums to ~100%. */
-  percentageOfTotal: number;
-  /** API-friendly "ID", not meant to be displayed. */
-  label: string;
-}
+import type { DatabasesResponse } from "../src/api/types";
 
 interface DatabaseSeed {
   label: string;
@@ -83,7 +68,8 @@ const SEEDS: DatabaseSeed[] = [
 
 const TOTAL_ENTRYSETS = SEEDS.reduce((s, d) => s + d.totalEntrysets, 0);
 
-export const DATABASES: DatabaseDef[] = SEEDS.map((s) => ({
+/** Every field here is the wire contract, so GET /api/databases sends this as-is. */
+export const DATABASES: DatabasesResponse[] = SEEDS.map((s) => ({
   ...s,
   percentageOfTotal: (s.totalEntrysets / TOTAL_ENTRYSETS) * 100,
 }));

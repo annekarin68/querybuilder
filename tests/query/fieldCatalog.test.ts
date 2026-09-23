@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildFieldCatalog, OPERATORS, valueTypeFor } from "../../src/query/fieldCatalog";
+import {
+  buildFieldCatalog,
+  findField,
+  findOperator,
+  OPERATORS,
+  valueTypeFor,
+} from "../../src/query/fieldCatalog";
 import type { Facet } from "../../src/api/types";
 
 const facets: Facet[] = [
@@ -121,14 +127,26 @@ describe("buildFieldCatalog", () => {
     );
   });
 
-  it("description falls back to the facet's description when the field's is empty", () => {
-    const { fields } = buildFieldCatalog(facets);
-    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.description).toBe(
-      "Engine rotational speed.",
-    );
-    expect(fields.find((f) => f.label === "engine_rpm.redline_rpm")?.description).toBe(
-      "Redline for this engine.",
-    );
+  it("shows the field's name when the backend sends one, falling back to its label", () => {
+    const named: Facet[] = [
+      {
+        ...facets[0]!,
+        fields: [{ ...facets[0]!.fields[0]!, name: "Engine speed" }, facets[0]!.fields[1]!],
+      },
+    ];
+    const { fields } = buildFieldCatalog(named);
+    expect(fields[0]).toMatchObject({
+      name: "Engine RPM: Engine speed",
+      fieldName: "Engine speed",
+    });
+    expect(fields[1]).toMatchObject({ name: "Engine RPM: redline_rpm", fieldName: "redline_rpm" });
+  });
+
+  it("findField looks a field up by its dotted label", () => {
+    const catalog = buildFieldCatalog(facets);
+    expect(findField(catalog, "vehicle_identity.vin")?.valueType).toBe("string");
+    expect(findField(catalog, "nope")).toBeUndefined();
+    expect(findField(catalog, null)).toBeUndefined();
   });
 
   it("assigns operatorIds per valueType, all of which are real operator labels", () => {
@@ -175,10 +193,7 @@ describe("buildFieldCatalog", () => {
     const { fields } = buildFieldCatalog(withValues);
     const field = fields.find((f) => f.label === "vehicle_identity.vehicle_type");
     expect(field?.valueType).toBe("enum");
-    expect(field?.options).toEqual([
-      { value: "sedan", label: "sedan" },
-      { value: "van", label: "van" },
-    ]);
+    expect(field?.options).toEqual(["sedan", "van"]);
     expect(field?.operatorIds).toEqual(["eq", "neq", "in", "isEmpty", "isNotEmpty"]);
   });
 
@@ -207,6 +222,12 @@ describe("buildFieldCatalog", () => {
 describe("OPERATORS", () => {
   it("arities are from the allowed set", () => {
     for (const o of OPERATORS) expect(["none", "one", "two", "many"]).toContain(o.arity);
+  });
+
+  it("findOperator looks an operator up by label", () => {
+    expect(findOperator("between")?.arity).toBe("two");
+    expect(findOperator("nope")).toBeUndefined();
+    expect(findOperator(null)).toBeUndefined();
   });
 });
 

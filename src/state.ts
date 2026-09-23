@@ -1,4 +1,4 @@
-import type { Issue, QueryNode } from "./query/types";
+import type { Group, Issue } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
 import { hasBlockingErrors } from "./query/validate";
 import type {
@@ -8,13 +8,22 @@ import type {
   Facet,
   StatsResponse,
 } from "./api/types";
-import { buildFieldCatalog } from "./query/fieldCatalog";
+import type { FieldCatalog } from "./query/fieldCatalog";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 export type AsyncStatus = "idle" | "loading" | "ok" | "error";
 
+/** The Matching events request. Only "ok" carries data, only "error" a message. */
+export type PreviewState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ok"; data: EventsResponse }
+  | { status: "error"; error: string };
+
 export interface AppState {
-  schema: ReturnType<typeof buildFieldCatalog> | null;
+  /** The queryable fields, derived from `facets` at startup (there is
+   *  no schema endpoint — see src/query/fieldCatalog.ts). */
+  catalog: FieldCatalog | null;
   /** The databases the query can be scoped to (loaded once). */
   databases: DatabasesResponse[] | null;
   /** The data model backing the docs sidebar (loaded once). */
@@ -33,17 +42,18 @@ export interface AppState {
   selectedDatabaseIds: string[];
   activeView: ActiveView;
 
-  query: QueryNode;
+  /** The query tree. Its root is always a group. */
+  query: Group;
   issues: Issue[];
 
   stats: { status: AsyncStatus; lines: StatsResponse[]; error: string | null };
-  preview: { status: AsyncStatus; data: EventsResponse | null; error: string | null };
+  preview: PreviewState;
 
   sidebarCollapsed: boolean;
 }
 
 export const initialState: AppState = {
-  schema: null,
+  catalog: null,
   databases: null,
   facets: null,
   auth: { status: "loading", user: null },
@@ -53,28 +63,32 @@ export const initialState: AppState = {
   query: emptyQuery(),
   issues: [],
   stats: { status: "idle", lines: [], error: null },
-  preview: { status: "idle", data: null, error: null },
+  preview: { status: "idle" },
   // The docs start folded into their rail so the query builder gets the width.
   sidebarCollapsed: true,
 };
 
+/** Why the current query/scope can't run yet, or null when it can. */
+export type RunBlocker = "loading" | "no-database" | "no-condition" | "unfinished";
+
+type RunInputs = Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds">;
+
 /**
- * Whether the current query/scope is complete and valid enough to run or
- * refresh (§6): a schema is loaded, there are no blocking validation issues,
- * at least one condition exists, and at least one database is selected. The
- * single source of truth for this check — main.ts's runPreview and
- * refreshStats read it instead of repeating the four clauses (the preview
- * panel mirrors the same checks to decide whether Run is enabled).
+ * The single source of truth for "can this query run?" (§6). main.ts uses it to
+ * decide whether to fetch; the statistics and Matching events panels use the
+ * reason to explain why they are empty. Checked in the order the panels explain
+ * them.
  */
-export function canRunQuery(
-  state: Pick<AppState, "schema" | "issues" | "query" | "selectedDatabaseIds">,
-): boolean {
-  return (
-    !!state.schema &&
-    !hasBlockingErrors(state.issues) &&
-    countConditions(state.query) > 0 &&
-    state.selectedDatabaseIds.length > 0
-  );
+export function runBlocker(state: RunInputs): RunBlocker | null {
+  if (!state.catalog) return "loading";
+  if (state.selectedDatabaseIds.length === 0) return "no-database";
+  if (countConditions(state.query) === 0) return "no-condition";
+  if (hasBlockingErrors(state.issues)) return "unfinished";
+  return null;
+}
+
+export function canRunQuery(state: RunInputs): boolean {
+  return runBlocker(state) === null;
 }
 
 type Listener = (state: AppState, changed: Set<keyof AppState>) => void;

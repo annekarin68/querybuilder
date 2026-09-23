@@ -1,4 +1,5 @@
-// The ONLY file allowed to import jQuery. See docs/ARCHITECTURE.md §3.
+// The jQuery airlock: the only file that uses jQuery (src/setup-jquery.ts
+// merely publishes the global for Fomantic). See docs/ARCHITECTURE.md §3.
 import $ from "jquery";
 
 export function activate(container: HTMLElement): void {

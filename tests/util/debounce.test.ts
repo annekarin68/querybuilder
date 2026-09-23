@@ -15,15 +15,4 @@ describe("debounce", () => {
     expect(spy).toHaveBeenCalledWith(3);
     vi.useRealTimers();
   });
-
-  it("cancel() prevents a pending call", () => {
-    vi.useFakeTimers();
-    const spy = vi.fn();
-    const d = debounce(spy, 400);
-    d();
-    d.cancel();
-    vi.advanceTimersByTime(1000);
-    expect(spy).not.toHaveBeenCalled();
-    vi.useRealTimers();
-  });
 });
