@@ -464,6 +464,14 @@ body {
   border-radius: var(--qb-radius);
   box-shadow: 0 8px 24px rgba(15, 30, 45, 0.18);
 }
+/* Fomantic's .ui.button is content-box, so a fluid button's width:100% (plus
+   its own horizontal padding) overflows a narrow container like this menu's
+   sections — force border-box and drop Fomantic's .25em right margin so the
+   fluid buttons here actually fit within .qb-account-section's padding. */
+.qb-account-menu .ui.button {
+  box-sizing: border-box;
+  margin: 0;
+}
 .qb-account-section {
   padding: 0.75rem;
 }
