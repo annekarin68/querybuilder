@@ -1,7 +1,13 @@
 import type { Issue, QueryNode } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
 import { hasBlockingErrors } from "./query/validate";
-import type { DatabasesResponse, EntrysetsResponse, Individual, StatsResponse } from "./api/types";
+import type {
+  AuthUser,
+  DatabasesResponse,
+  EntrysetsResponse,
+  Individual,
+  StatsResponse,
+} from "./api/types";
 import { buildFieldCatalog } from "./query/fieldCatalog";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
@@ -13,6 +19,8 @@ export interface AppState {
   databases: DatabasesResponse[] | null;
   /** The vehicle telemetry data model backing the docs sidebar (loaded once). */
   individuals: Individual[] | null;
+  /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
+  auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
   /** Which databases the query currently runs against. Empty = nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;
@@ -30,6 +38,7 @@ export const initialState: AppState = {
   schema: null,
   databases: null,
   individuals: null,
+  auth: { status: "loading", user: null },
   selectedDatabaseIds: [],
   activeView: "filter",
   query: emptyQuery(),

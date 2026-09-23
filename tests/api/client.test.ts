@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getDatabases, getIndividuals, getStats, runQuery } from "../../src/api/client";
+import {
+  ApiError,
+  getDatabases,
+  getIndividuals,
+  getMe,
+  getStats,
+  logout,
+  runQuery,
+} from "../../src/api/client";
 import { emptyQuery } from "../../src/query/tree";
 
 function mockFetchOnce(status: number, body: unknown) {
@@ -126,5 +134,46 @@ describe("api client", () => {
   it("falls back to status text when there is no error field", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, {}));
     await expect(getDatabases()).rejects.toThrow("500 STATUS");
+  });
+
+  it("throws an ApiError carrying the response status", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(401, { error: "nope" }));
+    await expect(getDatabases()).rejects.toBeInstanceOf(ApiError);
+    await expect(getDatabases()).rejects.toMatchObject({ status: 401, message: "nope" });
+  });
+
+  it("getMe returns the user when logged in", async () => {
+    const f = mockFetchOnce(200, { name: "demo.user" });
+    vi.stubGlobal("fetch", f);
+    const out = await getMe();
+    expect(out).toEqual({ name: "demo.user" });
+    // getMe() calls fetch(url) with no second argument (unlike request<T>,
+    // which always passes init explicitly) — so check just the URL, not the
+    // full args array, which would otherwise differ in length from ["/api/auth/me", undefined].
+    expect(f.mock.calls[0]![0]).toBe("/api/auth/me");
+  });
+
+  it("getMe returns null on 401 rather than throwing", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(401, { error: "Not authenticated." }));
+    await expect(getMe()).resolves.toBeNull();
+  });
+
+  it("getMe still throws on other non-2xx statuses", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(500, { error: "boom" }));
+    await expect(getMe()).rejects.toThrow("boom");
+  });
+
+  it("logout POSTs to /api/auth/logout", async () => {
+    const f = mockFetchOnce(200, {});
+    vi.stubGlobal("fetch", f);
+    await logout();
+    const [url, init] = f.mock.calls[0]!;
+    expect(url).toBe("/api/auth/logout");
+    expect(init.method).toBe("POST");
+  });
+
+  it("logout throws the server's error message on non-2xx", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(500, { error: "boom" }));
+    await expect(logout()).rejects.toThrow("boom");
   });
 });

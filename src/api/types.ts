@@ -1,3 +1,8 @@
+/** Who's logged in, returned by GET /api/auth/me. */
+export interface AuthUser {
+  name: string;
+}
+
 /**
  * One database's result from the POST /api/stats stream. The endpoint's
  * response body is newline-delimited JSON today (the backend may change the

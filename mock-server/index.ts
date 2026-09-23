@@ -11,6 +11,18 @@ import {
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { ROWS } from "./rows";
+import {
+  startLogin,
+  issueFakeCode,
+  exchangeCodeForSession,
+  sessionFor,
+  endSession,
+  sessionCookieHeader,
+  clearSessionCookieHeader,
+  loginStateCookieHeader,
+  clearLoginStateCookieHeader,
+  loginStateFromCookie,
+} from "./auth";
 
 const PORT = 3001;
 
@@ -33,6 +45,26 @@ export function paginate<T>(items: T[], page: number, pageSize: number) {
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
+}
+
+function sendHtml(res: ServerResponse, status: number, html: string): void {
+  res.writeHead(status, { "content-type": "text/html; charset=utf-8" });
+  res.end(html);
+}
+
+/** Dev-only stand-in for a real IdP's login screen. Server-rendered HTML —
+ *  never bundled by Vite, never touches dist/, no interaction with the
+ *  offline-first check:offline guard. */
+function mockIdpAuthorizePage(state: string): string {
+  return `<!doctype html>
+<html>
+  <head><title>Mock IdP</title></head>
+  <body style="font-family: sans-serif; max-width: 28rem; margin: 4rem auto;">
+    <h1>Mock Identity Provider</h1>
+    <p>This stands in for a real internal IdP during local development.</p>
+    <p><a href="/mock-idp/authorize/confirm?state=${encodeURIComponent(state)}">Log in as demo.user</a></p>
+  </body>
+</html>`;
 }
 
 /** Thrown by readJson when the request body is not valid JSON — mapped to 400. */
@@ -73,6 +105,64 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/individuals") {
       sendJson(res, 200, INDIVIDUALS);
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/auth/login") {
+      const state = startLogin();
+      res.writeHead(302, {
+        Location: `/mock-idp/authorize?state=${encodeURIComponent(state)}`,
+        "Set-Cookie": loginStateCookieHeader(state),
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/mock-idp/authorize") {
+      const state = url.searchParams.get("state") ?? "";
+      sendHtml(res, 200, mockIdpAuthorizePage(state));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/mock-idp/authorize/confirm") {
+      const state = url.searchParams.get("state") ?? "";
+      const code = issueFakeCode();
+      res.writeHead(302, {
+        Location: `/api/auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/auth/callback") {
+      const code = url.searchParams.get("code") ?? "";
+      const state = url.searchParams.get("state") ?? "";
+      const boundState = loginStateFromCookie(req.headers.cookie);
+      if (boundState !== state) {
+        sendJson(res, 400, { error: "Invalid or expired login attempt." });
+        return;
+      }
+      const outcome = exchangeCodeForSession(code, state);
+      if (!outcome.ok) {
+        sendJson(res, 400, { error: outcome.error });
+        return;
+      }
+      res.writeHead(302, {
+        Location: "/",
+        "Set-Cookie": [sessionCookieHeader(outcome.sessionId), clearLoginStateCookieHeader()],
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/auth/me") {
+      const session = sessionFor(req.headers.cookie);
+      if (!session) {
+        sendJson(res, 401, { error: "Not authenticated." });
+        return;
+      }
+      sendJson(res, 200, session.user);
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+      endSession(req.headers.cookie);
+      res.writeHead(204, { "Set-Cookie": clearSessionCookieHeader() });
+      res.end();
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/stats") {
@@ -121,6 +211,11 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/query") {
+      const session = sessionFor(req.headers.cookie);
+      if (!session) {
+        sendJson(res, 401, { error: "Log in to preview data." });
+        return;
+      }
       const body = (await readJson(req)) as {
         query?: JsonNode;
         databases?: string[];
