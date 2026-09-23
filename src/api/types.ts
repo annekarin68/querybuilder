@@ -3,6 +3,13 @@ export interface AuthUser {
   name: string;
 }
 
+/** Compliance acknowledgment status, returned by GET /api/compliance/status. */
+export interface ComplianceStatus {
+  status: "required" | "acknowledged";
+  reason?: string;
+  ackedAt?: string;
+}
+
 export interface SchemaResponse {
   fields: {
     id: string;
