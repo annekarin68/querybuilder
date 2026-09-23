@@ -163,10 +163,11 @@ toolchain for a colour change); replacing Fomantic with hand-written components
   figures in `title=`. Failed database: name + its `errorMessages` in red on its
   own line; `infoMessages` in small grey text beneath. While loading, a trailing
   "Waiting on N more database(s)…" line.
-- Empty states (no databases / no condition / query incomplete / idle) use a quiet
-  grey placeholder instead of blue `ui info message` boxes, with the wording
-  "Select at least one database…", "Add a condition…", "Finish the query to see
-  statistics."
+- Empty states use a quiet grey placeholder instead of blue `ui info message`
+  boxes: "Select at least one database…", "Add a condition…", "Finish the query
+  to see statistics." (incomplete), and "Counting matches…" while a complete
+  query's first result is pending (idle = the 400 ms debounce, or loading with
+  no line yet).
 - All number formatting stays in `src/ui/format.ts`.
 
 ## 6. Matching entrysets

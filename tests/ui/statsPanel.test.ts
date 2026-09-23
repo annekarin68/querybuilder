@@ -56,4 +56,9 @@ describe("headlineHtml", () => {
     expect(html).toContain("of 1,000");
     expect(html).toContain("Excludes 1 database that failed");
   });
+
+  it("labels the headline number", () => {
+    const html = headlineHtml(stateWith("ok", [{ label: "a", success: true, matchCount: 10 }]));
+    expect(html).toContain("matching entrysets");
+  });
 });

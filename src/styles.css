@@ -352,39 +352,6 @@ body {
   color: var(--qb-warn);
 }
 
-/* Statistics panel (src/ui/statsPanel.ts + format.ts) — must stay inside a ~20rem column */
-[data-panel="stats"] {
-  overflow-wrap: anywhere;
-}
-/* Fomantic gives .bar a 2em min-width; we drive width ourselves (incl. a 2px sliver). */
-[data-panel="stats"] .ui.progress .bar {
-  min-width: 0;
-}
-.qb-stat-big {
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1.15;
-}
-.qb-stat-sub {
-  display: block;
-  font-size: 0.85em;
-  color: rgba(0, 0, 0, 0.6);
-}
-.qb-db-name {
-  font-weight: 600;
-}
-.qb-db-nums {
-  font-size: 0.85em;
-  color: rgba(0, 0, 0, 0.6);
-}
-/* The per-database list is the stats panel's only dynamic content now that
-   StatBlock is gone; give it its own scroll region the same way the entryset
-   list below has one. */
-.qb-stat-perdb {
-  max-height: 45vh;
-  overflow-y: auto;
-}
-
 /* Data preview (src/ui/dataPreview.ts): a scrollable list of entrysets, each
    a native <details> row — no JS needed for expand/collapse. */
 .qb-entryset-list {
@@ -439,12 +406,6 @@ body {
   border-radius: 0.28rem;
   font-size: 0.8em;
   overflow-x: auto;
-}
-
-/* Stats headline caveat when some databases failed (src/ui/statsPanel.ts). */
-.qb-stat-failed {
-  margin-top: 0.35rem;
-  color: #9f3a38;
 }
 
 /* ---- Account menu (src/ui/accountMenu.ts) ---- */
@@ -759,4 +720,90 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-style: italic;
+}
+
+/* ---- Statistics (src/ui/statsPanel.ts + format.ts) — must fit ~15rem ---- */
+.qb-stats .qb-card-title .ui.loader {
+  margin: 0;
+}
+.qb-stat-headline {
+  margin-bottom: 0.75rem;
+}
+.qb-stat-big {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.qb-stat-label {
+  font-weight: 600;
+}
+.qb-stat-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--qb-muted);
+}
+.qb-stat-failed {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--qb-danger);
+}
+.qb-bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e3e8ee;
+}
+.qb-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--qb-and);
+}
+.qb-stat-headline .qb-bar {
+  margin-top: 0.4rem;
+}
+.qb-stat-subtitle {
+  margin: 0.25rem 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--qb-muted);
+}
+.qb-db-row {
+  display: grid;
+  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) auto;
+  gap: 0.1rem 0.5rem;
+  align-items: center;
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+}
+.qb-db-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.qb-db-ratio {
+  color: var(--qb-muted);
+  white-space: nowrap;
+}
+.qb-db-msg {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: var(--qb-muted);
+}
+.qb-db-error {
+  color: var(--qb-danger);
+}
+.qb-stat-pending {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-stat-pending .ui.loader {
+  margin: 0;
 }
