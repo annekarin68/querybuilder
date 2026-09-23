@@ -11,6 +11,14 @@ import {
   loginStateCookieHeader,
   clearLoginStateCookieHeader,
   loginStateFromCookie,
+  startCompliance,
+  issueFakeComplianceToken,
+  exchangeComplianceToken,
+  complianceStatusFor,
+  clearCompliance,
+  complianceStateCookieHeader,
+  clearComplianceStateCookieHeader,
+  complianceStateFromCookie,
 } from "../../mock-server/auth";
 
 describe("parseCookie", () => {
@@ -142,5 +150,142 @@ describe("login-state binding cookie", () => {
 
   it("clearLoginStateCookieHeader expires it immediately", () => {
     expect(clearLoginStateCookieHeader()).toContain("Max-Age=0");
+  });
+});
+
+describe("compliance state/token round trip", () => {
+  function newSession(): string {
+    const state = startLogin();
+    const code = issueFakeCode();
+    const outcome = exchangeCodeForSession(code, state);
+    if (!outcome.ok) throw new Error("expected success");
+    return outcome.sessionId;
+  }
+
+  it("a valid state+token pair attaches the reason to the session", () => {
+    const sessionId = newSession();
+    const cookie = `qb_session=${sessionId}`;
+    const state = startCompliance();
+    const token = issueFakeComplianceToken("investigating incident #123");
+    const outcome = exchangeComplianceToken(token, state, cookie);
+    expect(outcome).toEqual({ ok: true });
+    expect(complianceStatusFor(cookie)).toMatchObject({
+      status: "acknowledged",
+      reason: "investigating incident #123",
+    });
+  });
+
+  it("a state can only be consumed once", () => {
+    const sessionId = newSession();
+    const cookie = `qb_session=${sessionId}`;
+    const state = startCompliance();
+    const token1 = issueFakeComplianceToken("reason one");
+    const token2 = issueFakeComplianceToken("reason two");
+    expect(exchangeComplianceToken(token1, state, cookie).ok).toBe(true);
+    expect(exchangeComplianceToken(token2, state, cookie)).toEqual({
+      ok: false,
+      error: "Invalid or expired compliance attempt.",
+    });
+  });
+
+  it("a token can only be consumed once", () => {
+    const sessionId = newSession();
+    const cookie = `qb_session=${sessionId}`;
+    const state1 = startCompliance();
+    const state2 = startCompliance();
+    const token = issueFakeComplianceToken("reason");
+    expect(exchangeComplianceToken(token, state1, cookie).ok).toBe(true);
+    expect(exchangeComplianceToken(token, state2, cookie)).toEqual({
+      ok: false,
+      error: "Invalid or expired compliance token.",
+    });
+  });
+
+  it("an unknown state is rejected", () => {
+    const sessionId = newSession();
+    const token = issueFakeComplianceToken("reason");
+    expect(exchangeComplianceToken(token, "not-a-real-state", `qb_session=${sessionId}`)).toEqual({
+      ok: false,
+      error: "Invalid or expired compliance attempt.",
+    });
+  });
+
+  it("an unknown token is rejected", () => {
+    const sessionId = newSession();
+    const state = startCompliance();
+    expect(
+      exchangeComplianceToken("not-a-real-token", state, `qb_session=${sessionId}`),
+    ).toEqual({ ok: false, error: "Invalid or expired compliance token." });
+  });
+
+  it("fails when there is no session for the cookie", () => {
+    const state = startCompliance();
+    const token = issueFakeComplianceToken("reason");
+    expect(exchangeComplianceToken(token, state, undefined)).toEqual({
+      ok: false,
+      error: "Not authenticated.",
+    });
+  });
+});
+
+describe("complianceStatusFor / clearCompliance", () => {
+  function ackedSession(): string {
+    const state = startLogin();
+    const code = issueFakeCode();
+    const outcome = exchangeCodeForSession(code, state);
+    if (!outcome.ok) throw new Error("expected success");
+    const sessionId = outcome.sessionId;
+    const cookie = `qb_session=${sessionId}`;
+    const cState = startCompliance();
+    const token = issueFakeComplianceToken("reason");
+    exchangeComplianceToken(token, cState, cookie);
+    return sessionId;
+  }
+
+  it("reports required for a session with no compliance record", () => {
+    const state = startLogin();
+    const code = issueFakeCode();
+    const outcome = exchangeCodeForSession(code, state);
+    if (!outcome.ok) throw new Error("expected success");
+    expect(complianceStatusFor(`qb_session=${outcome.sessionId}`)).toEqual({ status: "required" });
+  });
+
+  it("reports required when there is no session at all", () => {
+    expect(complianceStatusFor(undefined)).toEqual({ status: "required" });
+  });
+
+  it("reports acknowledged with the reason after a successful exchange", () => {
+    const sessionId = ackedSession();
+    expect(complianceStatusFor(`qb_session=${sessionId}`)).toMatchObject({
+      status: "acknowledged",
+      reason: "reason",
+    });
+  });
+
+  it("clearCompliance removes just the compliance field, leaving the session logged in", () => {
+    const sessionId = ackedSession();
+    const cookie = `qb_session=${sessionId}`;
+    clearCompliance(cookie);
+    expect(complianceStatusFor(cookie)).toEqual({ status: "required" });
+    expect(sessionFor(cookie)).not.toBeNull(); // still logged in
+  });
+});
+
+describe("compliance-state binding cookie", () => {
+  it("complianceStateCookieHeader includes the state, HttpOnly, and SameSite=Lax", () => {
+    const header = complianceStateCookieHeader("abc123");
+    expect(header).toContain("qb_compliance_state=abc123");
+    expect(header).toContain("HttpOnly");
+    expect(header).toContain("SameSite=Lax");
+  });
+
+  it("complianceStateFromCookie reads it back", () => {
+    const header = complianceStateCookieHeader("xyz789");
+    const cookiePair = header.split(";")[0]!;
+    expect(complianceStateFromCookie(cookiePair)).toBe("xyz789");
+  });
+
+  it("clearComplianceStateCookieHeader expires it immediately", () => {
+    expect(clearComplianceStateCookieHeader()).toContain("Max-Age=0");
   });
 });
