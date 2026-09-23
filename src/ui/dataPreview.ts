@@ -84,10 +84,19 @@ export function renderDataPreview(state: AppState): void {
   if (p.status === "idle") {
     // onQueryChange nulls preview.data in the same setState that writes the query,
     // so "idle" always means "nothing current" — never run yet, or edited since.
+    // Both hints below are advisory only — auth/compliance are display-only state;
+    // the actual gate is main.ts's reactive 401/403 handling on the real request.
     if (state.auth.status === "anonymous") {
       paint(
         el,
         `<h4 class="ui header">Data preview</h4><div class="ui info message">Log in to preview data. <a href="/api/auth/login">Log in</a></div>`,
+      );
+      return;
+    }
+    if (state.compliance.status === "required") {
+      paint(
+        el,
+        `<h4 class="ui header">Data preview</h4><div class="ui info message">Confirm compliance to preview data. <a href="/api/compliance/start">Start compliance check</a></div>`,
       );
       return;
     }
