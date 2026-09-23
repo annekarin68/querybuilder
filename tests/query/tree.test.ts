@@ -10,6 +10,7 @@ import {
   countConditions,
   sameSemantics,
 } from "../../src/query/tree";
+import type { Condition, Group } from "../../src/query/types";
 
 describe("tree", () => {
   it("emptyQuery is an AND group with no children", () => {
@@ -59,7 +60,7 @@ describe("tree", () => {
     const withGroup = addChild(root, root.id, g);
     const c = newCondition();
     const next = addChild(withGroup, g.id, c);
-    const found = findNode(next, g.id) as import("../../src/query/types").Group;
+    const found = findNode(next, g.id) as Group;
     expect(found.children).toHaveLength(2);
     expect(found.children[1]).toBe(c);
   });
@@ -68,11 +69,11 @@ describe("tree", () => {
     const root = emptyQuery();
     const c = newCondition();
     const t1 = addChild(root, root.id, c);
-    const t2 = updateNode(t1, c.id, { fieldId: "species", operatorId: "eq", value: "oak" });
-    const updated = findNode(t2, c.id) as import("../../src/query/types").Condition;
-    expect(updated).toMatchObject({ fieldId: "species", operatorId: "eq", value: "oak" });
+    const t2 = updateNode(t1, c.id, { fieldId: "color", operatorId: "eq", value: "red" });
+    const updated = findNode(t2, c.id) as Condition;
+    expect(updated).toMatchObject({ fieldId: "color", operatorId: "eq", value: "red" });
     // original still null
-    expect((findNode(t1, c.id) as import("../../src/query/types").Condition).fieldId).toBeNull();
+    expect((findNode(t1, c.id) as Condition).fieldId).toBeNull();
   });
 
   it("removeNode deletes the node wherever it is", () => {

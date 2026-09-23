@@ -318,7 +318,7 @@ mock-server/
                        events (ids 1-21), each a distinct, internally-consistent
                        vehicle/event scenario, spread across all 7 mock databases via
                        dbIndexForEntrysetId(id).
-tests/                 Vitest specs mirroring the source tree: src/query/*, src/api/*, src/state, src/util/*, src/ui/* (pure helpers only), mock-server/* (auth, audit, databases, rows, evaluate, stats lines, data integrity), plus noBackendDataInSrc (§12). No DOM.
+tests/                 Vitest specs mirroring the source tree: one test file per source file it tests (tests/query/tree.test.ts tests src/query/tree.ts; tests/mock-server/data.test.ts checks mock-server/data/*.json), plus app.test (src/app.ts with a fake API), lintRules (the ESLint airlocks), dateCases (shared date values) and noBackendDataInSrc (§12). No DOM.
 .github/workflows/     ci.yml — typecheck, test, lint, build (incl. check:offline) on every PR and push to main.
 docs/
   ARCHITECTURE.md      This file.
@@ -1219,7 +1219,8 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 - `tests/api/client.test.ts` — requests, error unwrapping, NDJSON streaming, timeouts, aborts.
 - `tests/util/` — `debounce`, `pendingQuery` (save/restore, untrusted input), `requestSlot` (the stale-response rule).
 - `tests/ui/` — `docsFilter`, `dataPreview` (badges, row columns), `statsPanel` (headline), `format`, `valueControl` (markup + accessible names).
-- `tests/mock-server/` — the server over real HTTP (`server.test.ts`: every route's status codes, 400s, 401/403, redirects, the NDJSON stream), auth flows (incl. expiry), audit, databases, rows, the evaluator (incl. `utcSpan` and date conditions at each precision), stats lines, data integrity.
+- `tests/mock-server/` — one file per source file: `server` (every route over real HTTP: status codes, 400s, 401/403, redirects, the NDJSON stream), `auth` (flows, expiry), `audit`, `databases`, `rows`, `evaluate` (matching, `utcSpan` and date conditions at each precision, database counts, stats lines), and `data` (the sample JSON files).
+- Fixtures use one neutral vocabulary: a `thing` facet with fields such as `color`, `count`, `size`, `active`; databases `alpha` and `beta`.
 - `tests/dateCases.ts` — date values shared by the frontend's and the mock's date tests, so their two copies of the timestamp pattern can't drift apart.
 - `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock facet, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
 - Fixture request/response objects double as contract examples.

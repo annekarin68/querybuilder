@@ -1,71 +1,92 @@
 import { describe, it, expect } from "vitest";
 import {
-  filterByDatabases,
-  perDatabaseCounts,
-  scaleCount,
-  type JsonNode,
-  type Row,
-} from "../../mock-server/evaluate";
+  DATABASES,
+  dbIndexForEntrysetId,
+  databaseIdForEntrysetId,
+} from "../../mock-server/databases";
 
-const rows: Row[] = [
-  { __db: "alpha", id: 1, branches: 5 },
-  { __db: "beta", id: 2, branches: 20 },
-  { __db: "alpha", id: 3, branches: 30 },
-  { __db: "gamma", id: 4, branches: 1 },
-];
-
-const matchAll: JsonNode = { kind: "group", operator: "AND", children: [] };
-const branchesGte10: JsonNode = {
-  kind: "group",
-  operator: "AND",
-  children: [{ kind: "condition", fieldId: "branches", operatorId: "gte", value: 10 }],
-};
-
-describe("filterByDatabases", () => {
-  it("keeps only rows whose __db is a selected database id", () => {
-    expect(filterByDatabases(rows, ["alpha"]).map((r) => r.id)).toEqual([1, 3]);
-    expect(filterByDatabases(rows, ["beta", "gamma"]).map((r) => r.id)).toEqual([2, 4]);
+describe("DATABASES", () => {
+  it("has exactly 7 entries named ALPHA..ETA", () => {
+    expect(DATABASES.map((d) => d.name)).toEqual([
+      "ALPHA",
+      "BETA",
+      "GAMMA",
+      "DELTA",
+      "EPSILON",
+      "ZETA",
+      "ETA",
+    ]);
+    expect(DATABASES.map((d) => d.label)).toEqual([
+      "alpha",
+      "beta",
+      "gamma",
+      "delta",
+      "epsilon",
+      "zeta",
+      "eta",
+    ]);
   });
 
-  it("an empty id list keeps nothing", () => {
-    expect(filterByDatabases(rows, [])).toEqual([]);
+  it("every database has a positive totalEntrysets, spanning several orders of magnitude", () => {
+    for (const d of DATABASES) expect(d.totalEntrysets).toBeGreaterThan(0);
+    const sizes = DATABASES.map((d) => d.totalEntrysets);
+    expect(Math.max(...sizes) / Math.min(...sizes)).toBeGreaterThan(1000);
   });
 
-  it("unknown ids are simply absent", () => {
-    expect(filterByDatabases(rows, ["zeta", "alpha"]).map((r) => r.id)).toEqual([1, 3]);
+  it("percentageOfTotal is each database's share of totalEntrysets, summing to ~100", () => {
+    const sum = DATABASES.reduce((s, d) => s + d.percentageOfTotal, 0);
+    expect(sum).toBeCloseTo(100, 0);
+    for (const d of DATABASES) {
+      expect(d.percentageOfTotal).toBeGreaterThan(0);
+      expect(d.description.length).toBeGreaterThan(0);
+      expect(d.owner.length).toBeGreaterThan(0);
+    }
   });
 });
 
-describe("perDatabaseCounts", () => {
-  it("returns match/total per database in the given id order", () => {
-    expect(perDatabaseCounts(matchAll, rows, ["beta", "alpha"])).toEqual([
-      { label: "beta", matchCount: 1, totalCount: 1 },
-      { label: "alpha", matchCount: 2, totalCount: 2 },
-    ]);
+describe("dbIndexForEntrysetId", () => {
+  it("is deterministic and within range", () => {
+    for (const id of [1, 2, 3, 100, 999]) {
+      const idx = dbIndexForEntrysetId(id);
+      expect(idx).toBe(dbIndexForEntrysetId(id));
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(idx).toBeLessThan(7);
+    }
   });
 
-  it("matchCount reflects the query; totalCount is the whole database", () => {
-    expect(perDatabaseCounts(branchesGte10, rows, ["alpha", "beta", "gamma"])).toEqual([
-      { label: "alpha", matchCount: 1, totalCount: 2 }, // only branches:30
-      { label: "beta", matchCount: 1, totalCount: 1 }, // branches:20
-      { label: "gamma", matchCount: 0, totalCount: 1 }, // branches:1
-    ]);
-  });
-
-  it("an unknown database id yields zero counts", () => {
-    expect(perDatabaseCounts(matchAll, rows, ["zeta"])).toEqual([
-      { label: "zeta", matchCount: 0, totalCount: 0 },
-    ]);
+  it("matches the precomputed table for entryset ids 1-21", () => {
+    const expected: Record<number, number> = {
+      1: 6,
+      2: 6,
+      3: 0,
+      4: 5,
+      5: 6,
+      6: 0,
+      7: 5,
+      8: 1,
+      9: 0,
+      10: 5,
+      11: 1,
+      12: 4,
+      13: 5,
+      14: 1,
+      15: 4,
+      16: 2,
+      17: 1,
+      18: 4,
+      19: 2,
+      20: 3,
+      21: 3,
+    };
+    for (const [id, idx] of Object.entries(expected)) {
+      expect(dbIndexForEntrysetId(Number(id))).toBe(idx);
+    }
   });
 });
 
-describe("scaleCount", () => {
-  it("projects a sample part/whole onto a target size", () => {
-    expect(scaleCount(1, 40, 1_234_000_000)).toBe(30_850_000); // 1/40 of 1.234B
-    expect(scaleCount(40, 40, 5_600_000_000)).toBe(5_600_000_000); // all
-    expect(scaleCount(0, 40, 1_234_000_000)).toBe(0);
-  });
-  it("zero whole → zero (unknown/empty database)", () => {
-    expect(scaleCount(0, 0, 999)).toBe(0);
+describe("databaseIdForEntrysetId", () => {
+  it("returns the DATABASES id at dbIndexForEntrysetId's index", () => {
+    expect(databaseIdForEntrysetId(3)).toBe("alpha"); // index 0
+    expect(databaseIdForEntrysetId(1)).toBe("eta"); // index 6
   });
 });

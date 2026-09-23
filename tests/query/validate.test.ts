@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { validateQuery } from "../../src/query/validate";
 import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
-import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../src/query/tree";
+import {
+  emptyQuery,
+  newCondition,
+  newGroup,
+  addChild,
+  updateNode,
+  type NodePatch,
+} from "../../src/query/tree";
+import type { Issue } from "../../src/query/types";
 
 const field = (label: string, valueType: CatalogField["valueType"], operatorIds: string[]) => ({
   label,
@@ -12,166 +20,117 @@ const field = (label: string, valueType: CatalogField["valueType"], operatorIds:
 });
 const catalog: FieldCatalog = {
   fields: [
-    field("species", "enum", ["eq", "in", "isEmpty"]),
-    field("branches", "number", ["eq", "between", "isEmpty"]),
+    field("color", "enum", ["eq", "in", "isEmpty"]),
+    field("count", "number", ["eq", "between", "isEmpty"]),
     field("seenAt", "date", ["eq", "between"]),
   ],
 };
+
+/** Validate a query holding one condition with `patch` applied. */
+function validateOne(patch: NodePatch = {}): { issues: Issue[]; id: string } {
+  const root = emptyQuery();
+  const c = newCondition();
+  const tree = updateNode(addChild(root, root.id, c), c.id, patch);
+  return { issues: validateQuery(tree, catalog), id: c.id };
+}
+
+/** Expect the single condition built from `patch` to have exactly this issue. */
+function expectIssue(patch: NodePatch, message: string, kind: Issue["kind"]): void {
+  const { issues, id } = validateOne(patch);
+  expect(issues).toEqual([{ nodeId: id, message, kind }]);
+}
 
 describe("validateQuery", () => {
   it("empty root query has no issues", () => {
     expect(validateQuery(emptyQuery(), catalog)).toEqual([]);
   });
 
-  it("condition without a field is an error", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    const tree = addChild(root, root.id, c);
-    const issues = validateQuery(tree, catalog);
-    expect(issues).toContainEqual({
-      nodeId: c.id,
-      message: "Choose a field.",
-      kind: "incomplete",
-    });
+  it("condition without a field is incomplete", () => {
+    expectIssue({}, "Choose a field.", "incomplete");
   });
 
-  it("condition with a field but no operator is an error", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    tree = updateNode(tree, c.id, { fieldId: "species" });
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: c.id,
-      message: "Choose an operator.",
-      kind: "incomplete",
-    });
+  it("condition with a field but no operator is incomplete", () => {
+    expectIssue({ fieldId: "color" }, "Choose an operator.", "incomplete");
   });
 
-  it("arity 'one' with an empty value is an error", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "eq", value: "" });
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: c.id,
-      message: "Enter a value.",
-      kind: "incomplete",
-    });
+  it("arity 'one' with an empty value is incomplete", () => {
+    expectIssue({ fieldId: "color", operatorId: "eq", value: "" }, "Enter a value.", "incomplete");
   });
 
   it("arity 'two' needs exactly two non-empty values", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    tree = updateNode(tree, c.id, { fieldId: "branches", operatorId: "between", value: [1] });
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: c.id,
-      message: "Enter both values.",
-      kind: "incomplete",
-    });
+    const patch = { fieldId: "count", operatorId: "between", value: [1] };
+    expectIssue(patch, "Enter both values.", "incomplete");
   });
 
   it("arity 'many' needs at least one value", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "in", value: [] });
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: c.id,
-      message: "Choose at least one value.",
-      kind: "incomplete",
-    });
+    const patch = { fieldId: "color", operatorId: "in", value: [] };
+    expectIssue(patch, "Choose at least one value.", "incomplete");
   });
 
   it("arity 'none' ignores the value", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "isEmpty", value: null });
-    expect(validateQuery(tree, catalog)).toEqual([]);
+    expect(validateOne({ fieldId: "color", operatorId: "isEmpty", value: null }).issues).toEqual(
+      [],
+    );
   });
 
-  it("a field that is not in the catalog is an error", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    tree = updateNode(tree, c.id, { fieldId: "nope", operatorId: "eq", value: "x" });
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: c.id,
-      message: "Unknown field.",
-      kind: "invalid",
-    });
+  it("a field that is not in the catalog is invalid", () => {
+    expectIssue({ fieldId: "nope", operatorId: "eq", value: "x" }, "Unknown field.", "invalid");
   });
 
-  it("an operator the field does not offer is an error", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    // "between" exists globally but is not in species.operatorIds.
-    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "between", value: [1, 2] });
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: c.id,
-      message: "That operator isn't available for this field.",
-      kind: "invalid",
-    });
+  it("an operator the field does not offer is invalid", () => {
+    // "between" exists globally but is not in color.operatorIds.
+    const patch = { fieldId: "color", operatorId: "between", value: [1, 2] };
+    expectIssue(patch, "That operator isn't available for this field.", "invalid");
   });
 
-  it("an operator that is not in the catalog is an error", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    let tree = addChild(root, root.id, c);
-    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "nope", value: "x" });
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: c.id,
-      message: "Unknown operator.",
-      kind: "invalid",
-    });
+  it("an operator that is not in the catalog is invalid", () => {
+    expectIssue(
+      { fieldId: "color", operatorId: "nope", value: "x" },
+      "Unknown operator.",
+      "invalid",
+    );
   });
 
-  it("a non-root empty group is an error", () => {
+  it("a non-root empty group is incomplete", () => {
     const root = emptyQuery();
     const g = { ...newGroup(), children: [] };
     const tree = addChild(root, root.id, g);
-    expect(validateQuery(tree, catalog)).toContainEqual({
-      nodeId: g.id,
-      message: "Add a condition to this group.",
-      kind: "incomplete",
-    });
+    expect(validateQuery(tree, catalog)).toEqual([
+      { nodeId: g.id, message: "Add a condition to this group.", kind: "incomplete" },
+    ]);
   });
 
   describe("date values", () => {
-    const withDate = (operatorId: string, value: unknown) => {
-      const root = emptyQuery();
-      const c = newCondition();
-      const tree = updateNode(addChild(root, root.id, c), c.id, {
-        fieldId: "seenAt",
-        operatorId,
-        value,
-      });
-      return { issues: validateQuery(tree, catalog), id: c.id };
-    };
-    const badDate = (nodeId: string) => ({
-      nodeId,
-      message: "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.",
-      kind: "invalid",
-    });
+    const badDate = "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.";
 
     it("accepts a full or partial UTC timestamp", () => {
-      expect(withDate("eq", "2024-11").issues).toEqual([]);
-      expect(withDate("between", ["2024", "2024-11-06T14:30Z"]).issues).toEqual([]);
+      expect(validateOne({ fieldId: "seenAt", operatorId: "eq", value: "2024-11" }).issues).toEqual(
+        [],
+      );
+      const range = {
+        fieldId: "seenAt",
+        operatorId: "between",
+        value: ["2024", "2024-11-06T14:30Z"],
+      };
+      expect(validateOne(range).issues).toEqual([]);
     });
 
     it("rejects anything else", () => {
-      const one = withDate("eq", "06/11/2024");
-      expect(one.issues).toEqual([badDate(one.id)]);
-      const two = withDate("between", ["2024", "2024-11-06 14:30"]);
-      expect(two.issues).toEqual([badDate(two.id)]);
+      expectIssue({ fieldId: "seenAt", operatorId: "eq", value: "06/11/2024" }, badDate, "invalid");
+      const range = {
+        fieldId: "seenAt",
+        operatorId: "between",
+        value: ["2024", "2024-11-06 14:30"],
+      };
+      expectIssue(range, badDate, "invalid");
     });
 
     it("an empty value is still just incomplete", () => {
-      const { issues } = withDate("eq", "");
-      expect(issues).toHaveLength(1);
-      expect(issues[0]).toMatchObject({ kind: "incomplete" });
+      expectIssue(
+        { fieldId: "seenAt", operatorId: "eq", value: "" },
+        "Enter a value.",
+        "incomplete",
+      );
     });
   });
 });

@@ -61,8 +61,8 @@ describe("api client", () => {
   it("getDatabases GETs /api/databases and returns the parsed bare array", async () => {
     const f = mockFetchOnce(200, [
       {
-        label: "fern",
-        name: "Fern",
+        label: "alpha",
+        name: "ALPHA",
         description: "",
         owner: "",
         totalEntrysets: 1,
@@ -73,8 +73,8 @@ describe("api client", () => {
     const out = await getDatabases();
     expect(out).toEqual([
       {
-        label: "fern",
-        name: "Fern",
+        label: "alpha",
+        name: "ALPHA",
         description: "",
         owner: "",
         totalEntrysets: 1,
@@ -110,13 +110,13 @@ describe("api client", () => {
     const f = mockStreamFetch(200, [""]);
     vi.stubGlobal("fetch", f);
     const q = emptyQuery();
-    await getStats(q, ["fern", "oak"], () => {});
+    await getStats(q, ["alpha", "beta"], () => {});
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe("/api/stats");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({
       query: JSON.parse(JSON.stringify(q)),
-      databases: ["fern", "oak"],
+      databases: ["alpha", "beta"],
     });
   });
 
@@ -138,7 +138,7 @@ describe("api client", () => {
     const f = mockFetchOnce(400, { error: "bad query tree" });
     vi.stubGlobal("fetch", f);
     const onLine = vi.fn();
-    await expect(getStats(emptyQuery(), ["fern"], onLine)).rejects.toThrow("bad query tree");
+    await expect(getStats(emptyQuery(), ["alpha"], onLine)).rejects.toThrow("bad query tree");
     expect(onLine).not.toHaveBeenCalled();
   });
 

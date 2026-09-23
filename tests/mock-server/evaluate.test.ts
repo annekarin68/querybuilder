@@ -1,15 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { matches, utcSpan, type JsonNode } from "../../mock-server/evaluate";
+import {
+  buildStatsLine,
+  filterByDatabases,
+  matches,
+  perDatabaseCounts,
+  scaleCount,
+  utcSpan,
+  type JsonNode,
+  type Row,
+} from "../../mock-server/evaluate";
 import { MALFORMED, WELL_FORMED } from "../dateCases";
 
 const row = {
-  species: "oak",
-  branches: 12,
-  heightCm: 200,
-  foliage: true,
-  flowering: null,
-  plantedOn: "2018-05-01",
-  notes: "healthy",
+  color: "red",
+  count: 12,
+  size: 200,
+  active: true,
+  spare: null,
+  madeOn: "2018-05-01",
+  note: "all good",
 };
 
 const cond = (fieldId: string, operatorId: string, value: unknown) => ({
@@ -29,44 +38,44 @@ describe("matches", () => {
     expect(matches(group("AND"), row)).toBe(true);
   });
   it("eq / neq on strings and numbers", () => {
-    expect(matches(cond("species", "eq", "oak"), row)).toBe(true);
-    expect(matches(cond("species", "neq", "oak"), row)).toBe(false);
-    expect(matches(cond("branches", "eq", 12), row)).toBe(true);
+    expect(matches(cond("color", "eq", "red"), row)).toBe(true);
+    expect(matches(cond("color", "neq", "red"), row)).toBe(false);
+    expect(matches(cond("count", "eq", 12), row)).toBe(true);
   });
   it("numeric comparisons", () => {
-    expect(matches(cond("branches", "gte", 12), row)).toBe(true);
-    expect(matches(cond("branches", "gt", 12), row)).toBe(false);
-    expect(matches(cond("heightCm", "lt", 300), row)).toBe(true);
+    expect(matches(cond("count", "gte", 12), row)).toBe(true);
+    expect(matches(cond("count", "gt", 12), row)).toBe(false);
+    expect(matches(cond("size", "lt", 300), row)).toBe(true);
   });
   it("between is inclusive", () => {
-    expect(matches(cond("branches", "between", [10, 12]), row)).toBe(true);
-    expect(matches(cond("branches", "between", [0, 11]), row)).toBe(false);
+    expect(matches(cond("count", "between", [10, 12]), row)).toBe(true);
+    expect(matches(cond("count", "between", [0, 11]), row)).toBe(false);
   });
   it("in", () => {
-    expect(matches(cond("species", "in", ["oak", "fern"]), row)).toBe(true);
-    expect(matches(cond("species", "in", ["fern"]), row)).toBe(false);
+    expect(matches(cond("color", "in", ["red", "blue"]), row)).toBe(true);
+    expect(matches(cond("color", "in", ["blue"]), row)).toBe(false);
   });
   it("contains on text", () => {
-    expect(matches(cond("notes", "contains", "health"), row)).toBe(true);
+    expect(matches(cond("note", "contains", "good"), row)).toBe(true);
   });
   it("date before / after", () => {
-    expect(matches(cond("plantedOn", "before", "2019-01-01"), row)).toBe(true);
-    expect(matches(cond("plantedOn", "after", "2019-01-01"), row)).toBe(false);
+    expect(matches(cond("madeOn", "before", "2019-01-01"), row)).toBe(true);
+    expect(matches(cond("madeOn", "after", "2019-01-01"), row)).toBe(false);
   });
   it("isEmpty / isNotEmpty", () => {
-    expect(matches(cond("flowering", "isEmpty", null), row)).toBe(true);
-    expect(matches(cond("species", "isNotEmpty", null), row)).toBe(true);
+    expect(matches(cond("spare", "isEmpty", null), row)).toBe(true);
+    expect(matches(cond("color", "isNotEmpty", null), row)).toBe(true);
   });
   it("AND / OR groups", () => {
-    expect(
-      matches(group("AND", cond("species", "eq", "oak"), cond("branches", "gte", 12)), row),
-    ).toBe(true);
-    expect(
-      matches(group("AND", cond("species", "eq", "oak"), cond("branches", "gt", 12)), row),
-    ).toBe(false);
-    expect(
-      matches(group("OR", cond("species", "eq", "fern"), cond("branches", "gte", 12)), row),
-    ).toBe(true);
+    expect(matches(group("AND", cond("color", "eq", "red"), cond("count", "gte", 12)), row)).toBe(
+      true,
+    );
+    expect(matches(group("AND", cond("color", "eq", "red"), cond("count", "gt", 12)), row)).toBe(
+      false,
+    );
+    expect(matches(group("OR", cond("color", "eq", "blue"), cond("count", "gte", 12)), row)).toBe(
+      true,
+    );
   });
 });
 
@@ -87,7 +96,7 @@ describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
   });
 
   it("is null for anything else", () => {
-    expect(utcSpan("oak")).toBeNull();
+    expect(utcSpan("red")).toBeNull();
     expect(utcSpan(2024)).toBeNull();
   });
 
@@ -136,8 +145,100 @@ describe("date conditions: the user's operator at the precision they typed (UTC)
   });
 
   it('a plain "YYYY-MM-DD" stored value is midnight UTC', () => {
-    const day = { plantedOn: "2024-11-06" };
-    expect(matches(cond("plantedOn", "eq", "2024-11-06T00"), day)).toBe(true);
-    expect(matches(cond("plantedOn", "before", "2024-11-06"), day)).toBe(false);
+    const day = { madeOn: "2024-11-06" };
+    expect(matches(cond("madeOn", "eq", "2024-11-06T00"), day)).toBe(true);
+    expect(matches(cond("madeOn", "before", "2024-11-06"), day)).toBe(false);
+  });
+});
+
+// ---- database scoping and counts ------------------------------------------
+
+const rows: Row[] = [
+  { __db: "alpha", id: 1, count: 5 },
+  { __db: "beta", id: 2, count: 20 },
+  { __db: "alpha", id: 3, count: 30 },
+  { __db: "gamma", id: 4, count: 1 },
+];
+
+const matchAll: JsonNode = { kind: "group", operator: "AND", children: [] };
+const countGte10: JsonNode = {
+  kind: "group",
+  operator: "AND",
+  children: [{ kind: "condition", fieldId: "count", operatorId: "gte", value: 10 }],
+};
+
+describe("filterByDatabases", () => {
+  it("keeps only rows whose __db is a selected database id", () => {
+    expect(filterByDatabases(rows, ["alpha"]).map((r) => r.id)).toEqual([1, 3]);
+    expect(filterByDatabases(rows, ["beta", "gamma"]).map((r) => r.id)).toEqual([2, 4]);
+  });
+
+  it("an empty id list keeps nothing", () => {
+    expect(filterByDatabases(rows, [])).toEqual([]);
+  });
+
+  it("unknown ids are simply absent", () => {
+    expect(filterByDatabases(rows, ["zeta", "alpha"]).map((r) => r.id)).toEqual([1, 3]);
+  });
+});
+
+describe("perDatabaseCounts", () => {
+  it("returns match/total per database in the given id order", () => {
+    expect(perDatabaseCounts(matchAll, rows, ["beta", "alpha"])).toEqual([
+      { label: "beta", matchCount: 1, totalCount: 1 },
+      { label: "alpha", matchCount: 2, totalCount: 2 },
+    ]);
+  });
+
+  it("matchCount reflects the query; totalCount is the whole database", () => {
+    expect(perDatabaseCounts(countGte10, rows, ["alpha", "beta", "gamma"])).toEqual([
+      { label: "alpha", matchCount: 1, totalCount: 2 }, // only count:30
+      { label: "beta", matchCount: 1, totalCount: 1 }, // count:20
+      { label: "gamma", matchCount: 0, totalCount: 1 }, // count:1
+    ]);
+  });
+
+  it("an unknown database id yields zero counts", () => {
+    expect(perDatabaseCounts(matchAll, rows, ["zeta"])).toEqual([
+      { label: "zeta", matchCount: 0, totalCount: 0 },
+    ]);
+  });
+});
+
+describe("scaleCount", () => {
+  it("projects a sample part/whole onto a target size", () => {
+    expect(scaleCount(1, 40, 1_234_000_000)).toBe(30_850_000); // 1/40 of 1.234B
+    expect(scaleCount(40, 40, 5_600_000_000)).toBe(5_600_000_000); // all
+    expect(scaleCount(0, 40, 1_234_000_000)).toBe(0);
+  });
+  it("zero whole → zero (unknown/empty database)", () => {
+    expect(scaleCount(0, 0, 999)).toBe(0);
+  });
+});
+
+// ---- /api/stats lines ---------------------------------------------------------
+
+describe("buildStatsLine", () => {
+  it("builds a successful line with matchCount", () => {
+    expect(buildStatsLine({ label: "alpha", matchCount: 3 })).toEqual({
+      label: "alpha",
+      success: true,
+      matchCount: 3,
+    });
+  });
+
+  it("builds a failure line when fail is given, omitting matchCount entirely", () => {
+    const line = buildStatsLine({
+      label: "beta",
+      matchCount: 999, // must be ignored/dropped
+      fail: { errorMessages: ["bad field"], infoMessages: [] },
+    });
+    expect(line).toEqual({
+      label: "beta",
+      success: false,
+      errorMessages: ["bad field"],
+      infoMessages: [],
+    });
+    expect(line).not.toHaveProperty("matchCount");
   });
 });

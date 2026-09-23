@@ -13,9 +13,9 @@ const field = (label: string, name: string, options?: string[]): CatalogField =>
 });
 const catalog: FieldCatalog = {
   fields: [
-    field("heightCm", "Height (cm)"),
-    field("foliage", "Has foliage"),
-    field("species", "Species", ["oak", "fern"]),
+    field("size", "Size (cm)"),
+    field("active", "Active"),
+    field("color", "Color", ["red", "blue"]),
   ],
 };
 describe("queryToText", () => {
@@ -27,8 +27,8 @@ describe("queryToText", () => {
     const root = emptyQuery();
     const c = newCondition();
     let t = addChild(root, root.id, c);
-    t = updateNode(t, c.id, { fieldId: "heightCm", operatorId: "gte", value: 20 });
-    expect(queryToText(t, catalog)).toBe("Height (cm) Greater than or equal 20");
+    t = updateNode(t, c.id, { fieldId: "size", operatorId: "gte", value: 20 });
+    expect(queryToText(t, catalog)).toBe("Size (cm) Greater than or equal 20");
   });
 
   it("values print as-is; nested group gets parens", () => {
@@ -38,15 +38,15 @@ describe("queryToText", () => {
     const c2 = newCondition();
     const c3 = newCondition();
     let t = addChild(root, root.id, c1);
-    t = updateNode(t, c1.id, { fieldId: "heightCm", operatorId: "gte", value: 20 });
+    t = updateNode(t, c1.id, { fieldId: "size", operatorId: "gte", value: 20 });
     t = addChild(t, root.id, g);
     t = updateNode(t, g.id, { operator: "OR" });
     t = addChild(t, g.id, c2);
-    t = updateNode(t, c2.id, { fieldId: "foliage", operatorId: "eq", value: true });
+    t = updateNode(t, c2.id, { fieldId: "active", operatorId: "eq", value: true });
     t = addChild(t, g.id, c3);
-    t = updateNode(t, c3.id, { fieldId: "species", operatorId: "in", value: ["oak", "fern"] });
+    t = updateNode(t, c3.id, { fieldId: "color", operatorId: "in", value: ["red", "blue"] });
     expect(queryToText(t, catalog)).toBe(
-      "Height (cm) Greater than or equal 20 AND (Has foliage Equals true OR Species Is any of oak, fern)",
+      "Size (cm) Greater than or equal 20 AND (Active Equals true OR Color Is any of red, blue)",
     );
   });
 
@@ -54,8 +54,8 @@ describe("queryToText", () => {
     const root = emptyQuery();
     const c = newCondition();
     let t = addChild(root, root.id, c);
-    t = updateNode(t, c.id, { fieldId: "species", operatorId: "isEmpty", value: null });
-    expect(queryToText(t, catalog)).toBe("Species Is empty");
+    t = updateNode(t, c.id, { fieldId: "color", operatorId: "isEmpty", value: null });
+    expect(queryToText(t, catalog)).toBe("Color Is empty");
   });
 });
 
@@ -71,21 +71,21 @@ describe("queryToText with a value not entered yet", () => {
   };
 
   it("shows (value?) for a missing single value", () => {
-    expect(withValue("heightCm", "gte", null)).toBe("Height (cm) Greater than or equal (value?)");
-    expect(withValue("heightCm", "gte", "")).toBe("Height (cm) Greater than or equal (value?)");
+    expect(withValue("size", "gte", null)).toBe("Size (cm) Greater than or equal (value?)");
+    expect(withValue("size", "gte", "")).toBe("Size (cm) Greater than or equal (value?)");
   });
 
   it("shows (value?) for each missing end of a range", () => {
-    expect(withValue("heightCm", "between", null)).toBe("Height (cm) Between (value?) to (value?)");
-    expect(withValue("heightCm", "between", [5, ""])).toBe("Height (cm) Between 5 to (value?)");
+    expect(withValue("size", "between", null)).toBe("Size (cm) Between (value?) to (value?)");
+    expect(withValue("size", "between", [5, ""])).toBe("Size (cm) Between 5 to (value?)");
   });
 
   it("shows (value?) when no value of a list is chosen", () => {
-    expect(withValue("species", "in", [])).toBe("Species Is any of (value?)");
+    expect(withValue("color", "in", [])).toBe("Color Is any of (value?)");
   });
 
   it("still prints false and 0", () => {
-    expect(withValue("foliage", "eq", false)).toBe("Has foliage Equals false");
-    expect(withValue("heightCm", "eq", 0)).toBe("Height (cm) Equals 0");
+    expect(withValue("active", "eq", false)).toBe("Active Equals false");
+    expect(withValue("size", "eq", 0)).toBe("Size (cm) Equals 0");
   });
 });
