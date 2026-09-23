@@ -1,5 +1,8 @@
 # Compliance logging redirect gate — design
 
+> **Historical design record.** This describes the design as approved at the time;
+> the code has moved on since. For current behaviour see `docs/ARCHITECTURE.md`.
+
 Status: approved, ready for implementation planning.
 
 Branched from `worktree-oauth2-auth-code-login` (OAuth2 authorization-code

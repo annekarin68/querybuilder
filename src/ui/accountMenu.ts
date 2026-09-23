@@ -70,12 +70,11 @@ export function renderAccountMenu(state: AppState): void {
   );
 }
 
+/** Delegated menu actions + close-on-outside-click/Escape. Call once at startup. */
 export function wireAccountMenu(
   container: HTMLElement,
   handlers: { onLogout(): void; onInvalidate(): void },
 ): void {
-  if (container.dataset.accountWired === "1") return;
-  container.dataset.accountWired = "1";
   container.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     if (t.closest("[data-action='logout']")) handlers.onLogout();

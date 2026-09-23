@@ -1,7 +1,5 @@
-import type { AppState } from "../state";
+import { runBlocker, type AppState, type RunBlocker } from "../state";
 import type { DatabasesResponse, StatsResponse } from "../api/types";
-import { countConditions } from "../query/tree";
-import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
@@ -117,22 +115,22 @@ function card(state: AppState, body: string): string {
 
 const placeholder = (text: string) => `<p class="qb-placeholder">${escapeHtml(text)}</p>`;
 
+/** Why the statistics column is empty (see `runBlocker`). */
+const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
+  "no-database": "Select at least one database to see statistics.",
+  "no-condition": "Add a condition to see statistics.",
+  unfinished: "Finish the query to see statistics.",
+};
+
 export function renderStatsPanel(state: AppState): void {
   const el = panelEls().stats;
-  if (!state.schema) {
+  const blocker = runBlocker(state);
+  if (blocker === "loading") {
     paint(el, "");
     return;
   }
-  if (state.selectedDatabaseIds.length === 0) {
-    paint(el, card(state, placeholder("Select at least one database to see statistics.")));
-    return;
-  }
-  if (countConditions(state.query) === 0) {
-    paint(el, card(state, placeholder("Add a condition to see statistics.")));
-    return;
-  }
-  if (hasBlockingErrors(state.issues)) {
-    paint(el, card(state, placeholder("Finish the query to see statistics.")));
+  if (blocker) {
+    paint(el, card(state, placeholder(BLOCKED_MESSAGES[blocker])));
     return;
   }
   const { status, lines, error } = state.stats;

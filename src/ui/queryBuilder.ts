@@ -1,25 +1,23 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { Facet } from "../api/types";
-import type { CatalogField, CatalogOperator } from "../query/fieldCatalog";
+import { findField, findOperator, OPERATORS, type FieldCatalog } from "../query/fieldCatalog";
 import {
   addChild,
   countConditions,
-  emptyQuery,
   findNode,
   newCondition,
   newGroup,
   removeNode,
   updateNode,
 } from "../query/tree";
+import { nextCondition } from "../query/conditionEdit";
 import { queryToText } from "../query/summary";
 import { panelEls } from "./layout";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange } from "./fomantic";
 import { countLabel } from "./format";
-import { defaultValueFor, readValueControl, renderValueControl } from "./valueControl";
-
-type FieldCatalog = { fields: CatalogField[]; operators: CatalogOperator[] };
+import { readValueControl, renderValueControl } from "./valueControl";
 
 /**
  * Unfinished parts are quiet grey hints — the user simply isn't done yet. Only
@@ -53,51 +51,47 @@ function facetDropdown(facets: Facet[] | null, c: Condition): string {
     (facet) => facet.name,
     (facet) => facet.label === c.facetId,
   );
-  return `<select class="ui selection dropdown" data-part="facet"><option value="">Facet…</option>${opts}</select>`;
+  return `<select class="ui selection dropdown" data-part="facet" aria-label="Facet"><option value="">Facet…</option>${opts}</select>`;
 }
 
-function fieldDropdown(schema: FieldCatalog, c: Condition): string {
+function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
   const prefix = c.facetId ? `${c.facetId}.` : null;
   const opts = prefix
     ? optionsHtml(
-        schema.fields.filter((f) => f.label.startsWith(prefix)),
+        catalog.fields.filter((f) => f.label.startsWith(prefix)),
         (f) => f.label,
-        (f) => f.label.slice(prefix.length),
+        (f) => f.fieldName,
         (f) => f.label === c.fieldId,
       )
     : "";
-  return `<select class="ui selection dropdown" data-part="field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
+  return `<select class="ui selection dropdown" data-part="field" aria-label="Field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
-function operatorDropdown(schema: FieldCatalog, c: Condition): string {
-  const field = schema.fields.find((f) => f.label === c.fieldId);
-  const ops = field
-    ? field.operatorIds
-        .map((label) => schema.operators.find((o) => o.label === label))
-        .filter((o): o is CatalogOperator => o !== undefined)
-    : [];
+function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
+  const field = findField(catalog, c.fieldId);
+  const ops = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.label)) : [];
   const opts = optionsHtml(
     ops,
     (o) => o.label,
     (o) => o.name,
     (o) => o.label === c.operatorId,
   );
-  return `<select class="ui selection dropdown" data-part="operator"${field ? "" : " disabled"}><option value="">Operator…</option>${opts}</select>`;
+  return `<select class="ui selection dropdown" data-part="operator" aria-label="Operator"${field ? "" : " disabled"}><option value="">Operator…</option>${opts}</select>`;
 }
 
 function conditionHtml(
-  schema: FieldCatalog,
+  catalog: FieldCatalog,
   facets: Facet[] | null,
   c: Condition,
   issues: Issue[],
 ): string {
-  const field = schema.fields.find((f) => f.label === c.fieldId);
-  const operator = schema.operators.find((o) => o.label === c.operatorId);
+  const field = findField(catalog, c.fieldId);
+  const operator = findOperator(c.operatorId);
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-grid">
       ${facetDropdown(facets, c)}
-      ${fieldDropdown(schema, c)}
-      ${operatorDropdown(schema, c)}
+      ${fieldDropdown(catalog, c)}
+      ${operatorDropdown(catalog, c)}
       <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
       ${iconButton("remove-node", "Remove condition", "times")}
     </div>
@@ -121,7 +115,7 @@ function collapseButton(collapsed: boolean): string {
  * plain-English summary and how many conditions it holds.
  */
 function groupHtml(
-  schema: FieldCatalog,
+  catalog: FieldCatalog,
   facets: Facet[] | null,
   g: Group,
   issues: Issue[],
@@ -131,7 +125,7 @@ function groupHtml(
   const matchWord = g.operator === "OR" ? "ANY" : "ALL";
   const remove = isRoot ? "" : iconButton("remove-node", "Remove group", "times");
   if (g.collapsed) {
-    const text = queryToText(g, schema);
+    const text = queryToText(g, catalog);
     return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
       <div class="qb-group-head">
         ${collapseButton(true)}
@@ -145,7 +139,7 @@ function groupHtml(
   }
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
   const children = g.children
-    .map((child) => nodeHtml(schema, facets, child, issues, false))
+    .map((child) => nodeHtml(catalog, facets, child, issues, false))
     .join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head">
@@ -167,20 +161,20 @@ function groupHtml(
 }
 
 function nodeHtml(
-  schema: FieldCatalog,
+  catalog: FieldCatalog,
   facets: Facet[] | null,
   node: QueryNode,
   issues: Issue[],
   isRoot: boolean,
 ): string {
   return node.kind === "group"
-    ? groupHtml(schema, facets, node, issues, isRoot)
-    : conditionHtml(schema, facets, node, issues);
+    ? groupHtml(catalog, facets, node, issues, isRoot)
+    : conditionHtml(catalog, facets, node, issues);
 }
 
 /** The query card's footer: the whole query in plain English once it is
  *  complete, otherwise how many parts still need attention. */
-function footerHtml(state: AppState, schema: FieldCatalog): string {
+function footerHtml(state: AppState, catalog: FieldCatalog): string {
   if (countConditions(state.query) === 0) {
     return `<span class="qb-muted">Add a condition to start building the query.</span>`;
   }
@@ -192,13 +186,13 @@ function footerHtml(state: AppState, schema: FieldCatalog): string {
         : `${pending} parts of the query still need`;
     return `<span class="qb-muted">${what} attention.</span>`;
   }
-  const text = queryToText(state.query, schema);
+  const text = queryToText(state.query, catalog);
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
 export function renderQueryBuilder(state: AppState): void {
   const el = panelEls().center;
-  if (!state.schema) {
+  if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
     return;
   }
@@ -206,146 +200,86 @@ export function renderQueryBuilder(state: AppState): void {
     el,
     `<div class="qb-card qb-query">
        <h2 class="qb-card-title">Query</h2>
-       ${nodeHtml(state.schema, state.facets, state.query, state.issues, true)}
-       <div class="qb-query-foot">${footerHtml(state, state.schema)}</div>
+       ${nodeHtml(state.catalog, state.facets, state.query, state.issues, true)}
+       <div class="qb-query-foot">${footerHtml(state, state.catalog)}</div>
      </div>`,
   );
-  // Keep the once-wired delegated handlers acting on the current tree/schema.
-  _setBuilderRefs(state.query as Group, state.schema);
-}
-
-// module-scope refs set by renderQueryBuilder; the delegated handlers below read
-// these so a single wiring keeps working across every paint().
-let currentQuery: Group = emptyQuery();
-let schemaRef: FieldCatalog | null = null;
-
-export function _setBuilderRefs(query: Group, schema: FieldCatalog | null): void {
-  currentQuery = query;
-  schemaRef = schema;
 }
 
 /**
- * Install the query-builder's interactive behaviour on `container` (the persistent
- * centre panel). main.ts calls this after every renderQueryBuilder(), because
- * paint() swaps container.innerHTML. The two delegated listeners are attached
- * ONCE per container (guarded by data-qbWired) so re-calls don't stack handlers;
- * onDropdownChange is re-run every time because Fomantic rebinds onChange per
- * .ui.dropdown element, and paint() replaces those elements.
+ * Install the query builder's behaviour on `container` (the persistent centre
+ * panel). Call ONCE at startup. The handlers read the current tree through
+ * `getState()` when an event fires, so they never go stale across repaints.
+ *
+ * Returns `bindDropdowns`, which must run after every renderQueryBuilder():
+ * Fomantic dropdowns don't emit a usable native "change", their onChange is
+ * bound per element, and paint() replaces those elements.
  */
-export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group) => void): void {
-  const getQuery = (): Group => currentQuery;
-  const rootId = (): string => currentQuery.id;
-
-  function nodeIdFrom(el: HTMLElement): string | null {
-    return el.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? null;
-  }
-
+export function wireQueryBuilder(
+  container: HTMLElement,
+  getState: () => AppState,
+  onChange: (next: Group) => void,
+): () => void {
   function handleRowChange(row: HTMLElement): void {
-    const nodeId = row.dataset.nodeId!;
-    const q = getQuery();
-    const cond = findNode(q, nodeId);
-    if (!cond || cond.kind !== "condition") return;
-
-    const facetSel = row.querySelector<HTMLSelectElement>('[data-part="facet"]');
-    const fieldSel = row.querySelector<HTMLSelectElement>('[data-part="field"]');
-    const opSel = row.querySelector<HTMLSelectElement>('[data-part="operator"]');
-
-    const newFacetId = facetSel ? facetSel.value || null : cond.facetId;
-    const facetChanged = newFacetId !== cond.facetId;
-
-    const newFieldId = facetChanged ? null : fieldSel ? fieldSel.value || null : cond.fieldId;
-    const fieldChanged = facetChanged || newFieldId !== cond.fieldId;
-    const newOperatorId = fieldChanged ? null : opSel ? opSel.value || null : cond.operatorId;
-
-    const field = schemaRef?.fields.find((f) => f.label === newFieldId);
-    const operator = schemaRef?.operators.find((o) => o.label === newOperatorId);
-    // The value control's DOM shape (one input, two, a multi-select, or none)
-    // depends on the operator's arity. If only the operator changed but its arity
-    // differs from before, `row` still holds the OLD shape until the next paint()
-    // — reading it would silently pull garbage from the wrong control. Only trust
-    // the DOM when the shape it currently has actually matches `operator`.
-    const oldOperator = schemaRef?.operators.find((o) => o.label === cond.operatorId);
-    const arityChanged =
-      newOperatorId !== cond.operatorId && oldOperator?.arity !== operator?.arity;
-
-    let value: unknown = defaultValueFor(field, operator);
-    if (!fieldChanged && !arityChanged && operator) {
-      value = readValueControl(row, operator.arity, field?.valueType ?? "string") ?? value;
-    }
-    onChange(
-      updateNode(q, nodeId, {
-        facetId: newFacetId,
-        fieldId: newFieldId,
-        operatorId: newOperatorId,
-        value,
-      }),
+    const { query, catalog } = getState();
+    const cond = findNode(query, row.dataset.nodeId!);
+    if (!catalog || !cond || cond.kind !== "condition") return;
+    const picked = (part: string) =>
+      row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
+    const patch = nextCondition(
+      cond,
+      {
+        facetId: picked("facet"),
+        fieldId: picked("field"),
+        operatorId: picked("operator"),
+      },
+      catalog,
+      (arity, valueType) => readValueControl(row, arity, valueType),
     );
+    onChange(updateNode(query, cond.id, patch));
   }
 
-  if (container.dataset.qbWired !== "1") {
-    container.dataset.qbWired = "1";
-
-    container.addEventListener("click", (e) => {
-      const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
-      if (!btn) return;
-      const action = btn.dataset.action!;
-      const nodeId = nodeIdFrom(btn);
-      if (!nodeId) return;
-      const q = getQuery();
-      switch (action) {
-        case "add-condition":
-          return onChange(addChild(q, nodeId, newCondition()));
-        case "add-group":
-          return onChange(addChild(q, nodeId, newGroup()));
-        case "remove-node":
-          return onChange(nodeId === rootId() ? q : removeNode(q, nodeId));
-        case "set-and":
-          return onChange(updateNode(q, nodeId, { operator: "AND" }));
-        case "set-or":
-          return onChange(updateNode(q, nodeId, { operator: "OR" }));
-        case "toggle-collapse": {
-          const node = findNode(q, nodeId);
-          return onChange(
-            updateNode(q, nodeId, {
-              collapsed: !(node && "collapsed" in node && node.collapsed),
-            }),
-          );
-        }
+  container.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
+    const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
+    if (!btn || !nodeId) return;
+    const q = getState().query;
+    switch (btn.dataset.action) {
+      case "add-condition":
+        return onChange(addChild(q, nodeId, newCondition()));
+      case "add-group":
+        return onChange(addChild(q, nodeId, newGroup()));
+      case "remove-node":
+        return onChange(removeNode(q, nodeId));
+      case "set-and":
+        return onChange(updateNode(q, nodeId, { operator: "AND" }));
+      case "set-or":
+        return onChange(updateNode(q, nodeId, { operator: "OR" }));
+      case "toggle-collapse": {
+        const node = findNode(q, nodeId);
+        return onChange(
+          updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }),
+        );
       }
-    });
+    }
+  });
 
-    container.addEventListener("change", (e) => {
-      const target = e.target as HTMLElement;
-      // Fomantic's `set.value` dispatches a NATIVE bubbling "change" on the backing
-      // <select> *before* calling settings.onChange. Without this guard both this
-      // listener and onDropdownChange below would run handleRowChange for the same
-      // interaction; pass 2 would then read the already-detached (stale) row and write
-      // back the operator pass 1 cleared — state and screen would disagree (§6).
-      // So every Fomantic-managed <select> (field, operator, enum value) is handled
-      // EXCLUSIVELY by onDropdownChange, and everything else keeps this path.
-      //
-      // The `select` qualifier is load-bearing, do not drop it: `data-part="value"`
-      // also sits directly on the native <input> controls (text/number/date, the
-      // two-arity from/to pair, and the comma-separated `many` input). A bare
-      // `[data-part="value"]` would exclude those too — and since they are not
-      // `.ui.dropdown`, onDropdownChange never binds them, so their edits would be
-      // silently dropped and the query would stop updating as the user types.
-      if (
-        target.matches(
-          'select[data-part="facet"], select[data-part="field"], select[data-part="operator"], select[data-part="value"]',
-        )
-      ) {
-        return;
-      }
-      const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
-      if (!row) return;
-      handleRowChange(row);
-    });
-  }
-
-  // ALWAYS re-run — Fomantic rebinds onChange per .ui.dropdown, which paint() replaces.
-  onDropdownChange(container, (el) => {
-    const row = el.closest<HTMLElement>(".qb-condition[data-node-id]");
+  container.addEventListener("change", (e) => {
+    const target = e.target as HTMLElement;
+    // Fomantic dispatches a native bubbling "change" on the <select> behind each
+    // dropdown *before* calling its onChange. Handling both would run
+    // handleRowChange twice, the second time on a detached row, and write back
+    // stale values. So every <select> is handled ONLY via bindDropdowns below;
+    // this listener handles the plain <input>s (text/number/date, the range
+    // pair and the boolean toggle's checkbox).
+    if (target instanceof HTMLSelectElement) return;
+    const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
     if (row) handleRowChange(row);
   });
+
+  return () =>
+    onDropdownChange(container, (el) => {
+      const row = el.closest<HTMLElement>(".qb-condition[data-node-id]");
+      if (row) handleRowChange(row);
+    });
 }

@@ -5,9 +5,12 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-23 — terminology: the frontend now says **events**
-(was "entrysets") and **facets** (was "individuals" / "items"); the backend's
-wire names are unchanged. See "Terminology" in §1 and §13.
+Last updated: 2026-09-23 — code-review fixes: one stale-response rule
+(`requestSlot`), `AppState.catalog` (was `schema`), `runBlocker`, date
+conditions compare calendar days (§7 "Dates"), dead code removed, CI added.
+Earlier the same day: the frontend now says **events** (was "entrysets") and
+**facets** (was "individuals" / "items"); the backend's wire names are
+unchanged — see "Terminology" in §1. See §13.
 
 ---
 
@@ -158,12 +161,12 @@ and event handlers to DOM nodes, so blindly replacing `innerHTML` would leak
 handlers and lose plugin state. We contain that hazard in **one file** and **one
 helper**.
 
-### `src/ui/fomantic.ts` — the only file allowed to import jQuery
+### `src/ui/fomantic.ts` — the only file that uses jQuery
 
 ```ts
 export function activate(container: HTMLElement): void {
   // Turn plain markup into interactive Fomantic components.
-  $(container).find('.ui.dropdown').dropdown();
+  $(container).find('.ui.dropdown').dropdown({ fullTextSearch: true });
   $(container).find('.ui.checkbox').checkbox();
 }
 
@@ -173,6 +176,10 @@ export function destroy(container: HTMLElement): void {
   $(container).find('.ui.checkbox').checkbox('destroy');
 }
 ```
+
+It also exports `onDropdownChange(container, handler)`: Fomantic dropdowns
+don't emit a usable native `change`, so the query builder binds their
+`onChange` through it after every paint.
 
 Native elements are preferred where they do the job without a plugin: the
 data dictionary's groups, the event rows and the account menu are
@@ -190,13 +197,16 @@ export function paint(container: HTMLElement, html: string): void {
 
 ### The rules a maintainer learns on day one
 
-1. **Never write `$(...)` outside `src/ui/fomantic.ts`.** (Enforced by an ESLint
-   note / review checklist: no `jquery` import elsewhere.)
+1. **Never write `$(...)` outside `src/ui/fomantic.ts`.** ESLint enforces it: a
+   `jquery` import anywhere else is an error (`eslint.config.js`).
 2. **To make new markup interactive**, add its selector to `activate()` and the
    matching teardown to `destroy()`.
 3. **To update a panel**, build an HTML string from state and call `paint()`.
-4. **Panels are independent.** A change in one panel never repaints another (see
-   §5). This keeps plugin churn contained to the panel that actually changed.
+4. **Panels repaint only for the state they read.** Each panel lists the
+   `AppState` keys it depends on (`panelRenderers` in `main.ts`, §5), and repaints
+   only when one of those changes. A query edit therefore repaints the query
+   builder, statistics and preview — but never the docs, database picker or
+   account menu.
 
 ### The bootstrap wrinkle
 
@@ -219,11 +229,12 @@ are the only two files that may import jquery (ESLint enforces it).
 ```
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
-  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/facets/auth/compliance; wire subscriptions; hold the refreshStats / runPreview orchestrators; reacts to 401/403 generically to trigger the login/compliance redirects.
+  main.ts              Bootstrap: import setup-jquery + Fomantic; render the layout shell; wire every panel once; load databases/facets/auth/compliance and derive the field catalog; the panelRenderers table; the refreshStats / runPreview orchestrators, which react to 401/403 by redirecting into login/compliance.
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data (facets, fields, tags, groups); all empty by default. HIDDEN_ROW_BADGES (tags/groups never shown as Matching events badges), ROW_COLUMNS (facet.field values shown as columns on each row). Enforced by tests/noBackendDataInSrc.test.ts.
-  state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
+  state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store` + runBlocker()/canRunQuery() — the one "can this query run, and if not why" check.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
+    requestSlot.ts     requestSlot() — at most one in-flight request per kind, and the whole stale-response guard (§6).
     pendingQuery.ts    Save/restore the in-progress query across the login or
                        compliance redirect (sessionStorage only). See §2 and
                        §5 of the compliance-logging design spec.
@@ -232,10 +243,11 @@ src/
     types.ts           Request/response types. This IS the API contract.
   query/
     types.ts           Condition, Group, QueryNode, Issue.
-    tree.ts            Pure tree helpers: emptyQuery, newCondition, newGroup, addChild, updateNode, removeNode, findNode, countConditions.
-    validate.ts        validateQuery(tree, schema) -> Issue[]; hasBlockingErrors(issues).
-    summary.ts         queryToText(tree, schema) -> human-readable string (display only).
-    fieldCatalog.ts    buildFieldCatalog(facets) -> { fields, operators } — derives the query builder's field catalog client-side; the real API has no schema/operators endpoint.
+    tree.ts            Pure tree helpers: emptyQuery, newCondition, newGroup, addChild, updateNode, removeNode, findNode, countConditions, stripCollapsed, sameSemantics.
+    conditionEdit.ts   nextCondition(cond, picks, catalog, readValue) — the Facet → Field → Operator → value cascade when a row changes; defaultValueFor().
+    validate.ts        validateQuery(tree, catalog) -> Issue[]; hasBlockingErrors(issues).
+    summary.ts         queryToText(tree, catalog) -> human-readable string (display only).
+    fieldCatalog.ts    buildFieldCatalog(facets) -> FieldCatalog, the fixed OPERATORS list, findField / findOperator — derives the query builder's fields client-side; the real API has no schema/operators endpoint.
   ui/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
     panel.ts           paint() helper + escapeHtml().
@@ -243,26 +255,27 @@ src/
     layout.ts          Renders the shell once (top bar with workflow steps + account slot, docs rail, docs / main / stats columns). Handles docs collapse + active step via classes/attributes, no repaint.
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
-    queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
+    queryBuilder.ts    render + event wiring for the centre panel (recursive). wireQueryBuilder runs once and returns bindDropdowns, which main.ts calls after every render.
     docsFilter.ts      tagsOf / groupByTag (the data dictionary's per-tag sections, untagged last) + matchDocs(facets, text) — which facets/sections match the filter (pure; unit-tested).
     docsSidebar.ts     render for the data dictionary (docs column) — built
-                       from state.facets, NOT state.schema. See §9.
+                       from state.facets, NOT state.catalog. See §9.
     statsPanel.ts      render for the pinned statistics column (data-driven from /api/stats).
     dataPreview.ts     render + Run wiring for the "Matching events" card
                        (POST /api/query) — the only Run control. See §9.
     accountMenu.ts     render + wiring for the top-bar account menu (login +
                        compliance; data-panel="account"). See §9.
 mock-server/
-  index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate().
-                       Starts only when run as the entrypoint.
-  auth.ts              Session/state/code logic for the fake-IdP login round
-                       trip: startLogin/issueFakeCode/exchangeCodeForSession
-                       (in-memory, dev-only) + cookie helpers. See §7, §10.
+  index.ts             Dev-only. Plain Node http: routing + JSON/form I/O. Listens on
+                       MOCK_PORT (default 3001; vite.config.ts proxies to the same).
+  auth.ts              Session/state/code logic for the fake-IdP login and
+                       compliance round trips (in-memory, dev-only; pending
+                       states/codes/tokens expire after 5 minutes) + cookie
+                       helpers. See §7, §10.
   audit.ts             Per-query audit-forwarding stand-in: an in-memory list
                        appended to on every successful POST /api/query. Dev-only
                        — production needs a real network call to a real audit
                        service. See §10.
-  databases.ts         DatabaseDef type, DATABASES (7 synthetic, arbitrarily
+  databases.ts         DATABASES (7 synthetic, arbitrarily
                        named ALPHA..ETA partitions with mock-only sizes),
                        dbIndexForEntrysetId(id) / databaseIdForEntrysetId(id)
                        — a pure function of an event's numeric id, never
@@ -271,16 +284,18 @@ mock-server/
                        dotted "facetLabel.fieldLabel" keys + a
                        synthetic __db key) and ROWS, every event
                        flattened once at startup.
-  evaluate.ts          matches(node, row) recursive evaluator + filterByDatabases(rows, ids) /
+  evaluate.ts          matches(node, row) recursive evaluator (dates compare UTC days, §7) + filterByDatabases(rows, ids) /
                        perDatabaseCounts(query, rows, ids) (keyed on row.__db) +
                        scaleCount(part, whole, target) + buildStatsLine(outcome) — turns one
                        database's raw outcome into the StatsResponse line /api/stats streams
                        for it.
   vehicleData.ts       Loads data/individual.json + data/entrysets.json via
-                       fs.readFileSync -> INDIVIDUALS, ENTRYSETS.
+                       fs.readFileSync -> INDIVIDUALS, ENTRYSETS (typed with
+                       src/api/types.ts, type-only).
   data/
-    individual.json    The vehicle/fleet telemetry data model: ~157 facets (4 metadata
-                       + ~153 content facets across 18 subsystem groups: engine,
+    individual.json    The vehicle/fleet telemetry data model: 157 facets (4 metadata
+                       + 153 content facets across 20 subsystem groups, one facet
+                       with a deliberately blank group: engine,
                        powertrain, fuel, emissions, cooling, electrical, EV battery,
                        tires/wheels, brakes, suspension, steering, body/chassis,
                        lighting, HVAC, infotainment, ADAS, radar/lidar, diagnostics,
@@ -296,7 +311,8 @@ mock-server/
                        events (ids 1-21), each a distinct, internally-consistent
                        vehicle/event scenario, spread across all 7 mock databases via
                        dbIndexForEntrysetId(id).
-tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, src/ui/* (pure helpers only), mock-server/evaluate + index (pure, no DOM).
+tests/                 Vitest specs mirroring the source tree: src/query/*, src/api/*, src/state, src/util/*, src/ui/* (pure helpers only), mock-server/* (auth, audit, databases, rows, evaluate, stats lines, data integrity), plus noBackendDataInSrc (§12). No DOM.
+.github/workflows/     ci.yml — typecheck, test, lint, build (incl. check:offline) on every PR and push to main.
 docs/
   ARCHITECTURE.md      This file.
 index.html
@@ -310,7 +326,7 @@ index.html
 
 ```ts
 export interface AppState {
-  schema: ReturnType<typeof buildFieldCatalog> | null;  // derived client-side from `facets` — no schema endpoint exists
+  catalog: FieldCatalog | null;             // derived client-side from `facets` — no schema endpoint exists
   databases: DatabasesResponse[] | null;    // loaded once (GET /api/databases, a bare array)
   facets: Facet[] | null;         // loaded once (GET /api/individuals, a bare array); drives docsSidebar and the query builder's Facet dropdown
   /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
@@ -321,19 +337,19 @@ export interface AppState {
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // workflow steps; default "filter"
 
-  query: QueryNode;                   // the tree (root Group, operator "AND")
-  issues: Issue[];                    // validateQuery(query, schema); recomputed on every query change
+  query: Group;                       // the tree; its root is always a group
+  issues: Issue[];                    // validateQuery(query, catalog); recomputed on every query change
 
   stats: {
     status: "idle" | "loading" | "ok" | "error";
     lines: StatsResponse[];   // one entry per database that has reported so far (streamed)
     error: string | null;
   };
-  preview: {
-    status: "idle" | "loading" | "ok" | "error";
-    data: EventsResponse | null;   // the events matching the current query — see §7/§9/§10
-    error: string | null;
-  };
+  preview:                            // the events matching the current query — see §7/§9/§10
+    | { status: "idle" }
+    | { status: "loading" }
+    | { status: "ok"; data: EventsResponse }
+    | { status: "error"; error: string };
 
   sidebarCollapsed: boolean;
 }
@@ -347,24 +363,31 @@ of the keys that changed.
 
 | Trigger | Effect |
 |---|---|
-| App starts | `getDatabases()` + `getFacets()`, then `buildFieldCatalog(facets)` synchronously → `setState({ schema, databases, facets, ... })` → every panel renders once. Facets/databases load failure is fatal (full-page error + Reload). |
-| User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
+| App starts | Every panel paints its loader. Then `getDatabases()` + `getFacets()` + `getMe()` + `getComplianceStatus()` in parallel, `buildFieldCatalog(facets)` synchronously, and one `setState({ catalog, databases, facets, query, issues, auth, compliance, ... })`. On a `?resume=1` return hop the saved query and database selection are restored (§9) and statistics fetched at once. Individuals/databases load failure is fatal (full-page error + Reload); auth/compliance failures are not. |
+| User edits the query | handler calls a `tree.ts` fn → `onQueryChange` → `changeScope`: cancel both request slots, `setState({ query, issues, stats: idle, preview: idle })` → the query builder, statistics and preview repaint. Then a **debounced** (400 ms) `getStats()` is scheduled; it does nothing unless `runBlocker` says the query can run. A collapse toggle (`sameSemantics`) only updates `query`. |
 | `getStats()` reports a streamed line | stale-response guard (below); if current, appended to `stats.lines` via `setState` → **only** `statsPanel` repaints, showing partial results while more lines are still arriving. When the stream ends, `status` becomes `ok`; a non-2xx response instead sets `status: "error"`. |
-| User clicks **Run query** (in Matching events) | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints (the card shows a loader instead of the button) → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and flows with the page. |
+| User clicks **Run query** (in Matching events) | `setState({ preview: { status: "loading" } })` → `dataPreview` repaints (the card shows a loader instead of the button) → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and flows with the page. |
 | User opens/closes the docs (rail or ✕) | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class and the rail's `aria-expanded`. No repaint. |
-| User clicks a workflow step | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
+| User clicks a workflow step | `setState({ activeView })` → `layout` toggles `hidden` on the main area and the "Coming soon" placeholder. Nothing repaints or refetches. |
 
-Each panel subscribes narrowly:
+Each panel lists the keys it reads in one table in `main.ts`, and one
+subscriber runs it when any of them changed:
 
 ```ts
-subscribe((state, changed) => {
-  if (changed.has("query") || changed.has("issues") || changed.has("facets"))
-    queryBuilder.render(state);
-  if (changed.has("stats"))   statsPanel.render(state);
-  if (changed.has("preview") || changed.has("facets")) dataPreview.render(state);
-  if (changed.has("facets")) docsSidebar.render(state);
+const panelRenderers = [
+  { keys: ["facets", "databases"], run: renderDocsSidebar },
+  { keys: ["catalog", "query", "issues", "stats", "selectedDatabaseIds", "databases"], run: renderStatsPanel },
+  // …one row per panel
+];
+store.subscribe((state, changed) => {
+  for (const { keys, run } of panelRenderers) if (keys.some((k) => changed.has(k))) run(state);
 });
 ```
+
+When a render function starts reading a new `AppState` key, add it to its row.
+Event wiring is separate: every `wire*` function runs **once** at startup, on
+the panel containers `renderShell` created (their listeners are delegated, so
+they survive repaints).
 
 `debounce(fn, ms)` is one named helper used in exactly one place (the stats trigger).
 
@@ -377,26 +400,24 @@ from the exact query tree currently in `AppState`. In every other situation they
 are empty (placeholder or error) — never stale.**
 
 "The exact query" includes the **selected databases** — a stats/preview response
-belongs to a `(query, selectedDatabaseIds)` pair, and the stale-guard key
-(`requestKey` in `main.ts`) is `JSON.stringify({ query, databases: sorted })`.
+belongs to a `(query, selectedDatabaseIds)` pair.
 
 Concretely:
 
 - **On any query edit _or database-selection change_**, the same `setState` that
   writes `query` / `selectedDatabaseIds` also resets `stats` to
-  `{ status: "idle", data: null }` and `preview` to
-  `{ status: "idle", data: null, page: 1 }`. Old numbers and rows disappear the
-  instant the scope changes on screen — before any new request goes out.
+  `{ status: "idle", lines: [], error: null }` and `preview` to
+  `{ status: "idle" }` (`changeScope` in `main.ts`). Old numbers and rows
+  disappear the instant the scope changes on screen — before any new request
+  goes out.
   - The Matching events card then shows its ready state: an enabled **Run
     query** button and, for an anonymous visitor or one missing compliance,
     an advisory note ("You'll be asked to log in first." / "…confirm
     compliance first.") — §9.
-- **If no database is selected:** no request fires; both panels show
-  *"Select at least one database…"* and **Run** is disabled.
-- **If `issues` has errors:**
-  - No `/api/stats` request fires. Stats shows a neutral hint:
-    *"Fix the errors in your query to see statistics."*
-  - **Run** is disabled. Preview shows the same hint, no rows.
+- **If the query can't run yet** (`runBlocker` in `state.ts`): no request
+  fires, **Run** is disabled, and both panels say why — *"Select at least one
+  database…"*, *"Add a condition…"*, or *"Finish the query…"* (unfinished or
+  invalid parts).
 - **If the query is valid:** debounced `getStats()` fires; while in flight the
   panel shows partial results as each database's line streams in (headline +
   per-database list so far), plus a "Waiting on N more" indicator for the
@@ -404,21 +425,25 @@ Concretely:
   it shows a plain loader instead.
 - **If the backend returns an error:** stats goes to
   `{ status: "error", lines: [], error }`; preview goes to
-  `{ status: "error", data: null, error }`. Both show a `ui negative message`
+  `{ status: "error", error }`. Both show a `ui negative message`
   with the text. No numbers, no rows.
-- **Stale-response guard:** each `getStats()` / `runQuery()` call captures a
-  snapshot (deep copy or stable stringify) of the query it was made for. When it
-  resolves, if `getState().query` no longer equals that snapshot, the response is
-  discarded. A slow earlier request can never overwrite results for a newer query.
-  The snapshot is paired with **request identity**: `main.ts` keeps one
-  `requestSlot()` per kind (stats, preview), and a response only counts if its
-  request is still the slot's current one — an edit-and-undo can make an old
-  request's key equal the new one's, so the key alone isn't enough.
-- **Superseded requests are aborted, not just ignored.** Every query edit,
-  database-selection change, and logout calls `cancelInFlight()`, and starting a
-  new request aborts the previous one of the same kind (`AbortController`,
-  passed through `client.ts`). Without this, each edit would leave an
-  `/api/stats` stream running against every selected database on the backend.
+- **Stale-response guard — one rule:** `main.ts` keeps one `requestSlot()`
+  (`src/util/requestSlot.ts`) per kind (stats, preview). Every query edit and
+  database-selection change cancels both slots, and starting a request replaces
+  the previous one. A response, a streamed line, an error — and the
+  compliance-status check after a `403` — is only applied while
+  `req.isStale()` is false, i.e. while its request is still the slot's current
+  one. Identity, not content, is compared, so an edit-and-undo can't revive an
+  old request.
+- **Superseded requests are aborted, not just ignored.** Cancelling or
+  replacing a slot aborts its `AbortController` (passed through `client.ts`).
+  Without this, each edit would leave an `/api/stats` stream running against
+  every selected database on the backend.
+- **Whoever aborts a request resets its panel.** An aborted request's own
+  handlers are stale and never touch state, so the code that cancels must set
+  the panel's state itself — `changeScope` resets both panels; logout and
+  compliance invalidation cancel and reset only the preview (`/api/stats` is
+  anonymous and unaffected).
 
 > **Streaming and "never stale" are compatible.** While `stats.status` is `"loading"`, `stats.lines` legitimately holds fewer entries than `selectedDatabaseIds` — that's a query result still arriving, not a stale one. The invariant this section protects is that every line in `stats.lines` belongs to the `(query, selectedDatabaseIds)` pair currently on screen; the stale-response guard is checked once per streamed line (not just once per request), so a line that arrives after the user has changed the query/scope is discarded before it reaches `AppState`.
 
@@ -434,7 +459,7 @@ message unwrapped from `{ error }`) on any non-2xx response.
 getDatabases(): Promise<DatabasesResponse[]>
 getFacets(): Promise<Facet[]>
 getStats(query: QueryNode, databases: string[], onLine: (line: StatsResponse) => void, signal?: AbortSignal): Promise<void>
-runQuery(query: QueryNode, databases: string[], page: number, pageSize: number, signal?: AbortSignal): Promise<EventsResponse>
+runQuery(query: QueryNode, databases: string[], signal?: AbortSignal): Promise<EventsResponse>
 getMe(): Promise<AuthUser | null>
 logout(): Promise<void>
 getComplianceStatus(): Promise<ComplianceStatus>
@@ -465,26 +490,31 @@ of this document guessed at one that doesn't exist in the actual API (see §13,
 `buildFieldCatalog(facets)` from the `Facet[]` data already fetched
 via `GET /api/individuals` — one `CatalogField` per (facet, field) pair,
 label `"facetLabel.fieldLabel"`, plus a fixed, hardcoded `CatalogOperator[]`
-(`OPERATORS`) that never varies. `AppState.schema` holds this derived value
-(`ReturnType<typeof buildFieldCatalog>`), not a fetched response.
+(`OPERATORS`) that never varies. `AppState.catalog` holds this derived
+`FieldCatalog`, not a fetched response.
 
 ```ts
 export interface CatalogField {
-  label: string;
-  name: string;
+  label: string;      // "itemLabel.fieldLabel" — what a condition stores as fieldId
+  name: string;       // "Facet name: field name", for summaries
+  fieldName: string;  // the field's `name`, else its `label` — the Field dropdown
   valueType: ValueType;
-  description: string;
-  options?: { value: string; label: string }[];
+  options?: string[]; // enum values
   operatorIds: string[];
 }
 
 export interface CatalogOperator {
   label: string;
   name: string;
-  description: string;
   arity: Arity;
 }
+
+export interface FieldCatalog {
+  fields: CatalogField[];
+}
 ```
+
+Look fields and operators up with `findField(catalog, id)` / `findOperator(id)`.
 
 `valueType` is mapped from each `FacetField.type` (falling back to
 `format`) by `valueTypeFor()`. The mapping is case-insensitive, ignores
@@ -675,13 +705,12 @@ carry `errorMessages`/`infoMessages` instead of a count. A missing / empty
 
 ### `POST /api/query`
 
-Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
+Body: `{ "query": <QueryNode tree>, "databases": string[] }`.
 Called only when the user clicks **Run query** (§9). Same `400` validation as `/api/stats`. The
 mock scopes `ROWS` (every event, flattened) to the selected databases,
 evaluates the query against them, and maps matching rows back to their
-source events, capped at 25. `page`/`pageSize` are accepted but unused —
-there is no pagination (§9); the whole capped result comes back in one
-response.
+source events, capped at 25. There is no pagination (§9); the whole
+capped result comes back in one response.
 
 ```ts
 interface EventRecord {
@@ -689,7 +718,7 @@ interface EventRecord {
   items: Record<string, Record<string, string | number | boolean>>; // keyed by Facet.label, then field label
 }
 interface EventsResponse {
-  entrysets: Entryset[];
+  entrysets: EventRecord[];         // the backend's key name
 }
 ```
 
@@ -724,7 +753,7 @@ interface AuthUser {
 
 `POST /api/query` requires both a session (`401 { error }` without one) and
 a compliance acknowledgment (`403 { error }` without one) — everything else
-(`schema`, `databases`, `facets`, `stats`) stays anonymous-accessible.
+(`databases`, `facets`, `stats`) stays anonymous-accessible.
 `canRunQuery` is NOT auth- or compliance-aware, and neither is `dataPreview.ts`'s
 enabling of the Run button — Run always genuinely attempts the request, and
 `main.ts` reacts to whatever status code comes back (§5, §9). A `401` always redirects into login. A
@@ -757,8 +786,11 @@ interface ComplianceStatus {
 }
 ```
 
-- `GET /api/compliance/start` — requires a session (`401` without one);
-  starts the flow, redirects to the compliance service.
+- `GET /api/compliance/start` — starts the flow, redirects to the compliance
+  service. It is a browser navigation, so without a session it redirects to
+  `GET /api/auth/login` rather than answering with JSON. Likewise, a failed
+  login/compliance callback shows a small HTML error page with a link back to
+  the app, and clears that flow's state-binding cookie.
 - `GET /api/compliance/callback?token=&state=` — exchanges the token
   server-to-server, attaches `{ reason, ackedAt }` to the current session,
   redirects to `/?resume=1`.
@@ -772,10 +804,28 @@ Every successful `POST /api/query` also appends `{ name, reason, timestamp
 }` to an in-memory audit list (`mock-server/audit.ts`) — a dev-only stand-in
 for forwarding to a real audit service (§10).
 
+### Dates
+
+A `date` field (backend type `DATE`, `DATETIME` or `TIMESTAMP …`) gets a date
+picker, so a condition's value is a **calendar day**, `"YYYY-MM-DD"` (a
+`between` value is two of them). For a field that stores instants, the
+backend compares the instant's **UTC calendar day**:
+
+| Operator | Matches when the stored instant's UTC day is… |
+|---|---|
+| `eq` / `neq` | the same day / a different day |
+| `before` / `after` | strictly earlier / strictly later than that day |
+| `between` | within `[from, to]`, both days included |
+
+So "Equals 2024-11-06" matches `2024-11-06T14:32:00Z`, and "After
+2024-11-06" does not. The mock implements this in `mock-server/evaluate.ts`;
+**the real backend must confirm it** (UTC in particular) — see issue #24.
+
 ### Errors
 
-Every endpoint, on 4xx/5xx: `{ "error": "human readable message" }`. `client.ts`
-unwraps it into the thrown `Error`.
+Every JSON endpoint, on 4xx/5xx: `{ "error": "human readable message" }`.
+`client.ts` unwraps it into the thrown `ApiError`. (The navigation endpoints
+above answer with pages or redirects instead.)
 
 ---
 
@@ -802,6 +852,7 @@ export interface Group {
   id: string;
   operator: LogicalOperator;
   children: Array<Group | Condition>;
+  collapsed?: boolean;        // display only — ignored by sameSemantics / validation
 }
 
 export type QueryNode = Group | Condition;
@@ -810,7 +861,8 @@ export type QueryNode = Group | Condition;
 ### `tree.ts` — pure, immutable, no DOM, no state
 
 `emptyQuery()`, `newCondition()`, `newGroup()`, `addChild(tree, parentId, node)`,
-`updateNode(tree, nodeId, patch)`, `removeNode(tree, nodeId)`, `findNode(tree, nodeId)`.
+`updateNode(tree, nodeId, patch)`, `removeNode(tree, nodeId)`, `findNode(tree, nodeId)`,
+`countConditions(tree)`, `stripCollapsed(tree)`, `sameSemantics(a, b)`.
 
 Every query edit is: read `state.query` → call one `tree.ts` function → write the
 result back with `setState`. These functions return **new** trees; the input is
@@ -818,16 +870,17 @@ never mutated.
 
 ### `validate.ts`
 
-`validateQuery(tree, schema): Issue[]` where
-`Issue = { nodeId: string; message: string; severity: "error" | "warning" }`.
+`validateQuery(tree, catalog): Issue[]` where
+`Issue = { nodeId: string; message: string; severity: "error" | "warning"; kind: "incomplete" | "invalid" }`.
 Reports: condition with no field / no operator / a value that does not fit the
 operator's arity; empty groups. The Run button and the live stats fetch are gated
 on there being **no `error`-severity issues**.
 
 ### `summary.ts`
 
-`queryToText(tree, schema): string` → e.g.
-`(Height ≥ 20 AND Has foliage is true) OR Species is any of Fern, Oak`.
+`queryToText(tree, catalog): string` → e.g.
+`Engine RPM: value_rpm Greater than 3000 AND (Fuel level: percentage Less than 10 OR …)`
+— field names, operator names and raw values.
 Display only; has no bearing on what is sent to the API.
 
 ### Wire format
@@ -866,7 +919,7 @@ statistics and Matching events cards explain why they are empty.
 
 ### Left — `docsSidebar.ts` (data dictionary)
 
-Built from `state.facets` (GET /api/individuals) — not `state.schema`.
+Built from `state.facets` (GET /api/individuals) — not `state.catalog`.
 Hidden behind the docs rail by default (`sidebarCollapsed` starts `true`);
 the rail and the card's ✕ both toggle it. Sections are built from our own
 `tags`, not the third-party `group` (`groupByTag` in `docsFilter.ts`): one
@@ -908,20 +961,24 @@ on node kind, `groupHtml` renders a group and recurses into its children via
   1. **Facet** `ui dropdown` (searchable) — built from `state.facets`; picking
      one stages `facetId` on the condition.
   2. **Field** `ui dropdown` — filtered to the chosen facet's fields (matched by
-     `fieldId` prefix), shown by their short slug rather than repeating the
-     facet's name; disabled and empty until a facet is chosen.
-  3. **Operator** `ui dropdown` (unchanged) — options from the selected field's
+     `fieldId` prefix), shown by `fieldName` (the field's `name`, else its
+     label) rather than repeating the facet's name; disabled and empty until a
+     facet is chosen.
+  3. **Operator** `ui dropdown` — options from the selected field's
      `operatorIds`.
   4. A **value** control chosen by the operator's `arity` × the field's
      `valueType`:
      - `none` → no control
      - `one` → single `ui input` / enum `ui dropdown` / boolean `ui checkbox` / date input
-     - `two` → two inputs (from / to)
-     - `many` → multiple `ui dropdown` (chips)
+     - `two` (numbers and dates only) → two inputs (from / to)
+     - `many` (enums only) → multiple `ui dropdown` (chips)
 
-  Changing the Facet resets Field, Operator, and the value to empty/null — the
-  same cascade-reset pattern that changing Field already applies one level
-  down to Operator/value.
+  Every control has an accessible name (`aria-label` Facet / Field / Operator /
+  Value / From / To). The cascade lives in `nextCondition`
+  (`src/query/conditionEdit.ts`, unit-tested): changing the Facet resets Field,
+  Operator and value; changing Field resets Operator and value; an operator
+  change that alters the arity resets the value instead of reading the old
+  control.
 - Issues show under their row/group header: `kind: "incomplete"` as a quiet
   grey hint, `kind: "invalid"` in red (§11). The card's footer shows the
   whole query in plain English (`queryToText`) once it is complete,
@@ -929,10 +986,15 @@ on node kind, `groupHtml` renders a group and recurses into its children via
   grid inside a size container: below ~640 px of row width the value and ✕
   wrap to a second line.
 
-**Event wiring:** one delegated listener on the panel container, reading
-`data-node-id` and `data-action` attributes. The recursive HTML stays a pure
-string with no baked-in closures. Fomantic dropdowns' `onChange` is bound inside
-`activate()` and dispatches into the same `data-action` flow.
+**Event wiring:** `wireQueryBuilder(container, getState, onChange)` runs once.
+It adds two delegated listeners on the panel container — `click` for the
+`data-action` buttons (read with `data-node-id`) and `change` for the plain
+`<input>`s — which read the current tree through `getState()` when an event
+fires. Every `<select>` is a Fomantic dropdown and is handled only through its
+`onChange`, which `onDropdownChange` binds per element; since `paint()`
+replaces those elements, `wireQueryBuilder` returns `bindDropdowns`, and
+`main.ts` calls it after every render. The recursive HTML stays a pure string
+with no baked-in closures.
 
 ### Right — `statsPanel.ts`
 
@@ -1022,24 +1084,20 @@ not fetches — proxying only `/api` would leave those hops unreachable under
 `npm run dev`). Plain Node `http`, no Express, heavily commented top to
 bottom.
 
-- There is no `/api/schema` route — it was removed entirely, since the real
-  API never had one (see §7). `mock-server/vehicleData.ts` declares its own
-  local `IndividualField`/`Individual` types — field-identical to
-  `src/api/types.ts`'s `IndividualField`/`Individual` (`mock-server/` shares
-  no code with `src/`, so the shapes are duplicated, not imported) — and
-  `individual.json`'s data conforms to them, matching the real contract.
+- There is no `/api/schema` route — the real API never had one (see §7).
+- **Types, not code.** The mock types its data and responses with
+  `import type` from `src/api/types.ts` — the one definition of the wire
+  contract, so the two can't drift. Type-only imports are erased at build
+  time; the mock shares no *runtime* code with `src/`, and `src/` never
+  imports `mock-server/` at all (ESLint enforces that direction).
 - `mock-server/databases.ts` defines 7 synthetic databases (`ALPHA`..`ETA`)
-  as `DatabaseDef` objects (`description`/`name`/`owner`/`totalEntrysets`/
-  `percentageOfTotal`/`label`, each `totalEntrysets` spanning several orders
+  as `DatabasesResponse` objects (each `totalEntrysets` spanning several orders
   of magnitude), and `dbIndexForEntrysetId(id)` — a hash of the event's
   own numeric id that assigns it to exactly one database, independent of its
-  content. `DatabaseDef` is field-identical to the wire `DatabasesResponse`
-  shape, so `GET /api/databases` sends `DATABASES` directly with no filtering
-  step — every field, including `totalEntrysets`/`percentageOfTotal`, is part
-  of the real contract.
+  content. `GET /api/databases` sends `DATABASES` as-is.
 - `mock-server/rows.ts` flattens every event in `ENTRYSETS`
   (`mock-server/vehicleData.ts`) into a flat `Row` — dotted
-  `"facetLabel.fieldLabel"` keys matching the schema's field labels, plus
+  `"facetLabel.fieldLabel"` keys matching the catalog's field labels, plus
   a synthetic `__db` key from `databaseIdForEntrysetId` — once at startup
   (`ROWS`).
 - `mock-server/auth.ts` simulates the entire OAuth round trip in-process:
@@ -1086,8 +1144,10 @@ bottom.
   at 25.
 - Bad query, or missing / empty `databases` → `400 { error }`.
 
-Shares **no code** with `src/`. It stands in for "a real backend in any
-language"; the frontend knows it only through `src/api/types.ts`.
+It stands in for "a real backend in any language"; the frontend knows it only
+through `src/api/types.ts`. Pending login/compliance states, codes and tokens
+expire after 5 minutes (the binding cookies' lifetime); a blank compliance
+reason is rejected on the server too.
 
 ---
 
@@ -1098,10 +1158,10 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 - `client.ts` throws an `ApiError` (carries the response's HTTP `status`) with a readable message on any non-2xx,
   and a `TimeoutError` when the server goes silent for `REQUEST_TIMEOUT_MS` (§7) —
   so no panel can sit on "Loading" forever with Run disabled.
-- Async panels catch it, write `{ status: "error", data: null, error }`, render a
-  `ui negative message`. Per §6, data is nulled — never left stale. Errors from a
-  request that was aborted because it was superseded never reach a panel (the
-  §6 identity guard drops them).
+- Async panels catch it and write an error state — `preview: { status: "error", error }`,
+  `stats: { status: "error", lines: [], error }` — and render a `ui negative message`.
+  Per §6, no data is kept — never left stale. Errors from a request that was
+  aborted because it was superseded never reach a panel (the §6 guard drops them).
 - A failure loading databases/facets at startup is fatal: replace `#app`
   with a full-page `ui negative message` + Reload button. The message is
   HTML-escaped like every other server-supplied string (it can come from an
@@ -1120,13 +1180,13 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 
 ### Tests (Vitest, unit only, on pure modules)
 
-- `tree.test.ts` — add/update/remove/find return correct new trees; inputs unmutated.
-- `validate.test.ts` — each issue type is reported; a complete query yields `[]`.
-- `summary.test.ts` — representative trees produce the expected text.
-- `tests/ui/docsFilter.test.ts` — data-dictionary filter matching.
-- `tests/ui/dataPreview.test.ts` — row badges (`eventBadges`), configured columns (`rowCell`, `rowGrid`).
+- `tests/query/` — `tree` (immutable edits, `sameSemantics`), `validate` (each issue type), `summary` (text), `fieldCatalog` (type mapping, enums, names, lookups), `conditionEdit` (the row cascade).
+- `tests/state.test.ts` — the store and `runBlocker` / `canRunQuery`.
+- `tests/api/client.test.ts` — requests, error unwrapping, NDJSON streaming, timeouts, aborts.
+- `tests/util/` — `debounce`, `pendingQuery` (save/restore, untrusted input), `requestSlot` (the stale-response rule).
+- `tests/ui/` — `docsFilter`, `dataPreview` (badges, row columns), `statsPanel` (headline), `format`, `valueControl` (markup + accessible names).
+- `tests/mock-server/` — auth flows (incl. expiry), audit, databases, rows, the evaluator (incl. date semantics), stats lines, data integrity, the bare-array wire shapes.
 - `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock facet, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
-- `tests/ui/format.test.ts` / `statsPanel.test.ts` / `valueControl.test.ts` — formatting helpers and the few pure render helpers.
 - Fixture request/response objects double as contract examples.
 - No DOM/component tests — the view layer is deliberately too thin to be worth it (repo rule).
 
@@ -1135,21 +1195,25 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 ```
 npm run dev           Vite dev server + mock server (concurrently)
 npm run mock          just the mock server
-npm run build         tsc --noEmit + vite build -> dist/
+npm run build         tsc --noEmit + vite build -> dist/ + check:offline
 npm run preview       vite preview on the built output
 npm run test          vitest run
 npm run test:watch    vitest
 npm run typecheck     tsc --noEmit
+npm run lint          ESLint + Prettier check
 npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any found
 ```
+
+CI (`.github/workflows/ci.yml`) runs `typecheck`, `test`, `lint` and `build` on
+every pull request and push to `main`.
 
 ### Config
 
 - `tsconfig.json` in `strict` mode.
-- Prettier + minimal ESLint (`eslint:recommended` + `@typescript-eslint/recommended`).
-- README note / review checklist item: **no `jquery` import outside
-  `src/ui/fomantic.ts` (plus the one-line `window.jQuery` bootstrap in
-  `src/main.ts`)**.
+- Prettier + ESLint (`eslint:recommended` + `typescript-eslint` recommended), plus
+  two enforced airlocks: `jquery` may be imported only in `src/ui/fomantic.ts`
+  and `src/setup-jquery.ts`, and `src/` may never import `mock-server/`.
+- `package.json` `engines`: Node ≥ 20.19.
 
 ---
 
@@ -1159,8 +1223,8 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 |---|---|
 | 2026-09-01 | Initial design captured. No code yet. Next step: implementation plan. |
 | 2026-09-01 | Added §2 "Offline-first" hard constraint: LAN-only, all assets bundled, fonts self-hosted, `npm run check:offline` guard. |
-| 2026-09-01 | Implementation plan written (`docs/superpowers/plans/2026-09-01-query-builder-frontend.md`). §4 expanded: added `src/util/debounce.ts`, `src/ui/valueControl.ts`, and split `mock-server/` into `index/catalog/data/evaluate`. |
-| 2026-09-01 | Frontend implemented per plan 2026-09-01-query-builder-frontend.md (Tasks 1–17). `npm run build` now chains `npm run check:offline`; README rewritten; `THIRD-PARTY-NOTICES.txt` added at repo root (bundled deps are MIT; Lato font files are OFL-1.1; TypeScript build tooling is Apache-2.0). |
+| 2026-09-01 | Implementation plan written (since removed; see git history). §4 expanded: added `src/util/debounce.ts`, `src/ui/valueControl.ts`, and split `mock-server/` into `index/catalog/data/evaluate`. |
+| 2026-09-01 | Frontend implemented per that plan (Tasks 1–17). `npm run build` now chains `npm run check:offline`; README rewritten; `THIRD-PARTY-NOTICES.txt` added at repo root (bundled deps are MIT; Lato font files are OFL-1.1; TypeScript build tooling is Apache-2.0). |
 | 2026-09-01 | Plan-defect rulings applied during build: `updateNode`'s patch parameter is typed `NodePatch` (`src/query/tree.ts`); `npm run typecheck` added as a standing gate alongside lint/test/build; `wireQueryBuilder` / `wireDataPreview` attach their delegated listeners once per container (not per render); the stats panel treats `idle` as distinct from `loading` (idle shows the §6 hint, loading shows a bare loader). Mock server `POST /api/stats` and `POST /api/query` now also 400 on a JSON-array `query` body (previously fell through to a 500). |
 | 2026-09-01 | Blank-page fix: the jQuery global must be published from a module (`src/setup-jquery.ts`) imported *before* `fomantic-ui-css/semantic.min.js`, not from `main.ts`'s body — ES import hoisting made the old approach evaluate Fomantic's JS while `window.jQuery` was still undefined. §3 rewritten. |
 | 2026-09-01 | Toolchain bump (needs Node 20.19+): Vite 5→8, Vitest 2→4, ESLint 8→9 (`.eslintrc.cjs` → flat `eslint.config.js`, via `typescript-eslint`). `npm audit` now clean (was 1 critical / 1 high / 3 moderate, all in the old Vite/Vitest chain). Vite 8's minifier no longer keeps vendor licence banners in the bundle, so attribution rests entirely on `THIRD-PARTY-NOTICES.txt`, which must ship next to `dist/` (README updated). |
@@ -1186,3 +1250,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-23 | Removed the hard-coded `"metadata"` exclusion from the Matching entrysets badges (the real databases have no such group). New `src/config.ts` `HIDDEN_ROW_BADGES = { tags, groups }` (empty by default) lists values to omit; matching ignores case/whitespace and hides only that badge. `entrysetBadges` takes the lists as an optional parameter (defaulting to the config) so tests don't depend on it. With the mock data, the metadata items' `metadata` group and tags now appear as badges unless listed there. |
 | 2026-09-23 | The frontend no longer names any backend data. The Matching entrysets "When"/"Vehicle" columns (hard-coded mock items `observation_window.from_timestamp` / `vehicle_identity.vehicle_type`) are replaced by `ROW_COLUMNS` in `src/config.ts` (`{ heading, item, field, format? }[]`, empty by default → rows show id, badges, item count). `rowCell` / `rowGrid` in `dataPreview.ts`; `.qb-er-when`/`.qb-er-vehicle` → `.qb-er-cell`; the row grid template comes from `--qb-er-grid`. Mock-specific wording removed from comments (`types.ts`, `state.ts`, `format.ts`). New guard test `tests/noBackendDataInSrc.test.ts`. |
 | 2026-09-23 | Terminology: "Entrysets" renamed to **Events** and "Individuals" (shown in the UI as "Item") renamed to **Facets** across `src/`, the frontend tests and this document (UI text, `EventRecord`/`EventsResponse`/`Facet`/`FacetField`, `getFacets`, `AppState.facets`, `Condition.facetId`, `RowColumn.facet`, `DocsMatch.facets`, `.qb-event-*` / `.qb-doc-facet*` CSS). The event type is `EventRecord`, not `Event`, so it doesn't shadow the DOM `Event`. The wire contract is unchanged: `GET /api/individuals`, `totalEntrysets`, `entrysets` and `items` keep the backend's names. `Condition.individualId` → `facetId` changes the key in the query JSON sent to the backend; it's UI staging only and the backend ignores it. A pending query saved by an older build (`individualId`) fails `isQueryNode` and is dropped. See §1 "Terminology". |
+| 2026-09-23 | Code-review fixes (issues #24–#36). **Bugs:** date conditions compare the stored instant's UTC calendar day (new §7 "Dates"; "Equals" on a timestamp used to never match); logging out mid-stream no longer leaves statistics stuck loading, and logout/invalidation reset the preview themselves; the post-403 compliance check obeys the stale guard; the Field dropdown and summaries honour `FacetField.name`; the docs sidebar re-renders on `databases`. **Simplification:** one stale-response rule, `src/util/requestSlot.ts` (the `requestKey` content check was redundant); `AppState.schema` → `catalog` with one `FieldCatalog` type and `findField`/`findOperator` (operators no longer travel through state; enum options are plain strings); `AppState.query` is a `Group`; `preview` is a discriminated union; `runBlocker` replaces the three copies of the "can this run" check; `nextCondition` (`src/query/conditionEdit.ts`) holds the row cascade; the query builder has no module-level state and every panel is wired once; `getStats` uses the shared `send()`. **Dead code removed:** mock `paginate`, `runQuery`'s unused `page`/`pageSize`, unreachable value controls, catalog descriptions, `debounce.cancel`, a no-op Vite option. **Mock:** types imported from `src/api/types.ts` (type-only), expiring pending states/tokens, HTML error pages and a login redirect for navigations, server-side reason check, `MOCK_PORT`. **Docs/tooling:** CI workflow, `engines`, obsolete implementation plans deleted, specs marked historical, this document and the README brought back in line with the code. |

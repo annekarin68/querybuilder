@@ -3,24 +3,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { dbIndexForEntrysetId } from "../../mock-server/databases";
 
-interface IndividualField {
-  label: string;
-  type: string;
-  description: string;
-  comment: string;
-  cardinality: number;
-  values: string[];
-  format: string;
-}
-interface Individual {
-  label: string;
-  fields: IndividualField[];
-  [key: string]: unknown;
-}
-interface Entryset {
-  id: number;
-  items: Record<string, Record<string, string | number | boolean>>;
-}
+import type {
+  EventRecord as Entryset,
+  Facet as Individual,
+  FacetField as IndividualField,
+} from "../../src/api/types";
 
 const dataDir = path.join(__dirname, "../../mock-server/data");
 

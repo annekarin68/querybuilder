@@ -1,5 +1,8 @@
 # Finalizing the entrysets transition — design
 
+> **Historical design record.** This describes the design as approved at the time;
+> the code has moved on since. For current behaviour see `docs/ARCHITECTURE.md`.
+
 Status: approved, ready for implementation planning.
 
 ## 1. Problem

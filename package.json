@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "concurrently -k -n mock,web -c blue,green \"npm:mock\" \"vite\"",
     "mock": "tsx watch mock-server/index.ts",

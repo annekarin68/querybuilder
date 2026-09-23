@@ -3,92 +3,56 @@ import type { Facet } from "../api/types";
 export type ValueType = "string" | "number" | "boolean" | "date" | "enum";
 export type Arity = "none" | "one" | "two" | "many";
 
+/** One queryable field: a (facet, field) pair from GET /api/individuals. */
 export interface CatalogField {
+  /** The dotted "itemLabel.fieldLabel" id a condition stores as `fieldId`. */
   label: string;
+  /** Display name, "Facet name: field name" — used in summaries. */
   name: string;
+  /** The field's own display name (its `name`, else its `label`) — used in
+   *  the Field dropdown, where the item is already chosen. */
+  fieldName: string;
   valueType: ValueType;
-  description: string;
-  options?: { value: string; label: string }[];
+  /** The allowed values of an enum field. */
+  options?: string[];
   operatorIds: string[];
 }
 
 export interface CatalogOperator {
   label: string;
   name: string;
-  description: string;
   arity: Arity;
 }
 
+/** What the query builder can offer: every queryable field. The operators are
+ *  the fixed `OPERATORS` list below, the same for every backend. */
+export interface FieldCatalog {
+  fields: CatalogField[];
+}
+
 export const OPERATORS: CatalogOperator[] = [
-  {
-    label: "eq",
-    name: "Equals",
-    description: "The field exactly matches the value.",
-    arity: "one",
-  },
-  {
-    label: "neq",
-    name: "Not equals",
-    description: "The field is anything other than the value.",
-    arity: "one",
-  },
-  {
-    label: "gt",
-    name: "Greater than",
-    description: "The field is strictly greater than the value.",
-    arity: "one",
-  },
-  {
-    label: "gte",
-    name: "Greater than or equal",
-    description: "The field is at least the value.",
-    arity: "one",
-  },
-  {
-    label: "lt",
-    name: "Less than",
-    description: "The field is strictly less than the value.",
-    arity: "one",
-  },
-  {
-    label: "lte",
-    name: "Less than or equal",
-    description: "The field is at most the value.",
-    arity: "one",
-  },
-  {
-    label: "before",
-    name: "Before",
-    description: "The date is earlier than the value.",
-    arity: "one",
-  },
-  { label: "after", name: "After", description: "The date is later than the value.", arity: "one" },
-  {
-    label: "contains",
-    name: "Contains",
-    description: "The text includes the value.",
-    arity: "one",
-  },
-  {
-    label: "between",
-    name: "Between",
-    description: "The field is within the inclusive range [from, to].",
-    arity: "two",
-  },
-  {
-    label: "in",
-    name: "Is any of",
-    description: "The field matches one of several values.",
-    arity: "many",
-  },
-  { label: "isEmpty", name: "Is empty", description: "The field has no value.", arity: "none" },
-  {
-    label: "isNotEmpty",
-    name: "Is not empty",
-    description: "The field has a value.",
-    arity: "none",
-  },
+  { label: "eq", name: "Equals", arity: "one" },
+  { label: "neq", name: "Not equals", arity: "one" },
+  { label: "gt", name: "Greater than", arity: "one" },
+  { label: "gte", name: "Greater than or equal", arity: "one" },
+  { label: "lt", name: "Less than", arity: "one" },
+  { label: "lte", name: "Less than or equal", arity: "one" },
+  { label: "before", name: "Before", arity: "one" },
+  { label: "after", name: "After", arity: "one" },
+  { label: "contains", name: "Contains", arity: "one" },
+  { label: "between", name: "Between", arity: "two" },
+  { label: "in", name: "Is any of", arity: "many" },
+  { label: "isEmpty", name: "Is empty", arity: "none" },
+  { label: "isNotEmpty", name: "Is not empty", arity: "none" },
 ];
+
+export function findField(catalog: FieldCatalog, label: string | null): CatalogField | undefined {
+  return label ? catalog.fields.find((f) => f.label === label) : undefined;
+}
+
+export function findOperator(label: string | null): CatalogOperator | undefined {
+  return label ? OPERATORS.find((o) => o.label === label) : undefined;
+}
 
 /**
  * Which operators apply to a field, keyed only by its valueType — never by
@@ -147,34 +111,30 @@ export function valueTypeFor(field: { type: string; format: string }): ValueType
 
 /**
  * One queryable field per (facet, field) pair, derived purely from
- * already-fetched Facet[] data — the real API has no schema/operators
- * endpoint. Field label is the dotted "facetLabel.fieldLabel" path,
- * matching how an event nests its values, so it doubles as the flattened
- * lookup key.
+ * already-fetched Facet[] data — the real API has no schema endpoint.
+ * Field label is the dotted "facetLabel.fieldLabel" path, matching how an
+ * event nests its values.
  *
  * Enum detection is `values.length > 0` — deliberately NEVER `cardinality`.
  * The backend's own rule for when it populates `values` is an implementation
- * detail that can change at any time; this catalog only reacts to whether
- * `values` actually has entries.
+ * detail that can change at any time.
  */
-export function buildFieldCatalog(facets: Facet[]): {
-  fields: CatalogField[];
-  operators: CatalogOperator[];
-} {
+export function buildFieldCatalog(facets: Facet[]): FieldCatalog {
   const fields: CatalogField[] = [];
   for (const facet of facets) {
     for (const f of facet.fields) {
       const isEnum = f.values.length > 0;
       const valueType = isEnum ? "enum" : valueTypeFor(f);
+      const fieldName = f.name || f.label;
       fields.push({
         label: `${facet.label}.${f.label}`,
-        name: `${facet.name}: ${f.label}`,
+        name: `${facet.name}: ${fieldName}`,
+        fieldName,
         valueType,
-        description: f.description || facet.description,
-        options: isEnum ? f.values.map((v) => ({ value: v, label: v })) : undefined,
+        options: isEnum ? [...f.values] : undefined,
         operatorIds: OPERATOR_PROFILE[valueType],
       });
     }
   }
-  return { fields, operators: OPERATORS };
+  return { fields };
 }

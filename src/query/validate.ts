@@ -1,9 +1,5 @@
 import type { Condition, Issue, QueryNode } from "./types";
-
-export interface ValidationSchema {
-  fields: { label: string; valueType: string; operatorIds: string[] }[];
-  operators: { label: string; arity: "none" | "one" | "two" | "many" }[];
-}
+import { findField, findOperator, type FieldCatalog } from "./fieldCatalog";
 
 export function hasBlockingErrors(issues: Issue[]): boolean {
   return issues.some((i) => i.severity === "error");
@@ -21,12 +17,12 @@ function invalid(nodeId: string, message: string): Issue {
   return { nodeId, message, severity: "error", kind: "invalid" };
 }
 
-function checkCondition(c: Condition, schema: ValidationSchema, out: Issue[]): void {
+function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
   if (!c.fieldId) {
     out.push(incomplete(c.id, "Choose a field."));
     return;
   }
-  const fieldDef = schema.fields.find((f) => f.label === c.fieldId);
+  const fieldDef = findField(catalog, c.fieldId);
   if (!fieldDef) {
     out.push(invalid(c.id, "Unknown field."));
     return;
@@ -35,7 +31,7 @@ function checkCondition(c: Condition, schema: ValidationSchema, out: Issue[]): v
     out.push(incomplete(c.id, "Choose an operator."));
     return;
   }
-  const op = schema.operators.find((o) => o.label === c.operatorId);
+  const op = findOperator(c.operatorId);
   if (!op) {
     out.push(invalid(c.id, "Unknown operator."));
     return;
@@ -61,19 +57,19 @@ function checkCondition(c: Condition, schema: ValidationSchema, out: Issue[]): v
   }
 }
 
-function walk(node: QueryNode, isRoot: boolean, schema: ValidationSchema, out: Issue[]): void {
+function walk(node: QueryNode, isRoot: boolean, catalog: FieldCatalog, out: Issue[]): void {
   if (node.kind === "condition") {
-    checkCondition(node, schema, out);
+    checkCondition(node, catalog, out);
     return;
   }
   if (!isRoot && node.children.length === 0) {
     out.push(incomplete(node.id, "Add a condition to this group."));
   }
-  for (const child of node.children) walk(child, false, schema, out);
+  for (const child of node.children) walk(child, false, catalog, out);
 }
 
-export function validateQuery(tree: QueryNode, schema: ValidationSchema): Issue[] {
+export function validateQuery(tree: QueryNode, catalog: FieldCatalog): Issue[] {
   const out: Issue[] = [];
-  walk(tree, true, schema, out);
+  walk(tree, true, catalog, out);
   return out;
 }

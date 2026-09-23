@@ -25,12 +25,13 @@ import {
   runQuery,
 } from "./api/client";
 import { buildFieldCatalog } from "./query/fieldCatalog";
-import { canRunQuery, store, type AppState } from "./state";
-import { addChild, countConditions, newCondition, stripCollapsed } from "./query/tree";
+import { runBlocker, store, type AppState } from "./state";
+import { addChild, countConditions, newCondition, sameSemantics } from "./query/tree";
 import { validateQuery } from "./query/validate";
-import type { Group, QueryNode } from "./query/types";
+import type { Group } from "./query/types";
 import { debounce } from "./util/debounce";
 import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
+import { requestSlot, type SlotRequest } from "./util/requestSlot";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { renderDocsSidebar } from "./ui/docsSidebar";
@@ -44,42 +45,15 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/**
- * Stale-guard key for /api/stats and /api/query. A request depends on BOTH the
- * query tree and the selected databases, so a change to either must invalidate an
- * in-flight response (§6). `collapsed` is stripped first: it's a pure UI display
- * flag, not part of the query's semantics, so toggling it must never invalidate an
- * in-flight request. Databases are sorted so selection order doesn't matter.
- */
-const requestKey = (query: QueryNode, databases: string[]): string =>
-  JSON.stringify({ query: stripCollapsed(query), databases: [...databases].sort() });
-
-/** A closure over the query/scope a request was made for — call it after the
- * request settles (or after each streamed line) to check whether the user has
- * since changed the query/scope, per §6's stale-response guard. */
-function staleGuard(query: QueryNode, databases: string[]): () => boolean {
-  const key = requestKey(query, databases);
-  return () => key !== requestKey(store.getState().query, store.getState().selectedDatabaseIds);
-}
-
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
 
-onMenu({
-  view: (v) => store.setState({ activeView: v }),
-  toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
-});
-// Run lives in the "Matching events" panel (the only Run control).
-wireDataPreview(panelEls().preview, () => runPreview());
-
 /**
  * Any link that navigates straight into the login or compliance flow (the
- * account menu, the Matching events card's notes) must save the in-progress query
- * first too, not just the Run button's own redirect path (§2 of the
- * compliance-logging design spec) — otherwise a user who follows the
- * on-screen guidance loses their query on a hop Run itself protects. Those
- * links are marked `data-flow-link` (rather than matched by href, which
- * depends on VITE_API_BASE).
+ * account menu, the Matching events card's notes) must save the in-progress
+ * query first, not just Run's own redirect (§2 of the compliance-logging design
+ * spec) — otherwise a user who follows the on-screen guidance loses their
+ * query. Those links are marked `data-flow-link`.
  */
 document.addEventListener("click", (e) => {
   const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>("a[data-flow-link]");
@@ -88,76 +62,9 @@ document.addEventListener("click", (e) => {
   if (countConditions(s.query) > 0) savePendingQuery(s.query, s.selectedDatabaseIds);
 });
 
-const PAGE_SIZE = 25;
-
-/**
- * At most one in-flight request of a kind (stats, preview). `start()` aborts the
- * previous one and hands back a fresh controller; `cancel()` aborts without
- * starting another. Aborting matters for more than tidiness: a superseded
- * /api/stats stream would otherwise keep running against every selected
- * database on the backend until it finished.
- *
- * `isCurrent(ctrl)` is the identity half of the stale-response guard. A
- * content-based `staleGuard` key alone isn't enough: toggling a database
- * off/on (or editing a value away and back) can produce a NEW request whose key
- * equals an OLD in-flight request's key, so the key check would treat the old
- * one as still current — for stats, both streams would then append into the
- * same `stats.lines`, doubling every row; for preview, the old (aborted)
- * request's AbortError would be shown as an error.
- */
-function requestSlot() {
-  let current: AbortController | null = null;
-  return {
-    start(): AbortController {
-      current?.abort();
-      current = new AbortController();
-      return current;
-    },
-    cancel(): void {
-      current?.abort();
-      current = null;
-    },
-    isCurrent: (ctrl: AbortController): boolean => ctrl === current,
-  };
-}
-
+// One slot per request kind. Every query/scope edit cancels both (§6).
 const statsSlot = requestSlot();
 const previewSlot = requestSlot();
-
-/** The on-screen query/scope changed (or the session did): drop every in-flight request. */
-function cancelInFlight(): void {
-  statsSlot.cancel();
-  previewSlot.cancel();
-}
-
-/**
- * Runs `fetcher` behind the shared §6 stale-response guard: bail out unless
- * `canRunQuery` says the current query/scope is runnable, mark loading, then apply
- * `onSuccess`/`onError` only if this is still the slot's current request AND the
- * query/scope hasn't changed since it was made.
- */
-function runGuarded<T>(
-  slot: ReturnType<typeof requestSlot>,
-  fetcher: (query: QueryNode, databases: string[], signal: AbortSignal) => Promise<T>,
-  onLoading: () => void,
-  onSuccess: (data: T) => void,
-  onError: (err: unknown) => void,
-): void {
-  const state = store.getState();
-  if (!canRunQuery(state)) return;
-  const { query, selectedDatabaseIds } = state;
-  const ctrl = slot.start();
-  const keyStale = staleGuard(query, selectedDatabaseIds);
-  const isStale = () => !slot.isCurrent(ctrl) || keyStale();
-  onLoading();
-  fetcher(query, selectedDatabaseIds, ctrl.signal)
-    .then((data) => {
-      if (!isStale()) onSuccess(data);
-    })
-    .catch((err) => {
-      if (!isStale()) onError(err);
-    });
-}
 
 /**
  * A 403 from /api/query means "authenticated, but some requirement is unmet" —
@@ -180,47 +87,79 @@ function redirectInto(url: string): void {
   window.location.href = url;
 }
 
+/**
+ * Run query. It always attempts the request and reacts to what comes back: a
+ * 401 (not logged in) or 403 (logged in, some requirement unmet — e.g.
+ * compliance) saves the query and navigates into the matching flow.
+ *
+ * Only ever do this from a call triggered by an explicit user gesture (a Run
+ * click). Never wrap it around an automatically-fired request such as
+ * refreshStats — that would redirect the browser without a click and break
+ * the "never redirects itself" loop-safety property this feature depends on.
+ */
 function runPreview(): void {
-  // No longer gated on auth.status: Run always genuinely attempts the request now,
-  // and reacts to whatever comes back. A 401 (not authenticated) or 403
-  // (authenticated, some requirement unmet — e.g. compliance) saves the current
-  // query/selection and navigates into the matching flow. This pattern would
-  // generalize to a future protected endpoint returning the same status codes —
-  // but ONLY from a call site triggered by an explicit user gesture, same as
-  // this one (a Run click). Never wrap this pattern around an automatically-
-  // fired request (e.g. refreshStats's debounced calls) — that would redirect
-  // the browser without a click, breaking the "never redirects itself"
-  // loop-safety property this whole feature depends on.
+  const state = store.getState();
+  if (runBlocker(state)) return;
+  const req = previewSlot.start();
   const showError = (err: unknown) =>
-    store.setState({ preview: { status: "error", data: null, error: errorMessage(err) } });
-  runGuarded(
-    previewSlot,
-    (query, databases, signal) => runQuery(query, databases, 1, PAGE_SIZE, signal),
-    () => store.setState({ preview: { status: "loading", data: null, error: null } }),
-    (data) => store.setState({ preview: { status: "ok", data, error: null } }),
-    (err) => {
-      if (err instanceof ApiError && err.status === 401) {
-        redirectInto(LOGIN_URL);
-        return;
-      }
+    store.setState({ preview: { status: "error", error: errorMessage(err) } });
+  store.setState({ preview: { status: "loading" } });
+  runQuery(state.query, state.selectedDatabaseIds, req.signal)
+    .then((data) => {
+      if (!req.isStale()) store.setState({ preview: { status: "ok", data } });
+    })
+    .catch(async (err) => {
+      if (req.isStale()) return;
+      if (err instanceof ApiError && err.status === 401) return redirectInto(LOGIN_URL);
       if (err instanceof ApiError && err.status === 403) {
-        // Still behind the same click: the status check below is a plain
-        // fetch, and the redirect happens at most once per Run press.
-        const snapshot = store.getState().query;
-        void complianceIsRequired().then((required) => {
-          if (store.getState().query !== snapshot) return; // edited meanwhile — drop it
-          if (required) redirectInto(COMPLIANCE_START_URL);
-          else showError(err);
-        });
-        return;
+        const required = await complianceIsRequired();
+        if (req.isStale()) return; // query, scope or session changed meanwhile
+        return required ? redirectInto(COMPLIANCE_START_URL) : showError(err);
       }
       showError(err);
+    });
+}
+
+/** Statistics, streamed one line per database and refetched live (debounced). */
+const refreshStats = debounce(() => {
+  const state = store.getState();
+  if (runBlocker(state)) return;
+  const req: SlotRequest = statsSlot.start();
+  store.setState({ stats: { status: "loading", lines: [], error: null } });
+  const lines = () => store.getState().stats.lines;
+  getStats(
+    state.query,
+    state.selectedDatabaseIds,
+    (line) => {
+      if (!req.isStale()) {
+        store.setState({ stats: { status: "loading", lines: [...lines(), line], error: null } });
+      }
     },
-  );
+    req.signal,
+  )
+    .then(() => {
+      if (!req.isStale()) store.setState({ stats: { status: "ok", lines: lines(), error: null } });
+    })
+    .catch((err) => {
+      if (!req.isStale()) {
+        store.setState({ stats: { status: "error", lines: [], error: errorMessage(err) } });
+      }
+    });
+}, 400);
+
+/**
+ * Logging out or invalidating compliance only affects Run (/api/stats is
+ * anonymous), so only the preview is cancelled — and it is reset in the same
+ * step, because whoever aborts a request must also reset its panel: the
+ * aborted request's own handlers are stale and will never touch the state.
+ */
+function resetPreview(): void {
+  previewSlot.cancel();
+  store.setState({ preview: { status: "idle" } });
 }
 
 function onLogout(): void {
-  cancelInFlight();
+  resetPreview();
   logout()
     .then(() => {
       // Compliance is piggybacked on the session server-side, so it's gone too
@@ -228,155 +167,103 @@ function onLogout(): void {
       store.setState({
         auth: { status: "anonymous", user: null },
         compliance: { status: "required", reason: null, ackedAt: null },
-        preview: { status: "idle", data: null, error: null },
       });
     })
     .catch((err) => {
-      // Best-effort: nothing more actionable to show beyond the button
-      // still being there for the user to try again.
+      // Best-effort: the button is still there for the user to try again.
       console.error("Logout failed:", errorMessage(err));
     });
 }
 
 function onInvalidateCompliance(): void {
-  previewSlot.cancel();
+  resetPreview();
   invalidateCompliance()
     .then(() => {
-      store.setState({
-        compliance: { status: "required", reason: null, ackedAt: null },
-        preview: { status: "idle", data: null, error: null },
-      });
+      store.setState({ compliance: { status: "required", reason: null, ackedAt: null } });
     })
     .catch((err) => {
       console.error("Invalidate compliance failed:", errorMessage(err));
     });
 }
 
-// Streamed, so it can't use runGuarded's single onSuccess — but it's the same
-// guard: slot identity (see requestSlot) + the content key, checked per line.
-const refreshStats = debounce(() => {
-  const state = store.getState();
-  if (!canRunQuery(state)) return;
-  const { query, selectedDatabaseIds } = state;
-  const ctrl = statsSlot.start();
-  const keyStale = staleGuard(query, selectedDatabaseIds);
-  const isStale = () => !statsSlot.isCurrent(ctrl) || keyStale();
-  store.setState({ stats: { status: "loading", lines: [], error: null } });
-  getStats(
-    query,
-    selectedDatabaseIds,
-    (line) => {
-      if (isStale()) return;
-      store.setState({
-        stats: { status: "loading", lines: [...store.getState().stats.lines, line], error: null },
-      });
-    },
-    ctrl.signal,
-  )
-    .then(() => {
-      if (isStale()) return;
-      store.setState({ stats: { status: "ok", lines: store.getState().stats.lines, error: null } });
-    })
-    .catch((err) => {
-      if (isStale()) return;
-      store.setState({ stats: { status: "error", lines: [], error: errorMessage(err) } });
-    });
-}, 400);
-
 /**
- * A tree edit that changes only a group's `collapsed` flag is a pure display
- * change, not a semantic one (§6): it must not reset stats/preview or trigger a
- * refetch — `requestKey` already ignores `collapsed` too, so an in-flight request
- * survives a collapse toggle instead of being wrongly treated as stale.
+ * A query edit or a database-scope change: clear stats & preview in the SAME
+ * setState and abandon every request still in flight (§6), then schedule fresh
+ * statistics.
  */
+function changeScope(patch: Partial<AppState>): void {
+  statsSlot.cancel();
+  previewSlot.cancel();
+  store.setState({
+    ...patch,
+    stats: { status: "idle", lines: [], error: null },
+    preview: { status: "idle" },
+  });
+  refreshStats();
+}
+
 function onQueryChange(nextQuery: Group): void {
-  const prevQuery = store.getState().query;
-  if (nextQuery === prevQuery) return;
-  const onlyCollapsedChanged =
-    JSON.stringify(stripCollapsed(nextQuery)) === JSON.stringify(stripCollapsed(prevQuery));
-  if (onlyCollapsedChanged) {
+  const { query, catalog } = store.getState();
+  if (nextQuery === query) return;
+  // Expanding/collapsing a group is display-only: no reset, no refetch.
+  if (sameSemantics(nextQuery, query)) {
     store.setState({ query: nextQuery });
     return;
   }
-  const schema = store.getState().schema;
-  const issues = schema
-    ? validateQuery(nextQuery, { fields: schema.fields, operators: schema.operators })
-    : [];
-  // Spec §6: editing the query immediately clears stats & preview in the SAME setState,
-  // and abandons any request still in flight for the old query.
-  cancelInFlight();
-  store.setState({
-    query: nextQuery,
-    issues,
-    stats: { status: "idle", lines: [], error: null },
-    preview: { status: "idle", data: null, error: null },
-  });
-  refreshStats();
+  const issues = catalog ? validateQuery(nextQuery, catalog) : [];
+  changeScope({ query: nextQuery, issues });
 }
 
-/** Changing the database scope behaves exactly like a query edit (§6). */
 function onDatabasesChange(nextIds: string[]): void {
   const cur = store.getState().selectedDatabaseIds;
   if (nextIds.length === cur.length && nextIds.every((id) => cur.includes(id))) return;
-  cancelInFlight();
-  store.setState({
-    selectedDatabaseIds: nextIds,
-    stats: { status: "idle", lines: [], error: null },
-    preview: { status: "idle", data: null, error: null },
-  });
-  refreshStats();
+  changeScope({ selectedDatabaseIds: nextIds });
 }
+
+// Wire every panel once; they paint into containers renderShell created.
+onMenu({
+  view: (v) => store.setState({ activeView: v }),
+  toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
+});
+wireDataPreview(panelEls().preview, runPreview);
+wireDatabasePicker(panelEls().dbpicker, onDatabasesChange);
+wireAccountMenu(panelEls().account, { onLogout, onInvalidate: onInvalidateCompliance });
+const bindQueryDropdowns = wireQueryBuilder(panelEls().center, store.getState, onQueryChange);
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
- * (re)render it. One list to read and extend instead of several hand-maintained
- * `changed.has(...)` chains that repeat the same keys.
+ * (re)render it. Add a key here whenever a render function starts reading it.
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => setActiveView(s.activeView) },
   { keys: ["sidebarCollapsed"], run: (s) => setSidebarCollapsed(s.sidebarCollapsed) },
-  { keys: ["facets"], run: (s) => renderDocsSidebar(s) },
+  { keys: ["facets", "databases"], run: renderDocsSidebar },
+  { keys: ["databases", "selectedDatabaseIds"], run: renderDatabasePicker },
   {
-    keys: ["databases", "selectedDatabaseIds"],
-    run: (s) => {
-      renderDatabasePicker(s);
-      wireDatabasePicker(panelEls().dbpicker, onDatabasesChange);
-    },
-  },
-  {
-    keys: ["schema", "query", "issues", "facets"],
+    keys: ["catalog", "query", "issues", "facets"],
     run: (s) => {
       renderQueryBuilder(s);
-      wireQueryBuilder(panelEls().center, onQueryChange);
+      bindQueryDropdowns();
     },
   },
   {
-    keys: ["schema", "query", "issues", "stats", "selectedDatabaseIds"],
-    run: (s) => renderStatsPanel(s),
+    keys: ["catalog", "query", "issues", "stats", "selectedDatabaseIds", "databases"],
+    run: renderStatsPanel,
   },
   {
     keys: [
       "preview",
       "query",
       "issues",
-      "schema",
+      "catalog",
       "selectedDatabaseIds",
       "facets",
       "auth",
       "compliance",
     ],
-    run: (s) => renderDataPreview(s),
+    run: renderDataPreview,
   },
-  {
-    keys: ["auth", "compliance"],
-    run: (s) => {
-      renderAccountMenu(s);
-      wireAccountMenu(panelEls().account, {
-        onLogout,
-        onInvalidate: onInvalidateCompliance,
-      });
-    },
-  },
+  { keys: ["auth", "compliance"], run: renderAccountMenu },
 ];
 
 store.subscribe((state, changed) => {
@@ -400,19 +287,16 @@ function consumeResumeParam(): boolean {
   return true;
 }
 
+// Always take (and so clear) a saved entry, even on a non-resume load — a
+// stale one from an abandoned attempt must not resurface on some future,
+// unrelated resume-hop (spec §2). Only a resume-hop actually uses it.
 const resumed = consumeResumeParam();
-// Always clear a saved entry, even on a non-resume load — a stale one from an
-// abandoned attempt (backed out of login, or a widget link clicked on an
-// unrelated later visit) must not silently resurface on some future,
-// unrelated resume-hop (spec §2).
-const pending = resumed ? takePendingQuery() : (takePendingQuery(), null);
+const saved = takePendingQuery();
+const pending = resumed ? saved : null;
 
-renderDatabasePicker(store.getState()); // "" while databases is null
-renderQueryBuilder(store.getState()); // initial loader (centre panel spinner while facets/databases load)
-renderStatsPanel(store.getState()); // initial state ("" while schema is null)
-renderDataPreview(store.getState()); // initial idle message
-renderDocsSidebar(store.getState()); // initial loader
-renderAccountMenu(store.getState()); // "" while auth.status is "loading"
+// First paint: loaders/placeholders until the startup requests below finish.
+for (const { run } of panelRenderers) run(store.getState());
+
 Promise.all([
   getDatabases(),
   getFacets(),
@@ -426,31 +310,24 @@ Promise.all([
   getComplianceStatus().catch(() => ({ status: "required" }) as const),
 ])
   .then(([databases, facets, user, complianceStatus]) => {
-    const schema = buildFieldCatalog(facets);
-    // A restored query replaces the normal empty-condition seed entirely — it
-    // already has whatever conditions the user built before being redirected.
-    const seeded = pending
-      ? pending.query
-      : addChild(
-          store.getState().query as Group,
-          (store.getState().query as Group).id,
-          newCondition(),
-        );
-    // Validate in the SAME setState: this seed bypasses onQueryChange, so without
-    // it `issues` would stay [] and the preview panel would enable Run on the empty
-    // seeded condition. Every database is selected by default, unless restored.
-    const issues = validateQuery(seeded, { fields: schema.fields, operators: schema.operators });
+    const catalog = buildFieldCatalog(facets);
+    // A restored query replaces the normal seed (one empty condition).
+    const initial = store.getState().query;
+    const query = pending ? pending.query : addChild(initial, initial.id, newCondition());
     store.setState({
-      schema,
+      catalog,
       databases,
       facets,
       // A restored selection may name databases that no longer exist (it can
       // outlive a backend change) — keep only ones this load actually knows.
+      // Otherwise every database is selected by default.
       selectedDatabaseIds: pending
         ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.label === id))
         : databases.map((d) => d.label),
-      query: seeded,
-      issues,
+      query,
+      // The seed bypasses onQueryChange, so validate here — otherwise Run
+      // would be enabled on the empty seeded condition.
+      issues: validateQuery(query, catalog),
       auth: { status: user ? "authenticated" : "anonymous", user },
       compliance:
         complianceStatus.status === "acknowledged"
@@ -461,11 +338,8 @@ Promise.all([
             }
           : { status: "required", reason: null, ackedAt: null },
     });
-    // A restored query already has real conditions and databases selected —
-    // unlike the default empty seed, it needs its stats fetched immediately,
-    // the same way any other in-app edit would trigger refreshStats() via
-    // onQueryChange. The default-seed path never needed this since it starts
-    // with nothing runnable.
+    // A restored query is already complete, so fetch its statistics now, as
+    // any in-app edit would. The empty seed has nothing runnable yet.
     if (pending) refreshStats();
   })
   .catch((err) => {

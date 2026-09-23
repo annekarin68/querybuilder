@@ -1,46 +1,32 @@
-import type { Condition, Group, QueryNode } from "./types";
+import type { Condition, QueryNode } from "./types";
+import { findField, findOperator, type FieldCatalog } from "./fieldCatalog";
 
-export interface SummarySchema {
-  fields: { label: string; name: string; options?: { value: string; label: string }[] }[];
-  operators: { label: string; name: string; arity: "none" | "one" | "two" | "many" }[];
-}
-
-function optionLabel(schema: SummarySchema, fieldId: string | null, raw: unknown): string {
-  const field = schema.fields.find((f) => f.label === fieldId);
-  const opt = field?.options?.find((o) => o.value === raw);
-  if (opt) return opt.label;
-  if (typeof raw === "boolean") return raw ? "true" : "false";
-  return String(raw);
-}
-
-function formatValue(schema: SummarySchema, c: Condition, arity: string): string {
+function formatValue(c: Condition, arity: string): string {
   if (arity === "none") return "";
   if (arity === "two" && Array.isArray(c.value)) {
-    return `${optionLabel(schema, c.fieldId, c.value[0])} to ${optionLabel(schema, c.fieldId, c.value[1])}`;
+    return `${String(c.value[0])} to ${String(c.value[1])}`;
   }
-  if (arity === "many" && Array.isArray(c.value)) {
-    return c.value.map((v) => optionLabel(schema, c.fieldId, v)).join(", ");
-  }
-  return optionLabel(schema, c.fieldId, c.value);
+  if (arity === "many" && Array.isArray(c.value)) return c.value.map(String).join(", ");
+  return String(c.value);
 }
 
-function conditionText(schema: SummarySchema, c: Condition): string {
-  const field = schema.fields.find((f) => f.label === c.fieldId);
-  const op = schema.operators.find((o) => o.label === c.operatorId);
+function conditionText(catalog: FieldCatalog, c: Condition): string {
+  const field = findField(catalog, c.fieldId);
+  const op = findOperator(c.operatorId);
   const parts = [field?.name ?? "(field?)", op?.name ?? "(operator?)"];
-  const val = op ? formatValue(schema, c, op.arity) : "";
+  const val = op ? formatValue(c, op.arity) : "";
   if (val) parts.push(val);
   return parts.join(" ");
 }
 
-function nodeText(schema: SummarySchema, node: QueryNode, isRoot: boolean): string {
-  if (node.kind === "condition") return conditionText(schema, node);
-  const group = node as Group;
-  if (group.children.length === 0) return isRoot ? "(empty query)" : "()";
-  const inner = group.children.map((c) => nodeText(schema, c, false)).join(` ${group.operator} `);
+function nodeText(catalog: FieldCatalog, node: QueryNode, isRoot: boolean): string {
+  if (node.kind === "condition") return conditionText(catalog, node);
+  if (node.children.length === 0) return isRoot ? "(empty query)" : "()";
+  const inner = node.children.map((c) => nodeText(catalog, c, false)).join(` ${node.operator} `);
   return isRoot ? inner : `(${inner})`;
 }
 
-export function queryToText(tree: QueryNode, schema: SummarySchema): string {
-  return nodeText(schema, tree, true);
+/** The query in plain English, e.g. "Engine: rpm Greater than 3000 AND (…)". Display only. */
+export function queryToText(tree: QueryNode, catalog: FieldCatalog): string {
+  return nodeText(catalog, tree, true);
 }

@@ -142,12 +142,12 @@ describe("api client", () => {
     expect(onLine).not.toHaveBeenCalled();
   });
 
-  it("runQuery POSTs query + databases + paging", async () => {
+  it("runQuery POSTs just the query and databases", async () => {
     const f = mockFetchOnce(200, { entrysets: [] });
     vi.stubGlobal("fetch", f);
-    await runQuery(emptyQuery(), ["rose"], 2, 25);
+    await runQuery(emptyQuery(), ["rose"]);
     const [, init] = f.mock.calls[0]!;
-    expect(JSON.parse(init.body)).toMatchObject({ databases: ["rose"], page: 2, pageSize: 25 });
+    expect(Object.keys(JSON.parse(init.body)).sort()).toEqual(["databases", "query"]);
   });
 
   it("falls back to status text when there is no error field", async () => {
@@ -231,7 +231,7 @@ describe("api client", () => {
   it("runQuery rejects with the caller's abort reason when its signal aborts", async () => {
     vi.stubGlobal("fetch", hangingFetch());
     const ctrl = new AbortController();
-    const pending = runQuery(emptyQuery(), ["a"], 1, 25, ctrl.signal);
+    const pending = runQuery(emptyQuery(), ["a"], ctrl.signal);
     ctrl.abort(new Error("superseded"));
     await expect(pending).rejects.toThrow("superseded");
   });

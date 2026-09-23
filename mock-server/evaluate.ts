@@ -20,9 +20,26 @@ function cmp(a: unknown, b: unknown): number {
   return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
 }
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T/;
+
+/**
+ * The query sends dates as calendar days ("2024-11-06", from a date picker),
+ * but timestamp fields hold instants ("2024-11-06T14:32:00Z"). Per the API
+ * contract (docs/ARCHITECTURE.md §7, "Dates"), such a condition compares the
+ * instant's UTC calendar day — so turn the row value into that day first.
+ */
+function comparable(v: Row[string] | undefined, conditionValue: unknown): Row[string] | undefined {
+  const sample = Array.isArray(conditionValue) ? conditionValue[0] : conditionValue;
+  if (typeof sample !== "string" || !DAY.test(sample)) return v;
+  if (typeof v !== "string" || !TIMESTAMP.test(v)) return v;
+  const t = new Date(v);
+  return Number.isNaN(t.getTime()) ? v : t.toISOString().slice(0, 10);
+}
+
 function conditionMatches(c: JsonCondition, row: Row): boolean {
   if (!c.fieldId || !c.operatorId) return false;
-  const v = row[c.fieldId];
+  const v = comparable(row[c.fieldId], c.value);
   switch (c.operatorId) {
     case "eq":
       return v === c.value;

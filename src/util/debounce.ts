@@ -1,16 +1,11 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function debounce<F extends (...args: any[]) => void>(
-  fn: F,
+/** Calls `fn` once `ms` have passed without another call, with the latest arguments. */
+export function debounce<A extends unknown[]>(
+  fn: (...args: A) => void,
   ms: number,
-): F & { cancel(): void } {
+): (...args: A) => void {
   let handle: ReturnType<typeof setTimeout> | undefined;
-  const wrapped = ((...args: Parameters<F>) => {
-    if (handle) clearTimeout(handle);
+  return (...args: A) => {
+    clearTimeout(handle);
     handle = setTimeout(() => fn(...args), ms);
-  }) as F & { cancel(): void };
-  wrapped.cancel = () => {
-    if (handle) clearTimeout(handle);
-    handle = undefined;
   };
-  return wrapped;
 }

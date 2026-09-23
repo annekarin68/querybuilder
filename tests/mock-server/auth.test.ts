@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   startLogin,
   issueFakeCode,
@@ -307,6 +307,32 @@ describe("login and compliance flows don't cross-validate", () => {
     expect(exchangeCodeForSession(loginCode, complianceState)).toEqual({
       ok: false,
       error: "Invalid or expired login attempt.",
+    });
+  });
+});
+
+describe("pending login/compliance tokens expire", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("a login state older than the binding cookie's 5 minutes is rejected", () => {
+    vi.useFakeTimers();
+    const state = startLogin();
+    const code = issueFakeCode();
+    vi.advanceTimersByTime(5 * 60_000 + 1);
+    expect(exchangeCodeForSession(code, state)).toEqual({
+      ok: false,
+      error: "Invalid or expired login attempt.",
+    });
+  });
+
+  it("a compliance state older than 5 minutes is rejected", () => {
+    vi.useFakeTimers();
+    const state = startCompliance();
+    const token = issueFakeComplianceToken("audit");
+    vi.advanceTimersByTime(5 * 60_000 + 1);
+    expect(exchangeComplianceToken(token, state, undefined)).toEqual({
+      ok: false,
+      error: "Invalid or expired compliance attempt.",
     });
   });
 });

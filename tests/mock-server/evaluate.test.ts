@@ -68,3 +68,31 @@ describe("matches", () => {
     ).toBe(true);
   });
 });
+
+describe("date conditions on timestamp values (calendar days, UTC)", () => {
+  const seen = { seenAt: "2024-11-06T14:32:00Z" };
+
+  it("eq / neq compare the timestamp's day", () => {
+    expect(matches(cond("seenAt", "eq", "2024-11-06"), seen)).toBe(true);
+    expect(matches(cond("seenAt", "eq", "2024-11-07"), seen)).toBe(false);
+    expect(matches(cond("seenAt", "neq", "2024-11-06"), seen)).toBe(false);
+  });
+
+  it("between includes both end days", () => {
+    expect(matches(cond("seenAt", "between", ["2024-11-06", "2024-11-06"]), seen)).toBe(true);
+    expect(matches(cond("seenAt", "between", ["2024-11-01", "2024-11-06"]), seen)).toBe(true);
+    expect(matches(cond("seenAt", "between", ["2024-11-07", "2024-11-09"]), seen)).toBe(false);
+  });
+
+  it("before / after exclude the day itself", () => {
+    expect(matches(cond("seenAt", "after", "2024-11-06"), seen)).toBe(false);
+    expect(matches(cond("seenAt", "before", "2024-11-06"), seen)).toBe(false);
+    expect(matches(cond("seenAt", "after", "2024-11-05"), seen)).toBe(true);
+    expect(matches(cond("seenAt", "before", "2024-11-07"), seen)).toBe(true);
+  });
+
+  it("uses the UTC day, whatever offset the timestamp is written in", () => {
+    const late = { seenAt: "2024-11-06T23:30:00-02:00" }; // 2024-11-07 01:30 UTC
+    expect(matches(cond("seenAt", "eq", "2024-11-07"), late)).toBe(true);
+  });
+});
