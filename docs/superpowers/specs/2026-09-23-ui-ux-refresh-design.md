@@ -129,7 +129,7 @@ toolchain for a colour change); replacing Fomantic with hand-written components
 - `Issue` gains `kind: "incomplete" | "invalid"`:
   - `incomplete` — "Choose a field.", "Choose an operator.", "Enter a value.",
     "Enter both values.", "Choose at least one value.", "Add a condition to this
-    group." → rendered as a quiet grey hint at the end of the row / under the
+    group." → rendered as a quiet grey hint directly under the row / under the
     group header.
   - `invalid` — "Unknown field.", "Unknown operator.", "That operator isn't
     available for this field." → rendered as today's red label.

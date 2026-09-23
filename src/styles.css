@@ -543,3 +543,220 @@ body {
   font-size: 0.8rem;
   color: var(--qb-muted);
 }
+
+/* ---- Query builder (src/ui/queryBuilder.ts + valueControl.ts) ---- */
+.qb-group {
+  /* Operator colours; .qb-group-or overrides. Children read these through the
+     cascade, so a joiner/toggle always takes its own group's colour. */
+  --qb-c: var(--qb-and);
+  --qb-c-soft: var(--qb-and-soft);
+  --qb-c-text: var(--qb-and);
+  --qb-tint: var(--qb-and-tint);
+  --qb-tint-strong: var(--qb-and-tint-strong);
+  position: relative;
+  margin: 0.25rem 0;
+  padding: 0.45rem 0.5rem 0.45rem 0.75rem;
+  border-left: 3px solid var(--qb-c);
+  border-radius: 0 var(--qb-radius) var(--qb-radius) 0;
+  background: var(--qb-tint);
+  outline: 1px solid transparent;
+  transition:
+    background-color 0.12s,
+    outline-color 0.12s;
+}
+.qb-group-or {
+  --qb-c: var(--qb-or);
+  --qb-c-soft: var(--qb-or-soft);
+  --qb-c-text: var(--qb-or-text);
+  --qb-tint: var(--qb-or-tint);
+  --qb-tint-strong: var(--qb-or-tint-strong);
+}
+/* The bracket's top and bottom arms: "[" */
+.qb-group::before,
+.qb-group::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  width: 16px;
+  border-top: 2px solid var(--qb-c);
+}
+.qb-group::before {
+  top: 0;
+}
+.qb-group::after {
+  bottom: 0;
+}
+/* Hover lights up only the innermost group under the pointer. */
+.qb-group:hover:not(:has(.qb-group:hover)) {
+  background: var(--qb-tint-strong);
+  outline-color: var(--qb-c-soft);
+}
+.qb-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.9rem;
+}
+.qb-group-head .ui.mini.button {
+  margin: 0;
+}
+.qb-group-label {
+  font-size: 0.85rem;
+  color: var(--qb-muted);
+}
+.qb-logic {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 4px;
+  background: var(--qb-surface);
+}
+.qb-logic-btn {
+  padding: 0.15rem 0.55rem;
+  border: 0;
+  background: transparent;
+  color: var(--qb-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+.qb-logic-btn.is-on {
+  background: var(--qb-c);
+  color: #fff;
+}
+.qb-logic-btn:focus-visible {
+  outline: 2px solid var(--qb-c);
+  outline-offset: -2px;
+}
+.qb-children {
+  display: flex;
+  flex-direction: column;
+}
+/* AND/OR between two children, sitting centred on the group's bracket line. */
+.qb-joiner {
+  position: relative;
+  left: calc(-0.75rem - 1.5px);
+  transform: translateX(-50%);
+  align-self: flex-start;
+  margin: 0.1rem 0;
+  padding: 0 0.35rem;
+  border: 1px solid var(--qb-c-soft);
+  border-radius: 999px;
+  background: var(--qb-surface);
+  color: var(--qb-c-text);
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+.qb-op-badge {
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  background: var(--qb-c);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.qb-group-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+  color: var(--qb-muted);
+}
+.is-collapsed > .qb-group-head {
+  flex-wrap: nowrap;
+}
+
+/* One condition = one grid row. Container query: a row squeezed below ~640px
+   (deep nesting on a small screen) moves its value + ✕ onto a second line. */
+.qb-condition {
+  container-type: inline-size;
+  padding: 0.15rem 0;
+}
+.qb-cond-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)
+    minmax(0, 1.2fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+@container (max-width: 640px) {
+  .qb-cond-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+  .qb-cond-grid > .qb-value {
+    grid-column: 1 / 4;
+    grid-row: 2;
+  }
+  .qb-cond-grid > .qb-icon-btn {
+    grid-column: 4;
+    grid-row: 2;
+  }
+}
+/* Fomantic gives selection dropdowns a 14em min-width; the grid sizes them. */
+.qb-cond-grid .ui.selection.dropdown {
+  width: 100%;
+  min-width: 0;
+}
+.qb-cond-grid .ui.selection.dropdown > .text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qb-value {
+  min-width: 0;
+}
+.qb-value .ui.input {
+  display: flex;
+  width: 100%;
+}
+.qb-value .ui.input > input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+.qb-range {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.qb-range > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.qb-range > .qb-range-to {
+  flex: 0 0 auto;
+  color: var(--qb-muted);
+}
+.qb-hint {
+  margin: 0.2rem 0 0 0.1rem;
+  font-size: 0.8rem;
+  color: var(--qb-subtle);
+}
+.qb-invalid {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--qb-danger);
+}
+.qb-query-foot {
+  margin: 0.75rem -1rem -0.75rem;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--qb-border);
+  border-radius: 0 0 var(--qb-radius) var(--qb-radius);
+  background: var(--qb-surface-2);
+  font-size: 0.85rem;
+}
+.qb-summary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
