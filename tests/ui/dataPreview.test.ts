@@ -31,35 +31,48 @@ const entryset = (...labels: string[]): Entryset => ({
   items: Object.fromEntries(labels.map((l) => [l, {}])),
 });
 
+const none = { tags: [], groups: [] };
+
 describe("entrysetBadges", () => {
   it("collects distinct tags and groups, most common first", () => {
     expect(
-      entrysetBadges(entryset("wheel_speed", "engine_rpm", "engine_oil_pressure"), byLabel),
+      entrysetBadges(entryset("wheel_speed", "engine_rpm", "engine_oil_pressure"), byLabel, none),
     ).toEqual({ tags: ["critical", "high_frequency"], groups: ["engine", "tires_wheels"] });
   });
 
   it("breaks ties alphabetically", () => {
-    expect(entrysetBadges(entryset("speeding_event", "engine_rpm"), byLabel)).toEqual({
+    expect(entrysetBadges(entryset("speeding_event", "engine_rpm"), byLabel, none)).toEqual({
       tags: ["critical", "high_frequency", "regulatory"],
       groups: ["engine"],
     });
   });
 
-  it("skips metadata items entirely, tags included", () => {
-    expect(entrysetBadges(entryset("observation_window", "wheel_speed"), byLabel)).toEqual({
-      tags: [],
-      groups: ["tires_wheels"],
+  it("hides listed tags and groups, ignoring case and whitespace, keeping the item's others", () => {
+    const hidden = { tags: [" Critical "], groups: ["METADATA"] };
+    expect(entrysetBadges(entryset("observation_window", "engine_rpm"), byLabel, hidden)).toEqual({
+      tags: ["front", "high_frequency", "rear"],
+      groups: ["engine"],
+    });
+  });
+
+  it("has nothing hard-coded: with no hidden values every group shows", () => {
+    expect(entrysetBadges(entryset("observation_window"), byLabel, none)).toEqual({
+      tags: ["front", "rear"],
+      groups: ["metadata"],
     });
   });
 
   it("drops a blank group but keeps that item's tags", () => {
-    expect(entrysetBadges(entryset("speeding_event"), byLabel)).toEqual({
+    expect(entrysetBadges(entryset("speeding_event"), byLabel, none)).toEqual({
       tags: ["regulatory"],
       groups: [],
     });
   });
 
   it("ignores items the dictionary doesn't know", () => {
-    expect(entrysetBadges(entryset("unknown_item"), byLabel)).toEqual({ tags: [], groups: [] });
+    expect(entrysetBadges(entryset("unknown_item"), byLabel, none)).toEqual({
+      tags: [],
+      groups: [],
+    });
   });
 });

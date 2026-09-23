@@ -206,6 +206,7 @@ are the only two files that may import jquery (ESLint enforces it).
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
   main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/individuals/auth/compliance; wire subscriptions; hold the refreshStats / runPreview orchestrators; reacts to 401/403 generically to trigger the login/compliance redirects.
+  config.ts            Hand-edited display settings: HIDDEN_ROW_BADGES (tags/groups never shown as Matching entrysets badges). Deployment-specific values live here, not inline in ui/.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
@@ -604,6 +605,9 @@ The 4 `group: "metadata"` items (`observation_window`, `vehicle_identity`,
 they carry the time/identity/position every entryset needs and are used for
 indexing. There is no field marking an item as metadata vs. content; it's
 tracked only by convention (see git history for the design discussion).
+This is a property of the **mock** dataset only — the real databases have no
+`metadata` group, so `src/` never names it; values to suppress are listed in
+`src/config.ts` instead.
 
 ### `POST /api/stats`
 
@@ -975,7 +979,9 @@ expand/collapse):
   `formatWhen`, e.g. 7 Nov 2024, 09:15), "Vehicle" (`vehicle_identity.vehicle_type`, both falling
   back to `—` if that metadata item is absent), badges for the entryset's
   items — computed by `entrysetBadges` cross-referencing `state.individuals`,
-  skipping `group: "metadata"` items entirely — **tags first** (our own; filled
+  leaving out any tag or group listed in `HIDDEN_ROW_BADGES` (`src/config.ts`;
+  case-insensitive; hides only that badge, not the item's others; empty by
+  default) — **tags first** (our own; filled
   grey `.qb-tag` chips, first 3) **then third-party groups** (dashed-outline
   `.qb-group-badge` pills, first 2, set off by a small gap), each ranked by how
   many of the entryset's items carry it (ties alphabetical), blanks dropped,
@@ -1158,3 +1164,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-23 | UI/UX refresh (`docs/superpowers/specs/2026-09-23-ui-ux-refresh-design.md`). Layout: dark top bar with workflow steps and an account menu (replaces `authStatus.ts` + `complianceStatus.ts` with `accountMenu.ts`, a native `<details>` menu); docs collapsed into a rail (`sidebarCollapsed` starts `true`); main column stacks databases (pill toggles), the query card and "Matching entrysets"; a pinned ~15rem statistics column. Query builder: ALL/ANY groups as coloured brackets with tint + hover highlight, AND/OR joiners between children, collapsed groups summarised with `queryToText`, a plain-English footer, CSS-grid condition rows with a container query. `Issue.kind` (`incomplete` → grey hint, `invalid` → red); `newGroup()` now holds one empty condition. Run moved from the top bar into the Matching entrysets card (`syncRunButton` removed; `wireDataPreview` added) — request handling unchanged. Data dictionary: `<details>` groups instead of the Fomantic accordion, a filter (`docsFilter.ts`) that opens matching groups, backend casing with underscores as spaces. `format.ts` gains `displayLabel` / `countLabel` / `formatWhen`. |
 | 2026-09-23 | Data dictionary sectioned by our own `tags` instead of the third-party `group` (`docsFilter.ts` `tagsOf`/`groupByTag`; `matchDocs` counts per tag): alphabetical tag sections, multi-tag items listed under each, untagged items in a final **Untagged** section; `group` is now a small "Group: …" line, omitted when blank (the backend may send `""`). Blank-safe text everywhere via `format.ts` `text()`: database pills' hover is `databaseTitle` ("owner: description", either, or none); field chips gain a hover `fieldTitle` (comment, then "Third-party: description"); blank item `description`/`comment` are omitted. Mock: `speeding_event` has a blank `group`/`description` and one field `comment`, to exercise these paths. |
 | 2026-09-23 | Matching entrysets rows show tags and groups: `dataPreview.ts` `entrysetBadges` returns both, ranked by frequency within the entryset (ties alphabetical), metadata items skipped, blanks dropped. Tags render first as filled `.qb-tag` chips (max 3), then groups as dashed-outline `.qb-group-badge` pills (max 2), each with its own `+N` overflow whose hover lists the hidden values. Tests: `tests/ui/dataPreview.test.ts`. |
+| 2026-09-23 | Removed the hard-coded `"metadata"` exclusion from the Matching entrysets badges (the real databases have no such group). New `src/config.ts` `HIDDEN_ROW_BADGES = { tags, groups }` (empty by default) lists values to omit; matching ignores case/whitespace and hides only that badge. `entrysetBadges` takes the lists as an optional parameter (defaulting to the config) so tests don't depend on it. With the mock data, the metadata items' `metadata` group and tags now appear as badges unless listed there. |

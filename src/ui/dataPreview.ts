@@ -6,6 +6,7 @@ import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, formatWhen, text } from "./format";
 import { tagsOf, UNTAGGED } from "./docsFilter";
+import { HIDDEN_ROW_BADGES } from "../config";
 
 /** How many tag / group badges to show inline before collapsing the rest into "+N". */
 const MAX_TAG_BADGES = 3;
@@ -20,15 +21,18 @@ function individualsByLabel(state: AppState): Map<string, Individual> {
 /**
  * The distinct tags and third-party groups of an entryset's items, each
  * ordered by how many of its items carry it (most first, then alphabetical),
- * so the inline badges show what this entryset is mostly about. Items in the
- * `metadata` group (observation window, vehicle identity …) are skipped
- * entirely — every entryset has them, so their tags and group say nothing
- * about this one. Blank tags and groups are dropped.
+ * so the inline badges show what this entryset is mostly about. Blank values
+ * and those listed in `hidden` (default: `HIDDEN_ROW_BADGES` in config.ts,
+ * matched ignoring case) are dropped.
  */
 export function entrysetBadges(
   entryset: Entryset,
   byLabel: Map<string, Individual>,
+  hidden: { tags: string[]; groups: string[] } = HIDDEN_ROW_BADGES,
 ): { tags: string[]; groups: string[] } {
+  const norm = (s: string) => text(s).toLowerCase();
+  const hiddenTags = new Set(hidden.tags.map(norm));
+  const hiddenGroups = new Set(hidden.groups.map(norm));
   const tags = new Map<string, number>();
   const groups = new Map<string, number>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
@@ -36,9 +40,10 @@ export function entrysetBadges(
     const ind = byLabel.get(label);
     if (!ind) continue;
     const group = text(ind.group);
-    if (group === "metadata") continue;
-    if (group) bump(groups, group);
-    for (const tag of tagsOf(ind)) if (tag !== UNTAGGED) bump(tags, tag);
+    if (group && !hiddenGroups.has(norm(group))) bump(groups, group);
+    for (const tag of tagsOf(ind)) {
+      if (tag !== UNTAGGED && !hiddenTags.has(norm(tag))) bump(tags, tag);
+    }
   }
   const ranked = (m: Map<string, number>) =>
     [...m.keys()].sort((a, b) => m.get(b)! - m.get(a)! || a.localeCompare(b));
