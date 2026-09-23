@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
-import type { SchemaResponse } from "../../src/api/types";
+import type { CatalogField, CatalogOperator } from "../../src/query/fieldCatalog";
 import { defaultValueFor, renderValueControl } from "../../src/ui/valueControl";
 
-type Field = SchemaResponse["fields"][number];
-type Operator = SchemaResponse["operators"][number];
+type Field = CatalogField;
+type Operator = CatalogOperator;
 
 function field(overrides: Partial<Field> = {}): Field {
   return {
-    id: "f",
-    label: "F",
+    label: "f",
+    name: "F",
     valueType: "string",
     description: "",
     operatorIds: [],
@@ -17,7 +17,7 @@ function field(overrides: Partial<Field> = {}): Field {
 }
 
 function op(arity: Operator["arity"]): Operator {
-  return { id: "o", label: "O", description: "", arity };
+  return { label: "o", name: "O", description: "", arity };
 }
 
 const enumField = field({

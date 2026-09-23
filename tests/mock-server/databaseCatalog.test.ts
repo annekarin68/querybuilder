@@ -7,7 +7,7 @@ import {
 
 describe("DATABASES", () => {
   it("has exactly 7 entries named ALPHA..ETA", () => {
-    expect(DATABASES.map((d) => d.label)).toEqual([
+    expect(DATABASES.map((d) => d.name)).toEqual([
       "ALPHA",
       "BETA",
       "GAMMA",
@@ -16,7 +16,7 @@ describe("DATABASES", () => {
       "ZETA",
       "ETA",
     ]);
-    expect(DATABASES.map((d) => d.id)).toEqual([
+    expect(DATABASES.map((d) => d.label)).toEqual([
       "alpha",
       "beta",
       "gamma",
@@ -27,10 +27,20 @@ describe("DATABASES", () => {
     ]);
   });
 
-  it("every database has a positive size, spanning several orders of magnitude", () => {
-    for (const d of DATABASES) expect(d.size).toBeGreaterThan(0);
-    const sizes = DATABASES.map((d) => d.size);
+  it("every database has a positive totalEntrysets, spanning several orders of magnitude", () => {
+    for (const d of DATABASES) expect(d.totalEntrysets).toBeGreaterThan(0);
+    const sizes = DATABASES.map((d) => d.totalEntrysets);
     expect(Math.max(...sizes) / Math.min(...sizes)).toBeGreaterThan(1000);
+  });
+
+  it("percentageOfTotal is each database's share of totalEntrysets, summing to ~100", () => {
+    const sum = DATABASES.reduce((s, d) => s + d.percentageOfTotal, 0);
+    expect(sum).toBeCloseTo(100, 0);
+    for (const d of DATABASES) {
+      expect(d.percentageOfTotal).toBeGreaterThan(0);
+      expect(d.description.length).toBeGreaterThan(0);
+      expect(d.owner.length).toBeGreaterThan(0);
+    }
   });
 });
 

@@ -5,20 +5,20 @@ import type {
   AuthUser,
   DatabasesResponse,
   EntrysetsResponse,
-  IndividualsResponse,
-  SchemaResponse,
+  Individual,
   StatsResponse,
 } from "./api/types";
+import { buildFieldCatalog } from "./query/fieldCatalog";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 export type AsyncStatus = "idle" | "loading" | "ok" | "error";
 
 export interface AppState {
-  schema: SchemaResponse | null;
+  schema: ReturnType<typeof buildFieldCatalog> | null;
   /** The databases the query can be scoped to (loaded once). */
-  databases: DatabasesResponse["databases"] | null;
+  databases: DatabasesResponse[] | null;
   /** The vehicle telemetry data model backing the docs sidebar (loaded once). */
-  individuals: IndividualsResponse | null;
+  individuals: Individual[] | null;
   /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
   /** Which databases the query currently runs against. Empty = nothing runs. */
@@ -28,7 +28,7 @@ export interface AppState {
   query: QueryNode;
   issues: Issue[];
 
-  stats: { status: AsyncStatus; data: StatsResponse | null; error: string | null };
+  stats: { status: AsyncStatus; lines: StatsResponse[]; error: string | null };
   preview: { status: AsyncStatus; data: EntrysetsResponse | null; error: string | null };
 
   sidebarCollapsed: boolean;
@@ -43,7 +43,7 @@ export const initialState: AppState = {
   activeView: "filter",
   query: emptyQuery(),
   issues: [],
-  stats: { status: "idle", data: null, error: null },
+  stats: { status: "idle", lines: [], error: null },
   preview: { status: "idle", data: null, error: null },
   sidebarCollapsed: false,
 };

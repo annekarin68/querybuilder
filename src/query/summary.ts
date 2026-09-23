@@ -1,12 +1,12 @@
 import type { Condition, Group, QueryNode } from "./types";
 
 export interface SummarySchema {
-  fields: { id: string; label: string; options?: { value: string; label: string }[] }[];
-  operators: { id: string; label: string; arity: "none" | "one" | "two" | "many" }[];
+  fields: { label: string; name: string; options?: { value: string; label: string }[] }[];
+  operators: { label: string; name: string; arity: "none" | "one" | "two" | "many" }[];
 }
 
 function optionLabel(schema: SummarySchema, fieldId: string | null, raw: unknown): string {
-  const field = schema.fields.find((f) => f.id === fieldId);
+  const field = schema.fields.find((f) => f.label === fieldId);
   const opt = field?.options?.find((o) => o.value === raw);
   if (opt) return opt.label;
   if (typeof raw === "boolean") return raw ? "true" : "false";
@@ -25,9 +25,9 @@ function formatValue(schema: SummarySchema, c: Condition, arity: string): string
 }
 
 function conditionText(schema: SummarySchema, c: Condition): string {
-  const field = schema.fields.find((f) => f.id === c.fieldId);
-  const op = schema.operators.find((o) => o.id === c.operatorId);
-  const parts = [field?.label ?? "(field?)", op?.label ?? "(operator?)"];
+  const field = schema.fields.find((f) => f.label === c.fieldId);
+  const op = schema.operators.find((o) => o.label === c.operatorId);
+  const parts = [field?.name ?? "(field?)", op?.name ?? "(operator?)"];
   const val = op ? formatValue(schema, c, op.arity) : "";
   if (val) parts.push(val);
   return parts.join(" ");

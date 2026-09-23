@@ -14,7 +14,7 @@ function hint(text: string): string {
 
 function individualsByLabel(state: AppState): Map<string, Individual> {
   const map = new Map<string, Individual>();
-  for (const item of state.individuals?.individuals ?? []) map.set(item.label, item);
+  for (const item of state.individuals ?? []) map.set(item.label, item);
   return map;
 }
 

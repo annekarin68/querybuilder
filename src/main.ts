@@ -16,11 +16,11 @@ import {
   getDatabases,
   getIndividuals,
   getMe,
-  getSchema,
   getStats,
   logout,
   runQuery,
 } from "./api/client";
+import { buildFieldCatalog } from "./query/fieldCatalog";
 import { canRunQuery, store, type AppState } from "./state";
 import { addChild, newCondition, stripCollapsed } from "./query/tree";
 import { validateQuery } from "./query/validate";
@@ -47,6 +47,14 @@ function errorMessage(err: unknown): string {
  */
 const requestKey = (query: QueryNode, databases: string[]): string =>
   JSON.stringify({ query: stripCollapsed(query), databases: [...databases].sort() });
+
+/** A closure over the query/scope a request was made for — call it after the
+ * request settles (or after each streamed line) to check whether the user has
+ * since changed the query/scope, per §6's stale-response guard. */
+function staleGuard(query: QueryNode, databases: string[]): () => boolean {
+  const key = requestKey(query, databases);
+  return () => key !== requestKey(store.getState().query, store.getState().selectedDatabaseIds);
+}
 
 const root = document.querySelector<HTMLElement>("#app")!;
 renderShell(root);
@@ -75,18 +83,14 @@ function runGuarded<T>(
   const state = store.getState();
   if (!canRunQuery(state)) return;
   const { query, selectedDatabaseIds } = state;
-  const key = requestKey(query, selectedDatabaseIds);
+  const isStale = staleGuard(query, selectedDatabaseIds);
   onLoading();
   fetcher(query, selectedDatabaseIds)
     .then((data) => {
-      const s = store.getState();
-      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return; // scope changed since the request
-      onSuccess(data);
+      if (!isStale()) onSuccess(data);
     })
     .catch((err) => {
-      const s = store.getState();
-      if (key !== requestKey(s.query, s.selectedDatabaseIds)) return;
-      onError(err);
+      if (!isStale()) onError(err);
     });
 }
 
@@ -139,13 +143,37 @@ function onLogout(): void {
     });
 }
 
+// Bumped once per refreshStats invocation. A content-based staleGuard key alone
+// isn't enough here: toggling a database off/on (or editing a value away and
+// back) within the 400ms debounce window can produce a NEW stream whose key is
+// equal to an OLD in-flight stream's key, so the key-based check alone would
+// treat the old stream as still current. Both streams would then append into
+// the same (freshly-reset) `stats.lines` array, doubling every row. Pairing the
+// key check with stream identity (this counter) closes that gap.
+let statsRun = 0;
+
 const refreshStats = debounce(() => {
-  runGuarded(
-    (query, databases) => getStats(query, databases),
-    () => store.setState({ stats: { status: "loading", data: null, error: null } }),
-    (data) => store.setState({ stats: { status: "ok", data, error: null } }),
-    (err) => store.setState({ stats: { status: "error", data: null, error: errorMessage(err) } }),
-  );
+  const state = store.getState();
+  if (!canRunQuery(state)) return;
+  const { query, selectedDatabaseIds } = state;
+  const run = ++statsRun;
+  const keyStale = staleGuard(query, selectedDatabaseIds);
+  const isStale = () => run !== statsRun || keyStale();
+  store.setState({ stats: { status: "loading", lines: [], error: null } });
+  getStats(query, selectedDatabaseIds, (line) => {
+    if (isStale()) return;
+    store.setState({
+      stats: { status: "loading", lines: [...store.getState().stats.lines, line], error: null },
+    });
+  })
+    .then(() => {
+      if (isStale()) return;
+      store.setState({ stats: { status: "ok", lines: store.getState().stats.lines, error: null } });
+    })
+    .catch((err) => {
+      if (isStale()) return;
+      store.setState({ stats: { status: "error", lines: [], error: errorMessage(err) } });
+    });
 }, 400);
 
 /**
@@ -171,7 +199,7 @@ function onQueryChange(nextQuery: Group): void {
   store.setState({
     query: nextQuery,
     issues,
-    stats: { status: "idle", data: null, error: null },
+    stats: { status: "idle", lines: [], error: null },
     preview: { status: "idle", data: null, error: null },
   });
   refreshStats();
@@ -183,7 +211,7 @@ function onDatabasesChange(nextIds: string[]): void {
   if (nextIds.length === cur.length && nextIds.every((id) => cur.includes(id))) return;
   store.setState({
     selectedDatabaseIds: nextIds,
-    stats: { status: "idle", data: null, error: null },
+    stats: { status: "idle", lines: [], error: null },
     preview: { status: "idle", data: null, error: null },
   });
   refreshStats();
@@ -239,14 +267,15 @@ store.subscribe((state, changed) => {
 });
 
 renderDatabasePicker(store.getState()); // "" while databases is null
-renderQueryBuilder(store.getState()); // initial loader (centre panel spinner during schema fetch)
+renderQueryBuilder(store.getState()); // initial loader (centre panel spinner while individuals/databases load)
 renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
 syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
 renderAuthStatus(store.getState()); // "" while auth.status is "loading"
-Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe()])
-  .then(([schema, dbResp, individuals, user]) => {
+Promise.all([getDatabases(), getIndividuals(), getMe()])
+  .then(([databases, individuals, user]) => {
+    const schema = buildFieldCatalog(individuals);
     const seeded = addChild(
       store.getState().query as Group,
       (store.getState().query as Group).id,
@@ -258,9 +287,9 @@ Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe()])
     const issues = validateQuery(seeded, { fields: schema.fields, operators: schema.operators });
     store.setState({
       schema,
-      databases: dbResp.databases,
+      databases,
       individuals,
-      selectedDatabaseIds: dbResp.databases.map((d) => d.id),
+      selectedDatabaseIds: databases.map((d) => d.label),
       query: seeded,
       issues,
       auth: { status: user ? "authenticated" : "anonymous", user },

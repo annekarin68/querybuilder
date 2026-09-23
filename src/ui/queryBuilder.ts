@@ -1,6 +1,7 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
-import type { IndividualsResponse, SchemaResponse } from "../api/types";
+import type { Individual } from "../api/types";
+import type { CatalogField, CatalogOperator } from "../query/fieldCatalog";
 import {
   addChild,
   emptyQuery,
@@ -15,6 +16,8 @@ import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange } from "./fomantic";
 import { defaultValueFor, readValueControl, renderValueControl } from "./valueControl";
 
+type FieldCatalog = { fields: CatalogField[]; operators: CatalogOperator[] };
+
 function issuesFor(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
   if (!mine.length) return "";
@@ -23,9 +26,9 @@ function issuesFor(nodeId: string, issues: Issue[]): string {
     .join(" · ")}</div>`;
 }
 
-function individualDropdown(individuals: IndividualsResponse | null, c: Condition): string {
+function individualDropdown(individuals: Individual[] | null, c: Condition): string {
   const opts = optionsHtml(
-    individuals?.individuals ?? [],
+    individuals ?? [],
     (ind) => ind.label,
     (ind) => ind.name,
     (ind) => ind.label === c.individualId,
@@ -33,44 +36,44 @@ function individualDropdown(individuals: IndividualsResponse | null, c: Conditio
   return `<select class="ui selection dropdown" data-part="individual"><option value="">Item…</option>${opts}</select>`;
 }
 
-function fieldDropdown(schema: SchemaResponse, c: Condition): string {
+function fieldDropdown(schema: FieldCatalog, c: Condition): string {
   const prefix = c.individualId ? `${c.individualId}.` : null;
   const opts = prefix
     ? optionsHtml(
-        schema.fields.filter((f) => f.id.startsWith(prefix)),
-        (f) => f.id,
-        (f) => f.id.slice(prefix.length),
-        (f) => f.id === c.fieldId,
+        schema.fields.filter((f) => f.label.startsWith(prefix)),
+        (f) => f.label,
+        (f) => f.label.slice(prefix.length),
+        (f) => f.label === c.fieldId,
       )
     : "";
   return `<select class="ui selection dropdown" data-part="field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
-function operatorDropdown(schema: SchemaResponse, c: Condition): string {
-  const field = schema.fields.find((f) => f.id === c.fieldId);
+function operatorDropdown(schema: FieldCatalog, c: Condition): string {
+  const field = schema.fields.find((f) => f.label === c.fieldId);
   const ops = field
     ? field.operatorIds
-        .map((id) => schema.operators.find((o) => o.id === id))
-        .filter((o): o is SchemaResponse["operators"][number] => o !== undefined)
+        .map((label) => schema.operators.find((o) => o.label === label))
+        .filter((o): o is CatalogOperator => o !== undefined)
     : [];
   const opts = optionsHtml(
     ops,
-    (o) => o.id,
     (o) => o.label,
-    (o) => o.id === c.operatorId,
+    (o) => o.name,
+    (o) => o.label === c.operatorId,
   );
   return `<select class="ui selection dropdown" data-part="operator"${field ? "" : " disabled"}>
     <option value="">Operator…</option>${opts}</select>`;
 }
 
 function conditionHtml(
-  schema: SchemaResponse,
-  individuals: IndividualsResponse | null,
+  schema: FieldCatalog,
+  individuals: Individual[] | null,
   c: Condition,
   issues: Issue[],
 ): string {
-  const field = schema.fields.find((f) => f.id === c.fieldId);
-  const operator = schema.operators.find((o) => o.id === c.operatorId);
+  const field = schema.fields.find((f) => f.label === c.fieldId);
+  const operator = schema.operators.find((o) => o.label === c.operatorId);
   return `<div class="qb-condition" data-node-id="${c.id}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.35rem 0">
     ${individualDropdown(individuals, c)}
     ${fieldDropdown(schema, c)}
@@ -82,8 +85,8 @@ function conditionHtml(
 }
 
 function groupHtml(
-  schema: SchemaResponse,
-  individuals: IndividualsResponse | null,
+  schema: FieldCatalog,
+  individuals: Individual[] | null,
   g: Group,
   issues: Issue[],
   isRoot: boolean,
@@ -116,8 +119,8 @@ function groupHtml(
 }
 
 function nodeHtml(
-  schema: SchemaResponse,
-  individuals: IndividualsResponse | null,
+  schema: FieldCatalog,
+  individuals: Individual[] | null,
   node: QueryNode,
   issues: Issue[],
   isRoot: boolean,
@@ -144,9 +147,9 @@ export function renderQueryBuilder(state: AppState): void {
 // module-scope refs set by renderQueryBuilder; the delegated handlers below read
 // these so a single wiring keeps working across every paint().
 let currentQuery: Group = emptyQuery();
-let schemaRef: SchemaResponse | null = null;
+let schemaRef: FieldCatalog | null = null;
 
-export function _setBuilderRefs(query: Group, schema: SchemaResponse | null): void {
+export function _setBuilderRefs(query: Group, schema: FieldCatalog | null): void {
   currentQuery = query;
   schemaRef = schema;
 }
@@ -184,14 +187,14 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     const fieldChanged = individualChanged || newFieldId !== cond.fieldId;
     const newOperatorId = fieldChanged ? null : opSel ? opSel.value || null : cond.operatorId;
 
-    const field = schemaRef?.fields.find((f) => f.id === newFieldId);
-    const operator = schemaRef?.operators.find((o) => o.id === newOperatorId);
+    const field = schemaRef?.fields.find((f) => f.label === newFieldId);
+    const operator = schemaRef?.operators.find((o) => o.label === newOperatorId);
     // The value control's DOM shape (one input, two, a multi-select, or none)
     // depends on the operator's arity. If only the operator changed but its arity
     // differs from before, `row` still holds the OLD shape until the next paint()
     // — reading it would silently pull garbage from the wrong control. Only trust
     // the DOM when the shape it currently has actually matches `operator`.
-    const oldOperator = schemaRef?.operators.find((o) => o.id === cond.operatorId);
+    const oldOperator = schemaRef?.operators.find((o) => o.label === cond.operatorId);
     const arityChanged =
       newOperatorId !== cond.operatorId && oldOperator?.arity !== operator?.arity;
 
