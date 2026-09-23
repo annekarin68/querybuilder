@@ -123,7 +123,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
     if (runBlocker(state)) return;
     const req = statsSlot.start();
     const lines: StatsResponse[] = [];
-    store.setState({ stats: { status: "loading", lines: [], error: null } });
+    store.setState({ stats: { status: "loading", lines: [] } });
     api
       .getStats(
         state.query,
@@ -131,16 +131,16 @@ export function createApp({ store, api, navigate }: AppDeps) {
         (line) => {
           if (req.isStale()) return;
           lines.push(line);
-          store.setState({ stats: { status: "loading", lines: [...lines], error: null } });
+          store.setState({ stats: { status: "loading", lines: [...lines] } });
         },
         req.signal,
       )
       .then(() => {
-        if (!req.isStale()) store.setState({ stats: { status: "ok", lines, error: null } });
+        if (!req.isStale()) store.setState({ stats: { status: "ok", lines } });
       })
       .catch((err) => {
         if (!req.isStale()) {
-          store.setState({ stats: { status: "error", lines: [], error: errorMessage(err) } });
+          store.setState({ stats: { status: "error", error: errorMessage(err) } });
         }
       });
   }, STATS_DEBOUNCE_MS);
@@ -163,10 +163,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
       .then(() => {
         // Compliance is piggybacked on the session server-side, so it's gone too
         // once the session ends — reset the local display state to match.
-        store.setState({
-          auth: { status: "anonymous", user: null },
-          compliance: { status: "required", reason: null, ackedAt: null },
-        });
+        store.setState({ auth: { status: "anonymous" }, compliance: { status: "required" } });
       })
       .catch((err) => {
         // Best-effort: the button is still there for the user to try again.
@@ -179,7 +176,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
     api
       .invalidateCompliance()
       .then(() => {
-        store.setState({ compliance: { status: "required", reason: null, ackedAt: null } });
+        store.setState({ compliance: { status: "required" } });
       })
       .catch((err) => {
         console.error("Invalidate compliance failed:", errorMessage(err));
@@ -196,7 +193,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
     previewSlot.cancel();
     store.setState({
       ...patch,
-      stats: { status: "idle", lines: [], error: null },
+      stats: { status: "idle", lines: [] },
       preview: { status: "idle" },
     });
     refreshStats();
@@ -279,15 +276,15 @@ export function createApp({ store, api, navigate }: AppDeps) {
       // The seed bypasses onQueryChange, so validate here — otherwise Run
       // would be enabled on the empty seeded condition.
       issues: validateQuery(query, catalog),
-      auth: { status: user ? "authenticated" : "anonymous", user },
+      auth: user ? { status: "authenticated", user } : { status: "anonymous" },
       compliance:
         complianceStatus.status === "acknowledged"
           ? {
               status: "acknowledged",
-              reason: complianceStatus.reason ?? null,
+              reason: complianceStatus.reason ?? "",
               ackedAt: complianceStatus.ackedAt ?? null,
             }
-          : { status: "required", reason: null, ackedAt: null },
+          : { status: "required" },
     });
     // A restored query is already complete, so fetch its statistics now, as
     // any in-app edit would. The empty seed has nothing runnable yet.

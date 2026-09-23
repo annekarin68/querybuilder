@@ -14,11 +14,11 @@ import "./styles.css";
 import * as api from "./api/client";
 import { createApp, errorMessage } from "./app";
 import { store, type AppState } from "./state";
-import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
+import { renderShell } from "./ui/layout";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
-import { renderDocsSidebar } from "./ui/docsSidebar";
+import { renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
-import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
+import { wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
@@ -28,7 +28,8 @@ import { escapeHtml } from "./ui/panel";
 // when the state they read changes.
 
 const root = document.querySelector<HTMLElement>("#app")!;
-renderShell(root);
+const shell = renderShell(root);
+const { panels } = shell;
 
 const app = createApp({
   store,
@@ -44,38 +45,37 @@ document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest("a[data-flow-link]")) app.saveQueryBeforeRedirect();
 });
 
-// Wire every panel once; they paint into containers renderShell created.
-onMenu({
+// Wire every panel once. The listeners are delegated to the panel containers
+// renderShell created, so they survive every repaint.
+shell.onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
 });
-wireDataPreview(panelEls().preview, app.runPreview);
-wireDatabasePicker(panelEls().dbpicker, app.onDatabasesChange);
-wireAccountMenu(panelEls().account, {
+wireDocsSidebar(panels.docs, () => store.getState().facets);
+wireDataPreview(panels.preview, app.runPreview);
+wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
+wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onInvalidate: app.onInvalidateCompliance,
 });
-const bindQueryDropdowns = wireQueryBuilder(panelEls().center, store.getState, app.onQueryChange);
+const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange);
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
  * (re)render it. Add a key here whenever a render function starts reading it.
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
-  { keys: ["activeView"], run: (s) => setActiveView(s.activeView) },
-  { keys: ["sidebarCollapsed"], run: (s) => setSidebarCollapsed(s.sidebarCollapsed) },
-  { keys: ["facets", "databases"], run: renderDocsSidebar },
-  { keys: ["databases", "selectedDatabaseIds"], run: renderDatabasePicker },
+  { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
+  { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
+  { keys: ["facets", "databases"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
-    keys: ["catalog", "query", "issues", "facets"],
-    run: (s) => {
-      renderQueryBuilder(s);
-      bindQueryDropdowns();
-    },
+    keys: ["databases", "selectedDatabaseIds"],
+    run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
+  { keys: ["catalog", "query", "issues", "facets"], run: renderQueryBuilder },
   {
     keys: ["catalog", "query", "issues", "stats", "selectedDatabaseIds", "databases"],
-    run: renderStatsPanel,
+    run: (s) => renderStatsPanel(panels.stats, s),
   },
   {
     keys: [
@@ -88,9 +88,9 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "auth",
       "compliance",
     ],
-    run: renderDataPreview,
+    run: (s) => renderDataPreview(panels.preview, s),
   },
-  { keys: ["auth", "compliance"], run: renderAccountMenu },
+  { keys: ["auth", "compliance"], run: (s) => renderAccountMenu(panels.account, s) },
 ];
 
 store.subscribe((state, changed) => {

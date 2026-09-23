@@ -10,7 +10,25 @@ import type {
 import type { FieldCatalog } from "./query/fieldCatalog";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
-export type AsyncStatus = "idle" | "loading" | "ok" | "error";
+
+// Each async part of the state is a union on `status`: a field exists only in
+// the states where it means something, so TypeScript rejects impossible
+// combinations like "authenticated, but no user".
+
+/** Who's logged in. */
+export type AuthState =
+  { status: "loading" } | { status: "anonymous" } | { status: "authenticated"; user: AuthUser };
+
+/** The session's compliance acknowledgment. */
+export type ComplianceState =
+  | { status: "loading" }
+  | { status: "required" }
+  | { status: "acknowledged"; reason: string; ackedAt: string | null };
+
+/** The live statistics. `lines` fills in as each database answers. */
+export type StatsState =
+  | { status: "idle" | "loading" | "ok"; lines: StatsResponse[] }
+  | { status: "error"; error: string };
 
 /** The Matching events request. Only "ok" carries data, only "error" a message. */
 export type PreviewState =
@@ -27,16 +45,12 @@ export interface AppState {
   databases: DatabasesResponse[] | null;
   /** The data model backing the docs sidebar (loaded once). */
   facets: Facet[] | null;
-  /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
-  auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
-  /** Compliance acknowledgment for this session, if any — populated once at
-   *  startup via GET /api/compliance/status. Display-only, same as `auth`:
-   *  it drives the account menu and an advisory hint, never gating logic. */
-  compliance: {
-    status: "loading" | "required" | "acknowledged";
-    reason: string | null;
-    ackedAt: string | null;
-  };
+  /** Who's logged in, if anyone — loaded once at startup via GET /api/auth/me. */
+  auth: AuthState;
+  /** Compliance acknowledgment for this session — loaded once at startup via
+   *  GET /api/compliance/status. Display-only, same as `auth`: it drives the
+   *  account menu and an advisory hint, never gating logic. */
+  compliance: ComplianceState;
   /** Which databases the query currently runs against. Empty = nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;
@@ -45,7 +59,7 @@ export interface AppState {
   query: Group;
   issues: Issue[];
 
-  stats: { status: AsyncStatus; lines: StatsResponse[]; error: string | null };
+  stats: StatsState;
   preview: PreviewState;
 
   sidebarCollapsed: boolean;
@@ -55,13 +69,13 @@ export const initialState: AppState = {
   catalog: null,
   databases: null,
   facets: null,
-  auth: { status: "loading", user: null },
-  compliance: { status: "loading", reason: null, ackedAt: null },
+  auth: { status: "loading" },
+  compliance: { status: "loading" },
   selectedDatabaseIds: [],
   activeView: "filter",
   query: emptyQuery(),
   issues: [],
-  stats: { status: "idle", lines: [], error: null },
+  stats: { status: "idle", lines: [] },
   preview: { status: "idle" },
   // The docs start folded into their rail so the query builder gets the width.
   sidebarCollapsed: true,

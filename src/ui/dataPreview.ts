@@ -1,6 +1,5 @@
 import { runBlocker, type AppState, type RunBlocker } from "../state";
 import type { EventRecord, Facet } from "../api/types";
-import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, formatWhen, text } from "./format";
 import { tagsOf, UNTAGGED } from "./docsFilter";
@@ -143,8 +142,7 @@ const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
   unfinished: "Finish the query to run it.",
 };
 
-export function renderDataPreview(state: AppState): void {
-  const el = panelEls().preview;
+export function renderDataPreview(el: HTMLElement, state: AppState): void {
   const p = state.preview;
 
   // §6: this panel never shows anything that does not belong to the query on

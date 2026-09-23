@@ -255,12 +255,12 @@ src/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
     panel.ts           paint() helper + escapeHtml().
     format.ts          compact() / exact() / matchRatio() / barWidth() for the stats (billion-row / 1e-10 % scale), plus displayLabel() (backend casing, underscores → spaces), countLabel() and formatWhen().
-    layout.ts          Renders the shell once (top bar with workflow steps + account slot, docs rail, docs / main / stats columns). Handles docs collapse + active step via classes/attributes, no repaint.
+    layout.ts          renderShell(root) renders the frame once (top bar with workflow steps + account slot, docs rail, docs / main / stats columns) and returns a Shell: the panel containers, setActiveView / setSidebarCollapsed (classes/attributes, no repaint) and onMenu. No module-level state.
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
-    queryBuilder.ts    render + event wiring for the centre panel (recursive). wireQueryBuilder runs once and returns bindDropdowns, which main.ts calls after every render.
+    queryBuilder.ts    event wiring + render for the centre panel (recursive). wireQueryBuilder runs once and returns the render function, which paints and binds the Fomantic dropdowns together.
     docsFilter.ts      tagsOf / groupByTag (the data dictionary's per-tag sections, untagged last) + matchDocs(facets, text) — which facets/sections match the filter (pure; unit-tested).
-    docsSidebar.ts     render for the data dictionary (docs column) — built
+    docsSidebar.ts     render + wiring (search box) for the data dictionary (docs column) — built
                        from state.facets, NOT state.catalog. See §9.
     statsPanel.ts      render for the pinned statistics column (data-driven from /api/stats).
     dataPreview.ts     render + Run wiring for the "Matching events" card
@@ -332,22 +332,20 @@ export interface AppState {
   catalog: FieldCatalog | null;             // derived client-side from `facets` — no schema endpoint exists
   databases: DatabasesResponse[] | null;    // loaded once (GET /api/databases, a bare array)
   facets: Facet[] | null;         // loaded once (GET /api/individuals, a bare array); drives docsSidebar and the query builder's Facet dropdown
-  /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
-  auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
-  /** Compliance acknowledgment for this session, if any — populated once at
-   *  startup via GET /api/compliance/status. Display-only, same as `auth`. */
-  compliance: { status: "loading" | "required" | "acknowledged"; reason: string | null; ackedAt: string | null };
+  auth:                               // who's logged in — GET /api/auth/me, loaded once
+    | { status: "loading" } | { status: "anonymous" } | { status: "authenticated"; user: AuthUser };
+  compliance:                         // the session's acknowledgment — display-only, like `auth`
+    | { status: "loading" } | { status: "required" }
+    | { status: "acknowledged"; reason: string; ackedAt: string | null };
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // workflow steps; default "filter"
 
   query: Group;                       // the tree; its root is always a group
   issues: Issue[];                    // validateQuery(query, catalog); recomputed on every query change
 
-  stats: {
-    status: "idle" | "loading" | "ok" | "error";
-    lines: StatsResponse[];   // one entry per database that has reported so far (streamed)
-    error: string | null;
-  };
+  stats:                              // one line per database that has reported so far (streamed)
+    | { status: "idle" | "loading" | "ok"; lines: StatsResponse[] }
+    | { status: "error"; error: string };
   preview:                            // the events matching the current query — see §7/§9/§10
     | { status: "idle" }
     | { status: "loading" }
@@ -388,9 +386,11 @@ store.subscribe((state, changed) => {
 ```
 
 When a render function starts reading a new `AppState` key, add it to its row.
-Event wiring is separate: every `wire*` function runs **once** at startup, on
-the panel containers `renderShell` created (their listeners are delegated, so
-they survive repaints).
+`renderShell` returns the page's panel containers (`shell.panels`), and every
+render function takes its container as the first argument
+(`renderStatsPanel(el, state)`). Event wiring is separate: every `wire*`
+function runs **once** at startup on the same containers (their listeners are
+delegated, so they survive repaints).
 
 `debounce(fn, ms)` is one named helper used in exactly one place (the stats trigger).
 
@@ -409,7 +409,7 @@ Concretely:
 
 - **On any query edit _or database-selection change_**, the same `setState` that
   writes `query` / `selectedDatabaseIds` also resets `stats` to
-  `{ status: "idle", lines: [], error: null }` and `preview` to
+  `{ status: "idle", lines: [] }` and `preview` to
   `{ status: "idle" }` (`changeScope` in `app.ts`). Old numbers and rows
   disappear the instant the scope changes on screen — before any new request
   goes out.
@@ -427,7 +427,7 @@ Concretely:
   databases that haven't reported yet — see §9. Before the first line arrives,
   it shows a plain loader instead.
 - **If the backend returns an error:** stats goes to
-  `{ status: "error", lines: [], error }`; preview goes to
+  `{ status: "error", error }`; preview goes to
   `{ status: "error", error }`. Both show a `ui negative message`
   with the text. No numbers, no rows.
 - **Stale-response guard — one rule:** `app.ts` keeps one `requestSlot()`
@@ -1008,10 +1008,11 @@ It adds two delegated listeners on the panel container — `click` for the
 `data-action` buttons (read with `data-node-id`) and `change` for the plain
 `<input>`s — which read the current tree through `getState()` when an event
 fires. Every `<select>` is a Fomantic dropdown and is handled only through its
-`onChange`, which `onDropdownChange` binds per element; since `paint()`
-replaces those elements, `wireQueryBuilder` returns `bindDropdowns`, and
-`main.ts` calls it after every render. The recursive HTML stays a pure string
-with no baked-in closures.
+`onChange`, which `onDropdownChange` binds per element. Since `paint()`
+replaces those elements, painting and binding must always happen together, so
+`wireQueryBuilder` returns the query builder's render function, which does
+both; there is no other way to paint it. The recursive HTML stays a pure
+string with no baked-in closures.
 
 ### Right — `statsPanel.ts`
 
@@ -1176,7 +1177,7 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
   and a `TimeoutError` when the server goes silent for `REQUEST_TIMEOUT_MS` (§7) —
   so no panel can sit on "Loading" forever with Run disabled.
 - Async panels catch it and write an error state — `preview: { status: "error", error }`,
-  `stats: { status: "error", lines: [], error }` — and render a `ui negative message`.
+  `stats: { status: "error", error }` — and render a `ui negative message`.
   Per §6, no data is kept — never left stale. Errors from a request that was
   aborted because it was superseded never reach a panel (the §6 guard drops them).
 - A failure loading databases/facets at startup is fatal: replace `#app`
