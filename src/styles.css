@@ -1,48 +1,298 @@
-/* System-font override kept out of scope: Fomantic handles typography (it self-hosts Lato). */
+/*
+ * Theme layer on top of Fomantic UI (docs/superpowers/specs/2026-09-23-ui-ux-refresh-design.md).
+ * Fomantic handles typography (it self-hosts Lato) and its widgets; this file
+ * owns layout and colour. Colours and sizes live in the tokens below — change
+ * them here, not in individual rules.
+ */
+:root {
+  --qb-bg: #f3f5f8;
+  --qb-surface: #ffffff;
+  --qb-surface-2: #f7f9fb;
+  --qb-border: #dde2e8;
+  --qb-border-strong: #c8d0d9;
+  --qb-text: #1f2933;
+  --qb-muted: #5f6b7a;
+  --qb-subtle: #8792a0;
+
+  --qb-topbar: #1b2a3a;
+  --qb-topbar-2: #2d4257;
+  --qb-topbar-text: #dbe6f0;
+
+  /* ALL / AND */
+  --qb-and: #2185d0;
+  --qb-and-soft: #9cc5e8;
+  --qb-and-tint: rgba(33, 133, 208, 0.05);
+  --qb-and-tint-strong: rgba(33, 133, 208, 0.11);
+  /* ANY / OR */
+  --qb-or: #e08a00;
+  --qb-or-text: #a86400;
+  --qb-or-soft: #f0c47a;
+  --qb-or-tint: rgba(224, 138, 0, 0.07);
+  --qb-or-tint-strong: rgba(224, 138, 0, 0.14);
+
+  --qb-danger: #c0392b;
+  --qb-warn: #a86400;
+
+  --qb-radius: 6px;
+  --qb-gap: 1rem;
+  --qb-topbar-h: 48px;
+  --qb-rail-w: 28px;
+  --qb-docs-w: 20rem;
+  --qb-stats-w: 15rem;
+}
+
 html,
 body {
   height: 100%;
 }
 body {
   margin: 0;
+  background: var(--qb-bg);
+  color: var(--qb-text);
 }
 #app {
   min-height: 100%;
 }
+/* Fomantic sets display on many classes; `hidden` must always win. */
+[hidden] {
+  display: none !important;
+}
 
-/* Layout helpers used by src/ui/layout.ts */
-.qb-body {
+/* ---- Top bar (src/ui/layout.ts) ---- */
+.qb-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: var(--qb-topbar-h);
   display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  align-items: flex-start;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0 1rem;
+  background: var(--qb-topbar);
+  color: #fff;
 }
-.qb-col-docs {
-  flex: 0 0 20rem;
+.qb-brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  white-space: nowrap;
 }
-.qb-col-center {
-  flex: 1 1 auto;
+.qb-steps {
+  display: flex;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-x: auto;
+}
+.qb-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  color: #9fb0c2;
+  white-space: nowrap;
+}
+.qb-step:hover,
+.qb-step:focus-visible {
+  color: #fff;
+}
+.qb-step.is-active {
+  background: var(--qb-topbar-2);
+  color: #fff;
+}
+.qb-step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 0.75rem;
+}
+.qb-topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   min-width: 0;
 }
-.qb-col-stats {
-  flex: 0 0 20rem;
-  /* Stay with the viewport as a tall query builder scrolls past, and scroll
-     internally if the stats themselves are taller than the screen. */
+
+/* ---- Body: docs rail | docs | main | stats ---- */
+.qb-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--qb-gap);
+  padding: 0 var(--qb-gap) var(--qb-gap) 0;
+}
+.qb-docs-rail {
   position: sticky;
-  top: 1rem;
-  align-self: flex-start;
-  max-height: calc(100vh - 2rem);
+  top: var(--qb-topbar-h);
+  flex: 0 0 var(--qb-rail-w);
+  height: calc(100vh - var(--qb-topbar-h));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0 0;
+  border: none;
+  border-right: 1px solid var(--qb-border);
+  background: var(--qb-surface);
+  color: var(--qb-and);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.qb-docs-rail span {
+  writing-mode: vertical-rl;
+}
+.qb-docs-rail .icon {
+  margin: 0;
+}
+.qb-docs-rail:hover {
+  background: var(--qb-surface-2);
+}
+.qb-docs-rail:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: -2px;
+}
+.qb-col-docs,
+.qb-col-main,
+.qb-col-stats {
+  margin-top: var(--qb-gap);
+}
+.qb-col-docs {
+  flex: 0 0 var(--qb-docs-w);
+  position: sticky;
+  top: calc(var(--qb-topbar-h) + var(--qb-gap));
+  max-height: calc(100vh - var(--qb-topbar-h) - 2 * var(--qb-gap));
   overflow-y: auto;
 }
 .qb-body.qb-docs-collapsed .qb-col-docs {
   display: none;
 }
-.qb-preview {
-  padding: 0 1rem 2rem;
+.qb-col-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qb-gap);
 }
-.qb-col-docs .ui.accordion {
-  max-height: 70vh;
+.qb-col-stats {
+  flex: 0 0 var(--qb-stats-w);
+  /* Always visible while a tall query scrolls past (users read the stats as
+     they build); scrolls internally if the stats are taller than the screen. */
+  position: sticky;
+  top: calc(var(--qb-topbar-h) + var(--qb-gap));
+  max-height: calc(100vh - var(--qb-topbar-h) - 2 * var(--qb-gap));
   overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.qb-coming-soon {
+  margin: 2rem;
+  padding: 3rem;
+  text-align: center;
+  font-size: 1.2rem;
+  color: var(--qb-muted);
+}
+/* Below the supported range (1024 px+) the stats drop under the main column. */
+@media (max-width: 900px) {
+  .qb-body {
+    flex-wrap: wrap;
+  }
+  .qb-col-main {
+    flex-basis: calc(100% - var(--qb-rail-w) - var(--qb-gap));
+  }
+  .qb-col-stats {
+    position: static;
+    flex: 1 1 100%;
+    max-height: none;
+    margin-left: calc(var(--qb-rail-w) + var(--qb-gap));
+  }
+}
+
+/* ---- Shared building blocks ---- */
+.qb-card {
+  background: var(--qb-surface);
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  padding: 0.75rem 1rem;
+}
+.qb-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--qb-muted);
+}
+.qb-card-count {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.qb-placeholder {
+  margin: 0;
+  padding: 0.75rem;
+  text-align: center;
+  color: var(--qb-muted);
+  background: var(--qb-surface-2);
+  border: 1px dashed var(--qb-border-strong);
+  border-radius: var(--qb-radius);
+}
+.qb-muted {
+  color: var(--qb-muted);
+}
+.qb-spacer {
+  flex: 1 1 auto;
+}
+.qb-tag {
+  display: inline-block;
+  padding: 0 0.45rem;
+  border-radius: 3px;
+  background: #eef1f4;
+  color: var(--qb-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.qb-count {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border: 1px solid var(--qb-border);
+  border-radius: 999px;
+  background: var(--qb-surface);
+  color: var(--qb-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.qb-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--qb-subtle);
+  cursor: pointer;
+}
+.qb-icon-btn .icon {
+  margin: 0;
+}
+.qb-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--qb-text);
+}
+.qb-icon-btn:focus-visible {
+  outline: 2px solid var(--qb-and);
 }
 
 /* Database scope selector (src/ui/databasePicker.ts) */

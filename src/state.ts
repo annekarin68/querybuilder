@@ -54,7 +54,8 @@ export const initialState: AppState = {
   issues: [],
   stats: { status: "idle", lines: [], error: null },
   preview: { status: "idle", data: null, error: null },
-  sidebarCollapsed: false,
+  // The docs start folded into their rail so the query builder gets the width.
+  sidebarCollapsed: true,
 };
 
 /**

@@ -36,6 +36,7 @@ describe("store", () => {
     expect(initialState.preview.status).toBe("idle");
     expect(initialState.auth.status).toBe("loading");
     expect(initialState.compliance.status).toBe("loading");
+    expect(initialState.sidebarCollapsed).toBe(true);
   });
 });
 
