@@ -5,11 +5,9 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-23 — UI/UX refresh: dark top bar with workflow steps
-and an account menu; docs folded into a rail; full-width query builder with
-coloured ALL/ANY brackets, joiners, soft hints for unfinished parts and a
-plain-English footer; a pinned slim statistics column; Run moved into the
-"Matching entrysets" card. Request handling is unchanged. See §13.
+Last updated: 2026-09-23 — terminology: the frontend now says **events**
+(was "entrysets") and **facets** (was "individuals" / "items"); the backend's
+wire names are unchanged. See "Terminology" in §1 and §13.
 
 ---
 
@@ -21,6 +19,22 @@ records match and what a sample of them looks like. Almost all data comes from a
 backend API; this repo focuses on the frontend and ships a small mock server so
 the app runs end to end during development.
 
+### Terminology
+
+- **Event** — one record: something that happened, holding values for some
+  facets. The backend calls these *entrysets*.
+- **Facet** — one described aspect of an event (a signal, a sensor reading,
+  a piece of context), with its own fields, tags and group. The backend calls
+  these *individuals*; the UI used to say "item".
+- **Field** — one value a facet can report (`facetLabel.fieldLabel`).
+
+The frontend uses *event* / *facet* everywhere: UI text, types (`EventRecord`,
+`EventsResponse`, `Facet`, `FacetField`), state (`AppState.facets`), and
+`Condition.facetId`. Only the backend's own names stay as they are, because
+the real API defines them: `GET /api/individuals`, `DatabasesResponse.totalEntrysets`,
+`EventsResponse.entrysets` and `EventRecord.items`. The mock server keeps the
+backend's names internally too (`INDIVIDUALS`, `ENTRYSETS`, `individual.json`).
+
 ### Screen layout
 
 ```
@@ -30,7 +44,7 @@ the app runs end to end during development.
 │D │ databases (pill toggles · N of M selected · All/None) │ statistics     │
 │O │ query (recursive ALL/ANY groups as coloured brackets; │ (pinned: live  │
 │C │   plain-English summary in the footer)                │  headline +    │
-│S │ matching entrysets (the Run query button lives here)  │  per database) │
+│S │ matching events (the Run query button lives here)  │  per database) │
 │› │                                                        │                │
 └──┴──────────────────────────────────────────────────────┴────────────────┘
  ↑ docs rail — opens the data dictionary as a 20rem column (collapsed by default)
@@ -39,11 +53,11 @@ the app runs end to end during development.
 - **Top bar** — app name, the workflow steps, and the account menu (login +
   compliance acknowledgment).
 - **Docs rail / data dictionary** — generated from `GET /api/individuals`.
-  Collapsed to a 28 px rail by default; opens as a column; searchable by item
+  Collapsed to a 28 px rail by default; opens as a column; searchable by facet
   and field name.
 - **Main column** — database scope, the query builder (nested ALL/ANY groups,
-  any depth, collapsible), and **Matching entrysets**: a sample of matching
-  entrysets, fetched only when the user presses **Run query** in that card.
+  any depth, collapsible), and **Matching events**: a sample of matching
+  events, fetched only when the user presses **Run query** in that card.
 - **Statistics column** (right, ~15rem) — sticky, so it never scrolls out of
   view while the user builds; refetched live (debounced) whenever the query
   is complete.
@@ -161,7 +175,7 @@ export function destroy(container: HTMLElement): void {
 ```
 
 Native elements are preferred where they do the job without a plugin: the
-data dictionary's groups, the entryset rows and the account menu are
+data dictionary's groups, the event rows and the account menu are
 `<details>` elements, and the database toggles are plain checkboxes.
 
 ### `src/ui/panel.ts` — the only way a panel updates its DOM
@@ -205,8 +219,8 @@ are the only two files that may import jquery (ESLint enforces it).
 ```
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
-  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/individuals/auth/compliance; wire subscriptions; hold the refreshStats / runPreview orchestrators; reacts to 401/403 generically to trigger the login/compliance redirects.
-  config.ts            Hand-edited display settings — the ONLY place src/ may name backend data (items, fields, tags, groups); all empty by default. HIDDEN_ROW_BADGES (tags/groups never shown as Matching entrysets badges), ROW_COLUMNS (item.field values shown as columns on each row). Enforced by tests/noBackendDataInSrc.test.ts.
+  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/facets/auth/compliance; wire subscriptions; hold the refreshStats / runPreview orchestrators; reacts to 401/403 generically to trigger the login/compliance redirects.
+  config.ts            Hand-edited display settings — the ONLY place src/ may name backend data (facets, fields, tags, groups); all empty by default. HIDDEN_ROW_BADGES (tags/groups never shown as Matching events badges), ROW_COLUMNS (facet.field values shown as columns on each row). Enforced by tests/noBackendDataInSrc.test.ts.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
@@ -221,7 +235,7 @@ src/
     tree.ts            Pure tree helpers: emptyQuery, newCondition, newGroup, addChild, updateNode, removeNode, findNode, countConditions.
     validate.ts        validateQuery(tree, schema) -> Issue[]; hasBlockingErrors(issues).
     summary.ts         queryToText(tree, schema) -> human-readable string (display only).
-    fieldCatalog.ts    buildFieldCatalog(individuals) -> { fields, operators } — derives the query builder's field catalog client-side; the real API has no schema/operators endpoint.
+    fieldCatalog.ts    buildFieldCatalog(facets) -> { fields, operators } — derives the query builder's field catalog client-side; the real API has no schema/operators endpoint.
   ui/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
     panel.ts           paint() helper + escapeHtml().
@@ -230,11 +244,11 @@ src/
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
-    docsFilter.ts      tagsOf / groupByTag (the data dictionary's per-tag sections, untagged last) + matchDocs(individuals, text) — which items/sections match the filter (pure; unit-tested).
+    docsFilter.ts      tagsOf / groupByTag (the data dictionary's per-tag sections, untagged last) + matchDocs(facets, text) — which facets/sections match the filter (pure; unit-tested).
     docsSidebar.ts     render for the data dictionary (docs column) — built
-                       from state.individuals, NOT state.schema. See §9.
+                       from state.facets, NOT state.schema. See §9.
     statsPanel.ts      render for the pinned statistics column (data-driven from /api/stats).
-    dataPreview.ts     render + Run wiring for the "Matching entrysets" card
+    dataPreview.ts     render + Run wiring for the "Matching events" card
                        (POST /api/query) — the only Run control. See §9.
     accountMenu.ts     render + wiring for the top-bar account menu (login +
                        compliance; data-panel="account"). See §9.
@@ -251,11 +265,11 @@ mock-server/
   databases.ts         DatabaseDef type, DATABASES (7 synthetic, arbitrarily
                        named ALPHA..ETA partitions with mock-only sizes),
                        dbIndexForEntrysetId(id) / databaseIdForEntrysetId(id)
-                       — a pure function of an entryset's numeric id, never
+                       — a pure function of an event's numeric id, never
                        of its content.
-  rows.ts              flattenEntryset(entryset) -> Row (nested items ->
-                       dotted "individualLabel.fieldLabel" keys + a
-                       synthetic __db key) and ROWS, every entryset
+  rows.ts              flattenEntryset(event) -> Row (nested facets ->
+                       dotted "facetLabel.fieldLabel" keys + a
+                       synthetic __db key) and ROWS, every event
                        flattened once at startup.
   evaluate.ts          matches(node, row) recursive evaluator + filterByDatabases(rows, ids) /
                        perDatabaseCounts(query, rows, ids) (keyed on row.__db) +
@@ -265,21 +279,21 @@ mock-server/
   vehicleData.ts       Loads data/individual.json + data/entrysets.json via
                        fs.readFileSync -> INDIVIDUALS, ENTRYSETS.
   data/
-    individual.json    The vehicle/fleet telemetry data model: ~157 items (4 metadata
-                       + ~153 content items across 18 subsystem groups: engine,
+    individual.json    The vehicle/fleet telemetry data model: ~157 facets (4 metadata
+                       + ~153 content facets across 18 subsystem groups: engine,
                        powertrain, fuel, emissions, cooling, electrical, EV battery,
                        tires/wheels, brakes, suspension, steering, body/chassis,
                        lighting, HVAC, infotainment, ADAS, radar/lidar, diagnostics,
                        driver behavior, environment context), each with
                        label/group/tags/idNumber/name/description/comment/
-                       totalCount/fields. totalCount is that item's count within a mock
-                       6-billion-entryset universe, tiered by real-world commonality
+                       totalCount/fields. totalCount is that facet's count within a mock
+                       6-billion-event universe, tiered by real-world commonality
                        (near-universal/common/uncommon/rare) so it agrees with the
-                       item's own description.
-    entrysets.json     Actual telemetry records referencing individual.json's items,
-                       keyed by entryset id (string): `{ [id]: { id, items: {
-                       [individualLabel]: { [fieldLabel]: value } } } }`. 21 example
-                       entrysets (ids 1-21), each a distinct, internally-consistent
+                       facet's own description.
+    entrysets.json     Actual telemetry records referencing individual.json's facets,
+                       keyed by event id (string): `{ [id]: { id, items: {
+                       [facetLabel]: { [fieldLabel]: value } } } }`. 21 example
+                       events (ids 1-21), each a distinct, internally-consistent
                        vehicle/event scenario, spread across all 7 mock databases via
                        dbIndexForEntrysetId(id).
 tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, src/ui/* (pure helpers only), mock-server/evaluate + index (pure, no DOM).
@@ -296,9 +310,9 @@ index.html
 
 ```ts
 export interface AppState {
-  schema: ReturnType<typeof buildFieldCatalog> | null;  // derived client-side from `individuals` — no schema endpoint exists
+  schema: ReturnType<typeof buildFieldCatalog> | null;  // derived client-side from `facets` — no schema endpoint exists
   databases: DatabasesResponse[] | null;    // loaded once (GET /api/databases, a bare array)
-  individuals: Individual[] | null;         // loaded once (GET /api/individuals, a bare array); drives docsSidebar and the query builder's Item dropdown
+  facets: Facet[] | null;         // loaded once (GET /api/individuals, a bare array); drives docsSidebar and the query builder's Facet dropdown
   /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
   /** Compliance acknowledgment for this session, if any — populated once at
@@ -317,7 +331,7 @@ export interface AppState {
   };
   preview: {
     status: "idle" | "loading" | "ok" | "error";
-    data: EntrysetsResponse | null;   // the entrysets matching the current query — see §7/§9/§10
+    data: EventsResponse | null;   // the events matching the current query — see §7/§9/§10
     error: string | null;
   };
 
@@ -333,10 +347,10 @@ of the keys that changed.
 
 | Trigger | Effect |
 |---|---|
-| App starts | `getDatabases()` + `getIndividuals()`, then `buildFieldCatalog(individuals)` synchronously → `setState({ schema, databases, individuals, ... })` → every panel renders once. Individuals/databases load failure is fatal (full-page error + Reload). |
+| App starts | `getDatabases()` + `getFacets()`, then `buildFieldCatalog(facets)` synchronously → `setState({ schema, databases, facets, ... })` → every panel renders once. Facets/databases load failure is fatal (full-page error + Reload). |
 | User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
 | `getStats()` reports a streamed line | stale-response guard (below); if current, appended to `stats.lines` via `setState` → **only** `statsPanel` repaints, showing partial results while more lines are still arriving. When the stream ends, `status` becomes `ok`; a non-2xx response instead sets `status: "error"`. |
-| User clicks **Run query** (in Matching entrysets) | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints (the card shows a loader instead of the button) → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and flows with the page. |
+| User clicks **Run query** (in Matching events) | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints (the card shows a loader instead of the button) → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and flows with the page. |
 | User opens/closes the docs (rail or ✕) | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class and the rail's `aria-expanded`. No repaint. |
 | User clicks a workflow step | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
 
@@ -344,11 +358,11 @@ Each panel subscribes narrowly:
 
 ```ts
 subscribe((state, changed) => {
-  if (changed.has("query") || changed.has("issues") || changed.has("individuals"))
+  if (changed.has("query") || changed.has("issues") || changed.has("facets"))
     queryBuilder.render(state);
   if (changed.has("stats"))   statsPanel.render(state);
-  if (changed.has("preview") || changed.has("individuals")) dataPreview.render(state);
-  if (changed.has("individuals")) docsSidebar.render(state);
+  if (changed.has("preview") || changed.has("facets")) dataPreview.render(state);
+  if (changed.has("facets")) docsSidebar.render(state);
 });
 ```
 
@@ -373,7 +387,7 @@ Concretely:
   `{ status: "idle", data: null }` and `preview` to
   `{ status: "idle", data: null, page: 1 }`. Old numbers and rows disappear the
   instant the scope changes on screen — before any new request goes out.
-  - The Matching entrysets card then shows its ready state: an enabled **Run
+  - The Matching events card then shows its ready state: an enabled **Run
     query** button and, for an anonymous visitor or one missing compliance,
     an advisory note ("You'll be asked to log in first." / "…confirm
     compliance first.") — §9.
@@ -418,9 +432,9 @@ message unwrapped from `{ error }`) on any non-2xx response.
 
 ```ts
 getDatabases(): Promise<DatabasesResponse[]>
-getIndividuals(): Promise<Individual[]>
+getFacets(): Promise<Facet[]>
 getStats(query: QueryNode, databases: string[], onLine: (line: StatsResponse) => void, signal?: AbortSignal): Promise<void>
-runQuery(query: QueryNode, databases: string[], page: number, pageSize: number, signal?: AbortSignal): Promise<EntrysetsResponse>
+runQuery(query: QueryNode, databases: string[], page: number, pageSize: number, signal?: AbortSignal): Promise<EventsResponse>
 getMe(): Promise<AuthUser | null>
 logout(): Promise<void>
 getComplianceStatus(): Promise<ComplianceStatus>
@@ -448,9 +462,9 @@ The real backend has no `GET /api/schema` and never did — an earlier revision
 of this document guessed at one that doesn't exist in the actual API (see §13,
 2026-09-22 Revision 2). The query builder's field catalog is instead derived
 **client-side**, synchronously at startup, by `src/query/fieldCatalog.ts`'s
-`buildFieldCatalog(individuals)` from the `Individual[]` data already fetched
-via `GET /api/individuals` — one `CatalogField` per (individual, field) pair,
-label `"individualLabel.fieldLabel"`, plus a fixed, hardcoded `CatalogOperator[]`
+`buildFieldCatalog(facets)` from the `Facet[]` data already fetched
+via `GET /api/individuals` — one `CatalogField` per (facet, field) pair,
+label `"facetLabel.fieldLabel"`, plus a fixed, hardcoded `CatalogOperator[]`
 (`OPERATORS`) that never varies. `AppState.schema` holds this derived value
 (`ReturnType<typeof buildFieldCatalog>`), not a fetched response.
 
@@ -472,7 +486,7 @@ export interface CatalogOperator {
 }
 ```
 
-`valueType` is mapped from each `IndividualField.type` (falling back to
+`valueType` is mapped from each `FacetField.type` (falling back to
 `format`) by `valueTypeFor()`. The mapping is case-insensitive, ignores
 size/precision parameters (`DECIMAL(10,2)`, `VARCHAR(255)`), treats any
 `TIMESTAMP …` variant as a date, and covers the common SQL spellings
@@ -495,8 +509,8 @@ Keep deriving the catalog client-side. The reasons:
   Adding one to the mock would bring back exactly the mistake Revision 2
   corrected: a guessed contract that the frontend then depends on.
 - **It would duplicate data we already load.** Every field in the catalog is
-  one (individual, field) pair from `GET /api/individuals`, which the sidebar
-  and the Item dropdown need anyway. A second endpoint would mean a second
+  one (facet, field) pair from `GET /api/individuals`, which the sidebar
+  and the Facet dropdown need anyway. A second endpoint would mean a second
   request at startup and two sources that can disagree.
 - **The client-side part is small and stable.** `OPERATORS` and
   `OPERATOR_PROFILE` are UI decisions (which operators to offer for a number,
@@ -506,7 +520,7 @@ The one real argument for a server-side schema is type mapping. The backend
 knows its own type names, and the frontend can only guess at them
 (`valueTypeFor` above). The fix for that is narrower than a new endpoint: if
 the mapping ever becomes a problem, ask the backend to add one normalised
-field to `IndividualField` (e.g. `valueType: "string" | "number" | "boolean" |
+field to `FacetField` (e.g. `valueType: "string" | "number" | "boolean" |
 "date"`) and prefer it over `type`/`format` in `valueTypeFor`. That keeps a
 single source of truth, one request, and the UI-side operator rules in the UI.
 
@@ -525,7 +539,7 @@ export interface DatabasesResponse {
   name: string;
   /** The title of this database's owner — the company that reported the data. */
   owner: string;
-  /** Total entrysets in this database. */
+  /** Total events in this database. */
   totalEntrysets: number;
   /** This database's share of the total data across all databases — sums
    *  to 100% across every database returned. */
@@ -538,15 +552,15 @@ export interface DatabasesResponse {
 ### `GET /api/individuals`
 
 The vehicle/fleet telemetry data model — every "individual" (signal, sensor, or
-piece of event metadata) an entryset may hold a value for. Loaded once at
+piece of event metadata) an event may hold a value for. Loaded once at
 startup, alongside databases; drives the **left** docs sidebar (§9) and, via
 `buildFieldCatalog`, the query builder's field catalog. Returns a **bare
 array**, no wrapper object.
 
 ```ts
-/** One field an individual's telemetry item can report (GET /api/individuals). */
-export interface IndividualField {
-  /** This field's locally unique, API-friendly "ID" within this individual. */
+/** One field a facet's telemetry facet can report (GET /api/individuals). */
+export interface FacetField {
+  /** This field's locally unique, API-friendly "ID" within this facet. */
   label: string;
   /** The field's actual type, defined by the backend (e.g. VARCHAR, BIGINT,
    *  TIMESTAMP). Takes precedence over `format` when both are present. */
@@ -573,10 +587,10 @@ export interface IndividualField {
 }
 
 /**
- * One item in the vehicle telemetry data model — a signal, sensor, or piece
- * of metadata that an entryset may hold a value for.
+ * One facet in the vehicle telemetry data model — a signal, sensor, or piece
+ * of metadata that an event may hold a value for.
  */
-export interface Individual {
+export interface Facet {
   /** Unique "ID" for API requests — a permutation of `name` with special
    *  characters removed. */
   label: string;
@@ -584,7 +598,7 @@ export interface Individual {
   group: string;
   /** Our own tags, from a limited reusable pool. More useful than `group`. */
   tags: string[];
-  /** This individual's unique identification number. */
+  /** This facet's unique identification number. */
   idNumber: number;
   /** Descriptive name, shown to the user in place of `label`. */
   name: string;
@@ -592,18 +606,18 @@ export interface Individual {
   description: string;
   /** The backend's own, always-correct description. */
   comment: string;
-  /** How many times this individual appears across ALL databases. No
+  /** How many times this facet appears across ALL databases. No
    *  percentage is supplied — the frontend derives one from
    *  DatabasesResponse[].totalEntrysets (see docsSidebar.ts). */
   totalCount: number;
-  fields: IndividualField[];
+  fields: FacetField[];
 }
 ```
 
-The 4 `group: "metadata"` items (`observation_window`, `vehicle_identity`,
-`trip_context`, `gps_position`) are always fully populated in any entryset —
-they carry the time/identity/position every entryset needs and are used for
-indexing. There is no field marking an item as metadata vs. content; it's
+The 4 `group: "metadata"` facets (`observation_window`, `vehicle_identity`,
+`trip_context`, `gps_position`) are always fully populated in any event —
+they carry the time/identity/position every event needs and are used for
+indexing. There is no field marking a facet as metadata vs. content; it's
 tracked only by convention (see git history for the design discussion).
 This is a property of the **mock** dataset only — the real databases have no
 `metadata` group, so `src/` never names it; values to suppress are listed in
@@ -633,7 +647,7 @@ export interface StatsResponse {
    *  per-database HTTP status in an NDJSON stream, so this is how failure
    *  is signaled instead. */
   success: boolean;
-  /** Individuals matched by this query in this database. Only meaningful
+  /** Events matched by this query in this database. Only meaningful
    *  when `success` is true — optional rather than a fabricated 0, so a
    *  failed database can never be misread as "zero rows matched." */
   matchCount?: number;
@@ -663,25 +677,25 @@ carry `errorMessages`/`infoMessages` instead of a count. A missing / empty
 
 Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
 Called only when the user clicks **Run query** (§9). Same `400` validation as `/api/stats`. The
-mock scopes `ROWS` (every entryset, flattened) to the selected databases,
+mock scopes `ROWS` (every event, flattened) to the selected databases,
 evaluates the query against them, and maps matching rows back to their
-source entrysets, capped at 25. `page`/`pageSize` are accepted but unused —
+source events, capped at 25. `page`/`pageSize` are accepted but unused —
 there is no pagination (§9); the whole capped result comes back in one
 response.
 
 ```ts
-interface Entryset {
+interface EventRecord {
   id: number;
-  items: Record<string, Record<string, string | number | boolean>>; // keyed by Individual.label, then field label
+  items: Record<string, Record<string, string | number | boolean>>; // keyed by Facet.label, then field label
 }
-interface EntrysetsResponse {
+interface EventsResponse {
   entrysets: Entryset[];
 }
 ```
 
-Drives the **bottom** data preview (§9): a compact summary row per entryset,
-not a full item-by-item view — see §9 for why (design rationale: a full
-comparison grid doesn't scale past a handful of entrysets in either
+Drives the **bottom** data preview (§9): a compact summary row per event,
+not a full facet-by-facet view — see §9 for why (design rationale: a full
+comparison grid doesn't scale past a handful of events in either
 orientation; a summary list does). There is no pagination — the whole list is
 returned in one response and scrolls internally.
 
@@ -710,7 +724,7 @@ interface AuthUser {
 
 `POST /api/query` requires both a session (`401 { error }` without one) and
 a compliance acknowledgment (`403 { error }` without one) — everything else
-(`schema`, `databases`, `individuals`, `stats`) stays anonymous-accessible.
+(`schema`, `databases`, `facets`, `stats`) stays anonymous-accessible.
 `canRunQuery` is NOT auth- or compliance-aware, and neither is `dataPreview.ts`'s
 enabling of the Run button — Run always genuinely attempts the request, and
 `main.ts` reacts to whatever status code comes back (§5, §9). A `401` always redirects into login. A
@@ -774,8 +788,8 @@ export type LogicalOperator = "AND" | "OR";
 export interface Condition {
   kind: "condition";
   id: string;                 // stable id; used as the key when re-rendering
-  individualId: string | null; // UI staging only — which individual.json item is picked in the
-                                // builder's Item dropdown, ahead of a field being chosen. Never
+  facetId: string | null; // UI staging only — which individual.json facet is picked in the
+                                // builder's Facet dropdown, ahead of a field being chosen. Never
                                 // read by validate.ts/summary.ts/the mock backend; fieldId (below)
                                 // stays the sole authoritative target.
   fieldId: string | null;     // null = not chosen yet
@@ -819,7 +833,7 @@ Display only; has no bearing on what is sent to the API.
 ### Wire format
 
 The tree is sent as-is, `JSON.stringify(query)`. No custom DSL string on the wire.
-Since `Condition` gained `individualId`, the tree can now carry that one UI-only
+Since `Condition` gained `facetId`, the tree can now carry that one UI-only
 key on the wire too — the backend simply ignores it, same as any other field it
 doesn't recognize.
 
@@ -848,21 +862,21 @@ plugin; its hover `title` is `databaseTitle`: "owner: description", or
 whichever is non-blank, or no `title` at all), "N of M selected", and **All** / **None** buttons. Toggling calls
 `onDatabasesChange` in `main.ts`, which treats it exactly like a query edit
 (§6). Zero selected → an amber "Select at least one database." note, and the
-statistics and Matching entrysets cards explain why they are empty.
+statistics and Matching events cards explain why they are empty.
 
 ### Left — `docsSidebar.ts` (data dictionary)
 
-Built from `state.individuals` (GET /api/individuals) — not `state.schema`.
+Built from `state.facets` (GET /api/individuals) — not `state.schema`.
 Hidden behind the docs rail by default (`sidebarCollapsed` starts `true`);
 the rail and the card's ✕ both toggle it. Sections are built from our own
 `tags`, not the third-party `group` (`groupByTag` in `docsFilter.ts`): one
-native `<details>` per tag, sorted alphabetically, listing every item carrying
-it — so an item with several tags appears in several sections. Tags are
-trimmed and blank/duplicate tags dropped (`tagsOf`); items left with no tags
+native `<details>` per tag, sorted alphabetically, listing every facet carrying
+it — so a facet with several tags appears in several sections. Tags are
+trimmed and blank/duplicate tags dropped (`tagsOf`); facets left with no tags
 go in a final italic **Untagged** section (key `UNTAGGED`, the empty string —
-never a real tag). Each item shows: name, tag chips, a small "Group: …" line
+never a real tag). Each facet shows: name, tag chips, a small "Group: …" line
 with the third-party `group` (omitted when blank — the backend may send `""`),
-`description`, italic `comment`, "In N entrysets (x%)" (`matchRatio` against
+`description`, italic `comment`, "In N events (x%)" (`matchRatio` against
 the sum of every database's `totalEntrysets`), and field chips (`name`,
 falling back to `label`, + type) whose hover `title` is `fieldTitle`: the
 field's `comment`, then "Third-party: `description`". The backend sends `""`
@@ -870,9 +884,9 @@ for missing text, so every `description`/`comment`/`group`/`owner` goes
 through `text()` (trim) and a blank value's element or `title` is omitted
 rather than rendered empty. Tags and group names are shown in the backend's
 casing with underscores as spaces (`displayLabel`). The search box filters
-with `matchDocs` (item name, field label or name; case-insensitive): matching
-sections open and show "N matches", other sections and items are hidden, and
-"No items match …" appears when nothing does. The filter sets `hidden`/`open` on the painted DOM instead
+with `matchDocs` (facet name, field label or name; case-insensitive): matching
+sections open and show "N matches", other sections and facets are hidden, and
+"No facets match …" appears when nothing does. The filter sets `hidden`/`open` on the painted DOM instead
 of repainting, so typing keeps focus.
 
 ### Centre — `queryBuilder.ts`
@@ -891,11 +905,11 @@ on node kind, `groupHtml` renders a group and recurses into its children via
   `queryToText` summary and "N conditions". **+ Group** inserts `newGroup()`,
   which already holds one empty condition.
 - A condition = three cascading dropdowns followed by a value control:
-  1. **Item** `ui dropdown` (searchable) — built from `state.individuals`; picking
-     one stages `individualId` on the condition.
-  2. **Field** `ui dropdown` — filtered to the chosen item's fields (matched by
+  1. **Facet** `ui dropdown` (searchable) — built from `state.facets`; picking
+     one stages `facetId` on the condition.
+  2. **Field** `ui dropdown` — filtered to the chosen facet's fields (matched by
      `fieldId` prefix), shown by their short slug rather than repeating the
-     item's name; disabled and empty until an item is chosen.
+     facet's name; disabled and empty until a facet is chosen.
   3. **Operator** `ui dropdown` (unchanged) — options from the selected field's
      `operatorIds`.
   4. A **value** control chosen by the operator's `arity` × the field's
@@ -905,7 +919,7 @@ on node kind, `groupHtml` renders a group and recurses into its children via
      - `two` → two inputs (from / to)
      - `many` → multiple `ui dropdown` (chips)
 
-  Changing the Item resets Field, Operator, and the value to empty/null — the
+  Changing the Facet resets Field, Operator, and the value to empty/null — the
   same cascade-reset pattern that changing Field already applies one level
   down to Operator/value.
 - Issues show under their row/group header: `kind: "incomplete"` as a quiet
@@ -935,7 +949,7 @@ Every number in this panel goes through `src/ui/format.ts` so it stays inside a
 
 A ~15rem card, sticky beside the builder. Top to bottom: the headline (big
 compact sum of `matchCount` over the successful lines so far, labelled
-"matching entrysets", then "ratio of total" and a thin bar), then **By
+"matching events", then "ratio of total" and a thin bar), then **By
 database** — one compact grid row per streamed line: name · bar · ratio
 (exact figures on hover), or for a failed database its `errorMessages` in
 red with `infoMessages` beneath — then, while loading, "Waiting on N more
@@ -949,49 +963,49 @@ window); `error` → `ui negative message`, no data. There is no per-field-block
 list — the real backend can currently only return counts, not aggregated
 min/max/avg/buckets/earliest/latest.
 
-### Main column, under the query — `dataPreview.ts` (Matching entrysets)
+### Main column, under the query — `dataPreview.ts` (Matching events)
 
 Owns the app's only **Run query** button. States: query not runnable (no
 database / no condition / unfinished) → disabled button + the reason; ready
 (`preview.status === "idle"`) → enabled button + an advisory note for
 anonymous users or missing compliance; loading → loader; error → red message
-+ **Try again**; ok → "Matching entrysets · N" and the list, with no Run
++ **Try again**; ok → "Matching events · N" and the list, with no Run
 button (the card resets to "ready" whenever the query or scope changes, §6,
 so there is one run per query). `wireDataPreview` attaches one delegated
 click listener that calls `runPreview()`.
 
-On success: a **summary index list**, one compact row per entryset in
-`EntrysetsResponse.entrysets` — not a full item-by-item grid. Design
-rationale: entrysets are heterogeneous (each is a different event, most
-likely holding a different subset of `individual.json`'s items), so a grid
-needs either items-as-rows (fine for a handful of entrysets-as-columns, but
-entrysets don't scale past ~5-6 columns on screen) or entrysets-as-rows
-(scales entrysets fine, but then *items* become columns and the union across
-many varied entrysets can easily reach 60-100+, needing horizontal scroll —
+On success: a **summary index list**, one compact row per event in
+`EventsResponse.entrysets` — not a full facet-by-facet grid. Design
+rationale: events are heterogeneous (each is a different event, most
+likely holding a different subset of `individual.json`'s facets), so a grid
+needs either facets-as-rows (fine for a handful of events-as-columns, but
+events don't scale past ~5-6 columns on screen) or events-as-rows
+(scales events fine, but then *facets* become columns and the union across
+many varied events can easily reach 60-100+, needing horizontal scroll —
 worse UX than vertical). A summary list sidesteps the problem entirely: no
-per-item columns, so it scales to 20+ entrysets just by scrolling vertically
-(`.qb-entryset-list`, flowing with the page).
+per-facet columns, so it scales to 20+ events just by scrolling vertically
+(`.qb-event-list`, flowing with the page).
 
 Each row is a native `<details>/<summary>` element (no JS wiring needed for
 expand/collapse):
 
-- **Summary line**: entryset id, then one cell per `ROW_COLUMNS` entry in
-  `src/config.ts` (none by default) — the entryset's value for that
-  `item.field` (`rowCell`: `—` when absent; `format: "datetime"` →
+- **Summary line**: event id, then one cell per `ROW_COLUMNS` entry in
+  `src/config.ts` (none by default) — the event's value for that
+  `facet.field` (`rowCell`: `—` when absent; `format: "datetime"` →
   `formatWhen`), hover "heading: value". Each row is its own CSS grid, so the
   tracks (`rowGrid`, set as `--qb-er-grid` on the list) never depend on
-  content: 12rem for dates, `minmax(0, 10rem)` + ellipsis for text. Then badges for the entryset's
-  items — computed by `entrysetBadges` cross-referencing `state.individuals`,
+  content: 12rem for dates, `minmax(0, 10rem)` + ellipsis for text. Then badges for the event's
+  facets — computed by `eventBadges` cross-referencing `state.facets`,
   leaving out any tag or group listed in `HIDDEN_ROW_BADGES` (`src/config.ts`;
-  case-insensitive; hides only that badge, not the item's others; empty by
+  case-insensitive; hides only that badge, not the facet's others; empty by
   default) — **tags first** (our own; filled
   grey `.qb-tag` chips, first 3) **then third-party groups** (dashed-outline
   `.qb-group-badge` pills, first 2, set off by a small gap), each ranked by how
-  many of the entryset's items carry it (ties alphabetical), blanks dropped,
-  each with its own `+N` whose hover lists the rest; and the total item count.
-- **Expanded content**: the entryset's full `{ id, items }` as pretty-printed
-  JSON (`JSON.stringify(entryset, null, 2)` in a `<pre>`) — a throwaway stand-in
-  for the dedicated pretty-JSON entryset viewer planned as a follow-up; expect
+  many of the event's facets carry it (ties alphabetical), blanks dropped,
+  each with its own `+N` whose hover lists the rest; and the total facet count.
+- **Expanded content**: the event's full `{ id, items }` as pretty-printed
+  JSON (`JSON.stringify(event, null, 2)` in a `<pre>`) — a throwaway stand-in
+  for the dedicated pretty-JSON event viewer planned as a follow-up; expect
   this to be replaced by a link/route into that viewer once it exists.
 
 `/api/query` filters for real (§7, §10), so this list changes with the query
@@ -1017,15 +1031,15 @@ bottom.
 - `mock-server/databases.ts` defines 7 synthetic databases (`ALPHA`..`ETA`)
   as `DatabaseDef` objects (`description`/`name`/`owner`/`totalEntrysets`/
   `percentageOfTotal`/`label`, each `totalEntrysets` spanning several orders
-  of magnitude), and `dbIndexForEntrysetId(id)` — a hash of the entryset's
+  of magnitude), and `dbIndexForEntrysetId(id)` — a hash of the event's
   own numeric id that assigns it to exactly one database, independent of its
   content. `DatabaseDef` is field-identical to the wire `DatabasesResponse`
   shape, so `GET /api/databases` sends `DATABASES` directly with no filtering
   step — every field, including `totalEntrysets`/`percentageOfTotal`, is part
   of the real contract.
-- `mock-server/rows.ts` flattens every entryset in `ENTRYSETS`
+- `mock-server/rows.ts` flattens every event in `ENTRYSETS`
   (`mock-server/vehicleData.ts`) into a flat `Row` — dotted
-  `"individualLabel.fieldLabel"` keys matching the schema's field labels, plus
+  `"facetLabel.fieldLabel"` keys matching the schema's field labels, plus
   a synthetic `__db` key from `databaseIdForEntrysetId` — once at startup
   (`ROWS`).
 - `mock-server/auth.ts` simulates the entire OAuth round trip in-process:
@@ -1088,7 +1102,7 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
   `ui negative message`. Per §6, data is nulled — never left stale. Errors from a
   request that was aborted because it was superseded never reach a panel (the
   §6 identity guard drops them).
-- A failure loading databases/individuals at startup is fatal: replace `#app`
+- A failure loading databases/facets at startup is fatal: replace `#app`
   with a full-page `ui negative message` + Reload button. The message is
   HTML-escaped like every other server-supplied string (it can come from an
   `{ error }` body), and the button is wired with `addEventListener` rather than
@@ -1110,8 +1124,8 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 - `validate.test.ts` — each issue type is reported; a complete query yields `[]`.
 - `summary.test.ts` — representative trees produce the expected text.
 - `tests/ui/docsFilter.test.ts` — data-dictionary filter matching.
-- `tests/ui/dataPreview.test.ts` — row badges (`entrysetBadges`), configured columns (`rowCell`, `rowGrid`).
-- `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock item, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
+- `tests/ui/dataPreview.test.ts` — row badges (`eventBadges`), configured columns (`rowCell`, `rowGrid`).
+- `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock facet, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
 - `tests/ui/format.test.ts` / `statsPanel.test.ts` / `valueControl.test.ts` — formatting helpers and the few pure render helpers.
 - Fixture request/response objects double as contract examples.
 - No DOM/component tests — the view layer is deliberately too thin to be worth it (repo rule).
@@ -1171,3 +1185,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-23 | Matching entrysets rows show tags and groups: `dataPreview.ts` `entrysetBadges` returns both, ranked by frequency within the entryset (ties alphabetical), metadata items skipped, blanks dropped. Tags render first as filled `.qb-tag` chips (max 3), then groups as dashed-outline `.qb-group-badge` pills (max 2), each with its own `+N` overflow whose hover lists the hidden values. Tests: `tests/ui/dataPreview.test.ts`. |
 | 2026-09-23 | Removed the hard-coded `"metadata"` exclusion from the Matching entrysets badges (the real databases have no such group). New `src/config.ts` `HIDDEN_ROW_BADGES = { tags, groups }` (empty by default) lists values to omit; matching ignores case/whitespace and hides only that badge. `entrysetBadges` takes the lists as an optional parameter (defaulting to the config) so tests don't depend on it. With the mock data, the metadata items' `metadata` group and tags now appear as badges unless listed there. |
 | 2026-09-23 | The frontend no longer names any backend data. The Matching entrysets "When"/"Vehicle" columns (hard-coded mock items `observation_window.from_timestamp` / `vehicle_identity.vehicle_type`) are replaced by `ROW_COLUMNS` in `src/config.ts` (`{ heading, item, field, format? }[]`, empty by default → rows show id, badges, item count). `rowCell` / `rowGrid` in `dataPreview.ts`; `.qb-er-when`/`.qb-er-vehicle` → `.qb-er-cell`; the row grid template comes from `--qb-er-grid`. Mock-specific wording removed from comments (`types.ts`, `state.ts`, `format.ts`). New guard test `tests/noBackendDataInSrc.test.ts`. |
+| 2026-09-23 | Terminology: "Entrysets" renamed to **Events** and "Individuals" (shown in the UI as "Item") renamed to **Facets** across `src/`, the frontend tests and this document (UI text, `EventRecord`/`EventsResponse`/`Facet`/`FacetField`, `getFacets`, `AppState.facets`, `Condition.facetId`, `RowColumn.facet`, `DocsMatch.facets`, `.qb-event-*` / `.qb-doc-facet*` CSS). The event type is `EventRecord`, not `Event`, so it doesn't shadow the DOM `Event`. The wire contract is unchanged: `GET /api/individuals`, `totalEntrysets`, `entrysets` and `items` keep the backend's names. `Condition.individualId` → `facetId` changes the key in the query JSON sent to the backend; it's UI staging only and the backend ignores it. A pending query saved by an older build (`individualId`) fails `isQueryNode` and is dropped. See §1 "Terminology". |

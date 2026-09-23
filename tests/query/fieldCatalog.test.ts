@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { buildFieldCatalog, OPERATORS, valueTypeFor } from "../../src/query/fieldCatalog";
-import type { Individual } from "../../src/api/types";
+import type { Facet } from "../../src/api/types";
 
-const individuals: Individual[] = [
+const facets: Facet[] = [
   {
     label: "engine_rpm",
     group: "engine",
@@ -75,8 +75,8 @@ const individuals: Individual[] = [
 ];
 
 describe("buildFieldCatalog", () => {
-  it("labels are dotted individualLabel.fieldLabel", () => {
-    const { fields } = buildFieldCatalog(individuals);
+  it("labels are dotted facetLabel.fieldLabel", () => {
+    const { fields } = buildFieldCatalog(facets);
     expect(fields.map((f) => f.label)).toEqual([
       "engine_rpm.value_rpm",
       "engine_rpm.redline_rpm",
@@ -87,16 +87,16 @@ describe("buildFieldCatalog", () => {
   });
 
   it("maps backend type to valueType", () => {
-    const { fields } = buildFieldCatalog(individuals);
+    const { fields } = buildFieldCatalog(facets);
     expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.valueType).toBe("number");
     expect(fields.find((f) => f.label === "engine_rpm.is_over_rev")?.valueType).toBe("boolean");
     expect(fields.find((f) => f.label === "vehicle_identity.vin")?.valueType).toBe("string");
   });
 
   it("falls back to format when type is empty", () => {
-    const withFallback: Individual[] = [
+    const withFallback: Facet[] = [
       {
-        ...individuals[0]!,
+        ...facets[0]!,
         fields: [
           {
             label: "observed_at",
@@ -114,15 +114,15 @@ describe("buildFieldCatalog", () => {
     expect(fields[0]?.valueType).toBe("date");
   });
 
-  it("name combines the individual's name and the field's label", () => {
-    const { fields } = buildFieldCatalog(individuals);
+  it("name combines the facet's name and the field's label", () => {
+    const { fields } = buildFieldCatalog(facets);
     expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.name).toBe(
       "Engine RPM: value_rpm",
     );
   });
 
-  it("description falls back to the individual's description when the field's is empty", () => {
-    const { fields } = buildFieldCatalog(individuals);
+  it("description falls back to the facet's description when the field's is empty", () => {
+    const { fields } = buildFieldCatalog(facets);
     expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.description).toBe(
       "Engine rotational speed.",
     );
@@ -132,7 +132,7 @@ describe("buildFieldCatalog", () => {
   });
 
   it("assigns operatorIds per valueType, all of which are real operator labels", () => {
-    const { fields } = buildFieldCatalog(individuals);
+    const { fields } = buildFieldCatalog(facets);
     const opLabels = new Set(OPERATORS.map((o) => o.label));
     for (const f of fields) {
       expect(f.operatorIds.length).toBeGreaterThan(0);
@@ -156,9 +156,9 @@ describe("buildFieldCatalog", () => {
   });
 
   it("a field with non-empty values becomes an enum field with matching options, regardless of cardinality", () => {
-    const withValues: Individual[] = [
+    const withValues: Facet[] = [
       {
-        ...individuals[1]!,
+        ...facets[1]!,
         fields: [
           {
             label: "vehicle_type",
@@ -183,9 +183,9 @@ describe("buildFieldCatalog", () => {
   });
 
   it("a field with empty values is never valueType enum, no matter its cardinality", () => {
-    const lowCardinalityNoValues: Individual[] = [
+    const lowCardinalityNoValues: Facet[] = [
       {
-        ...individuals[1]!,
+        ...facets[1]!,
         fields: [
           {
             label: "vehicle_type",

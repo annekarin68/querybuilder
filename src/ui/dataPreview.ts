@@ -1,5 +1,5 @@
 import type { AppState } from "../state";
-import type { Entryset, Individual } from "../api/types";
+import type { EventRecord, Facet } from "../api/types";
 import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
@@ -12,22 +12,22 @@ import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
 const MAX_TAG_BADGES = 3;
 const MAX_GROUP_BADGES = 2;
 
-function individualsByLabel(state: AppState): Map<string, Individual> {
-  const map = new Map<string, Individual>();
-  for (const item of state.individuals ?? []) map.set(item.label, item);
+function facetsByLabel(state: AppState): Map<string, Facet> {
+  const map = new Map<string, Facet>();
+  for (const facet of state.facets ?? []) map.set(facet.label, facet);
   return map;
 }
 
 /**
- * The distinct tags and third-party groups of an entryset's items, each
- * ordered by how many of its items carry it (most first, then alphabetical),
- * so the inline badges show what this entryset is mostly about. Blank values
+ * The distinct tags and third-party groups of an event's facets, each
+ * ordered by how many of its facets carry it (most first, then alphabetical),
+ * so the inline badges show what this event is mostly about. Blank values
  * and those listed in `hidden` (default: `HIDDEN_ROW_BADGES` in config.ts,
  * matched ignoring case) are dropped.
  */
-export function entrysetBadges(
-  entryset: Entryset,
-  byLabel: Map<string, Individual>,
+export function eventBadges(
+  event: EventRecord,
+  byLabel: Map<string, Facet>,
   hidden: { tags: string[]; groups: string[] } = HIDDEN_ROW_BADGES,
 ): { tags: string[]; groups: string[] } {
   const norm = (s: string) => text(s).toLowerCase();
@@ -36,12 +36,12 @@ export function entrysetBadges(
   const tags = new Map<string, number>();
   const groups = new Map<string, number>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-  for (const label of Object.keys(entryset.items)) {
-    const ind = byLabel.get(label);
-    if (!ind) continue;
-    const group = text(ind.group);
+  for (const label of Object.keys(event.items)) {
+    const facet = byLabel.get(label);
+    if (!facet) continue;
+    const group = text(facet.group);
     if (group && !hiddenGroups.has(norm(group))) bump(groups, group);
-    for (const tag of tagsOf(ind)) {
+    for (const tag of tagsOf(facet)) {
       if (tag !== UNTAGGED && !hiddenTags.has(norm(tag))) bump(tags, tag);
     }
   }
@@ -65,22 +65,22 @@ function badgesHtml(values: string[], max: number, cls: string, kind: string): s
 }
 
 /** Tags first (our own, filled chips), then third-party groups (outlined). */
-function tagsAndGroupsHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
-  const { tags, groups } = entrysetBadges(entryset, byLabel);
+function tagsAndGroupsHtml(event: EventRecord, byLabel: Map<string, Facet>): string {
+  const { tags, groups } = eventBadges(event, byLabel);
   return (
     badgesHtml(tags, MAX_TAG_BADGES, "qb-tag", "Tag") +
     badgesHtml(groups, MAX_GROUP_BADGES, "qb-group-badge", "Group")
   );
 }
 
-/** The text of one configured column for one entryset ("—" when absent). */
-export function rowCell(entryset: Entryset, col: RowColumn): string {
-  const v = entryset.items[col.item]?.[col.field];
+/** The text of one configured column for one event ("—" when absent). */
+export function rowCell(event: EventRecord, col: RowColumn): string {
+  const v = event.items[col.facet]?.[col.field];
   if (v === undefined || v === null || v === "") return "—";
   return col.format === "datetime" ? formatWhen(String(v)) : String(v);
 }
 
-/** The row grid: id, one column per ROW_COLUMNS entry, badges, item count.
+/** The row grid: id, one column per ROW_COLUMNS entry, badges, facet count.
  *  Every row is its own grid, so tracks must not depend on content or the
  *  columns would misalign: dates get a fixed width that fits a medium
  *  date + short time; text is capped and ellipsised, full value on hover. */
@@ -89,33 +89,33 @@ export function rowGrid(columns: RowColumn[]): string {
   return ["3rem", ...cols, "minmax(0, 1fr)", "auto"].join(" ");
 }
 
-function entrysetRowHtml(
-  entryset: Entryset,
-  byLabel: Map<string, Individual>,
+function eventRowHtml(
+  event: EventRecord,
+  byLabel: Map<string, Facet>,
   columns: RowColumn[],
 ): string {
   const cells = columns
     .map((col) => {
-      const value = rowCell(entryset, col);
+      const value = rowCell(event, col);
       return `<span class="qb-er-cell" title="${escapeHtml(`${col.heading}: ${value}`)}">${escapeHtml(value)}</span>`;
     })
     .join("");
   return `
-    <details class="qb-entryset-row">
+    <details class="qb-event-row">
       <summary>
-        <span class="qb-er-id">#${escapeHtml(entryset.id)}</span>
+        <span class="qb-er-id">#${escapeHtml(event.id)}</span>
         ${cells}
-        <span class="qb-er-groups">${tagsAndGroupsHtml(entryset, byLabel)}</span>
-        <span class="qb-er-count">${countLabel(Object.keys(entryset.items).length, "item")}</span>
+        <span class="qb-er-groups">${tagsAndGroupsHtml(event, byLabel)}</span>
+        <span class="qb-er-count">${countLabel(Object.keys(event.items).length, "facet")}</span>
       </summary>
-      <pre class="qb-er-json">${escapeHtml(JSON.stringify(entryset, null, 2))}</pre>
+      <pre class="qb-er-json">${escapeHtml(JSON.stringify(event, null, 2))}</pre>
     </details>`;
 }
 
 function card(body: string, count?: number): string {
   const n =
     count === undefined ? "" : ` <span class="qb-card-count">· ${count.toLocaleString()}</span>`;
-  return `<div class="qb-card qb-preview"><h2 class="qb-card-title">Matching entrysets${n}</h2>${body}</div>`;
+  return `<div class="qb-card qb-preview"><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
 }
 
 /** The Run control — the only one in the app. Its enabled state is decided by
@@ -165,7 +165,7 @@ export function renderDataPreview(state: AppState): void {
   if (p.status === "idle") {
     paint(
       el,
-      card(runBlock("Fetch a sample of the entrysets this query matches.", true, runNote(state))),
+      card(runBlock("Fetch a sample of the events this query matches.", true, runNote(state))),
     );
     return;
   }
@@ -173,7 +173,7 @@ export function renderDataPreview(state: AppState): void {
     paint(
       el,
       card(
-        `<div class="qb-run"><div class="ui active inline loader"></div><p class="qb-run-msg">Fetching entrysets…</p></div>`,
+        `<div class="qb-run"><div class="ui active inline loader"></div><p class="qb-run-msg">Fetching events…</p></div>`,
       ),
     );
     return;
@@ -182,7 +182,7 @@ export function renderDataPreview(state: AppState): void {
     paint(
       el,
       card(
-        `<div class="ui small negative message"><div class="header">Could not load entrysets</div><p>${escapeHtml(p.error)}</p></div>
+        `<div class="ui small negative message"><div class="header">Could not load events</div><p>${escapeHtml(p.error)}</p></div>
          ${runBlock("", true, "", "Try again")}`,
       ),
     );
@@ -192,18 +192,18 @@ export function renderDataPreview(state: AppState): void {
     paint(el, "");
     return;
   }
-  const { entrysets } = p.data;
-  if (entrysets.length === 0) {
-    paint(el, card(`<p class="qb-placeholder">No entrysets match this query.</p>`, 0));
+  const { entrysets: events } = p.data;
+  if (events.length === 0) {
+    paint(el, card(`<p class="qb-placeholder">No events match this query.</p>`, 0));
     return;
   }
-  const byLabel = individualsByLabel(state);
+  const byLabel = facetsByLabel(state);
   paint(
     el,
     card(
-      `<p class="qb-preview-note qb-muted">Showing ${countLabel(entrysets.length, "entryset")} — click a row to see its full JSON.</p>
-       <div class="qb-entryset-list" style="--qb-er-grid: ${rowGrid(ROW_COLUMNS)}">${entrysets.map((e) => entrysetRowHtml(e, byLabel, ROW_COLUMNS)).join("")}</div>`,
-      entrysets.length,
+      `<p class="qb-preview-note qb-muted">Showing ${countLabel(events.length, "event")} — click a row to see its full JSON.</p>
+       <div class="qb-event-list" style="--qb-er-grid: ${rowGrid(ROW_COLUMNS)}">${events.map((e) => eventRowHtml(e, byLabel, ROW_COLUMNS)).join("")}</div>`,
+      events.length,
     ),
   );
 }

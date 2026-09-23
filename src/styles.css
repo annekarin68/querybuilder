@@ -752,7 +752,7 @@ body {
   margin: 0;
 }
 
-/* ---- Matching entrysets (src/ui/dataPreview.ts) ---- */
+/* ---- Matching events (src/ui/dataPreview.ts) ---- */
 .qb-run {
   padding: 1.25rem 0.75rem;
   text-align: center;
@@ -782,17 +782,17 @@ body {
   margin: 0 0 0.5rem;
   font-size: 0.85rem;
 }
-.qb-entryset-list {
+.qb-event-list {
   border: 1px solid var(--qb-border);
   border-radius: var(--qb-radius);
 }
-.qb-entryset-row {
+.qb-event-row {
   border-bottom: 1px solid var(--qb-border);
 }
-.qb-entryset-row:last-child {
+.qb-event-row:last-child {
   border-bottom: none;
 }
-.qb-entryset-row summary {
+.qb-event-row summary {
   display: grid;
   /* Set inline by dataPreview.ts from the configured ROW_COLUMNS. */
   grid-template-columns: var(--qb-er-grid, 3rem minmax(0, 1fr) auto);
@@ -802,13 +802,13 @@ body {
   cursor: pointer;
   list-style: none;
 }
-.qb-entryset-row summary::-webkit-details-marker {
+.qb-event-row summary::-webkit-details-marker {
   display: none;
 }
-.qb-entryset-row summary:hover {
+.qb-event-row summary:hover {
   background: var(--qb-surface-2);
 }
-.qb-entryset-row[open] summary {
+.qb-event-row[open] summary {
   background: #eef4fa;
 }
 .qb-er-id {
@@ -906,14 +906,14 @@ body {
 .qb-doc-group-name {
   flex: 1 1 auto;
 }
-.qb-doc-items {
+.qb-doc-facets {
   padding: 0 0 0.5rem 1.3rem;
 }
-.qb-doc-item {
+.qb-doc-facet {
   padding: 0.5rem 0;
   border-top: 1px dashed var(--qb-border);
 }
-.qb-doc-item:first-child {
+.qb-doc-facet:first-child {
   border-top: none;
 }
 .qb-doc-name {

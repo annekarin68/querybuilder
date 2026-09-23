@@ -4,8 +4,8 @@ import { hasBlockingErrors } from "./query/validate";
 import type {
   AuthUser,
   DatabasesResponse,
-  EntrysetsResponse,
-  Individual,
+  EventsResponse,
+  Facet,
   StatsResponse,
 } from "./api/types";
 import { buildFieldCatalog } from "./query/fieldCatalog";
@@ -18,7 +18,7 @@ export interface AppState {
   /** The databases the query can be scoped to (loaded once). */
   databases: DatabasesResponse[] | null;
   /** The data model backing the docs sidebar (loaded once). */
-  individuals: Individual[] | null;
+  facets: Facet[] | null;
   /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
   /** Compliance acknowledgment for this session, if any — populated once at
@@ -37,7 +37,7 @@ export interface AppState {
   issues: Issue[];
 
   stats: { status: AsyncStatus; lines: StatsResponse[]; error: string | null };
-  preview: { status: AsyncStatus; data: EntrysetsResponse | null; error: string | null };
+  preview: { status: AsyncStatus; data: EventsResponse | null; error: string | null };
 
   sidebarCollapsed: boolean;
 }
@@ -45,7 +45,7 @@ export interface AppState {
 export const initialState: AppState = {
   schema: null,
   databases: null,
-  individuals: null,
+  facets: null,
   auth: { status: "loading", user: null },
   compliance: { status: "loading", reason: null, ackedAt: null },
   selectedDatabaseIds: [],

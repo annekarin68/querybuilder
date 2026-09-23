@@ -59,6 +59,6 @@ describe("headlineHtml", () => {
 
   it("labels the headline number", () => {
     const html = headlineHtml(stateWith("ok", [{ label: "a", success: true, matchCount: 10 }]));
-    expect(html).toContain("matching entrysets");
+    expect(html).toContain("matching events");
   });
 });

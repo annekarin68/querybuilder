@@ -4,7 +4,7 @@ import {
   COMPLIANCE_START_URL,
   getComplianceStatus,
   getDatabases,
-  getIndividuals,
+  getFacets,
   getMe,
   getStats,
   invalidateCompliance,
@@ -84,7 +84,7 @@ describe("api client", () => {
     expect(f).toHaveBeenCalledWith("/api/databases", { signal: expect.any(AbortSignal) });
   });
 
-  it("getIndividuals GETs /api/individuals and returns the parsed bare array", async () => {
+  it("getFacets GETs /api/individuals and returns the parsed bare array", async () => {
     const f = mockFetchOnce(200, [
       {
         label: "engine_rpm",
@@ -99,7 +99,7 @@ describe("api client", () => {
       },
     ]);
     vi.stubGlobal("fetch", f);
-    const out = await getIndividuals();
+    const out = await getFacets();
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);
     expect(out[0]?.label).toBe("engine_rpm");

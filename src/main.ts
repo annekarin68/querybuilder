@@ -16,7 +16,7 @@ import {
   COMPLIANCE_START_URL,
   getComplianceStatus,
   getDatabases,
-  getIndividuals,
+  getFacets,
   getMe,
   getStats,
   invalidateCompliance,
@@ -69,12 +69,12 @@ onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
 });
-// Run lives in the "Matching entrysets" panel (the only Run control).
+// Run lives in the "Matching events" panel (the only Run control).
 wireDataPreview(panelEls().preview, () => runPreview());
 
 /**
  * Any link that navigates straight into the login or compliance flow (the
- * account menu, the Matching entrysets card's notes) must save the in-progress query
+ * account menu, the Matching events card's notes) must save the in-progress query
  * first too, not just the Run button's own redirect path (§2 of the
  * compliance-logging design spec) — otherwise a user who follows the
  * on-screen guidance loses their query on a hop Run itself protects. Those
@@ -335,7 +335,7 @@ function onDatabasesChange(nextIds: string[]): void {
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => setActiveView(s.activeView) },
   { keys: ["sidebarCollapsed"], run: (s) => setSidebarCollapsed(s.sidebarCollapsed) },
-  { keys: ["individuals"], run: (s) => renderDocsSidebar(s) },
+  { keys: ["facets"], run: (s) => renderDocsSidebar(s) },
   {
     keys: ["databases", "selectedDatabaseIds"],
     run: (s) => {
@@ -344,7 +344,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     },
   },
   {
-    keys: ["schema", "query", "issues", "individuals"],
+    keys: ["schema", "query", "issues", "facets"],
     run: (s) => {
       renderQueryBuilder(s);
       wireQueryBuilder(panelEls().center, onQueryChange);
@@ -361,7 +361,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "issues",
       "schema",
       "selectedDatabaseIds",
-      "individuals",
+      "facets",
       "auth",
       "compliance",
     ],
@@ -408,14 +408,14 @@ const resumed = consumeResumeParam();
 const pending = resumed ? takePendingQuery() : (takePendingQuery(), null);
 
 renderDatabasePicker(store.getState()); // "" while databases is null
-renderQueryBuilder(store.getState()); // initial loader (centre panel spinner while individuals/databases load)
+renderQueryBuilder(store.getState()); // initial loader (centre panel spinner while facets/databases load)
 renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
 renderDocsSidebar(store.getState()); // initial loader
 renderAccountMenu(store.getState()); // "" while auth.status is "loading"
 Promise.all([
   getDatabases(),
-  getIndividuals(),
+  getFacets(),
   // Login state is display-only (§9) and most of the app works anonymously, so
   // an auth-service outage must not take the whole app down: show "Log in",
   // and let a Run press surface the real problem.
@@ -425,8 +425,8 @@ Promise.all([
   }),
   getComplianceStatus().catch(() => ({ status: "required" }) as const),
 ])
-  .then(([databases, individuals, user, complianceStatus]) => {
-    const schema = buildFieldCatalog(individuals);
+  .then(([databases, facets, user, complianceStatus]) => {
+    const schema = buildFieldCatalog(facets);
     // A restored query replaces the normal empty-condition seed entirely — it
     // already has whatever conditions the user built before being redirected.
     const seeded = pending
@@ -443,7 +443,7 @@ Promise.all([
     store.setState({
       schema,
       databases,
-      individuals,
+      facets,
       // A restored selection may name databases that no longer exist (it can
       // outlive a backend change) — keep only ones this load actually knows.
       selectedDatabaseIds: pending

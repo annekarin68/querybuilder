@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import type { Entryset, Individual } from "../../src/api/types";
-import { entrysetBadges, rowCell, rowGrid } from "../../src/ui/dataPreview";
+import type { EventRecord, Facet } from "../../src/api/types";
+import { eventBadges, rowCell, rowGrid } from "../../src/ui/dataPreview";
 
-function ind(label: string, group: string, tags: string[]): Individual {
+function facet(label: string, group: string, tags: string[]): Facet {
   return {
     label,
     group,
@@ -18,59 +18,59 @@ function ind(label: string, group: string, tags: string[]): Individual {
 
 const byLabel = new Map(
   [
-    ind("observation_window", "metadata", ["rear", "front"]),
-    ind("engine_rpm", "engine", ["high_frequency", "critical"]),
-    ind("engine_oil_pressure", "engine", ["critical", " "]),
-    ind("wheel_speed", "tires_wheels", []),
-    ind("speeding_event", "", ["regulatory"]),
+    facet("observation_window", "metadata", ["rear", "front"]),
+    facet("engine_rpm", "engine", ["high_frequency", "critical"]),
+    facet("engine_oil_pressure", "engine", ["critical", " "]),
+    facet("wheel_speed", "tires_wheels", []),
+    facet("speeding_event", "", ["regulatory"]),
   ].map((i) => [i.label, i]),
 );
 
-const entryset = (...labels: string[]): Entryset => ({
+const event = (...labels: string[]): EventRecord => ({
   id: 1,
   items: Object.fromEntries(labels.map((l) => [l, {}])),
 });
 
 const none = { tags: [], groups: [] };
 
-describe("entrysetBadges", () => {
+describe("eventBadges", () => {
   it("collects distinct tags and groups, most common first", () => {
     expect(
-      entrysetBadges(entryset("wheel_speed", "engine_rpm", "engine_oil_pressure"), byLabel, none),
+      eventBadges(event("wheel_speed", "engine_rpm", "engine_oil_pressure"), byLabel, none),
     ).toEqual({ tags: ["critical", "high_frequency"], groups: ["engine", "tires_wheels"] });
   });
 
   it("breaks ties alphabetically", () => {
-    expect(entrysetBadges(entryset("speeding_event", "engine_rpm"), byLabel, none)).toEqual({
+    expect(eventBadges(event("speeding_event", "engine_rpm"), byLabel, none)).toEqual({
       tags: ["critical", "high_frequency", "regulatory"],
       groups: ["engine"],
     });
   });
 
-  it("hides listed tags and groups, ignoring case and whitespace, keeping the item's others", () => {
+  it("hides listed tags and groups, ignoring case and whitespace, keeping the facet's others", () => {
     const hidden = { tags: [" Critical "], groups: ["METADATA"] };
-    expect(entrysetBadges(entryset("observation_window", "engine_rpm"), byLabel, hidden)).toEqual({
+    expect(eventBadges(event("observation_window", "engine_rpm"), byLabel, hidden)).toEqual({
       tags: ["front", "high_frequency", "rear"],
       groups: ["engine"],
     });
   });
 
   it("has nothing hard-coded: with no hidden values every group shows", () => {
-    expect(entrysetBadges(entryset("observation_window"), byLabel, none)).toEqual({
+    expect(eventBadges(event("observation_window"), byLabel, none)).toEqual({
       tags: ["front", "rear"],
       groups: ["metadata"],
     });
   });
 
-  it("drops a blank group but keeps that item's tags", () => {
-    expect(entrysetBadges(entryset("speeding_event"), byLabel, none)).toEqual({
+  it("drops a blank group but keeps that facet's tags", () => {
+    expect(eventBadges(event("speeding_event"), byLabel, none)).toEqual({
       tags: ["regulatory"],
       groups: [],
     });
   });
 
-  it("ignores items the dictionary doesn't know", () => {
-    expect(entrysetBadges(entryset("unknown_item"), byLabel, none)).toEqual({
+  it("ignores facets the dictionary doesn't know", () => {
+    expect(eventBadges(event("unknown_item"), byLabel, none)).toEqual({
       tags: [],
       groups: [],
     });
@@ -78,25 +78,25 @@ describe("entrysetBadges", () => {
 });
 
 describe("rowCell", () => {
-  const e: Entryset = {
+  const e: EventRecord = {
     id: 7,
     items: { thing: { kind: "alpha", count: 3, on: false, blank: "", at: "not a date" } },
   };
 
-  it("shows the configured item.field value as text", () => {
-    expect(rowCell(e, { heading: "Kind", item: "thing", field: "kind" })).toBe("alpha");
-    expect(rowCell(e, { heading: "N", item: "thing", field: "count" })).toBe("3");
-    expect(rowCell(e, { heading: "On", item: "thing", field: "on" })).toBe("false");
+  it("shows the configured facet.field value as text", () => {
+    expect(rowCell(e, { heading: "Kind", facet: "thing", field: "kind" })).toBe("alpha");
+    expect(rowCell(e, { heading: "N", facet: "thing", field: "count" })).toBe("3");
+    expect(rowCell(e, { heading: "On", facet: "thing", field: "on" })).toBe("false");
   });
 
-  it("shows — for a missing item, field or blank value", () => {
-    expect(rowCell(e, { heading: "X", item: "nope", field: "kind" })).toBe("—");
-    expect(rowCell(e, { heading: "X", item: "thing", field: "nope" })).toBe("—");
-    expect(rowCell(e, { heading: "X", item: "thing", field: "blank" })).toBe("—");
+  it("shows — for a missing facet, field or blank value", () => {
+    expect(rowCell(e, { heading: "X", facet: "nope", field: "kind" })).toBe("—");
+    expect(rowCell(e, { heading: "X", facet: "thing", field: "nope" })).toBe("—");
+    expect(rowCell(e, { heading: "X", facet: "thing", field: "blank" })).toBe("—");
   });
 
   it("formats datetime columns, passing unparseable values through", () => {
-    const at = { heading: "At", item: "thing", field: "at", format: "datetime" as const };
+    const at = { heading: "At", facet: "thing", field: "at", format: "datetime" as const };
     expect(rowCell(e, at)).toBe("not a date");
     const iso = { ...e, items: { thing: { at: "2024-11-07T08:15:00Z" } } };
     expect(rowCell(iso, at)).not.toBe("2024-11-07T08:15:00Z");
@@ -112,8 +112,8 @@ describe("rowGrid", () => {
   it("adds one track per column: fixed for dates, capped for text", () => {
     expect(
       rowGrid([
-        { heading: "At", item: "a", field: "b", format: "datetime" },
-        { heading: "Kind", item: "a", field: "c" },
+        { heading: "At", facet: "a", field: "b", format: "datetime" },
+        { heading: "Kind", facet: "a", field: "c" },
       ]),
     ).toBe("3rem 12rem minmax(0, 10rem) minmax(0, 1fr) auto");
   });

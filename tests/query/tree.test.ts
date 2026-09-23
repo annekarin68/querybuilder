@@ -23,9 +23,9 @@ describe("tree", () => {
     expect(newGroup().id).not.toBe(newGroup().id);
   });
 
-  it("newCondition starts with no individual, field, operator, or value", () => {
+  it("newCondition starts with no facet, field, operator, or value", () => {
     const c = newCondition();
-    expect(c.individualId).toBeNull();
+    expect(c.facetId).toBeNull();
     expect(c.fieldId).toBeNull();
     expect(c.operatorId).toBeNull();
     expect(c.value).toBeNull();
@@ -37,7 +37,7 @@ describe("tree", () => {
     expect(g.children).toHaveLength(1);
     expect(g.children[0]).toMatchObject({
       kind: "condition",
-      individualId: null,
+      facetId: null,
       fieldId: null,
       operatorId: null,
       value: null,
