@@ -830,6 +830,20 @@ body {
   gap: 0.3rem;
   min-width: 0;
 }
+.qb-group-badge {
+  display: inline-block;
+  padding: 0 0.45rem;
+  border: 1px dashed var(--qb-border);
+  border-radius: 999px;
+  color: var(--qb-subtle);
+  font-size: 0.72rem;
+  line-height: calc(1.5em - 2px);
+  white-space: nowrap;
+}
+/* A little extra space where the tags end and the groups begin. */
+.qb-er-groups > :not(.qb-group-badge) + .qb-group-badge {
+  margin-left: 0.4rem;
+}
 .qb-er-more {
   font-size: 0.8rem;
   color: var(--qb-subtle);

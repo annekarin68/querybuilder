@@ -5,9 +5,11 @@ import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, formatWhen, text } from "./format";
+import { tagsOf, UNTAGGED } from "./docsFilter";
 
-/** How many group tags to show inline before collapsing the rest into "+N". */
-const MAX_GROUP_BADGES = 3;
+/** How many tag / group badges to show inline before collapsing the rest into "+N". */
+const MAX_TAG_BADGES = 3;
+const MAX_GROUP_BADGES = 2;
 
 function individualsByLabel(state: AppState): Map<string, Individual> {
   const map = new Map<string, Individual>();
@@ -15,19 +17,54 @@ function individualsByLabel(state: AppState): Map<string, Individual> {
   return map;
 }
 
-function groupsBadgesHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
-  const groups = [
-    ...new Set(
-      Object.keys(entryset.items)
-        .map((slug) => text(byLabel.get(slug)?.group))
-        .filter((g) => g !== "" && g !== "metadata"),
-    ),
-  ].sort();
-  const shown = groups.slice(0, MAX_GROUP_BADGES);
-  const overflow = groups.length - shown.length;
+/**
+ * The distinct tags and third-party groups of an entryset's items, each
+ * ordered by how many of its items carry it (most first, then alphabetical),
+ * so the inline badges show what this entryset is mostly about. Items in the
+ * `metadata` group (observation window, vehicle identity …) are skipped
+ * entirely — every entryset has them, so their tags and group say nothing
+ * about this one. Blank tags and groups are dropped.
+ */
+export function entrysetBadges(
+  entryset: Entryset,
+  byLabel: Map<string, Individual>,
+): { tags: string[]; groups: string[] } {
+  const tags = new Map<string, number>();
+  const groups = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (const label of Object.keys(entryset.items)) {
+    const ind = byLabel.get(label);
+    if (!ind) continue;
+    const group = text(ind.group);
+    if (group === "metadata") continue;
+    if (group) bump(groups, group);
+    for (const tag of tagsOf(ind)) if (tag !== UNTAGGED) bump(tags, tag);
+  }
+  const ranked = (m: Map<string, number>) =>
+    [...m.keys()].sort((a, b) => m.get(b)! - m.get(a)! || a.localeCompare(b));
+  return { tags: ranked(tags), groups: ranked(groups) };
+}
+
+/** Up to `max` badges of one kind, then a "+N" whose hover lists the rest. */
+function badgesHtml(values: string[], max: number, cls: string, kind: string): string {
+  const shown = values.slice(0, max);
+  const rest = values.slice(max).map(displayLabel);
   return (
-    shown.map((g) => `<span class="qb-tag">${escapeHtml(displayLabel(g))}</span>`).join("") +
-    (overflow > 0 ? `<span class="qb-er-more">+${overflow}</span>` : "")
+    shown
+      .map((v) => `<span class="${cls}" title="${kind}">${escapeHtml(displayLabel(v))}</span>`)
+      .join("") +
+    (rest.length
+      ? `<span class="qb-er-more" title="${escapeHtml(`More ${kind.toLowerCase()}s: ${rest.join(", ")}`)}">+${rest.length}</span>`
+      : "")
+  );
+}
+
+/** Tags first (our own, filled chips), then third-party groups (outlined). */
+function tagsAndGroupsHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
+  const { tags, groups } = entrysetBadges(entryset, byLabel);
+  return (
+    badgesHtml(tags, MAX_TAG_BADGES, "qb-tag", "Tag") +
+    badgesHtml(groups, MAX_GROUP_BADGES, "qb-group-badge", "Group")
   );
 }
 
@@ -40,7 +77,7 @@ function entrysetRowHtml(entryset: Entryset, byLabel: Map<string, Individual>): 
         <span class="qb-er-id">#${escapeHtml(entryset.id)}</span>
         <span class="qb-er-when">${escapeHtml(formatWhen(typeof when === "string" ? when : undefined))}</span>
         <span class="qb-er-vehicle">${escapeHtml(typeof vehicle === "string" ? vehicle : "—")}</span>
-        <span class="qb-er-groups">${groupsBadgesHtml(entryset, byLabel)}</span>
+        <span class="qb-er-groups">${tagsAndGroupsHtml(entryset, byLabel)}</span>
         <span class="qb-er-count">${countLabel(Object.keys(entryset.items).length, "item")}</span>
       </summary>
       <pre class="qb-er-json">${escapeHtml(JSON.stringify(entryset, null, 2))}</pre>
