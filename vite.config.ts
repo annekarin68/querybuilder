@@ -98,7 +98,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    // Fomantic's CSS/JS is one big vendor chunk by design (§2). Raise the warning
+    // Fomantic ships one prebuilt CSS file and one prebuilt JS file. Neither can
+    // be tree-shaken, so the bundle is big on purpose. Raise the warning
     // threshold so a known, accepted size stops crying wolf on every build.
     chunkSizeWarningLimit: 1500,
   },
