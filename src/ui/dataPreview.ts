@@ -125,8 +125,9 @@ function runBlock(message: string, enabled: boolean, note = "", label = "Run que
   </div>`;
 }
 
-/** Advisory only (§9): Run always attempts the request; src/app.ts reacts to the
- *  real 401/403 by redirecting into login/compliance and back. */
+/** Advisory only (docs/ARCHITECTURE.md, "Auth"): Run always attempts the
+ *  request; src/app.ts reacts to the real 401/403 by redirecting into
+ *  login/compliance and back. */
 function runNote(state: AppState): string {
   if (state.auth.status === "anonymous") return "You'll be asked to log in first.";
   if (state.auth.status === "authenticated" && state.compliance.status === "required") {
@@ -145,8 +146,9 @@ const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
 export function renderDataPreview(el: HTMLElement, state: AppState): void {
   const p = state.preview;
 
-  // §6: this panel never shows anything that does not belong to the query on
-  // screen, and it says WHY it is empty.
+  // This panel never shows anything that does not belong to the query on
+  // screen, and it says WHY it is empty (docs/ARCHITECTURE.md, "Correctness
+  // invariant").
   const blocker = runBlocker(state);
   if (blocker === "loading") {
     paint(el, "");

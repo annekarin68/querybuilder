@@ -1,5 +1,6 @@
 // The jQuery airlock: the only file that uses jQuery (src/setup-jquery.ts
-// merely publishes the global for Fomantic). See docs/ARCHITECTURE.md §3.
+// merely publishes the global for Fomantic). See docs/ARCHITECTURE.md,
+// "The Fomantic discipline".
 import $ from "jquery";
 
 export function activate(container: HTMLElement): void {

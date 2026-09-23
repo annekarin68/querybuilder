@@ -36,7 +36,7 @@ function nodeText(catalog: FieldCatalog, node: QueryNode, isRoot: boolean): stri
   return isRoot ? inner : `(${inner})`;
 }
 
-/** The query in plain English, e.g. "Engine: rpm Greater than 3000 AND (…)". Display only. */
+/** The query in plain English, e.g. "Thing: size Greater than 3000 AND (…)". Display only. */
 export function queryToText(tree: QueryNode, catalog: FieldCatalog): string {
   return nodeText(catalog, tree, true);
 }

@@ -7,7 +7,8 @@ import { databaseTitle } from "./format";
  * arbitrary partitions with no semantic tie to event content (returned by
  * GET /api/databases). Each one is a pill toggle — a real checkbox inside a
  * styled label, so it needs no plugin and works from the keyboard. Changing it
- * behaves like editing the query (see onDatabasesChange in src/app.ts + §6).
+ * behaves like editing the query (see onDatabasesChange in src/app.ts and
+ * docs/ARCHITECTURE.md, "Correctness invariant").
  */
 export function renderDatabasePicker(el: HTMLElement, state: AppState): void {
   if (!state.databases) {

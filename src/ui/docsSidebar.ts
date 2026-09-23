@@ -5,9 +5,9 @@ import { escapeHtml, paint } from "./panel";
 import { compact, countLabel, displayLabel, fieldTitle, matchRatio, text } from "./format";
 import { groupByTag, matchDocs, tagsOf, UNTAGGED } from "./docsFilter";
 
-/** Total events across every loaded database — the denominator for an
- * facet's percentage, since the backend no longer sends one directly
- * (Facet only carries totalCount, an absolute figure). */
+/** Total events across every loaded database — the denominator for a
+ * facet's percentage. The backend sends no percentage: Facet only carries
+ * totalCount, an absolute figure. */
 function totalEvents(databases: DatabasesResponse[] | null): number {
   return databases?.reduce((s, d) => s + d.totalEntrysets, 0) ?? 0;
 }

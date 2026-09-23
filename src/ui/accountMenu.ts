@@ -5,7 +5,7 @@ import { escapeHtml, paint } from "./panel";
 
 /**
  * The top-bar account menu: login state and the compliance acknowledgment in
- * one place. Display-only, like the two widgets it replaced — Run is never
+ * one place. Display-only — Run is never
  * gated on it; src/app.ts reacts to POST /api/query's real 401/403 instead.
  *
  * A native <details> dropdown rather than a Fomantic one: Fomantic's dropdown

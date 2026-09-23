@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
 /**
- * Offline-first (docs/ARCHITECTURE.md §2): nothing may load from the internet, so
+ * Offline-first (docs/ARCHITECTURE.md, "Offline-first"): nothing may load from the internet, so
  * this plugin strips every off-origin `@import` / `url()` from bundled CSS. In
  * fomantic-ui-css@2.9.x the only off-origin references are the emoji icon URLs
  * pointing at `cdn.jsdelivr.net` (jdecked/twemoji), and they sit in commented-out

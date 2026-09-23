@@ -3,7 +3,7 @@
  * much of `YYYY-MM-DDTHH:mm:ss.sssZ` as the user knows, cut off after any
  * part: "2024", "2024-11", "2024-11-06", "2024-11-06T14", "2024-11-06T14:32Z",
  * … The query is sent as the user built it; the backend decides which stored
- * timestamps match at that precision (docs/ARCHITECTURE.md §7, "Dates").
+ * timestamps match at that precision (docs/ARCHITECTURE.md, "Dates").
  */
 
 export const UTC_TIMESTAMP_HINT = "YYYY-MM-DDTHH:mm:ssZ";

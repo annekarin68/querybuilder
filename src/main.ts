@@ -1,12 +1,12 @@
 // Publishes `window.jQuery` before Fomantic's JS is imported below. MUST stay the
 // first import — ES imports are hoisted and evaluated in order, so this is the only
 // way to guarantee the global exists when `semantic.min.js` evaluates.
-// (docs/ARCHITECTURE.md §3 — the bootstrap wrinkle.)
+// (docs/ARCHITECTURE.md, "The bootstrap wrinkle".)
 import "./setup-jquery";
 
 // Lato is NOT imported separately: fomantic-ui-css@2.9.x self-hosts it via local
 // @font-face rules pointing at its own bundled LatoLatin-*.woff2 files. See
-// docs/ARCHITECTURE.md §2.3.
+// docs/ARCHITECTURE.md, "Offline-first".
 import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";

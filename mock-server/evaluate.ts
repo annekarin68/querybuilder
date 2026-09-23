@@ -58,7 +58,7 @@ function timestampParts(v: string): Parts | null {
  * The span of time a full or partial ISO UTC timestamp covers, as
  * [start, end) in epoch ms: "2024-11" is all of November 2024,
  * "2024-11-06T14" the hour from 14:00 UTC. How the frontend sends dates —
- * docs/ARCHITECTURE.md §7 "Dates". Null if `v` isn't one.
+ * docs/ARCHITECTURE.md, "Dates". Null if `v` isn't one.
  */
 export function utcSpan(v: unknown): [number, number] | null {
   if (typeof v !== "string") return null;

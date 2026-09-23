@@ -5,12 +5,12 @@ export type Arity = "none" | "one" | "two" | "many";
 
 /** One queryable field: a (facet, field) pair from GET /api/individuals. */
 export interface CatalogField {
-  /** The dotted "itemLabel.fieldLabel" id a condition stores as `fieldId`. */
+  /** The dotted "facetLabel.fieldLabel" id a condition stores as `fieldId`. */
   label: string;
   /** Display name, "Facet name: field name" — used in summaries. */
   name: string;
   /** The field's own display name (its `name`, else its `label`) — used in
-   *  the Field dropdown, where the item is already chosen. */
+   *  the Field dropdown, where the facet is already chosen. */
   fieldName: string;
   valueType: ValueType;
   /** The allowed values of an enum field. */
