@@ -1,6 +1,6 @@
 # UI/UX refresh — design
 
-Status: approved in brainstorming, awaiting written-spec review.
+Status: approved and implemented (plan: docs/superpowers/plans/2026-09-23-ui-ux-refresh.md).
 
 Branch: `claude/frontend-ui-ux-improvements-73afba` (from `main` @ `68d7fe7`).
 
