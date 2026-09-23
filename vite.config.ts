@@ -60,10 +60,15 @@ export default defineConfig({
   esbuild: { legalComments: "eof" },
   server: {
     port: 5173,
-    // /api/auth/login 302s the browser (a real navigation, not a fetch) to
-    // /mock-idp/... on this same origin — that redirect target must be proxied
-    // too, or the dev server serves the SPA shell instead of the mock IdP page.
-    proxy: { "/api": "http://localhost:3001", "/mock-idp": "http://localhost:3001" },
+    // /api/auth/login and /api/compliance/start both 302 the browser (a real
+    // navigation, not a fetch) to a mock-*/... path on this same origin — each
+    // redirect target must be proxied too, or the dev server serves the SPA
+    // shell instead of the mock service's page.
+    proxy: {
+      "/api": "http://localhost:3001",
+      "/mock-idp": "http://localhost:3001",
+      "/mock-compliance": "http://localhost:3001",
+    },
   },
   build: {
     outDir: "dist",
