@@ -143,3 +143,9 @@ body {
   font-size: 0.8em;
   overflow-x: auto;
 }
+
+/* Stats headline caveat when some databases failed (src/ui/statsPanel.ts). */
+.qb-stat-failed {
+  margin-top: 0.35rem;
+  color: #9f3a38;
+}

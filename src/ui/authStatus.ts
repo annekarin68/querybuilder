@@ -1,10 +1,11 @@
 import type { AppState } from "../state";
+import { LOGIN_URL } from "../api/client";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 
 /**
  * The top-menu login/logout widget. Anonymous: a plain navigation link to
- * GET /api/auth/login (a real page load, not a fetch — the whole point is
+ * GET {API base}/auth/login (a real page load, not a fetch — the whole point is
  * that the browser needs to leave the SPA and follow the OAuth redirects).
  * Authenticated: the user's name + a Log out button.
  */
@@ -15,7 +16,10 @@ export function renderAuthStatus(state: AppState): void {
     return;
   }
   if (state.auth.status === "anonymous") {
-    paint(el, `<a href="/api/auth/login" class="ui small button">Log in</a>`);
+    paint(
+      el,
+      `<a href="${escapeHtml(LOGIN_URL)}" data-flow-link class="ui small button">Log in</a>`,
+    );
     return;
   }
   paint(

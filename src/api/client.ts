@@ -10,6 +10,22 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+/**
+ * Where the browser navigates (a real page load, not a fetch) to start the login
+ * or compliance redirect flow. Built from the same BASE as every fetch below, so
+ * a non-default VITE_API_BASE moves these links too.
+ */
+export const LOGIN_URL = `${BASE}/auth/login`;
+export const COMPLIANCE_START_URL = `${BASE}/compliance/start`;
+
+/**
+ * How long a request may go without the server sending anything before it is
+ * abandoned. For plain JSON requests that's the whole request; for the streamed
+ * /stats body the clock restarts on every chunk, so a slow-but-progressing
+ * stream is never cut off — only a silent one.
+ */
+export const REQUEST_TIMEOUT_MS = 60_000;
+
 export class ApiError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -17,6 +33,40 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
   }
+}
+
+/** Thrown (as the abort reason) when a request hits REQUEST_TIMEOUT_MS. */
+export class TimeoutError extends Error {
+  constructor() {
+    super("The server took too long to respond. Please try again.");
+    this.name = "TimeoutError";
+  }
+}
+
+/**
+ * A signal that aborts when the caller's `outer` signal does, or when `ms`
+ * passes without `touch()` being called — whichever comes first. Call `done()`
+ * once the request has fully settled so the timer and listener are released.
+ */
+function deadline(outer: AbortSignal | undefined, ms: number) {
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const touch = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => ctrl.abort(new TimeoutError()), ms);
+  };
+  const onOuterAbort = () => ctrl.abort(outer!.reason);
+  if (outer?.aborted) ctrl.abort(outer.reason);
+  else outer?.addEventListener("abort", onOuterAbort, { once: true });
+  touch();
+  return {
+    signal: ctrl.signal,
+    touch,
+    done() {
+      clearTimeout(timer);
+      outer?.removeEventListener("abort", onOuterAbort);
+    },
+  };
 }
 
 async function errorFromResponse(res: Response): Promise<ApiError> {
@@ -30,10 +80,35 @@ async function errorFromResponse(res: Response): Promise<ApiError> {
   return new ApiError(res.status, message);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, init);
-  if (!res.ok) throw await errorFromResponse(res);
-  return (await res.json()) as T;
+/**
+ * fetch() with the shared timeout. `read` consumes the successful response
+ * inside the deadline, so a body that never finishes arriving times out too.
+ */
+async function send<T>(
+  path: string,
+  init: RequestInit | undefined,
+  read: (res: Response) => Promise<T>,
+): Promise<T> {
+  const d = deadline(init?.signal ?? undefined, REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}${path}`, { ...init, signal: d.signal });
+    return await read(res);
+  } finally {
+    d.done();
+  }
+}
+
+function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return send(path, init, async (res) => {
+    if (!res.ok) throw await errorFromResponse(res);
+    return (await res.json()) as T;
+  });
+}
+
+function requestNoContent(path: string, init?: RequestInit): Promise<void> {
+  return send(path, init, async (res) => {
+    if (!res.ok) throw await errorFromResponse(res);
+  });
 }
 
 export function getDatabases(): Promise<DatabasesResponse[]> {
@@ -49,40 +124,51 @@ export function getIndividuals(): Promise<Individual[]> {
  * selected database, as soon as that database's result is ready. `onLine` is
  * called once per line, in arrival order; the returned promise resolves when
  * the stream ends, or rejects (before any line is read) on a non-2xx response.
+ * Aborting `signal` stops reading and rejects with the abort reason — callers
+ * use it to drop a stream whose query is no longer on screen.
  */
 export async function getStats(
   query: QueryNode,
   databases: string[],
   onLine: (line: StatsResponse) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${BASE}/stats`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query, databases }),
-  });
-  if (!res.ok) throw await errorFromResponse(res);
+  const d = deadline(signal, REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}/stats`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, databases }),
+      signal: d.signal,
+    });
+    if (!res.ok) throw await errorFromResponse(res);
+    if (!res.body) throw new ApiError(res.status, "The server sent an empty statistics response.");
 
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  // A chunk boundary from the underlying stream has no relation to line
-  // boundaries (or even UTF-8 character boundaries) in the NDJSON body, so a
-  // chunk may end mid-line — buffer text across read() calls and only emit
-  // complete lines, split on "\n".
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let newlineIndex: number;
-    while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim();
-      buffer = buffer.slice(newlineIndex + 1);
-      if (line) onLine(JSON.parse(line) as StatsResponse);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    // A chunk boundary from the underlying stream has no relation to line
+    // boundaries (or even UTF-8 character boundaries) in the NDJSON body, so a
+    // chunk may end mid-line — buffer text across read() calls and only emit
+    // complete lines, split on "\n".
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      d.touch(); // still making progress — restart the idle timeout
+      buffer += decoder.decode(value, { stream: true });
+      let newlineIndex: number;
+      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (line) onLine(JSON.parse(line) as StatsResponse);
+      }
     }
+    buffer += decoder.decode(); // flush a trailing partial multi-byte sequence, if any
+    const rest = buffer.trim();
+    if (rest) onLine(JSON.parse(rest) as StatsResponse);
+  } finally {
+    d.done();
   }
-  buffer += decoder.decode(); // flush a trailing partial multi-byte sequence, if any
-  const rest = buffer.trim();
-  if (rest) onLine(JSON.parse(rest) as StatsResponse);
 }
 
 export function runQuery(
@@ -90,11 +176,13 @@ export function runQuery(
   databases: string[],
   page: number,
   pageSize: number,
+  signal?: AbortSignal,
 ): Promise<EntrysetsResponse> {
   return request<EntrysetsResponse>("/query", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query, databases, page, pageSize }),
+    signal,
   });
 }
 
@@ -104,23 +192,22 @@ export function runQuery(
  * getDatabases()/getIndividuals() in main.ts's startup Promise.all without
  * an anonymous visitor tripping their fatal-load-failure path.
  */
-export async function getMe(): Promise<AuthUser | null> {
-  const res = await fetch(`${BASE}/auth/me`);
-  if (res.status === 401) return null;
-  if (!res.ok) throw await errorFromResponse(res);
-  return (await res.json()) as AuthUser;
+export function getMe(): Promise<AuthUser | null> {
+  return send("/auth/me", undefined, async (res) => {
+    if (res.status === 401) return null;
+    if (!res.ok) throw await errorFromResponse(res);
+    return (await res.json()) as AuthUser;
+  });
 }
 
-export async function logout(): Promise<void> {
-  const res = await fetch(`${BASE}/auth/logout`, { method: "POST" });
-  if (!res.ok) throw await errorFromResponse(res);
+export function logout(): Promise<void> {
+  return requestNoContent("/auth/logout", { method: "POST" });
 }
 
 export function getComplianceStatus(): Promise<ComplianceStatus> {
   return request<ComplianceStatus>("/compliance/status");
 }
 
-export async function invalidateCompliance(): Promise<void> {
-  const res = await fetch(`${BASE}/compliance/invalidate`, { method: "POST" });
-  if (!res.ok) throw await errorFromResponse(res);
+export function invalidateCompliance(): Promise<void> {
+  return requestNoContent("/compliance/invalidate", { method: "POST" });
 }

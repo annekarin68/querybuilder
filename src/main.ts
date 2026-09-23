@@ -13,12 +13,14 @@ import "./styles.css";
 
 import {
   ApiError,
+  COMPLIANCE_START_URL,
   getComplianceStatus,
   getDatabases,
   getIndividuals,
   getMe,
   getStats,
   invalidateCompliance,
+  LOGIN_URL,
   logout,
   runQuery,
 } from "./api/client";
@@ -37,6 +39,7 @@ import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview } from "./ui/dataPreview";
+import { escapeHtml } from "./ui/panel";
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -74,12 +77,12 @@ onMenu({
  * top-menu widgets, the data-preview hints) must save the in-progress query
  * first too, not just the Run button's own redirect path (§2 of the
  * compliance-logging design spec) — otherwise a user who follows the
- * on-screen guidance loses their query on a hop Run itself protects.
+ * on-screen guidance loses their query on a hop Run itself protects. Those
+ * links are marked `data-flow-link` (rather than matched by href, which
+ * depends on VITE_API_BASE).
  */
 document.addEventListener("click", (e) => {
-  const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>(
-    "a[href='/api/auth/login'], a[href='/api/compliance/start']",
-  );
+  const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>("a[data-flow-link]");
   if (!anchor) return;
   const s = store.getState();
   if (countConditions(s.query) > 0) savePendingQuery(s.query, s.selectedDatabaseIds);
@@ -88,14 +91,54 @@ document.addEventListener("click", (e) => {
 const PAGE_SIZE = 25;
 
 /**
+ * At most one in-flight request of a kind (stats, preview). `start()` aborts the
+ * previous one and hands back a fresh controller; `cancel()` aborts without
+ * starting another. Aborting matters for more than tidiness: a superseded
+ * /api/stats stream would otherwise keep running against every selected
+ * database on the backend until it finished.
+ *
+ * `isCurrent(ctrl)` is the identity half of the stale-response guard. A
+ * content-based `staleGuard` key alone isn't enough: toggling a database
+ * off/on (or editing a value away and back) can produce a NEW request whose key
+ * equals an OLD in-flight request's key, so the key check would treat the old
+ * one as still current — for stats, both streams would then append into the
+ * same `stats.lines`, doubling every row; for preview, the old (aborted)
+ * request's AbortError would be shown as an error.
+ */
+function requestSlot() {
+  let current: AbortController | null = null;
+  return {
+    start(): AbortController {
+      current?.abort();
+      current = new AbortController();
+      return current;
+    },
+    cancel(): void {
+      current?.abort();
+      current = null;
+    },
+    isCurrent: (ctrl: AbortController): boolean => ctrl === current,
+  };
+}
+
+const statsSlot = requestSlot();
+const previewSlot = requestSlot();
+
+/** The on-screen query/scope changed (or the session did): drop every in-flight request. */
+function cancelInFlight(): void {
+  statsSlot.cancel();
+  previewSlot.cancel();
+}
+
+/**
  * Runs `fetcher` behind the shared §6 stale-response guard: bail out unless
  * `canRunQuery` says the current query/scope is runnable, mark loading, then apply
- * `onSuccess`/`onError` only if the query/scope hasn't changed since the request
- * was made. `runPreview` and `refreshStats` are this same shape twice over — this
- * is the one place that shape needs to be correct.
+ * `onSuccess`/`onError` only if this is still the slot's current request AND the
+ * query/scope hasn't changed since it was made.
  */
 function runGuarded<T>(
-  fetcher: (query: QueryNode, databases: string[]) => Promise<T>,
+  slot: ReturnType<typeof requestSlot>,
+  fetcher: (query: QueryNode, databases: string[], signal: AbortSignal) => Promise<T>,
   onLoading: () => void,
   onSuccess: (data: T) => void,
   onError: (err: unknown) => void,
@@ -103,15 +146,38 @@ function runGuarded<T>(
   const state = store.getState();
   if (!canRunQuery(state)) return;
   const { query, selectedDatabaseIds } = state;
-  const isStale = staleGuard(query, selectedDatabaseIds);
+  const ctrl = slot.start();
+  const keyStale = staleGuard(query, selectedDatabaseIds);
+  const isStale = () => !slot.isCurrent(ctrl) || keyStale();
   onLoading();
-  fetcher(query, selectedDatabaseIds)
+  fetcher(query, selectedDatabaseIds, ctrl.signal)
     .then((data) => {
       if (!isStale()) onSuccess(data);
     })
     .catch((err) => {
       if (!isStale()) onError(err);
     });
+}
+
+/**
+ * A 403 from /api/query means "authenticated, but some requirement is unmet" —
+ * compliance is one such requirement, but not necessarily the only one (e.g. a
+ * user not permitted to query a database). Redirecting into the compliance flow
+ * on every 403 would send such a user round in circles with no error ever shown,
+ * so ask the backend whether compliance is actually what's missing first.
+ */
+async function complianceIsRequired(): Promise<boolean> {
+  try {
+    return (await getComplianceStatus()).status === "required";
+  } catch {
+    return false;
+  }
+}
+
+function redirectInto(url: string): void {
+  const s = store.getState();
+  savePendingQuery(s.query, s.selectedDatabaseIds);
+  window.location.href = url;
 }
 
 function runPreview(): void {
@@ -125,18 +191,30 @@ function runPreview(): void {
   // fired request (e.g. refreshStats's debounced calls) — that would redirect
   // the browser without a click, breaking the "never redirects itself"
   // loop-safety property this whole feature depends on.
+  const showError = (err: unknown) =>
+    store.setState({ preview: { status: "error", data: null, error: errorMessage(err) } });
   runGuarded(
-    (query, databases) => runQuery(query, databases, 1, PAGE_SIZE),
+    previewSlot,
+    (query, databases, signal) => runQuery(query, databases, 1, PAGE_SIZE, signal),
     () => store.setState({ preview: { status: "loading", data: null, error: null } }),
     (data) => store.setState({ preview: { status: "ok", data, error: null } }),
     (err) => {
-      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-        const s = store.getState();
-        savePendingQuery(s.query, s.selectedDatabaseIds);
-        window.location.href = err.status === 401 ? "/api/auth/login" : "/api/compliance/start";
+      if (err instanceof ApiError && err.status === 401) {
+        redirectInto(LOGIN_URL);
         return;
       }
-      store.setState({ preview: { status: "error", data: null, error: errorMessage(err) } });
+      if (err instanceof ApiError && err.status === 403) {
+        // Still behind the same click: the status check below is a plain
+        // fetch, and the redirect happens at most once per Run press.
+        const snapshot = store.getState().query;
+        void complianceIsRequired().then((required) => {
+          if (store.getState().query !== snapshot) return; // edited meanwhile — drop it
+          if (required) redirectInto(COMPLIANCE_START_URL);
+          else showError(err);
+        });
+        return;
+      }
+      showError(err);
     },
   );
 }
@@ -148,6 +226,7 @@ function syncRunButton(state = store.getState()): void {
 }
 
 function onLogout(): void {
+  cancelInFlight();
   logout()
     .then(() => {
       // Compliance is piggybacked on the session server-side, so it's gone too
@@ -166,6 +245,7 @@ function onLogout(): void {
 }
 
 function onInvalidateCompliance(): void {
+  previewSlot.cancel();
   invalidateCompliance()
     .then(() => {
       store.setState({
@@ -178,29 +258,27 @@ function onInvalidateCompliance(): void {
     });
 }
 
-// Bumped once per refreshStats invocation. A content-based staleGuard key alone
-// isn't enough here: toggling a database off/on (or editing a value away and
-// back) within the 400ms debounce window can produce a NEW stream whose key is
-// equal to an OLD in-flight stream's key, so the key-based check alone would
-// treat the old stream as still current. Both streams would then append into
-// the same (freshly-reset) `stats.lines` array, doubling every row. Pairing the
-// key check with stream identity (this counter) closes that gap.
-let statsRun = 0;
-
+// Streamed, so it can't use runGuarded's single onSuccess — but it's the same
+// guard: slot identity (see requestSlot) + the content key, checked per line.
 const refreshStats = debounce(() => {
   const state = store.getState();
   if (!canRunQuery(state)) return;
   const { query, selectedDatabaseIds } = state;
-  const run = ++statsRun;
+  const ctrl = statsSlot.start();
   const keyStale = staleGuard(query, selectedDatabaseIds);
-  const isStale = () => run !== statsRun || keyStale();
+  const isStale = () => !statsSlot.isCurrent(ctrl) || keyStale();
   store.setState({ stats: { status: "loading", lines: [], error: null } });
-  getStats(query, selectedDatabaseIds, (line) => {
-    if (isStale()) return;
-    store.setState({
-      stats: { status: "loading", lines: [...store.getState().stats.lines, line], error: null },
-    });
-  })
+  getStats(
+    query,
+    selectedDatabaseIds,
+    (line) => {
+      if (isStale()) return;
+      store.setState({
+        stats: { status: "loading", lines: [...store.getState().stats.lines, line], error: null },
+      });
+    },
+    ctrl.signal,
+  )
     .then(() => {
       if (isStale()) return;
       store.setState({ stats: { status: "ok", lines: store.getState().stats.lines, error: null } });
@@ -230,7 +308,9 @@ function onQueryChange(nextQuery: Group): void {
   const issues = schema
     ? validateQuery(nextQuery, { fields: schema.fields, operators: schema.operators })
     : [];
-  // Spec §6: editing the query immediately clears stats & preview in the SAME setState.
+  // Spec §6: editing the query immediately clears stats & preview in the SAME setState,
+  // and abandons any request still in flight for the old query.
+  cancelInFlight();
   store.setState({
     query: nextQuery,
     issues,
@@ -244,6 +324,7 @@ function onQueryChange(nextQuery: Group): void {
 function onDatabasesChange(nextIds: string[]): void {
   const cur = store.getState().selectedDatabaseIds;
   if (nextIds.length === cur.length && nextIds.every((id) => cur.includes(id))) return;
+  cancelInFlight();
   store.setState({
     selectedDatabaseIds: nextIds,
     stats: { status: "idle", lines: [], error: null },
@@ -350,7 +431,13 @@ renderComplianceStatus(store.getState()); // "" while compliance.status is "load
 Promise.all([
   getDatabases(),
   getIndividuals(),
-  getMe(),
+  // Login state is display-only (§9) and most of the app works anonymously, so
+  // an auth-service outage must not take the whole app down: show "Log in",
+  // and let a Run press surface the real problem.
+  getMe().catch((err) => {
+    console.error("Could not determine login state:", errorMessage(err));
+    return null;
+  }),
   getComplianceStatus().catch(() => ({ status: "required" }) as const),
 ])
   .then(([databases, individuals, user, complianceStatus]) => {
@@ -372,7 +459,11 @@ Promise.all([
       schema,
       databases,
       individuals,
-      selectedDatabaseIds: pending ? pending.selectedDatabaseIds : databases.map((d) => d.label),
+      // A restored selection may name databases that no longer exist (it can
+      // outlive a backend change) — keep only ones this load actually knows.
+      selectedDatabaseIds: pending
+        ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.label === id))
+        : databases.map((d) => d.label),
       query: seeded,
       issues,
       auth: { status: user ? "authenticated" : "anonymous", user },
@@ -393,9 +484,15 @@ Promise.all([
     if (pending) refreshStats();
   })
   .catch((err) => {
+    // The message can come from the server's `{ error }` body — escape it like
+    // every panel does. No inline onclick either: it would be blocked by a
+    // strict Content-Security-Policy (script-src without 'unsafe-inline').
     root.innerHTML = `<div class="ui negative message" style="margin:2rem">
-      <div class="header">Could not load field list</div>
-      <p>${errorMessage(err)}</p>
-      <button class="ui button" onclick="location.reload()">Reload</button>
+      <div class="header">Could not load the app</div>
+      <p>${escapeHtml(errorMessage(err))}</p>
+      <button class="ui button" data-action="reload">Reload</button>
     </div>`;
+    root
+      .querySelector('[data-action="reload"]')
+      ?.addEventListener("click", () => window.location.reload());
   });

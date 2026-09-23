@@ -34,7 +34,7 @@ export function renderDatabasePicker(state: AppState): void {
          ${boxes}
        </div>
        <span class="ui small text">
-         <a data-db-all>Select all</a> · <a data-db-none>Select none</a>
+         <a href="#" data-db-all>Select all</a> · <a href="#" data-db-none>Select none</a>
          ${none ? ` — <span class="qb-db-warn">nothing selected</span>` : ""}
        </span>
      </div>`,

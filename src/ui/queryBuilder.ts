@@ -74,7 +74,7 @@ function conditionHtml(
 ): string {
   const field = schema.fields.find((f) => f.label === c.fieldId);
   const operator = schema.operators.find((o) => o.label === c.operatorId);
-  return `<div class="qb-condition" data-node-id="${c.id}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.35rem 0">
+  return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.35rem 0">
     ${individualDropdown(individuals, c)}
     ${fieldDropdown(schema, c)}
     ${operatorDropdown(schema, c)}
@@ -96,7 +96,7 @@ function groupHtml(
     : `<div class="qb-children" style="padding-left:${isRoot ? 0 : 1}rem">
         ${g.children.map((child) => nodeHtml(schema, individuals, child, issues, false)).join("")}
       </div>`;
-  return `<div class="ui segment qb-group" data-node-id="${g.id}">
+  return `<div class="ui segment qb-group" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head" style="display:flex;gap:.5rem;align-items:center">
       <button class="ui mini icon button" data-action="toggle-collapse" title="Collapse">
         <i class="${g.collapsed ? "caret right" : "caret down"} icon"></i>

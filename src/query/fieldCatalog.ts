@@ -103,22 +103,46 @@ const OPERATOR_PROFILE: Record<ValueType, string[]> = {
 };
 
 /**
- * Backend `type` (or, when `type` is empty, `format`) -> this catalog's
- * valueType. Never inferred from a field's name or its values.
+ * SQL-ish type names -> valueType, after normalisation (see `valueTypeFor`).
+ * Deliberately broader than any one backend's vocabulary: the backend's
+ * `type`/`format` strings are its own, and a type we fail to recognise
+ * silently degrades to "string" (text input, no comparison operators) — so
+ * cover the common spellings rather than just the ones seen so far.
  */
-function valueTypeFor(field: { type: string; format: string }): ValueType {
-  const declared = field.type || field.format;
-  switch (declared) {
-    case "BIGINT":
-    case "DOUBLE":
-      return "number";
-    case "BOOLEAN":
-      return "boolean";
-    case "TIMESTAMP":
-      return "date";
-    default:
-      return "string";
-  }
+const TYPE_NAMES: Record<string, ValueType> = {
+  TINYINT: "number",
+  SMALLINT: "number",
+  INT: "number",
+  INTEGER: "number",
+  BIGINT: "number",
+  REAL: "number",
+  FLOAT: "number",
+  DOUBLE: "number",
+  "DOUBLE PRECISION": "number",
+  DECIMAL: "number",
+  NUMERIC: "number",
+  NUMBER: "number",
+  BOOLEAN: "boolean",
+  BOOL: "boolean",
+  DATE: "date",
+  DATETIME: "date",
+  TIMESTAMP: "date",
+};
+
+/**
+ * Backend `type` (or, when `type` is empty, `format`) -> this catalog's
+ * valueType. Never inferred from a field's name or its values. Case-insensitive,
+ * ignores size/precision parameters (`DECIMAL(10,2)`, `VARCHAR(255)`), and
+ * treats any `TIMESTAMP …` variant (`TIMESTAMP WITH TIME ZONE`) as a date.
+ */
+export function valueTypeFor(field: { type: string; format: string }): ValueType {
+  const declared = (field.type || field.format)
+    .toUpperCase()
+    .replace(/\(.*?\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (declared.startsWith("TIMESTAMP")) return "date";
+  return TYPE_NAMES[declared] ?? "string";
 }
 
 /**

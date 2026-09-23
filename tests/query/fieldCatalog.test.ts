@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFieldCatalog, OPERATORS } from "../../src/query/fieldCatalog";
+import { buildFieldCatalog, OPERATORS, valueTypeFor } from "../../src/query/fieldCatalog";
 import type { Individual } from "../../src/api/types";
 
 const individuals: Individual[] = [
@@ -207,5 +207,33 @@ describe("buildFieldCatalog", () => {
 describe("OPERATORS", () => {
   it("arities are from the allowed set", () => {
     for (const o of OPERATORS) expect(["none", "one", "two", "many"]).toContain(o.arity);
+  });
+});
+
+describe("valueTypeFor", () => {
+  const t = (type: string, format = "") => valueTypeFor({ type, format });
+
+  it.each([
+    ["BIGINT", "number"],
+    ["integer", "number"],
+    ["SMALLINT", "number"],
+    ["DECIMAL(10,2)", "number"],
+    ["double precision", "number"],
+    ["REAL", "number"],
+    ["BOOLEAN", "boolean"],
+    ["bool", "boolean"],
+    ["DATE", "date"],
+    ["TIMESTAMP", "date"],
+    ["TIMESTAMP(3) WITH TIME ZONE", "date"],
+    ["timestamp without time zone", "date"],
+    ["VARCHAR(255)", "string"],
+    ["something_new", "string"],
+  ] as const)("maps %s -> %s", (type, expected) => {
+    expect(t(type)).toBe(expected);
+  });
+
+  it("falls back to format only when type is empty", () => {
+    expect(t("", "TIMESTAMP")).toBe("date");
+    expect(t("BIGINT", "TIMESTAMP")).toBe("number");
   });
 });

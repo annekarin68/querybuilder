@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   ApiError,
+  COMPLIANCE_START_URL,
   getComplianceStatus,
   getDatabases,
   getIndividuals,
   getMe,
   getStats,
   invalidateCompliance,
+  LOGIN_URL,
   logout,
+  REQUEST_TIMEOUT_MS,
   runQuery,
+  TimeoutError,
 } from "../../src/api/client";
 import { emptyQuery } from "../../src/query/tree";
 
@@ -38,7 +42,20 @@ function mockStreamFetch(status: number, chunks: string[]) {
   } as unknown as Response);
 }
 
-afterEach(() => vi.unstubAllGlobals());
+/** A fetch that never answers on its own — it only settles when its signal aborts. */
+function hangingFetch() {
+  return vi.fn(
+    (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+      }),
+  );
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("api client", () => {
   it("getDatabases GETs /api/databases and returns the parsed bare array", async () => {
@@ -64,7 +81,7 @@ describe("api client", () => {
         percentageOfTotal: 100,
       },
     ]);
-    expect(f).toHaveBeenCalledWith("/api/databases", undefined);
+    expect(f).toHaveBeenCalledWith("/api/databases", { signal: expect.any(AbortSignal) });
   });
 
   it("getIndividuals GETs /api/individuals and returns the parsed bare array", async () => {
@@ -86,7 +103,7 @@ describe("api client", () => {
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);
     expect(out[0]?.label).toBe("engine_rpm");
-    expect(f).toHaveBeenCalledWith("/api/individuals", undefined);
+    expect(f).toHaveBeenCalledWith("/api/individuals", { signal: expect.any(AbortSignal) });
   });
 
   it("getStats POSTs the query tree + selected databases as JSON", async () => {
@@ -149,10 +166,7 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     const out = await getMe();
     expect(out).toEqual({ name: "demo.user" });
-    // getMe() calls fetch(url) with no second argument (unlike request<T>,
-    // which always passes init explicitly) — so check just the URL, not the
-    // full args array, which would otherwise differ in length from ["/api/auth/me", undefined].
-    expect(f.mock.calls[0]![0]).toBe("/api/auth/me");
+    expect(f).toHaveBeenCalledWith("/api/auth/me", { signal: expect.any(AbortSignal) });
   });
 
   it("getMe returns null on 401 rather than throwing", async () => {
@@ -184,7 +198,7 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     const out = await getComplianceStatus();
     expect(out).toEqual({ status: "required" });
-    expect(f).toHaveBeenCalledWith("/api/compliance/status", undefined);
+    expect(f).toHaveBeenCalledWith("/api/compliance/status", { signal: expect.any(AbortSignal) });
   });
 
   it("invalidateCompliance POSTs to /api/compliance/invalidate", async () => {
@@ -199,5 +213,44 @@ describe("api client", () => {
   it("invalidateCompliance throws the server's error message on non-2xx", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, { error: "boom" }));
     await expect(invalidateCompliance()).rejects.toThrow("boom");
+  });
+
+  it("builds the login / compliance redirect URLs from the same API base as fetches", () => {
+    expect(LOGIN_URL).toBe("/api/auth/login");
+    expect(COMPLIANCE_START_URL).toBe("/api/compliance/start");
+  });
+
+  it("rejects with a TimeoutError when the server stays silent past REQUEST_TIMEOUT_MS", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", hangingFetch());
+    const pending = expect(getDatabases()).rejects.toBeInstanceOf(TimeoutError);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await pending;
+  });
+
+  it("runQuery rejects with the caller's abort reason when its signal aborts", async () => {
+    vi.stubGlobal("fetch", hangingFetch());
+    const ctrl = new AbortController();
+    const pending = runQuery(emptyQuery(), ["a"], 1, 25, ctrl.signal);
+    ctrl.abort(new Error("superseded"));
+    await expect(pending).rejects.toThrow("superseded");
+  });
+
+  it("getStats passes an abortable signal and rejects when it is aborted", async () => {
+    vi.stubGlobal("fetch", hangingFetch());
+    const ctrl = new AbortController();
+    const pending = getStats(emptyQuery(), ["a"], () => {}, ctrl.signal);
+    ctrl.abort(new Error("superseded"));
+    await expect(pending).rejects.toThrow("superseded");
+  });
+
+  it("getStats throws a readable error when a 2xx response has no body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 204, statusText: "", body: null }),
+    );
+    await expect(getStats(emptyQuery(), ["a"], () => {})).rejects.toThrow(
+      "empty statistics response",
+    );
   });
 });

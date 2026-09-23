@@ -13,6 +13,11 @@ const URL_RE = /https?:\/\/[^\s"'`)]+/gi;
 // exact string equality below, so nothing else on w3.org is permitted.
 const ALLOW = ["http://www.w3.org/2000/svg"];
 
+// The licence notice (emitted by vite.config.ts) quotes licence URLs as plain
+// document text. The app never loads or fetches it — it is there for humans and
+// licence compliance — so this exact file is exempt. Nothing else is.
+const EXEMPT_FILES = [join(DIST, "THIRD-PARTY-NOTICES.txt")];
+
 // Scan EVERYTHING except known-binary assets, rather than allow-listing a few text
 // extensions: that way .json, .svg, .txt and .webmanifest are covered too, and any
 // new text asset type is audited by default instead of silently skipped.
@@ -23,7 +28,7 @@ function walk(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) out.push(...walk(p));
-    else if (!BINARY_RE.test(name)) out.push(p);
+    else if (!BINARY_RE.test(name) && !EXEMPT_FILES.includes(p)) out.push(p);
   }
   return out;
 }
