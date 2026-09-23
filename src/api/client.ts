@@ -1,5 +1,6 @@
 import type { QueryNode } from "../query/types";
 import type {
+  AuthUser,
   DatabasesResponse,
   EntrysetsResponse,
   IndividualsResponse,
@@ -9,18 +10,20 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+async function errorFromResponse(res: Response): Promise<Error> {
+  let message = `${res.status} ${res.statusText}`;
+  try {
+    const body = (await res.json()) as { error?: string };
+    if (body && typeof body.error === "string") message = body.error;
+  } catch {
+    /* keep the status-line message */
+  }
+  return new Error(message);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, init);
-  if (!res.ok) {
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = (await res.json()) as { error?: string };
-      if (body && typeof body.error === "string") message = body.error;
-    } catch {
-      /* keep the status-line message */
-    }
-    throw new Error(message);
-  }
+  if (!res.ok) throw await errorFromResponse(res);
   return (await res.json()) as T;
 }
 
@@ -55,4 +58,22 @@ export function runQuery(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query, databases, page, pageSize }),
   });
+}
+
+/**
+ * Who's logged in, if anyone. A 401 here is a normal outcome (not logged
+ * in) — resolves to `null` rather than throwing, so this can sit alongside
+ * getDatabases()/getIndividuals() in main.ts's startup Promise.all without
+ * an anonymous visitor tripping their fatal-load-failure path.
+ */
+export async function getMe(): Promise<AuthUser | null> {
+  const res = await fetch(`${BASE}/auth/me`);
+  if (res.status === 401) return null;
+  if (!res.ok) throw await errorFromResponse(res);
+  return (await res.json()) as AuthUser;
+}
+
+export async function logout(): Promise<void> {
+  const res = await fetch(`${BASE}/auth/logout`, { method: "POST" });
+  if (!res.ok) throw await errorFromResponse(res);
 }
