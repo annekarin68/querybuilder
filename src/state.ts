@@ -51,7 +51,8 @@ export interface AppState {
    *  GET /api/compliance/status. Display-only, same as `auth`: it drives the
    *  account menu and an advisory hint, never gating logic. */
   compliance: ComplianceState;
-  /** Which databases the query currently runs against. Empty = nothing runs. */
+  /** The `label`s (DatabasesResponse.label) of the databases the query runs
+   *  against. Empty = nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;
 

@@ -9,7 +9,7 @@ of the data model (`GET /individuals` — the backend's name for them), the
 databases a query can be scoped to (`GET /databases`), live statistics
 (`POST /stats`), the matching events (`POST /query`), and the login and
 compliance flows (`/auth/*`, `/compliance/*`). The full contract is in
-`docs/ARCHITECTURE.md` §7. A dev-only mock server implements all of it so the app
+`docs/ARCHITECTURE.md` ("API contract"). A dev-only mock server implements all of it so the app
 runs end to end locally, on fictional vehicle-telemetry sample data.
 
 ## Run it
@@ -36,7 +36,7 @@ Other scripts:
 |---|---|
 | `npm run build` | Type-check, bundle to `dist/`, then fail if any off-origin URL leaked in. |
 | `npm run preview` | Serve the built `dist/`. |
-| `npm run test` | Vitest unit tests: the query model, validation, summary, API client, store, utilities, the pure view helpers (formatting, value controls, stats/preview helpers), the mock server's logic, and the `noBackendDataInSrc` guard. No DOM/component tests by design. |
+| `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client, the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint + Prettier check. |
 | `npm run check:offline` | Scan `dist/` for off-origin `http(s)` URLs. |
@@ -53,14 +53,18 @@ Other scripts:
    stay the first import of `src/main.ts`). To make
    new markup interactive, add its selector to `activate()` and `destroy()` in
    `src/ui/fomantic.ts`. ESLint blocks `jquery` imports anywhere else.
-3. **Update a panel by building an HTML string and calling `paint()`** — never
+3. **Update a panel by building an HTML string and calling `paint()`** — don't
    hand-mutate a panel's DOM. `paint()` tears down old Fomantic plugins first.
+   The only exceptions are the data dictionary's search filter (a repaint
+   would lose the input's focus) and the page frame in `src/ui/layout.ts`.
 4. **One state object.** `src/state.ts`. Change it with `store.setState({...})`;
    each panel re-renders when a key it lists in `panelRenderers` (`src/main.ts`)
    changes.
 5. **Stats & preview always match the on-screen query.** Editing the query or the
    database selection clears both immediately and cancels their requests; a
-   response is only used while its request is still current (`src/util/requestSlot.ts`).
+   response is only used while its request is still current (`src/app.ts`,
+   `src/util/requestSlot.ts`). What the app does lives in `src/app.ts` and is
+   tested in `tests/app.test.ts`; `src/main.ts` only wires it to the page.
 6. **The frontend never names backend data.** Facets, fields, tags and groups are
    learned at runtime; the only place to name them is `src/config.ts`.
 7. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
@@ -68,7 +72,9 @@ Other scripts:
 
 ## Layout of the code
 
-See `docs/ARCHITECTURE.md` §4.
+See `docs/ARCHITECTURE.md`, "Directory layout". Its last section, "How do I…",
+has checklists for the most common changes (a new operator, a new API
+endpoint, a new panel, …).
 
 CI (`.github/workflows/ci.yml`) runs typecheck, tests, lint and build on every
 pull request and push to `main`.
