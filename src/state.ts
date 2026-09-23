@@ -24,7 +24,11 @@ export interface AppState {
   /** Compliance acknowledgment for this session, if any — populated once at
    *  startup via GET /api/compliance/status. Display-only, same as `auth`:
    *  it drives the top-menu widget and an advisory hint, never gating logic. */
-  compliance: { status: "loading" | "required" | "acknowledged"; reason: string | null; ackedAt: string | null };
+  compliance: {
+    status: "loading" | "required" | "acknowledged";
+    reason: string | null;
+    ackedAt: string | null;
+  };
   /** Which databases the query currently runs against. Empty = nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;

@@ -189,8 +189,7 @@ export function exchangeComplianceToken(
 }
 
 export type ComplianceStatusBody =
-  | { status: "required" }
-  | { status: "acknowledged"; reason: string; ackedAt: string };
+  { status: "required" } | { status: "acknowledged"; reason: string; ackedAt: string };
 
 /** Never errors: no session, or a session with no compliance record, both
  *  report "required" — from the caller's perspective, compliance isn't met
@@ -198,7 +197,11 @@ export type ComplianceStatusBody =
 export function complianceStatusFor(cookieHeader: string | undefined): ComplianceStatusBody {
   const session = sessionFor(cookieHeader);
   if (!session?.compliance) return { status: "required" };
-  return { status: "acknowledged", reason: session.compliance.reason, ackedAt: session.compliance.ackedAt };
+  return {
+    status: "acknowledged",
+    reason: session.compliance.reason,
+    ackedAt: session.compliance.ackedAt,
+  };
 }
 
 /** Clears just the compliance field off the current session — the user stays

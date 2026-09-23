@@ -213,9 +213,10 @@ describe("compliance state/token round trip", () => {
   it("an unknown token is rejected", () => {
     const sessionId = newSession();
     const state = startCompliance();
-    expect(
-      exchangeComplianceToken("not-a-real-token", state, `qb_session=${sessionId}`),
-    ).toEqual({ ok: false, error: "Invalid or expired compliance token." });
+    expect(exchangeComplianceToken("not-a-real-token", state, `qb_session=${sessionId}`)).toEqual({
+      ok: false,
+      error: "Invalid or expired compliance token.",
+    });
   });
 
   it("fails when there is no session for the cookie", () => {

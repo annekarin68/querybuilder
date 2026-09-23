@@ -17,10 +17,7 @@ export function renderComplianceStatus(state: AppState): void {
     return;
   }
   if (state.compliance.status === "required") {
-    paint(
-      el,
-      `<a href="/api/compliance/start" class="ui small button">Start compliance check</a>`,
-    );
+    paint(el, `<a href="/api/compliance/start" class="ui small button">Start compliance check</a>`);
     return;
   }
   paint(

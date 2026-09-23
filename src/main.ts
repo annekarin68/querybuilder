@@ -313,7 +313,9 @@ Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe(), getComplian
       schema,
       databases: dbResp.databases,
       individuals,
-      selectedDatabaseIds: pending ? pending.selectedDatabaseIds : dbResp.databases.map((d) => d.id),
+      selectedDatabaseIds: pending
+        ? pending.selectedDatabaseIds
+        : dbResp.databases.map((d) => d.id),
       query: seeded,
       issues,
       auth: { status: user ? "authenticated" : "anonymous", user },

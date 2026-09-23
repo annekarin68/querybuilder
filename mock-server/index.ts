@@ -87,7 +87,11 @@ async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
  *  can never actually contain an HTML-special character — this escaping is a
  *  cheap defensive habit, not a response to a real exploitable input. */
 function escapeHtmlAttr(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 /** Dev-only stand-in for a real compliance/audit service's submission form.
