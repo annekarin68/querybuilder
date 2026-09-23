@@ -11,7 +11,15 @@ import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
-import { getDatabases, getIndividuals, getMe, getSchema, getStats, logout, runQuery } from "./api/client";
+import {
+  getDatabases,
+  getIndividuals,
+  getMe,
+  getSchema,
+  getStats,
+  logout,
+  runQuery,
+} from "./api/client";
 import { canRunQuery, store, type AppState } from "./state";
 import { addChild, newCondition, stripCollapsed } from "./query/tree";
 import { validateQuery } from "./query/validate";
