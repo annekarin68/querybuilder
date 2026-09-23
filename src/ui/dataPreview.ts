@@ -4,10 +4,13 @@ import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
-import { countLabel, displayLabel, formatWhen } from "./format";
+import { countLabel, displayLabel, formatWhen, text } from "./format";
+import { tagsOf, UNTAGGED } from "./docsFilter";
+import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
 
-/** How many group tags to show inline before collapsing the rest into "+N". */
-const MAX_GROUP_BADGES = 3;
+/** How many tag / group badges to show inline before collapsing the rest into "+N". */
+const MAX_TAG_BADGES = 3;
+const MAX_GROUP_BADGES = 2;
 
 function individualsByLabel(state: AppState): Map<string, Individual> {
   const map = new Map<string, Individual>();
@@ -15,32 +18,94 @@ function individualsByLabel(state: AppState): Map<string, Individual> {
   return map;
 }
 
-function groupsBadgesHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
-  const groups = [
-    ...new Set(
-      Object.keys(entryset.items)
-        .map((slug) => byLabel.get(slug)?.group)
-        .filter((g): g is string => Boolean(g) && g !== "metadata"),
-    ),
-  ].sort();
-  const shown = groups.slice(0, MAX_GROUP_BADGES);
-  const overflow = groups.length - shown.length;
+/**
+ * The distinct tags and third-party groups of an entryset's items, each
+ * ordered by how many of its items carry it (most first, then alphabetical),
+ * so the inline badges show what this entryset is mostly about. Blank values
+ * and those listed in `hidden` (default: `HIDDEN_ROW_BADGES` in config.ts,
+ * matched ignoring case) are dropped.
+ */
+export function entrysetBadges(
+  entryset: Entryset,
+  byLabel: Map<string, Individual>,
+  hidden: { tags: string[]; groups: string[] } = HIDDEN_ROW_BADGES,
+): { tags: string[]; groups: string[] } {
+  const norm = (s: string) => text(s).toLowerCase();
+  const hiddenTags = new Set(hidden.tags.map(norm));
+  const hiddenGroups = new Set(hidden.groups.map(norm));
+  const tags = new Map<string, number>();
+  const groups = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (const label of Object.keys(entryset.items)) {
+    const ind = byLabel.get(label);
+    if (!ind) continue;
+    const group = text(ind.group);
+    if (group && !hiddenGroups.has(norm(group))) bump(groups, group);
+    for (const tag of tagsOf(ind)) {
+      if (tag !== UNTAGGED && !hiddenTags.has(norm(tag))) bump(tags, tag);
+    }
+  }
+  const ranked = (m: Map<string, number>) =>
+    [...m.keys()].sort((a, b) => m.get(b)! - m.get(a)! || a.localeCompare(b));
+  return { tags: ranked(tags), groups: ranked(groups) };
+}
+
+/** Up to `max` badges of one kind, then a "+N" whose hover lists the rest. */
+function badgesHtml(values: string[], max: number, cls: string, kind: string): string {
+  const shown = values.slice(0, max);
+  const rest = values.slice(max).map(displayLabel);
   return (
-    shown.map((g) => `<span class="qb-tag">${escapeHtml(displayLabel(g))}</span>`).join("") +
-    (overflow > 0 ? `<span class="qb-er-more">+${overflow}</span>` : "")
+    shown
+      .map((v) => `<span class="${cls}" title="${kind}">${escapeHtml(displayLabel(v))}</span>`)
+      .join("") +
+    (rest.length
+      ? `<span class="qb-er-more" title="${escapeHtml(`More ${kind.toLowerCase()}s: ${rest.join(", ")}`)}">+${rest.length}</span>`
+      : "")
   );
 }
 
-function entrysetRowHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
-  const vehicle = entryset.items["vehicle_identity"]?.["vehicle_type"];
-  const when = entryset.items["observation_window"]?.["from_timestamp"];
+/** Tags first (our own, filled chips), then third-party groups (outlined). */
+function tagsAndGroupsHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
+  const { tags, groups } = entrysetBadges(entryset, byLabel);
+  return (
+    badgesHtml(tags, MAX_TAG_BADGES, "qb-tag", "Tag") +
+    badgesHtml(groups, MAX_GROUP_BADGES, "qb-group-badge", "Group")
+  );
+}
+
+/** The text of one configured column for one entryset ("—" when absent). */
+export function rowCell(entryset: Entryset, col: RowColumn): string {
+  const v = entryset.items[col.item]?.[col.field];
+  if (v === undefined || v === null || v === "") return "—";
+  return col.format === "datetime" ? formatWhen(String(v)) : String(v);
+}
+
+/** The row grid: id, one column per ROW_COLUMNS entry, badges, item count.
+ *  Every row is its own grid, so tracks must not depend on content or the
+ *  columns would misalign: dates get a fixed width that fits a medium
+ *  date + short time; text is capped and ellipsised, full value on hover. */
+export function rowGrid(columns: RowColumn[]): string {
+  const cols = columns.map((c) => (c.format === "datetime" ? "12rem" : "minmax(0, 10rem)"));
+  return ["3rem", ...cols, "minmax(0, 1fr)", "auto"].join(" ");
+}
+
+function entrysetRowHtml(
+  entryset: Entryset,
+  byLabel: Map<string, Individual>,
+  columns: RowColumn[],
+): string {
+  const cells = columns
+    .map((col) => {
+      const value = rowCell(entryset, col);
+      return `<span class="qb-er-cell" title="${escapeHtml(`${col.heading}: ${value}`)}">${escapeHtml(value)}</span>`;
+    })
+    .join("");
   return `
     <details class="qb-entryset-row">
       <summary>
         <span class="qb-er-id">#${escapeHtml(entryset.id)}</span>
-        <span class="qb-er-when">${escapeHtml(formatWhen(typeof when === "string" ? when : undefined))}</span>
-        <span class="qb-er-vehicle">${escapeHtml(typeof vehicle === "string" ? vehicle : "—")}</span>
-        <span class="qb-er-groups">${groupsBadgesHtml(entryset, byLabel)}</span>
+        ${cells}
+        <span class="qb-er-groups">${tagsAndGroupsHtml(entryset, byLabel)}</span>
         <span class="qb-er-count">${countLabel(Object.keys(entryset.items).length, "item")}</span>
       </summary>
       <pre class="qb-er-json">${escapeHtml(JSON.stringify(entryset, null, 2))}</pre>
@@ -137,7 +202,7 @@ export function renderDataPreview(state: AppState): void {
     el,
     card(
       `<p class="qb-preview-note qb-muted">Showing ${countLabel(entrysets.length, "entryset")} — click a row to see its full JSON.</p>
-       <div class="qb-entryset-list">${entrysets.map((e) => entrysetRowHtml(e, byLabel)).join("")}</div>`,
+       <div class="qb-entryset-list" style="--qb-er-grid: ${rowGrid(ROW_COLUMNS)}">${entrysets.map((e) => entrysetRowHtml(e, byLabel, ROW_COLUMNS)).join("")}</div>`,
       entrysets.length,
     ),
   );

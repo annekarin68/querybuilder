@@ -4712,11 +4712,11 @@
   {
     "speeding_event": {
       "label": "speeding_event",
-      "group": "driver_behavior",
+      "group": "",
       "tags": [],
       "idNumber": 147,
       "name": "Speeding event",
-      "description": "A detected instance of travel above the posted speed limit.",
+      "description": "",
       "comment": "Compares vehicle speed to sign recognition data",
       "totalCount": 846764974,
       "fields": [
@@ -4724,7 +4724,7 @@
           "label": "speed_kmh",
           "type": "DOUBLE",
           "description": "",
-          "comment": "",
+          "comment": "Derived from wheel speed sensors",
           "cardinality": 50000000,
           "values": [],
           "format": ""

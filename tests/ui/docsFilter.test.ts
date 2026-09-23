@@ -1,13 +1,19 @@
 import { describe, it, expect } from "vitest";
 import type { Individual } from "../../src/api/types";
-import { matchDocs } from "../../src/ui/docsFilter";
+import { groupByTag, matchDocs, tagsOf, UNTAGGED } from "../../src/ui/docsFilter";
 
-function ind(label: string, group: string, name: string, fields: string[]): Individual {
+function ind(
+  label: string,
+  tags: string[],
+  name: string,
+  fields: string[],
+  group = "",
+): Individual {
   return {
     label,
     group,
     name,
-    tags: [],
+    tags,
     idNumber: 0,
     description: "",
     comment: "",
@@ -25,14 +31,52 @@ function ind(label: string, group: string, name: string, fields: string[]): Indi
 }
 
 const items = [
-  ind("tire_pressure_front_left", "tires_wheels", "Tire pressure (front left)", [
+  ind("tire_pressure_front_left", ["wheels"], "Tire pressure (front left)", [
     "pressure_psi",
     "tread_depth_mm",
   ]),
-  ind("engine_oil_pressure", "engine", "Engine oil pressure", ["value_kpa"]),
-  ind("engine_rpm", "engine", "Engine RPM", ["value_rpm", "redline_rpm"]),
-  ind("brake_pressure", "brakes", "Brake pressure", ["value_kpa", "pedal_position_percentage"]),
+  ind("engine_oil_pressure", ["engine", "fluids"], "Engine oil pressure", ["value_kpa"]),
+  ind("engine_rpm", ["engine"], "Engine RPM", ["value_rpm", "redline_rpm"]),
+  ind("brake_pressure", [], "Brake pressure", ["value_kpa", "pedal_position_percentage"], "brakes"),
 ];
+
+describe("tagsOf", () => {
+  it("drops blank and duplicate tags, trimming the rest", () => {
+    expect(tagsOf(ind("x", [" engine ", "", "engine", "  "], "X", []))).toEqual(["engine"]);
+  });
+
+  it("puts an item with no usable tags under UNTAGGED", () => {
+    expect(tagsOf(ind("x", [], "X", []))).toEqual([UNTAGGED]);
+    expect(tagsOf(ind("x", ["", " "], "X", []))).toEqual([UNTAGGED]);
+  });
+});
+
+describe("groupByTag", () => {
+  it("sections by tag, alphabetically, with untagged items last", () => {
+    const sections = groupByTag(items);
+    expect([...sections.keys()]).toEqual(["engine", "fluids", "wheels", UNTAGGED]);
+    expect(sections.get("engine")!.map((i) => i.label)).toEqual([
+      "engine_oil_pressure",
+      "engine_rpm",
+    ]);
+    expect(sections.get(UNTAGGED)!.map((i) => i.label)).toEqual(["brake_pressure"]);
+  });
+
+  it("lists an item under every one of its tags", () => {
+    const sections = groupByTag(items);
+    expect(sections.get("fluids")!.map((i) => i.label)).toEqual(["engine_oil_pressure"]);
+  });
+
+  it("ignores the third-party group, blank or not", () => {
+    const blank = ind("a", ["engine"], "A", [], "");
+    const other = ind("b", ["engine"], "B", [], "powertrain");
+    expect([...groupByTag([blank, other]).keys()]).toEqual(["engine"]);
+  });
+
+  it("has no UNTAGGED section when every item is tagged", () => {
+    expect(groupByTag(items.slice(0, 3)).has(UNTAGGED)).toBe(false);
+  });
+});
 
 describe("matchDocs", () => {
   it("returns null for a blank filter", () => {
@@ -40,7 +84,7 @@ describe("matchDocs", () => {
     expect(matchDocs(items, "   ")).toBeNull();
   });
 
-  it("matches item names case-insensitively and counts matches per group", () => {
+  it("matches item names case-insensitively and counts matches per tag", () => {
     const m = matchDocs(items, "PRESSURE")!;
     expect([...m.items].sort()).toEqual([
       "brake_pressure",
@@ -49,9 +93,10 @@ describe("matchDocs", () => {
     ]);
     expect(m.groups).toEqual(
       new Map([
-        ["tires_wheels", 1],
+        ["wheels", 1],
         ["engine", 1],
-        ["brakes", 1],
+        ["fluids", 1],
+        [UNTAGGED, 1],
       ]),
     );
   });
@@ -68,7 +113,7 @@ describe("matchDocs", () => {
     expect([...matchDocs([named], "(kpa)")!.items]).toEqual(["engine_oil_pressure"]);
   });
 
-  it("counts several matches in the same group", () => {
+  it("counts several matches under the same tag", () => {
     const m = matchDocs(items, "engine")!;
     expect(m.groups.get("engine")).toBe(2);
   });

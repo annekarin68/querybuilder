@@ -58,9 +58,32 @@ export function barWidth(match: number, total: number): string {
 }
 
 /** A backend identifier shown as text (a group name, a tag): the backend's own
- *  casing, with underscores shown as spaces. "battery_ev" → "battery ev". */
+ *  casing, with underscores shown as spaces. "some_label" → "some label". */
 export function displayLabel(s: string): string {
   return s.replace(/_/g, " ");
+}
+
+/** The backend sends "" (never null) for a missing text value; treat
+ *  whitespace-only the same. Returns the trimmed text, or "" when blank. */
+export function text(s: string | undefined): string {
+  return (s ?? "").trim();
+}
+
+/** A database pill's hover text: "Owner: description", or whichever of the
+ *  two is non-blank, or "" when both are. */
+export function databaseTitle(d: { owner: string; description: string }): string {
+  const owner = text(d.owner);
+  const description = text(d.description);
+  return owner && description ? `${owner}: ${description}` : owner || description;
+}
+
+/** A field's hover text: the backend's always-correct `comment` first, then
+ *  the third-party `description`, labelled so the two stay distinct. Either
+ *  may be blank; "" when both are. */
+export function fieldTitle(f: { comment: string; description: string }): string {
+  const comment = text(f.comment);
+  const description = text(f.description);
+  return [comment, description && `Third-party: ${description}`].filter(Boolean).join("\n");
 }
 
 /** "1 entryset" / "9 entrysets" / "12,345 entrysets". */

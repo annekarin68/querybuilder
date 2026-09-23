@@ -54,7 +54,7 @@ export interface DatabasesResponse {
   label: string;
 }
 
-/** One field an individual's telemetry item can report (GET /api/individuals). */
+/** One field an individual can report a value for (GET /api/individuals). */
 export interface IndividualField {
   /** This field's locally unique, API-friendly "ID" within this individual. */
   label: string;
@@ -83,8 +83,9 @@ export interface IndividualField {
 }
 
 /**
- * One item in the vehicle telemetry data model — a signal, sensor, or piece
- * of metadata that an entryset may hold a value for.
+ * One item in the backend's data model — something an entryset may hold a
+ * value for. The frontend knows no item by name: everything it shows about
+ * items comes from this response (or from src/config.ts).
  */
 export interface Individual {
   /** Unique "ID" for API requests — a permutation of `name` with special
@@ -110,7 +111,7 @@ export interface Individual {
 }
 
 /**
- * A telemetry entryset: a snapshot of one vehicle event, holding actual values
+ * An entryset: one record, holding actual values
  * for a subset of the items returned by GET /api/individuals. `items` is keyed
  * by an Individual's `label`; each item's value object is keyed by one of
  * that item's field labels — see docs/ARCHITECTURE.md for the full shape.

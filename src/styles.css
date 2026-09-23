@@ -794,7 +794,8 @@ body {
 }
 .qb-entryset-row summary {
   display: grid;
-  grid-template-columns: 3rem 10.5rem minmax(0, 9rem) minmax(0, 1fr) auto;
+  /* Set inline by dataPreview.ts from the configured ROW_COLUMNS. */
+  grid-template-columns: var(--qb-er-grid, 3rem minmax(0, 1fr) auto);
   gap: 0.75rem;
   align-items: center;
   padding: 0.5rem 0.75rem;
@@ -813,22 +814,35 @@ body {
 .qb-er-id {
   font-weight: 700;
 }
-.qb-er-when,
 .qb-er-count {
   color: var(--qb-muted);
   white-space: nowrap;
 }
-.qb-er-vehicle {
+.qb-er-cell {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  color: var(--qb-muted);
 }
 .qb-er-groups {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
   min-width: 0;
+}
+.qb-group-badge {
+  display: inline-block;
+  padding: 0 0.45rem;
+  border: 1px dashed var(--qb-border);
+  border-radius: 999px;
+  color: var(--qb-subtle);
+  font-size: 0.72rem;
+  line-height: calc(1.5em - 2px);
+  white-space: nowrap;
+}
+/* A little extra space where the tags end and the groups begin. */
+.qb-er-groups > :not(.qb-group-badge) + .qb-group-badge {
+  margin-left: 0.4rem;
 }
 .qb-er-more {
   font-size: 0.8rem;
@@ -910,6 +924,15 @@ body {
   flex-wrap: wrap;
   gap: 0.25rem;
   margin: 0.25rem 0;
+}
+.qb-doc-untagged {
+  font-style: italic;
+  color: var(--qb-muted);
+}
+.qb-doc-source {
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
+  color: var(--qb-subtle);
 }
 .qb-doc-desc,
 .qb-doc-comment,

@@ -206,6 +206,7 @@ are the only two files that may import jquery (ESLint enforces it).
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
   main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/individuals/auth/compliance; wire subscriptions; hold the refreshStats / runPreview orchestrators; reacts to 401/403 generically to trigger the login/compliance redirects.
+  config.ts            Hand-edited display settings — the ONLY place src/ may name backend data (items, fields, tags, groups); all empty by default. HIDDEN_ROW_BADGES (tags/groups never shown as Matching entrysets badges), ROW_COLUMNS (item.field values shown as columns on each row). Enforced by tests/noBackendDataInSrc.test.ts.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
@@ -229,7 +230,7 @@ src/
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
-    docsFilter.ts      matchDocs(individuals, text) — which data-dictionary items/groups match the filter (pure; unit-tested).
+    docsFilter.ts      tagsOf / groupByTag (the data dictionary's per-tag sections, untagged last) + matchDocs(individuals, text) — which items/sections match the filter (pure; unit-tested).
     docsSidebar.ts     render for the data dictionary (docs column) — built
                        from state.individuals, NOT state.schema. See §9.
     statsPanel.ts      render for the pinned statistics column (data-driven from /api/stats).
@@ -604,6 +605,9 @@ The 4 `group: "metadata"` items (`observation_window`, `vehicle_identity`,
 they carry the time/identity/position every entryset needs and are used for
 indexing. There is no field marking an item as metadata vs. content; it's
 tracked only by convention (see git history for the design discussion).
+This is a property of the **mock** dataset only — the real databases have no
+`metadata` group, so `src/` never names it; values to suppress are listed in
+`src/config.ts` instead.
 
 ### `POST /api/stats`
 
@@ -840,7 +844,8 @@ as anonymous and the error is logged.
 
 Its own panel (`data-panel="dbpicker"`). A card with one pill toggle per
 `state.databases` entry (a native checkbox inside a styled label — no
-plugin), "N of M selected", and **All** / **None** buttons. Toggling calls
+plugin; its hover `title` is `databaseTitle`: "owner: description", or
+whichever is non-blank, or no `title` at all), "N of M selected", and **All** / **None** buttons. Toggling calls
 `onDatabasesChange` in `main.ts`, which treats it exactly like a query edit
 (§6). Zero selected → an amber "Select at least one database." note, and the
 statistics and Matching entrysets cards explain why they are empty.
@@ -849,16 +854,25 @@ statistics and Matching entrysets cards explain why they are empty.
 
 Built from `state.individuals` (GET /api/individuals) — not `state.schema`.
 Hidden behind the docs rail by default (`sidebarCollapsed` starts `true`);
-the rail and the card's ✕ both toggle it. One native `<details>` per `group`
-(18 subsystem groups, e.g. `engine`, `tires_wheels`, `metadata`), each
-listing its items: name, tags, `description`, italic `comment`, "In N
-entrysets (x%)" (`matchRatio` against the sum of every database's
-`totalEntrysets`), and field chips (`name`, falling back to `label`, + type).
-Group names and tags are shown in the backend's casing with underscores as
-spaces (`displayLabel`). The search box filters with `matchDocs` (item name,
-field label or name; case-insensitive): matching groups open and show "N
-matches", other groups and items are hidden, and "No items match …" appears
-when nothing does. The filter sets `hidden`/`open` on the painted DOM instead
+the rail and the card's ✕ both toggle it. Sections are built from our own
+`tags`, not the third-party `group` (`groupByTag` in `docsFilter.ts`): one
+native `<details>` per tag, sorted alphabetically, listing every item carrying
+it — so an item with several tags appears in several sections. Tags are
+trimmed and blank/duplicate tags dropped (`tagsOf`); items left with no tags
+go in a final italic **Untagged** section (key `UNTAGGED`, the empty string —
+never a real tag). Each item shows: name, tag chips, a small "Group: …" line
+with the third-party `group` (omitted when blank — the backend may send `""`),
+`description`, italic `comment`, "In N entrysets (x%)" (`matchRatio` against
+the sum of every database's `totalEntrysets`), and field chips (`name`,
+falling back to `label`, + type) whose hover `title` is `fieldTitle`: the
+field's `comment`, then "Third-party: `description`". The backend sends `""`
+for missing text, so every `description`/`comment`/`group`/`owner` goes
+through `text()` (trim) and a blank value's element or `title` is omitted
+rather than rendered empty. Tags and group names are shown in the backend's
+casing with underscores as spaces (`displayLabel`). The search box filters
+with `matchDocs` (item name, field label or name; case-insensitive): matching
+sections open and show "N matches", other sections and items are hidden, and
+"No items match …" appears when nothing does. The filter sets `hidden`/`open` on the painted DOM instead
 of repainting, so typing keeps focus.
 
 ### Centre — `queryBuilder.ts`
@@ -961,11 +975,20 @@ per-item columns, so it scales to 20+ entrysets just by scrolling vertically
 Each row is a native `<details>/<summary>` element (no JS wiring needed for
 expand/collapse):
 
-- **Summary line**: entryset id, "When" (`observation_window.from_timestamp`,
-  `formatWhen`, e.g. 7 Nov 2024, 09:15), "Vehicle" (`vehicle_identity.vehicle_type`, both falling
-  back to `—` if that metadata item is absent), the distinct non-`metadata`
-  `group`s present as badges (first 3, `+N` overflow — computed by
-  cross-referencing `state.individuals`), and the total item count.
+- **Summary line**: entryset id, then one cell per `ROW_COLUMNS` entry in
+  `src/config.ts` (none by default) — the entryset's value for that
+  `item.field` (`rowCell`: `—` when absent; `format: "datetime"` →
+  `formatWhen`), hover "heading: value". Each row is its own CSS grid, so the
+  tracks (`rowGrid`, set as `--qb-er-grid` on the list) never depend on
+  content: 12rem for dates, `minmax(0, 10rem)` + ellipsis for text. Then badges for the entryset's
+  items — computed by `entrysetBadges` cross-referencing `state.individuals`,
+  leaving out any tag or group listed in `HIDDEN_ROW_BADGES` (`src/config.ts`;
+  case-insensitive; hides only that badge, not the item's others; empty by
+  default) — **tags first** (our own; filled
+  grey `.qb-tag` chips, first 3) **then third-party groups** (dashed-outline
+  `.qb-group-badge` pills, first 2, set off by a small gap), each ranked by how
+  many of the entryset's items carry it (ties alphabetical), blanks dropped,
+  each with its own `+N` whose hover lists the rest; and the total item count.
 - **Expanded content**: the entryset's full `{ id, items }` as pretty-printed
   JSON (`JSON.stringify(entryset, null, 2)` in a `<pre>`) — a throwaway stand-in
   for the dedicated pretty-JSON entryset viewer planned as a follow-up; expect
@@ -1087,6 +1110,8 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 - `validate.test.ts` — each issue type is reported; a complete query yields `[]`.
 - `summary.test.ts` — representative trees produce the expected text.
 - `tests/ui/docsFilter.test.ts` — data-dictionary filter matching.
+- `tests/ui/dataPreview.test.ts` — row badges (`entrysetBadges`), configured columns (`rowCell`, `rowGrid`).
+- `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock item, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
 - `tests/ui/format.test.ts` / `statsPanel.test.ts` / `valueControl.test.ts` — formatting helpers and the few pure render helpers.
 - Fixture request/response objects double as contract examples.
 - No DOM/component tests — the view layer is deliberately too thin to be worth it (repo rule).
@@ -1142,3 +1167,7 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-23 | Compliance-logging redirect gate: `POST /api/query` now also requires a compliance acknowledgment (`403` without one), gated the same way login is (`401`) — via a second mock-service redirect flow (`mock-server/auth.ts`'s compliance session/token logic + `mock-server/index.ts`'s `/api/compliance/*` and `/mock-compliance/*` routes), the reason attached to the *same* session record rather than a second cookie. The frontend no longer pre-checks `auth`/`compliance` status before allowing Run — `syncRunButton` reverted to its pre-OAuth shape, and `main.ts` reacts generically to a `401`/`403` on the actual request, which will cover any future protected endpoint for free. The in-progress query survives both redirects via a new `src/util/pendingQuery.ts` (`sessionStorage`, restored on a `?resume=1` return-hop) — deliberately with no automatic retry or chaining, so the mechanism can never redirect-loop: the user always clicks Run again to retry. New top-menu widget (`src/ui/complianceStatus.ts`). Every successful extraction is also logged to a dev-only in-memory audit list (`mock-server/audit.ts`) standing in for a real audit-service call. Also rebased, alongside the OAuth2 row above, onto the API-contract-rename work — `getStats`'s streaming NDJSON shape and `buildFieldCatalog` were unaffected by this feature, so `refreshStats` kept its post-rename implementation untouched through both rebases. Design: `docs/superpowers/specs/2026-09-23-compliance-logging-design.md`. |
 | 2026-09-23 | Production-readiness hardening (review before first production deploy). **Requests:** `client.ts` gains a shared 60 s timeout (`TimeoutError`; for the `/stats` stream it is an idle timeout that restarts on each chunk) and optional `AbortSignal`s on `getStats`/`runQuery`; `main.ts` replaces the `statsRun` counter with a `requestSlot()` per request kind that aborts superseded requests and supplies the identity half of the stale guard, and `cancelInFlight()` runs on every query/scope edit and on logout (§6). **Auth/compliance:** a `403` from `/api/query` only redirects into compliance if `GET /api/compliance/status` says `"required"`, otherwise the error is shown (a non-compliance `403` used to redirect in an endless circle); a non-401 failure of `GET /api/auth/me` no longer fails startup; `LOGIN_URL`/`COMPLIANCE_START_URL` are exported from `client.ts` and follow `VITE_API_BASE` (previously hardcoded `/api/...` in five places), and flow links are marked `data-flow-link`. **Correctness/UI:** `valueTypeFor` accepts common SQL type spellings case-insensitively (previously only the mock's four); the stats headline never presents failed databases as zero and notes how many it excludes; a restored pending query is structurally validated and its database ids filtered to ones that still exist; the startup error page escapes the server's message and drops its inline `onclick`; node ids and entryset ids are escaped in markup; menu tabs, the Docs toggle and Select all/none are keyboard-focusable (`href="#"` + `preventDefault`). **Build:** `THIRD-PARTY-NOTICES.txt` is emitted into `dist/` by a Vite plugin (exempted by exact path in `check:offline`), removing the manual copy step. **Decision:** re-examined bringing back `GET /api/schema` and kept the client-side catalog (§7). |
 | 2026-09-23 | UI/UX refresh (`docs/superpowers/specs/2026-09-23-ui-ux-refresh-design.md`). Layout: dark top bar with workflow steps and an account menu (replaces `authStatus.ts` + `complianceStatus.ts` with `accountMenu.ts`, a native `<details>` menu); docs collapsed into a rail (`sidebarCollapsed` starts `true`); main column stacks databases (pill toggles), the query card and "Matching entrysets"; a pinned ~15rem statistics column. Query builder: ALL/ANY groups as coloured brackets with tint + hover highlight, AND/OR joiners between children, collapsed groups summarised with `queryToText`, a plain-English footer, CSS-grid condition rows with a container query. `Issue.kind` (`incomplete` → grey hint, `invalid` → red); `newGroup()` now holds one empty condition. Run moved from the top bar into the Matching entrysets card (`syncRunButton` removed; `wireDataPreview` added) — request handling unchanged. Data dictionary: `<details>` groups instead of the Fomantic accordion, a filter (`docsFilter.ts`) that opens matching groups, backend casing with underscores as spaces. `format.ts` gains `displayLabel` / `countLabel` / `formatWhen`. |
+| 2026-09-23 | Data dictionary sectioned by our own `tags` instead of the third-party `group` (`docsFilter.ts` `tagsOf`/`groupByTag`; `matchDocs` counts per tag): alphabetical tag sections, multi-tag items listed under each, untagged items in a final **Untagged** section; `group` is now a small "Group: …" line, omitted when blank (the backend may send `""`). Blank-safe text everywhere via `format.ts` `text()`: database pills' hover is `databaseTitle` ("owner: description", either, or none); field chips gain a hover `fieldTitle` (comment, then "Third-party: description"); blank item `description`/`comment` are omitted. Mock: `speeding_event` has a blank `group`/`description` and one field `comment`, to exercise these paths. |
+| 2026-09-23 | Matching entrysets rows show tags and groups: `dataPreview.ts` `entrysetBadges` returns both, ranked by frequency within the entryset (ties alphabetical), metadata items skipped, blanks dropped. Tags render first as filled `.qb-tag` chips (max 3), then groups as dashed-outline `.qb-group-badge` pills (max 2), each with its own `+N` overflow whose hover lists the hidden values. Tests: `tests/ui/dataPreview.test.ts`. |
+| 2026-09-23 | Removed the hard-coded `"metadata"` exclusion from the Matching entrysets badges (the real databases have no such group). New `src/config.ts` `HIDDEN_ROW_BADGES = { tags, groups }` (empty by default) lists values to omit; matching ignores case/whitespace and hides only that badge. `entrysetBadges` takes the lists as an optional parameter (defaulting to the config) so tests don't depend on it. With the mock data, the metadata items' `metadata` group and tags now appear as badges unless listed there. |
+| 2026-09-23 | The frontend no longer names any backend data. The Matching entrysets "When"/"Vehicle" columns (hard-coded mock items `observation_window.from_timestamp` / `vehicle_identity.vehicle_type`) are replaced by `ROW_COLUMNS` in `src/config.ts` (`{ heading, item, field, format? }[]`, empty by default → rows show id, badges, item count). `rowCell` / `rowGrid` in `dataPreview.ts`; `.qb-er-when`/`.qb-er-vehicle` → `.qb-er-cell`; the row grid template comes from `--qb-er-grid`. Mock-specific wording removed from comments (`types.ts`, `state.ts`, `format.ts`). New guard test `tests/noBackendDataInSrc.test.ts`. |

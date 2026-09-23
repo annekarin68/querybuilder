@@ -1,6 +1,7 @@
 import type { AppState } from "../state";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
+import { databaseTitle } from "./format";
 
 /**
  * The database scope selector, above the query builder. Databases are
@@ -17,12 +18,13 @@ export function renderDatabasePicker(state: AppState): void {
   }
   const selected = new Set(state.selectedDatabaseIds);
   const pills = state.databases
-    .map(
-      (d) => `<label class="qb-db-pill" title="${escapeHtml(d.description)}">
+    .map((d) => {
+      const title = databaseTitle(d);
+      return `<label class="qb-db-pill"${title ? ` title="${escapeHtml(title)}"` : ""}>
         <input type="checkbox" data-db-id="${escapeHtml(d.label)}"${selected.has(d.label) ? " checked" : ""} />
         <span>${escapeHtml(d.name)}</span>
-      </label>`,
-    )
+      </label>`;
+    })
     .join("");
   const none = state.selectedDatabaseIds.length === 0;
   paint(

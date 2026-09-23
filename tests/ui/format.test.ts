@@ -3,10 +3,13 @@ import {
   barWidth,
   compact,
   countLabel,
+  databaseTitle,
   displayLabel,
   exact,
+  fieldTitle,
   formatWhen,
   matchRatio,
+  text,
 } from "../../src/ui/format";
 
 const L = "en-US"; // pin locale so assertions are deterministic
@@ -94,5 +97,46 @@ describe("formatWhen", () => {
     expect(formatWhen(undefined)).toBe("—");
     expect(formatWhen("")).toBe("—");
     expect(formatWhen("not a date")).toBe("not a date");
+  });
+});
+
+describe("text", () => {
+  it("trims, and treats whitespace-only or missing as empty", () => {
+    expect(text("  hi ")).toBe("hi");
+    expect(text("   ")).toBe("");
+    expect(text("")).toBe("");
+    expect(text(undefined)).toBe("");
+  });
+});
+
+describe("databaseTitle", () => {
+  it("joins owner and description", () => {
+    expect(databaseTitle({ owner: "Acme", description: "Trucks." })).toBe("Acme: Trucks.");
+  });
+
+  it("falls back to whichever is non-blank", () => {
+    expect(databaseTitle({ owner: "", description: "Trucks." })).toBe("Trucks.");
+    expect(databaseTitle({ owner: "Acme", description: " " })).toBe("Acme");
+  });
+
+  it("is empty when both are blank", () => {
+    expect(databaseTitle({ owner: "", description: "" })).toBe("");
+  });
+});
+
+describe("fieldTitle", () => {
+  it("puts the comment first and labels the third-party description", () => {
+    expect(fieldTitle({ comment: "Ours.", description: "Theirs." })).toBe(
+      "Ours.\nThird-party: Theirs.",
+    );
+  });
+
+  it("shows whichever is non-blank", () => {
+    expect(fieldTitle({ comment: "Ours.", description: "" })).toBe("Ours.");
+    expect(fieldTitle({ comment: "  ", description: "Theirs." })).toBe("Third-party: Theirs.");
+  });
+
+  it("is empty when both are blank", () => {
+    expect(fieldTitle({ comment: "", description: "" })).toBe("");
   });
 });
