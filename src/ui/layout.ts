@@ -14,6 +14,7 @@ let els: {
   stats: HTMLElement;
   preview: HTMLElement;
   auth: HTMLElement;
+  compliance: HTMLElement;
 };
 let bodyEl: HTMLElement;
 
@@ -25,6 +26,7 @@ export function renderShell(root: HTMLElement): void {
         <a class="item" data-menu="toggle-sidebar"><i class="bars icon"></i> Docs</a>
         <div class="item"><button class="ui primary button" data-menu="run" disabled>Run / Refresh</button></div>
         <div class="item" data-panel="auth"></div>
+        <div class="item" data-panel="compliance"></div>
       </div>
     </div>
     <div class="ui pointing secondary menu" data-menu="views" style="margin:0 1rem">
@@ -48,6 +50,7 @@ export function renderShell(root: HTMLElement): void {
     stats: root.querySelector<HTMLElement>('[data-panel="stats"]')!,
     preview: root.querySelector<HTMLElement>('[data-panel="preview"]')!,
     auth: root.querySelector<HTMLElement>('[data-panel="auth"]')!,
+    compliance: root.querySelector<HTMLElement>('[data-panel="compliance"]')!,
   };
 }
 

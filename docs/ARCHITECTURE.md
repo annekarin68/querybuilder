@@ -5,9 +5,11 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-23 — OAuth2 authorization-code login added: only
-`POST /api/query` requires a session; everything else stays
-anonymous-accessible. Rebased onto the API contract rename (bare-array
+Last updated: 2026-09-23 — Compliance-logging redirect gate added
+alongside OAuth2 login: `POST /api/query` requires both a session and a
+compliance acknowledgment (`401`/`403`), each triggering its own redirect
+flow; everything else stays anonymous-accessible. Both features are
+rebased onto the API contract rename (bare-array
 `getDatabases`/`getIndividuals`, streaming `getStats`, client-side
 `buildFieldCatalog`, no `GET /api/schema`). See §13 for the full changelog.
 
@@ -25,7 +27,7 @@ the app runs end to end during development.
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│  top ui menu: app title ············· [☰ Docs]  [Run]  [Log in] │
+│  top ui menu: app title ····· [☰ Docs] [Run] [Log in] [Compliance] │
 ├───────────────────────────────────────────────────────────────┤
 │  secondary pointing ui menu:  Filter | Review | Approval | Done│
 ├────────────┬────────────────────────────────────┬──────────────┤
@@ -52,7 +54,10 @@ the app runs end to end during development.
 
 - The Review / Approval / Done views. Tabs exist; content does not.
 - Any real backend. The mock server stands in and shares no code with `src/`.
-- Saving / sharing / restoring queries (URL state, persistence).
+- Saving / sharing / restoring queries (URL state, persistence) — the
+  `?resume=1` sessionStorage handoff in `main.ts` is a narrow exception,
+  scoped only to surviving the login/compliance redirect round trip; it is
+  not general query persistence.
 
 ---
 
@@ -195,10 +200,13 @@ are the only two files that may import jquery (ESLint enforces it).
 ```
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
-  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/individuals/auth; wire subscriptions; hold the refreshStats / runPreview orchestrators.
+  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/individuals/auth/compliance; wire subscriptions; hold the refreshStats / runPreview orchestrators; reacts to 401/403 generically to trigger the login/compliance redirects.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
+    pendingQuery.ts    Save/restore the in-progress query across the login or
+                       compliance redirect (sessionStorage only). See §2 and
+                       §5 of the compliance-logging design spec.
   api/
     client.ts          The ONLY file that calls fetch(). One function per endpoint.
     types.ts           Request/response types. This IS the API contract.
@@ -224,12 +232,18 @@ src/
                        See §9.
     authStatus.ts      render + wiring for the top-menu login/logout widget
                        (its own panel, data-panel="auth"). See §9.
+    complianceStatus.ts render + wiring for the top-menu compliance-acknowledgment
+                       widget (its own panel, data-panel="compliance"). See §9.
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate().
                        Starts only when run as the entrypoint.
   auth.ts              Session/state/code logic for the fake-IdP login round
                        trip: startLogin/issueFakeCode/exchangeCodeForSession
                        (in-memory, dev-only) + cookie helpers. See §7, §10.
+  audit.ts             Per-query audit-forwarding stand-in: an in-memory list
+                       appended to on every successful POST /api/query. Dev-only
+                       — production needs a real network call to a real audit
+                       service. See §10.
   databases.ts         DatabaseDef type, DATABASES (7 synthetic, arbitrarily
                        named ALPHA..ETA partitions with mock-only sizes),
                        dbIndexForEntrysetId(id) / databaseIdForEntrysetId(id)
@@ -283,6 +297,9 @@ export interface AppState {
   individuals: Individual[] | null;         // loaded once (GET /api/individuals, a bare array); drives docsSidebar and the query builder's Item dropdown
   /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
+  /** Compliance acknowledgment for this session, if any — populated once at
+   *  startup via GET /api/compliance/status. Display-only, same as `auth`. */
+  compliance: { status: "loading" | "required" | "acknowledged"; reason: string | null; ackedAt: string | null };
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
 
@@ -620,15 +637,54 @@ interface AuthUser {
 - `GET /api/auth/callback?code=&state=` — exchanges the code server-to-server
   (client secret never leaves the backend), sets a `qb_session` `HttpOnly`/
   `SameSite=Lax` cookie (`Secure` too, in production — see §10), redirects
-  to `/`.
+  to `/?resume=1` (so a restored, saved query — see §5 — can be picked back
+  up after login).
 - `GET /api/auth/me` — `200 AuthUser` with a valid session cookie, `401`
   otherwise.
 - `POST /api/auth/logout` — clears the session, `204`.
 
-Only `POST /api/query` requires a session (`401 { error }` without one) —
-everything else (`schema`, `databases`, `individuals`, `stats`) stays
-anonymous-accessible. `canRunQuery` is NOT auth-aware; the Run button and
-`runPreview()` layer the auth check on separately (§5, §9).
+`POST /api/query` requires both a session (`401 { error }` without one) and
+a compliance acknowledgment (`403 { error }` without one) — everything else
+(`schema`, `databases`, `individuals`, `stats`) stays anonymous-accessible.
+`canRunQuery` is NOT auth- or compliance-aware; neither is `syncRunButton` —
+Run always genuinely attempts the request, and `main.ts` reacts to whatever
+status code comes back (§5, §9). This pattern would generalize to a future
+protected endpoint returning the same `401`/`403` conditions — but only from
+a call site triggered by an explicit user gesture, same as `runPreview`'s own
+Run-click origin. It must never wrap an automatically-fired request (e.g. the
+debounced `refreshStats`), which would redirect the browser without a click
+and break the "never redirects itself" loop-safety this feature depends on.
+
+### Compliance (`GET /api/compliance/start`, `GET /api/compliance/callback`, `GET /api/compliance/status`, `POST /api/compliance/invalidate`)
+
+A second redirect flow, structurally identical to Auth above, gating data
+extraction on a user-provided reason: the compliance service's redirect URI
+also points at the backend, so the frontend never handles its `state` or
+token either. The acknowledgment piggybacks on the *same* session as
+Auth — no second session-identifying cookie.
+
+```ts
+interface ComplianceStatus {
+  status: "required" | "acknowledged";
+  reason?: string;
+  ackedAt?: string;
+}
+```
+
+- `GET /api/compliance/start` — requires a session (`401` without one);
+  starts the flow, redirects to the compliance service.
+- `GET /api/compliance/callback?token=&state=` — exchanges the token
+  server-to-server, attaches `{ reason, ackedAt }` to the current session,
+  redirects to `/?resume=1`.
+- `GET /api/compliance/status` — never errors: `{ status: "required" }` with
+  no session or no acknowledgment yet, `{ status: "acknowledged", reason,
+  ackedAt }` otherwise.
+- `POST /api/compliance/invalidate` — clears just the compliance field off
+  the session (stays logged in), `204`.
+
+Every successful `POST /api/query` also appends `{ name, reason, timestamp
+}` to an in-memory audit list (`mock-server/audit.ts`) — a dev-only stand-in
+for forwarding to a real audit service (§10).
 
 ### Errors
 
@@ -703,10 +759,18 @@ doesn't recognize.
 
 Its own panel (`data-panel="auth"`, painted independently). Anonymous shows
 a `Log in` link (`GET /api/auth/login` — a real navigation, not a fetch);
-authenticated shows the user's name + a `Log out` button. The Run button
-(`main.ts`'s `syncRunButton`) additionally requires `auth.status ===
-"authenticated"`, on top of its existing `canRunQuery` check — stats stay
-anonymous-accessible, only the Run/Refresh preview action is gated.
+authenticated shows the user's name + a `Log out` button. **Display only:**
+`syncRunButton` does not read `auth.status` — Run always attempts the
+request, and `main.ts` reacts to a `401` response by redirecting here (§7).
+
+### Top menu — `complianceStatus.ts`
+
+Its own panel (`data-panel="compliance"`, painted independently of
+`authStatus.ts`). "Required" shows a `Start compliance check` link
+(`GET /api/compliance/start`); "acknowledged" shows the stored reason (its
+`ackedAt` timestamp in a tooltip) + an `Invalidate` button. Also
+display-only: `main.ts` reacts to a `403` response by redirecting here,
+never a pre-check of this widget's state.
 
 ### Centre, above the builder — `databasePicker.ts`
 
@@ -836,11 +900,12 @@ and selected databases. No pagination (§7). `status: "idle"` → hint from §6
 
 ## 10. Mock server (`mock-server/index.ts`)
 
-Dev-only. `npm run mock` starts it; Vite proxies `/api/*` and `/mock-idp/*`
-to it (the latter because `GET /api/auth/login`'s redirect is a real
-browser navigation to `/mock-idp/authorize`, not a fetch — proxying only
-`/api` would leave that hop unreachable under `npm run dev`). Plain Node
-`http`, no Express, heavily commented top to bottom.
+Dev-only. `npm run mock` starts it; Vite proxies `/api/*`, `/mock-idp/*`, and
+`/mock-compliance/*` to it (the latter two because their respective
+`GET .../login` / `GET .../start` redirects are real browser navigations,
+not fetches — proxying only `/api` would leave those hops unreachable under
+`npm run dev`). Plain Node `http`, no Express, heavily commented top to
+bottom.
 
 - There is no `/api/schema` route — it was removed entirely, since the real
   API never had one (see §7). `mock-server/vehicleData.ts` declares its own
@@ -881,6 +946,17 @@ browser navigation to `/mock-idp/authorize`, not a fetch — proxying only
   single global set of pending `state` values alone doesn't cover (a
   leaked/guessed callback URL could otherwise log a different browser into
   the state-issuing browser's session). See the design spec's §7.
+- `mock-server/auth.ts` also carries the compliance flow's session/token
+  logic (`startCompliance`, `issueFakeComplianceToken`,
+  `exchangeComplianceToken`, `complianceStatusFor`, `clearCompliance`) and a
+  `qb_compliance_state` binding cookie identical in shape to the login one
+  — the binding-cookie construction is now a shared, parameterized internal
+  helper rather than two copies. Compliance is stored as an optional field
+  on the *same* session record as `user`, not a second session.
+- `mock-server/audit.ts` stands in for forwarding a per-extraction audit
+  entry to a real audit/compliance service: an in-memory array, appended to
+  on every successful `POST /api/query`. **Not reusable in production** — a
+  real backend needs a real, durable audit store and a real network call.
 - `POST /api/stats` computes each database's match/total counts via
   `perDatabaseCounts` (which scopes `ROWS` to each database inline via
   `rows.filter((r) => String(r.__db) === label)`), scaling the sample's match
@@ -971,3 +1047,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-22 | API contract rename + streaming stats: `id`/`label` renamed to `label`/`name` across `SchemaResponse`, `DatabasesResponse`, and the (now per-database) `StatsResponse`, matching the convention `Individual`/`IndividualField` already used. `StatBlock` removed — the real backend can currently only return counts, not aggregated min/max/avg/buckets/earliest/latest. `IndividualField` gained `name` (reserved, unpopulated; UI falls back to `label`) and `values` (a field's declared domain, wired into `buildFields` as an enum `SchemaResponse` field with real `options` — exercised end to end via `vehicle_identity.vehicle_type`). `POST /api/stats` now streams newline-delimited JSON, one `StatsResponse` per selected database as it finishes, instead of waiting for every database and returning one combined response; the frontend derives the combined headline by summing the lines received so far, and reports per-database success/failure/info independently (§6, §7, §9, §10). Design: `docs/superpowers/specs/2026-09-22-api-types-refactoring-design.md`. |
 | 2026-09-22 | API contract correction (Revision 2): the initial rename (id/label -> label/name, streamed StatsResponse) guessed at shapes that didn't match the real production backend. Corrected against the actual contract: StatsResponse's identifier is `label` (not the guessed `database`), `matchCount` is optional (not a discriminated union), `errorMessages` (not `validationErrors`), and `totalCount` doesn't exist on the wire at all — the stats panel now derives its per-database denominator from `DatabasesResponse.totalEntrysets`. `DatabasesResponse` gained `description`/`owner`/`percentageOfTotal` and dropped its `{databases:[...]}` wrapper (GET /api/databases now returns a bare array, as does GET /api/individuals). `Individual.id_number`/`stats.{percentage,count}` became `idNumber`/`totalCount`; `IndividualField` gained `cardinality`/`values`/`format`. `GET /api/schema` was removed entirely — it was never part of the real API — and replaced by `src/query/fieldCatalog.ts`'s client-side `buildFieldCatalog`, which derives the same field catalog from `Individual[]` data already being fetched; enum detection is `values.length > 0`, deliberately never `cardinality`, per the frontend/backend decoupling requirement (the real backend's cardinality-20 threshold is an implementation detail the frontend must not depend on). Design: `docs/superpowers/specs/2026-09-22-api-types-refactoring-design.md` (Revision 2). |
 | 2026-09-23 | OAuth2 authorization-code login: only `POST /api/query` is gated (`401` without a session) — schema/databases/individuals/stats stay anonymous-accessible. The IdP's redirect URI points at the backend (`GET /api/auth/callback`), not the SPA, so the frontend never handles the auth code/state/tokens — it only reads `GET /api/auth/me`'s result via a new `AppState.auth`. `canRunQuery` deliberately stays auth-unaware (shared with `refreshStats`); the auth requirement is layered on separately at `syncRunButton`/`runPreview`. New top-menu widget (`src/ui/authStatus.ts`) for login/logout. Mock server (`mock-server/auth.ts` + new routes in `index.ts`) simulates the whole IdP round trip in-process to stay offline-first — none of it is reusable in production (see the design spec's §7 for the full list of new real backend requirements). Rebased onto the API-contract-rename work above (bare-array `getDatabases`/`getIndividuals`, streaming `getStats`, client-side `buildFieldCatalog`, no `GET /api/schema`) — `client.ts`'s `ApiError` class (added for this feature) is preserved through that rebase and is now the type every client function throws. Design: `docs/superpowers/specs/2026-09-22-oauth2-login-design.md`. |
+| 2026-09-23 | Compliance-logging redirect gate: `POST /api/query` now also requires a compliance acknowledgment (`403` without one), gated the same way login is (`401`) — via a second mock-service redirect flow (`mock-server/auth.ts`'s compliance session/token logic + `mock-server/index.ts`'s `/api/compliance/*` and `/mock-compliance/*` routes), the reason attached to the *same* session record rather than a second cookie. The frontend no longer pre-checks `auth`/`compliance` status before allowing Run — `syncRunButton` reverted to its pre-OAuth shape, and `main.ts` reacts generically to a `401`/`403` on the actual request, which will cover any future protected endpoint for free. The in-progress query survives both redirects via a new `src/util/pendingQuery.ts` (`sessionStorage`, restored on a `?resume=1` return-hop) — deliberately with no automatic retry or chaining, so the mechanism can never redirect-loop: the user always clicks Run again to retry. New top-menu widget (`src/ui/complianceStatus.ts`). Every successful extraction is also logged to a dev-only in-memory audit list (`mock-server/audit.ts`) standing in for a real audit-service call. Also rebased, alongside the OAuth2 row above, onto the API-contract-rename work — `getStats`'s streaming NDJSON shape and `buildFieldCatalog` were unaffected by this feature, so `refreshStats` kept its post-rename implementation untouched through both rebases. Design: `docs/superpowers/specs/2026-09-23-compliance-logging-design.md`. |

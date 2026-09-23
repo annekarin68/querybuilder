@@ -3,6 +3,13 @@ export interface AuthUser {
   name: string;
 }
 
+/** Compliance acknowledgment status, returned by GET /api/compliance/status. */
+export interface ComplianceStatus {
+  status: "required" | "acknowledged";
+  reason?: string;
+  ackedAt?: string;
+}
+
 /**
  * One database's result from the POST /api/stats stream. The endpoint's
  * response body is newline-delimited JSON today (the backend may change the

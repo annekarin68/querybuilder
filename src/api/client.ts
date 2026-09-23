@@ -1,6 +1,7 @@
 import type { QueryNode } from "../query/types";
 import type {
   AuthUser,
+  ComplianceStatus,
   DatabasesResponse,
   EntrysetsResponse,
   Individual,
@@ -112,5 +113,14 @@ export async function getMe(): Promise<AuthUser | null> {
 
 export async function logout(): Promise<void> {
   const res = await fetch(`${BASE}/auth/logout`, { method: "POST" });
+  if (!res.ok) throw await errorFromResponse(res);
+}
+
+export function getComplianceStatus(): Promise<ComplianceStatus> {
+  return request<ComplianceStatus>("/compliance/status");
+}
+
+export async function invalidateCompliance(): Promise<void> {
+  const res = await fetch(`${BASE}/compliance/invalidate`, { method: "POST" });
   if (!res.ok) throw await errorFromResponse(res);
 }

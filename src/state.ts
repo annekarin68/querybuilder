@@ -21,6 +21,14 @@ export interface AppState {
   individuals: Individual[] | null;
   /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
+  /** Compliance acknowledgment for this session, if any — populated once at
+   *  startup via GET /api/compliance/status. Display-only, same as `auth`:
+   *  it drives the top-menu widget and an advisory hint, never gating logic. */
+  compliance: {
+    status: "loading" | "required" | "acknowledged";
+    reason: string | null;
+    ackedAt: string | null;
+  };
   /** Which databases the query currently runs against. Empty = nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;
@@ -39,6 +47,7 @@ export const initialState: AppState = {
   databases: null,
   individuals: null,
   auth: { status: "loading", user: null },
+  compliance: { status: "loading", reason: null, ackedAt: null },
   selectedDatabaseIds: [],
   activeView: "filter",
   query: emptyQuery(),

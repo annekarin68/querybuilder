@@ -22,7 +22,16 @@ import {
   loginStateCookieHeader,
   clearLoginStateCookieHeader,
   loginStateFromCookie,
+  startCompliance,
+  issueFakeComplianceToken,
+  exchangeComplianceToken,
+  complianceStatusFor,
+  clearCompliance,
+  complianceStateCookieHeader,
+  clearComplianceStateCookieHeader,
+  complianceStateFromCookie,
 } from "./auth";
+import { logQueryAudit } from "./audit";
 
 const PORT = 3001;
 
@@ -63,6 +72,44 @@ function mockIdpAuthorizePage(state: string): string {
     <h1>Mock Identity Provider</h1>
     <p>This stands in for a real internal IdP during local development.</p>
     <p><a href="/mock-idp/authorize/confirm?state=${encodeURIComponent(state)}">Log in as demo.user</a></p>
+  </body>
+</html>`;
+}
+
+/** Parses an application/x-www-form-urlencoded request body — the mock
+ *  compliance page's form POST, parallel to readJson for the JSON routes. */
+async function readFormBody(req: IncomingMessage): Promise<URLSearchParams> {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+}
+
+/** `state` is always a randomToken() output (base64url: [A-Za-z0-9_-]), so it
+ *  can never actually contain an HTML-special character — this escaping is a
+ *  cheap defensive habit, not a response to a real exploitable input. */
+function escapeHtmlAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Dev-only stand-in for a real compliance/audit service's submission form.
+ *  Server-rendered HTML — never bundled by Vite, never touches dist/. */
+function mockComplianceSubmitPage(state: string): string {
+  return `<!doctype html>
+<html>
+  <head><title>Mock Compliance Logging Service</title></head>
+  <body style="font-family: sans-serif; max-width: 28rem; margin: 4rem auto;">
+    <h1>Compliance Logging</h1>
+    <p>This stands in for a real internal compliance/audit service during local development.</p>
+    <form method="POST" action="/mock-compliance/submit">
+      <input type="hidden" name="state" value="${escapeHtmlAttr(state)}" />
+      <label for="reason">Reason for this data extraction:</label><br/>
+      <input type="text" id="reason" name="reason" required style="width:100%;margin:0.5rem 0;" />
+      <button type="submit">Submit</button>
+    </form>
   </body>
 </html>`;
 }
@@ -144,7 +191,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       res.writeHead(302, {
-        Location: "/",
+        Location: "/?resume=1",
         "Set-Cookie": [sessionCookieHeader(outcome.sessionId), clearLoginStateCookieHeader()],
       });
       res.end();
@@ -162,6 +209,66 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/auth/logout") {
       endSession(req.headers.cookie);
       res.writeHead(204, { "Set-Cookie": clearSessionCookieHeader() });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/compliance/start") {
+      const session = sessionFor(req.headers.cookie);
+      if (!session) {
+        sendJson(res, 401, { error: "Not authenticated." });
+        return;
+      }
+      const state = startCompliance();
+      res.writeHead(302, {
+        Location: `/mock-compliance/submit?state=${encodeURIComponent(state)}`,
+        "Set-Cookie": complianceStateCookieHeader(state),
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/mock-compliance/submit") {
+      const state = url.searchParams.get("state") ?? "";
+      sendHtml(res, 200, mockComplianceSubmitPage(state));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/mock-compliance/submit") {
+      const form = await readFormBody(req);
+      const state = form.get("state") ?? "";
+      const reason = form.get("reason") ?? "";
+      const token = issueFakeComplianceToken(reason);
+      res.writeHead(302, {
+        Location: `/api/compliance/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/compliance/callback") {
+      const token = url.searchParams.get("token") ?? "";
+      const state = url.searchParams.get("state") ?? "";
+      const boundState = complianceStateFromCookie(req.headers.cookie);
+      if (boundState !== state) {
+        sendJson(res, 400, { error: "Invalid or expired compliance attempt." });
+        return;
+      }
+      const outcome = exchangeComplianceToken(token, state, req.headers.cookie);
+      if (!outcome.ok) {
+        sendJson(res, 400, { error: outcome.error });
+        return;
+      }
+      res.writeHead(302, {
+        Location: "/?resume=1",
+        "Set-Cookie": clearComplianceStateCookieHeader(),
+      });
+      res.end();
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/compliance/status") {
+      sendJson(res, 200, complianceStatusFor(req.headers.cookie));
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/compliance/invalidate") {
+      clearCompliance(req.headers.cookie);
+      res.writeHead(204);
       res.end();
       return;
     }
@@ -216,6 +323,10 @@ const server = createServer(async (req, res) => {
         sendJson(res, 401, { error: "Log in to preview data." });
         return;
       }
+      if (!session.compliance) {
+        sendJson(res, 403, { error: "Compliance acknowledgment required." });
+        return;
+      }
       const body = (await readJson(req)) as {
         query?: JsonNode;
         databases?: string[];
@@ -239,6 +350,7 @@ const server = createServer(async (req, res) => {
         .map((id) => ENTRYSETS[String(id)])
         .filter((e): e is Entryset => e !== undefined)
         .slice(0, 25);
+      logQueryAudit(session.user.name, session.compliance.reason);
       sendJson(res, 200, { entrysets });
       return;
     }
