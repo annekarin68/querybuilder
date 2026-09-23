@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   ApiError,
+  getComplianceStatus,
   getDatabases,
   getMe,
   getSchema,
   getStats,
+  invalidateCompliance,
   logout,
   runQuery,
 } from "../../src/api/client";
@@ -109,5 +111,27 @@ describe("api client", () => {
   it("logout throws the server's error message on non-2xx", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, { error: "boom" }));
     await expect(logout()).rejects.toThrow("boom");
+  });
+
+  it("getComplianceStatus GETs /api/compliance/status and returns the parsed body", async () => {
+    const f = mockFetchOnce(200, { status: "required" });
+    vi.stubGlobal("fetch", f);
+    const out = await getComplianceStatus();
+    expect(out).toEqual({ status: "required" });
+    expect(f).toHaveBeenCalledWith("/api/compliance/status", undefined);
+  });
+
+  it("invalidateCompliance POSTs to /api/compliance/invalidate", async () => {
+    const f = mockFetchOnce(200, {});
+    vi.stubGlobal("fetch", f);
+    await invalidateCompliance();
+    const [url, init] = f.mock.calls[0]!;
+    expect(url).toBe("/api/compliance/invalidate");
+    expect(init.method).toBe("POST");
+  });
+
+  it("invalidateCompliance throws the server's error message on non-2xx", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(500, { error: "boom" }));
+    await expect(invalidateCompliance()).rejects.toThrow("boom");
   });
 });
