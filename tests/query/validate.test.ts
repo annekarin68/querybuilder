@@ -25,7 +25,12 @@ describe("validateQuery", () => {
     const c = newCondition();
     const tree = addChild(root, root.id, c);
     const issues = validateQuery(tree, schema);
-    expect(issues).toContainEqual({ nodeId: c.id, message: "Choose a field.", severity: "error" });
+    expect(issues).toContainEqual({
+      nodeId: c.id,
+      message: "Choose a field.",
+      severity: "error",
+      kind: "incomplete",
+    });
   });
 
   it("condition with a field but no operator is an error", () => {
@@ -37,6 +42,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Choose an operator.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -49,6 +55,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Enter a value.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -61,6 +68,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Enter both values.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -73,6 +81,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Choose at least one value.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -93,6 +102,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Unknown field.",
       severity: "error",
+      kind: "invalid",
     });
   });
 
@@ -106,6 +116,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "That operator isn't available for this field.",
       severity: "error",
+      kind: "invalid",
     });
   });
 
@@ -117,11 +128,22 @@ describe("validateQuery", () => {
       nodeId: g.id,
       message: "Add a condition to this group.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
   it("hasBlockingErrors is true only when an error-severity issue is present", () => {
-    expect(hasBlockingErrors([{ nodeId: "x", message: "m", severity: "warning" }])).toBe(false);
-    expect(hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error" }])).toBe(true);
+    expect(
+      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "warning", kind: "incomplete" }]),
+    ).toBe(false);
+    expect(
+      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error", kind: "invalid" }]),
+    ).toBe(true);
+  });
+
+  it("incomplete issues block running just like invalid ones", () => {
+    expect(
+      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error", kind: "incomplete" }]),
+    ).toBe(true);
   });
 });
