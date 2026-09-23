@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { barWidth, compact, exact, matchRatio } from "../../src/ui/format";
+import {
+  barWidth,
+  compact,
+  countLabel,
+  displayLabel,
+  exact,
+  formatWhen,
+  matchRatio,
+} from "../../src/ui/format";
 
 const L = "en-US"; // pin locale so assertions are deterministic
 
@@ -57,5 +65,34 @@ describe("barWidth", () => {
     expect(barWidth(50, 100)).toBe("max(50%, 2px)");
     expect(barWidth(1234, 10000)).toBe("max(12.34%, 2px)");
     expect(barWidth(1, 1_000_000_000)).toBe("max(0.01%, 2px)");
+  });
+});
+
+describe("displayLabel", () => {
+  it("shows underscores as spaces and keeps the backend's casing", () => {
+    expect(displayLabel("battery_ev")).toBe("battery ev");
+    expect(displayLabel("HVAC_Cabin")).toBe("HVAC Cabin");
+    expect(displayLabel("brakes")).toBe("brakes");
+  });
+});
+
+describe("countLabel", () => {
+  it("singular for exactly one, plural otherwise, with digit grouping", () => {
+    expect(countLabel(1, "entryset", undefined, L)).toBe("1 entryset");
+    expect(countLabel(0, "entryset", undefined, L)).toBe("0 entrysets");
+    expect(countLabel(9, "entryset", undefined, L)).toBe("9 entrysets");
+    expect(countLabel(12345, "entryset", undefined, L)).toBe("12,345 entrysets");
+    expect(countLabel(2, "match", "matches", L)).toBe("2 matches");
+  });
+});
+
+describe("formatWhen", () => {
+  it("medium date + short time, on one line", () => {
+    expect(formatWhen("2024-11-07T08:15:00Z", "en-GB", "UTC")).toBe("7 Nov 2024, 08:15");
+  });
+  it("an em dash when missing, the raw string when unparseable", () => {
+    expect(formatWhen(undefined)).toBe("—");
+    expect(formatWhen("")).toBe("—");
+    expect(formatWhen("not a date")).toBe("not a date");
   });
 });

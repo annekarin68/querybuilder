@@ -25,7 +25,12 @@ describe("validateQuery", () => {
     const c = newCondition();
     const tree = addChild(root, root.id, c);
     const issues = validateQuery(tree, schema);
-    expect(issues).toContainEqual({ nodeId: c.id, message: "Choose a field.", severity: "error" });
+    expect(issues).toContainEqual({
+      nodeId: c.id,
+      message: "Choose a field.",
+      severity: "error",
+      kind: "incomplete",
+    });
   });
 
   it("condition with a field but no operator is an error", () => {
@@ -37,6 +42,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Choose an operator.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -49,6 +55,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Enter a value.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -61,6 +68,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Enter both values.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -73,6 +81,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Choose at least one value.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
@@ -93,6 +102,7 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "Unknown field.",
       severity: "error",
+      kind: "invalid",
     });
   });
 
@@ -106,22 +116,47 @@ describe("validateQuery", () => {
       nodeId: c.id,
       message: "That operator isn't available for this field.",
       severity: "error",
+      kind: "invalid",
+    });
+  });
+
+  it("an operator that is not in the schema is an error", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    let tree = addChild(root, root.id, c);
+    tree = updateNode(tree, c.id, { fieldId: "species", operatorId: "nope", value: "x" });
+    expect(validateQuery(tree, schema)).toContainEqual({
+      nodeId: c.id,
+      message: "Unknown operator.",
+      severity: "error",
+      kind: "invalid",
     });
   });
 
   it("a non-root empty group is an error", () => {
     const root = emptyQuery();
-    const g = newGroup();
+    const g = { ...newGroup(), children: [] };
     const tree = addChild(root, root.id, g);
     expect(validateQuery(tree, schema)).toContainEqual({
       nodeId: g.id,
       message: "Add a condition to this group.",
       severity: "error",
+      kind: "incomplete",
     });
   });
 
   it("hasBlockingErrors is true only when an error-severity issue is present", () => {
-    expect(hasBlockingErrors([{ nodeId: "x", message: "m", severity: "warning" }])).toBe(false);
-    expect(hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error" }])).toBe(true);
+    expect(
+      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "warning", kind: "incomplete" }]),
+    ).toBe(false);
+    expect(
+      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error", kind: "invalid" }]),
+    ).toBe(true);
+  });
+
+  it("incomplete issues block running just like invalid ones", () => {
+    expect(
+      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error", kind: "incomplete" }]),
+    ).toBe(true);
   });
 });

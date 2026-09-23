@@ -23,7 +23,7 @@ export interface AppState {
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
   /** Compliance acknowledgment for this session, if any — populated once at
    *  startup via GET /api/compliance/status. Display-only, same as `auth`:
-   *  it drives the top-menu widget and an advisory hint, never gating logic. */
+   *  it drives the account menu and an advisory hint, never gating logic. */
   compliance: {
     status: "loading" | "required" | "acknowledged";
     reason: string | null;
@@ -54,15 +54,17 @@ export const initialState: AppState = {
   issues: [],
   stats: { status: "idle", lines: [], error: null },
   preview: { status: "idle", data: null, error: null },
-  sidebarCollapsed: false,
+  // The docs start folded into their rail so the query builder gets the width.
+  sidebarCollapsed: true,
 };
 
 /**
  * Whether the current query/scope is complete and valid enough to run or
  * refresh (§6): a schema is loaded, there are no blocking validation issues,
  * at least one condition exists, and at least one database is selected. The
- * single source of truth for this check — main.ts's runPreview, refreshStats,
- * and syncRunButton all read it instead of repeating the four clauses.
+ * single source of truth for this check — main.ts's runPreview and
+ * refreshStats read it instead of repeating the four clauses (the preview
+ * panel mirrors the same checks to decide whether Run is enabled).
  */
 export function canRunQuery(
   state: Pick<AppState, "schema" | "issues" | "query" | "selectedDatabaseIds">,

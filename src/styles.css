@@ -1,151 +1,945 @@
-/* System-font override kept out of scope: Fomantic handles typography (it self-hosts Lato). */
+/*
+ * Theme layer on top of Fomantic UI (docs/superpowers/specs/2026-09-23-ui-ux-refresh-design.md).
+ * Fomantic handles typography (it self-hosts Lato) and its widgets; this file
+ * owns layout and colour. Colours and sizes live in the tokens below — change
+ * them here, not in individual rules.
+ */
+:root {
+  --qb-bg: #f3f5f8;
+  --qb-surface: #ffffff;
+  --qb-surface-2: #f7f9fb;
+  --qb-border: #dde2e8;
+  --qb-border-strong: #c8d0d9;
+  --qb-text: #1f2933;
+  --qb-muted: #5f6b7a;
+  --qb-subtle: #8792a0;
+
+  --qb-topbar: #1b2a3a;
+  --qb-topbar-2: #2d4257;
+  --qb-topbar-text: #dbe6f0;
+
+  /* ALL / AND */
+  --qb-and: #2185d0;
+  --qb-and-soft: #9cc5e8;
+  --qb-and-tint: rgba(33, 133, 208, 0.05);
+  --qb-and-tint-strong: rgba(33, 133, 208, 0.11);
+  /* ANY / OR */
+  --qb-or: #e08a00;
+  --qb-or-text: #a86400;
+  --qb-or-soft: #f0c47a;
+  --qb-or-tint: rgba(224, 138, 0, 0.07);
+  --qb-or-tint-strong: rgba(224, 138, 0, 0.14);
+
+  --qb-danger: #c0392b;
+  --qb-warn: #a86400;
+
+  --qb-radius: 6px;
+  --qb-gap: 1rem;
+  --qb-topbar-h: 48px;
+  --qb-rail-w: 28px;
+  --qb-docs-w: 20rem;
+  --qb-stats-w: 15rem;
+}
+
 html,
 body {
   height: 100%;
 }
 body {
   margin: 0;
+  background: var(--qb-bg);
+  color: var(--qb-text);
 }
 #app {
   min-height: 100%;
 }
+/* Fomantic sets display on many classes; `hidden` must always win. */
+[hidden] {
+  display: none !important;
+}
 
-/* Layout helpers used by src/ui/layout.ts */
-.qb-body {
+/* ---- Top bar (src/ui/layout.ts) ---- */
+.qb-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: var(--qb-topbar-h);
   display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  align-items: flex-start;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0 1rem;
+  background: var(--qb-topbar);
+  color: #fff;
 }
-.qb-col-docs {
-  flex: 0 0 20rem;
+.qb-brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  white-space: nowrap;
 }
-.qb-col-center {
-  flex: 1 1 auto;
+.qb-steps {
+  display: flex;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-x: auto;
+}
+.qb-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  color: #9fb0c2;
+  white-space: nowrap;
+}
+.qb-step:hover,
+.qb-step:focus-visible {
+  color: #fff;
+}
+.qb-step.is-active {
+  background: var(--qb-topbar-2);
+  color: #fff;
+}
+.qb-step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 0.75rem;
+}
+.qb-topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   min-width: 0;
 }
-.qb-col-stats {
-  flex: 0 0 20rem;
-  /* Stay with the viewport as a tall query builder scrolls past, and scroll
-     internally if the stats themselves are taller than the screen. */
+
+/* ---- Body: docs rail | docs | main | stats ---- */
+.qb-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--qb-gap);
+  padding: 0 var(--qb-gap) var(--qb-gap) 0;
+}
+.qb-docs-rail {
   position: sticky;
-  top: 1rem;
-  align-self: flex-start;
-  max-height: calc(100vh - 2rem);
+  top: var(--qb-topbar-h);
+  flex: 0 0 var(--qb-rail-w);
+  height: calc(100vh - var(--qb-topbar-h));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0 0;
+  border: none;
+  border-right: 1px solid var(--qb-border);
+  background: var(--qb-surface);
+  color: var(--qb-and);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.qb-docs-rail span {
+  writing-mode: vertical-rl;
+}
+.qb-docs-rail .icon {
+  margin: 0;
+}
+.qb-docs-rail:hover {
+  background: var(--qb-surface-2);
+}
+.qb-docs-rail:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: -2px;
+}
+.qb-col-docs,
+.qb-col-main,
+.qb-col-stats {
+  margin-top: var(--qb-gap);
+}
+.qb-col-docs {
+  flex: 0 0 var(--qb-docs-w);
+  position: sticky;
+  top: calc(var(--qb-topbar-h) + var(--qb-gap));
+  max-height: calc(100vh - var(--qb-topbar-h) - 2 * var(--qb-gap));
   overflow-y: auto;
 }
 .qb-body.qb-docs-collapsed .qb-col-docs {
   display: none;
 }
-.qb-preview {
-  padding: 0 1rem 2rem;
+.qb-col-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qb-gap);
 }
-.qb-col-docs .ui.accordion {
-  max-height: 70vh;
+.qb-col-stats {
+  flex: 0 0 var(--qb-stats-w);
+  /* Always visible while a tall query scrolls past (users read the stats as
+     they build); scrolls internally if the stats are taller than the screen. */
+  position: sticky;
+  top: calc(var(--qb-topbar-h) + var(--qb-gap));
+  max-height: calc(100vh - var(--qb-topbar-h) - 2 * var(--qb-gap));
   overflow-y: auto;
-}
-
-/* Database scope selector (src/ui/databasePicker.ts) */
-[data-panel="dbpicker"] a[data-db-all],
-[data-panel="dbpicker"] a[data-db-none] {
-  cursor: pointer;
-  text-decoration: underline;
-}
-.qb-db-warn {
-  color: #9f3a38;
-}
-
-/* Statistics panel (src/ui/statsPanel.ts + format.ts) — must stay inside a ~20rem column */
-[data-panel="stats"] {
   overflow-wrap: anywhere;
 }
-/* Fomantic gives .bar a 2em min-width; we drive width ourselves (incl. a 2px sliver). */
-[data-panel="stats"] .ui.progress .bar {
-  min-width: 0;
+.qb-coming-soon {
+  margin: 2rem;
+  padding: 3rem;
+  text-align: center;
+  font-size: 1.2rem;
+  color: var(--qb-muted);
 }
-.qb-stat-big {
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1.15;
-}
-.qb-stat-sub {
-  display: block;
-  font-size: 0.85em;
-  color: rgba(0, 0, 0, 0.6);
-}
-.qb-db-name {
-  font-weight: 600;
-}
-.qb-db-nums {
-  font-size: 0.85em;
-  color: rgba(0, 0, 0, 0.6);
-}
-/* The per-database list is the stats panel's only dynamic content now that
-   StatBlock is gone; give it its own scroll region the same way the entryset
-   list below has one. */
-.qb-stat-perdb {
-  max-height: 45vh;
-  overflow-y: auto;
+/* Below the supported range (1024 px+) the stats drop under the main column. */
+@media (max-width: 900px) {
+  .qb-body {
+    flex-wrap: wrap;
+  }
+  .qb-col-main {
+    flex-basis: calc(100% - var(--qb-rail-w) - var(--qb-gap));
+  }
+  .qb-col-stats {
+    position: static;
+    flex: 1 1 100%;
+    max-height: none;
+    margin-left: calc(var(--qb-rail-w) + var(--qb-gap));
+  }
 }
 
-/* Data preview (src/ui/dataPreview.ts): a scrollable list of entrysets, each
-   a native <details> row — no JS needed for expand/collapse. */
+/* ---- Shared building blocks ---- */
+.qb-card {
+  background: var(--qb-surface);
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  padding: 0.75rem 1rem;
+}
+.qb-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--qb-muted);
+}
+.qb-card-count {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.qb-placeholder {
+  margin: 0;
+  padding: 0.75rem;
+  text-align: center;
+  color: var(--qb-muted);
+  background: var(--qb-surface-2);
+  border: 1px dashed var(--qb-border-strong);
+  border-radius: var(--qb-radius);
+}
+.qb-muted {
+  color: var(--qb-muted);
+}
+.qb-spacer {
+  flex: 1 1 auto;
+}
+.qb-tag {
+  display: inline-block;
+  padding: 0 0.45rem;
+  border-radius: 3px;
+  background: #eef1f4;
+  color: var(--qb-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.qb-count {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border: 1px solid var(--qb-border);
+  border-radius: 999px;
+  background: var(--qb-surface);
+  color: var(--qb-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.qb-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--qb-subtle);
+  cursor: pointer;
+}
+.qb-icon-btn .icon {
+  margin: 0;
+}
+.qb-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--qb-text);
+}
+.qb-icon-btn:focus-visible {
+  outline: 2px solid var(--qb-and);
+}
+
+/* ---- Databases (src/ui/databasePicker.ts) ---- */
+.qb-dbpicker .qb-card-title .ui.button {
+  margin: 0;
+}
+.qb-db-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.qb-db-pill {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+.qb-db-pill input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.qb-db-pill span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 999px;
+  background: var(--qb-surface);
+  color: var(--qb-muted);
+  font-size: 0.85rem;
+  user-select: none;
+}
+.qb-db-pill span::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.qb-db-pill input:checked + span {
+  border-color: var(--qb-and-soft);
+  background: #eaf4fc;
+  color: #1f5f8f;
+}
+.qb-db-pill input:checked + span::before {
+  border-color: var(--qb-and);
+  background: var(--qb-and);
+}
+.qb-db-pill input:focus-visible + span {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+.qb-db-warn {
+  margin: 0.5rem 0 0;
+  color: var(--qb-warn);
+}
+
+/* ---- Account menu (src/ui/accountMenu.ts) ---- */
+.qb-account {
+  position: relative;
+}
+.qb-account-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--qb-topbar-2);
+  color: var(--qb-topbar-text);
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+.qb-account-chip::-webkit-details-marker {
+  display: none;
+}
+.qb-account-chip .icon {
+  margin: 0;
+}
+.qb-account-chip:focus-visible {
+  outline: 2px solid #fff;
+}
+.qb-account-name {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.qb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.qb-badge .icon {
+  margin: 0;
+  font-size: 0.8em;
+}
+.qb-badge-ok {
+  background: rgba(33, 186, 69, 0.2);
+  color: #a7f0b8;
+}
+.qb-badge-warn {
+  background: rgba(224, 138, 0, 0.25);
+  color: #ffd08a;
+}
+.qb-account-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 30;
+  width: 18rem;
+  background: var(--qb-surface);
+  color: var(--qb-text);
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  box-shadow: 0 8px 24px rgba(15, 30, 45, 0.18);
+}
+/* Fomantic's .ui.button is content-box, so a fluid button's width:100% (plus
+   its own horizontal padding) overflows a narrow container like this menu's
+   sections — force border-box and drop Fomantic's .25em right margin so the
+   fluid buttons here actually fit within .qb-account-section's padding. */
+.qb-account-menu .ui.button {
+  box-sizing: border-box;
+  margin: 0;
+}
+.qb-account-section {
+  padding: 0.75rem;
+}
+.qb-account-section + .qb-account-section {
+  border-top: 1px solid var(--qb-border);
+}
+.qb-account-label {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--qb-muted);
+}
+.qb-account-reason {
+  margin: 0 0 0.25rem;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+.qb-account-meta {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+
+/* ---- Query builder (src/ui/queryBuilder.ts + valueControl.ts) ---- */
+.qb-group {
+  /* Operator colours; .qb-group-or overrides. Children read these through the
+     cascade, so a joiner/toggle always takes its own group's colour. */
+  --qb-c: var(--qb-and);
+  --qb-c-soft: var(--qb-and-soft);
+  --qb-c-text: var(--qb-and);
+  --qb-tint: var(--qb-and-tint);
+  --qb-tint-strong: var(--qb-and-tint-strong);
+  position: relative;
+  margin: 0.25rem 0;
+  padding: 0.45rem 0.5rem 0.45rem 0.75rem;
+  border-left: 3px solid var(--qb-c);
+  border-radius: 0 var(--qb-radius) var(--qb-radius) 0;
+  background: var(--qb-tint);
+  outline: 1px solid transparent;
+  transition:
+    background-color 0.12s,
+    outline-color 0.12s;
+}
+.qb-group-or {
+  --qb-c: var(--qb-or);
+  --qb-c-soft: var(--qb-or-soft);
+  --qb-c-text: var(--qb-or-text);
+  --qb-tint: var(--qb-or-tint);
+  --qb-tint-strong: var(--qb-or-tint-strong);
+}
+/* The bracket's top and bottom arms: "[" */
+.qb-group::before,
+.qb-group::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  width: 16px;
+  border-top: 2px solid var(--qb-c);
+}
+.qb-group::before {
+  top: 0;
+}
+.qb-group::after {
+  bottom: 0;
+}
+/* Hover lights up only the innermost group under the pointer. */
+.qb-group:hover:not(:has(.qb-group:hover)) {
+  background: var(--qb-tint-strong);
+  outline-color: var(--qb-c-soft);
+}
+.qb-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.9rem;
+}
+.qb-group-head .ui.mini.button {
+  margin: 0;
+}
+.qb-group-label {
+  font-size: 0.85rem;
+  color: var(--qb-muted);
+}
+.qb-logic {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 4px;
+  background: var(--qb-surface);
+}
+.qb-logic-btn {
+  padding: 0.15rem 0.55rem;
+  border: 0;
+  background: transparent;
+  color: var(--qb-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+.qb-logic-btn.is-on {
+  background: var(--qb-c);
+  color: #fff;
+}
+.qb-logic-btn:focus-visible {
+  outline: 2px solid var(--qb-c);
+  outline-offset: -2px;
+}
+.qb-children {
+  display: flex;
+  flex-direction: column;
+}
+/* AND/OR between two children, sitting centred on the group's bracket line. */
+.qb-joiner {
+  position: relative;
+  left: calc(-0.75rem - 1.5px);
+  transform: translateX(-50%);
+  align-self: flex-start;
+  margin: 0.1rem 0;
+  padding: 0 0.35rem;
+  border: 1px solid var(--qb-c-soft);
+  border-radius: 999px;
+  background: var(--qb-surface);
+  color: var(--qb-c-text);
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+.qb-op-badge {
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  background: var(--qb-c);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.qb-group-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+  color: var(--qb-muted);
+}
+.is-collapsed > .qb-group-head {
+  flex-wrap: nowrap;
+}
+
+/* One condition = one grid row. Container query: a row squeezed below ~640px
+   (deep nesting on a small screen) moves its value + ✕ onto a second line. */
+.qb-condition {
+  container-type: inline-size;
+  padding: 0.15rem 0;
+}
+.qb-cond-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)
+    minmax(0, 1.2fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+@container (max-width: 640px) {
+  .qb-cond-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+  .qb-cond-grid > .qb-value {
+    grid-column: 1 / 4;
+    grid-row: 2;
+  }
+  .qb-cond-grid > .qb-icon-btn {
+    grid-column: 4;
+    grid-row: 2;
+  }
+}
+/* Fomantic gives selection dropdowns a 14em min-width; the grid sizes them. */
+.qb-cond-grid .ui.selection.dropdown {
+  width: 100%;
+  min-width: 0;
+}
+.qb-cond-grid .ui.selection.dropdown > .text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qb-value {
+  min-width: 0;
+}
+.qb-value .ui.input {
+  display: flex;
+  width: 100%;
+}
+.qb-value .ui.input > input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+.qb-range {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.qb-range > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.qb-range > .qb-range-to {
+  flex: 0 0 auto;
+  color: var(--qb-muted);
+}
+.qb-hint {
+  margin: 0.2rem 0 0 0.1rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-invalid {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--qb-danger);
+}
+.qb-query-foot {
+  margin: 0.75rem -1rem -0.75rem;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--qb-border);
+  border-radius: 0 0 var(--qb-radius) var(--qb-radius);
+  background: var(--qb-surface-2);
+  font-size: 0.85rem;
+}
+.qb-summary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
+
+/* ---- Statistics (src/ui/statsPanel.ts + format.ts) — must fit ~15rem ---- */
+.qb-stats .qb-card-title .ui.loader {
+  margin: 0;
+}
+.qb-stat-headline {
+  margin-bottom: 0.75rem;
+}
+.qb-stat-big {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.qb-stat-label {
+  font-weight: 600;
+}
+.qb-stat-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--qb-muted);
+}
+.qb-stat-failed {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--qb-danger);
+}
+.qb-bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e3e8ee;
+}
+.qb-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--qb-and);
+}
+.qb-stat-headline .qb-bar {
+  margin-top: 0.4rem;
+}
+.qb-stat-subtitle {
+  margin: 0.25rem 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--qb-muted);
+}
+.qb-db-row {
+  display: grid;
+  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) auto;
+  gap: 0.1rem 0.5rem;
+  align-items: center;
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+}
+.qb-db-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.qb-db-ratio {
+  color: var(--qb-muted);
+  white-space: nowrap;
+}
+.qb-db-msg {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: var(--qb-muted);
+}
+.qb-db-error {
+  color: var(--qb-danger);
+}
+.qb-stat-pending {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-stat-pending .ui.loader {
+  margin: 0;
+}
+
+/* ---- Matching entrysets (src/ui/dataPreview.ts) ---- */
+.qb-run {
+  padding: 1.25rem 0.75rem;
+  text-align: center;
+  border: 1px dashed var(--qb-border-strong);
+  border-radius: var(--qb-radius);
+  background: var(--qb-surface-2);
+}
+.qb-run-msg {
+  margin: 0 0 0.75rem;
+  color: var(--qb-muted);
+}
+.qb-run .ui.button {
+  margin: 0;
+}
+.qb-run .ui.loader {
+  margin-bottom: 0.5rem;
+}
+.qb-run-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-preview .ui.negative.message {
+  margin: 0 0 0.75rem;
+}
+.qb-preview-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
 .qb-entryset-list {
-  max-height: 45vh;
-  overflow-y: auto;
-  border: 1px solid rgba(34, 36, 38, 0.15);
-  border-radius: 0.28rem;
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
 }
 .qb-entryset-row {
-  border-bottom: 1px solid rgba(34, 36, 38, 0.1);
-  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--qb-border);
 }
 .qb-entryset-row:last-child {
   border-bottom: none;
 }
 .qb-entryset-row summary {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 3rem 10.5rem minmax(0, 9rem) minmax(0, 1fr) auto;
   gap: 0.75rem;
-  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+.qb-entryset-row summary::-webkit-details-marker {
+  display: none;
+}
+.qb-entryset-row summary:hover {
+  background: var(--qb-surface-2);
+}
+.qb-entryset-row[open] summary {
+  background: #eef4fa;
 }
 .qb-er-id {
   font-weight: 700;
-  flex: 0 0 2.5rem;
 }
-.qb-er-when {
-  flex: 0 0 11rem;
-  color: rgba(0, 0, 0, 0.6);
+.qb-er-when,
+.qb-er-count {
+  color: var(--qb-muted);
+  white-space: nowrap;
 }
 .qb-er-vehicle {
-  flex: 0 0 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
 }
 .qb-er-groups {
-  flex: 1 1 auto;
-  min-width: 10rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-width: 0;
 }
 .qb-er-more {
-  color: rgba(0, 0, 0, 0.5);
-  font-size: 0.85em;
+  font-size: 0.8rem;
+  color: var(--qb-subtle);
 }
 .qb-er-count {
-  flex: 0 0 5rem;
   text-align: right;
-  color: rgba(0, 0, 0, 0.6);
 }
 .qb-er-json {
-  margin: 0.5rem 0 0;
+  max-height: 24rem;
+  margin: 0;
   padding: 0.75rem;
-  background: rgba(0, 0, 0, 0.03);
-  border-radius: 0.28rem;
+  overflow: auto;
+  border-top: 1px solid var(--qb-border);
+  background: var(--qb-surface-2);
   font-size: 0.8em;
-  overflow-x: auto;
 }
 
-/* Stats headline caveat when some databases failed (src/ui/statsPanel.ts). */
-.qb-stat-failed {
-  margin-top: 0.35rem;
-  color: #9f3a38;
+/* ---- Data dictionary (src/ui/docsSidebar.ts + docsFilter.ts) ---- */
+.qb-docs-search {
+  position: relative;
+  margin-bottom: 0.6rem;
+}
+.qb-docs-search > input {
+  padding-right: 2rem !important;
+}
+.qb-docs-clear {
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  transform: translateY(-50%);
+}
+.qb-docs-empty {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--qb-muted);
+}
+.qb-doc-group {
+  border-top: 1px solid var(--qb-border);
+}
+.qb-doc-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.qb-doc-group > summary::-webkit-details-marker {
+  display: none;
+}
+.qb-doc-group > summary::before {
+  content: "▸";
+  width: 0.8rem;
+  color: var(--qb-subtle);
+}
+.qb-doc-group[open] > summary::before {
+  content: "▾";
+}
+.qb-doc-group-name {
+  flex: 1 1 auto;
+}
+.qb-doc-items {
+  padding: 0 0 0.5rem 1.3rem;
+}
+.qb-doc-item {
+  padding: 0.5rem 0;
+  border-top: 1px dashed var(--qb-border);
+}
+.qb-doc-item:first-child {
+  border-top: none;
+}
+.qb-doc-name {
+  font-weight: 600;
+}
+.qb-doc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.25rem 0;
+}
+.qb-doc-desc,
+.qb-doc-comment,
+.qb-doc-count {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+}
+.qb-doc-comment {
+  font-style: italic;
+  color: var(--qb-muted);
+}
+.qb-doc-count {
+  color: var(--qb-muted);
+}
+.qb-doc-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.qb-field-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--qb-border);
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+.qb-field-type {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: var(--qb-subtle);
 }

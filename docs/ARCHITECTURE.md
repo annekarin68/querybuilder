@@ -5,15 +5,11 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-23 — Production-readiness hardening: in-flight
-requests are aborted when superseded and time out after 60 s of silence; a
-`403` only redirects into compliance when `/api/compliance/status` confirms
-it is what's missing; an `/api/auth/me` outage no longer takes the app down;
-login/compliance URLs follow `VITE_API_BASE`; the field-type mapping accepts
-common SQL type spellings; the licence notice ships inside `dist/`. The
-decision to keep building the field catalog client-side (no
-`GET /api/schema`) was re-examined and upheld — see §7. See §13 for the full
-changelog.
+Last updated: 2026-09-23 — UI/UX refresh: dark top bar with workflow steps
+and an account menu; docs folded into a rail; full-width query builder with
+coloured ALL/ANY brackets, joiners, soft hints for unfinished parts and a
+plain-English footer; a pinned slim statistics column; Run moved into the
+"Matching entrysets" card. Request handling is unchanged. See §13.
 
 ---
 
@@ -28,29 +24,32 @@ the app runs end to end during development.
 ### Screen layout
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│  top ui menu: app title ····· [☰ Docs] [Run] [Log in] [Compliance] │
-├───────────────────────────────────────────────────────────────┤
-│  secondary pointing ui menu:  Filter | Review | Approval | Done│
-├────────────┬────────────────────────────────────┬──────────────┤
-│ docs       │        query builder (centre)      │  statistics  │
-│ sidebar    │        recursive AND/OR tree       │  (right)     │
-│ (left,     │                                    │  live, rich  │
-│ collapsible│                                    │  dashboard   │
-├────────────┴────────────────────────────────────┴──────────────┤
-│  data preview (bottom): summary line + paged table + Prev/Next │
-└───────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ top bar: Query Builder · ①Filter ②Review ③Approval ④Done · [account ▾]   │
+├──┬──────────────────────────────────────────────────────┬────────────────┤
+│D │ databases (pill toggles · N of M selected · All/None) │ statistics     │
+│O │ query (recursive ALL/ANY groups as coloured brackets; │ (pinned: live  │
+│C │   plain-English summary in the footer)                │  headline +    │
+│S │ matching entrysets (the Run query button lives here)  │  per database) │
+│› │                                                        │                │
+└──┴──────────────────────────────────────────────────────┴────────────────┘
+ ↑ docs rail — opens the data dictionary as a 20rem column (collapsed by default)
 ```
 
-- **Left** — documentation sidebar, generated entirely from the schema. Collapsible. Scrollable. Expandable items.
-- **Centre** — the query builder: nested AND/OR groups, any depth. Collapsible groups.
-- **Right** — statistics for the current query, refetched live (debounced) as the
-  user builds, as long as the query is valid.
-- **Bottom** — a sample of matching rows, refetched only when the user presses
-  **Run / Refresh**.
-- **Secondary menu** — `Filter | Review | Approval | Done`. Only **Filter** is a
-  real view today; the other three are selectable tabs showing a "Coming soon"
-  placeholder. Active tab lives in `AppState.activeView`.
+- **Top bar** — app name, the workflow steps, and the account menu (login +
+  compliance acknowledgment).
+- **Docs rail / data dictionary** — generated from `GET /api/individuals`.
+  Collapsed to a 28 px rail by default; opens as a column; searchable by item
+  and field name.
+- **Main column** — database scope, the query builder (nested ALL/ANY groups,
+  any depth, collapsible), and **Matching entrysets**: a sample of matching
+  entrysets, fetched only when the user presses **Run query** in that card.
+- **Statistics column** (right, ~15rem) — sticky, so it never scrolls out of
+  view while the user builds; refetched live (debounced) whenever the query
+  is complete.
+- **Workflow steps** — `Filter | Review | Approval | Done`. Only **Filter** is
+  a real view today; the others show a "Coming soon" placeholder. Active step
+  lives in `AppState.activeView`.
 
 ### Non-goals (for now)
 
@@ -68,7 +67,7 @@ the app runs end to end during development.
 | Choice | Why |
 |---|---|
 | **Vite + TypeScript** | Fast dev server with hot reload and readable error overlays; types give junior maintainers autocomplete and catch typos before runtime; the most transferable skill set. |
-| **Fomantic UI (CSS + JS) + jQuery** | Consistent good-looking components with little custom CSS. We use the **jQuery components** (searchable dropdowns, chips, accordion) — this is a deliberate choice; see §3 for how we keep it safe. |
+| **Fomantic UI (CSS + JS) + jQuery** | Consistent good-looking components with little custom CSS. We use the **jQuery components** (searchable dropdowns, chip-style multi-selects) — this is a deliberate choice; see §3 for how we keep it safe. Native elements (`<details>`, checkboxes) are preferred where they do the job without a plugin — see §3. |
 | **No framework (no React/Vue)** | One less thing to learn. State is one plain object; the view is functions that turn state into HTML strings. |
 | **Small mock server** | `npm run dev` gives a working app end to end. It is dev-only and shares no code with `src/`. |
 | **Vitest, unit tests on pure modules only** | The valuable logic (query tree, validation) is pure and easy to test. The view layer is deliberately too thin to be worth DOM testing. |
@@ -152,16 +151,18 @@ export function activate(container: HTMLElement): void {
   // Turn plain markup into interactive Fomantic components.
   $(container).find('.ui.dropdown').dropdown();
   $(container).find('.ui.checkbox').checkbox();
-  $(container).find('.ui.accordion').accordion();
 }
 
 export function destroy(container: HTMLElement): void {
   // Tear down plugin instances BEFORE the old markup is thrown away.
   $(container).find('.ui.dropdown').dropdown('destroy');
   $(container).find('.ui.checkbox').checkbox('destroy');
-  $(container).find('.ui.accordion').accordion('destroy');
 }
 ```
+
+Native elements are preferred where they do the job without a plugin: the
+data dictionary's groups, the entryset rows and the account menu are
+`<details>` elements, and the database toggles are plain checkboxes.
 
 ### `src/ui/panel.ts` — the only way a panel updates its DOM
 
@@ -223,21 +224,19 @@ src/
   ui/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
     panel.ts           paint() helper + escapeHtml().
-    format.ts          compact() / exact() / matchRatio() / barWidth() — number & proportion formatting for the stats panel at billion-row / 1e-10 % scale.
-    layout.ts          Renders the shell once (top menu, secondary menu, grid columns). Handles sidebar collapse + active view via CSS class, no repaint.
+    format.ts          compact() / exact() / matchRatio() / barWidth() for the stats (billion-row / 1e-10 % scale), plus displayLabel() (backend casing, underscores → spaces), countLabel() and formatWhen().
+    layout.ts          Renders the shell once (top bar with workflow steps + account slot, docs rail, docs / main / stats columns). Handles docs collapse + active step via classes/attributes, no repaint.
     valueControl.ts    renderValueControl(field, operator, value) + readValueControl(row, arity, valueType) — the value input(s) for a condition row, chosen by operator arity × field valueType.
     databasePicker.ts  render + wiring for the database-scope checkboxes above the query builder (its own panel, data-panel="dbpicker").
     queryBuilder.ts    render + delegated event wiring for the centre panel (recursive).
-    docsSidebar.ts     render for the left panel — built from state.individuals
-                       (GET /api/individuals), NOT state.schema. See §9.
-    statsPanel.ts      render for the right panel (data-driven from /api/stats).
-    dataPreview.ts     render for the bottom panel — a summary list of
-                       entrysets (POST /api/query), NOT a paged row table.
-                       See §9.
-    authStatus.ts      render + wiring for the top-menu login/logout widget
-                       (its own panel, data-panel="auth"). See §9.
-    complianceStatus.ts render + wiring for the top-menu compliance-acknowledgment
-                       widget (its own panel, data-panel="compliance"). See §9.
+    docsFilter.ts      matchDocs(individuals, text) — which data-dictionary items/groups match the filter (pure; unit-tested).
+    docsSidebar.ts     render for the data dictionary (docs column) — built
+                       from state.individuals, NOT state.schema. See §9.
+    statsPanel.ts      render for the pinned statistics column (data-driven from /api/stats).
+    dataPreview.ts     render + Run wiring for the "Matching entrysets" card
+                       (POST /api/query) — the only Run control. See §9.
+    accountMenu.ts     render + wiring for the top-bar account menu (login +
+                       compliance; data-panel="account"). See §9.
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate().
                        Starts only when run as the entrypoint.
@@ -282,7 +281,7 @@ mock-server/
                        entrysets (ids 1-21), each a distinct, internally-consistent
                        vehicle/event scenario, spread across all 7 mock databases via
                        dbIndexForEntrysetId(id).
-tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, mock-server/evaluate + index (pure, no DOM).
+tests/                 Vitest specs for src/query/*, src/api/*, src/state, src/util/*, src/ui/* (pure helpers only), mock-server/evaluate + index (pure, no DOM).
 docs/
   ARCHITECTURE.md      This file.
 index.html
@@ -305,7 +304,7 @@ export interface AppState {
    *  startup via GET /api/compliance/status. Display-only, same as `auth`. */
   compliance: { status: "loading" | "required" | "acknowledged"; reason: string | null; ackedAt: string | null };
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
-  activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
+  activeView: "filter" | "review" | "approval" | "done";  // workflow steps; default "filter"
 
   query: QueryNode;                   // the tree (root Group, operator "AND")
   issues: Issue[];                    // validateQuery(query, schema); recomputed on every query change
@@ -336,9 +335,9 @@ of the keys that changed.
 | App starts | `getDatabases()` + `getIndividuals()`, then `buildFieldCatalog(individuals)` synchronously → `setState({ schema, databases, individuals, ... })` → every panel renders once. Individuals/databases load failure is fatal (full-page error + Reload). |
 | User edits the query | handler calls a `tree.ts` fn → `setState({ query, issues, stats: <reset to idle/null>, preview: <reset to idle/null> })` → **only** `queryBuilder` repaints. Then, if `issues` has no errors, a **debounced** (400 ms) `getStats()` is scheduled. |
 | `getStats()` reports a streamed line | stale-response guard (below); if current, appended to `stats.lines` via `setState` → **only** `statsPanel` repaints, showing partial results while more lines are still arriving. When the stream ends, `status` becomes `ok`; a non-2xx response instead sets `status: "error"`. |
-| User clicks **Run / Refresh** | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and scrolls internally. |
-| User toggles docs sidebar | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class. No repaint. |
-| User clicks a secondary-menu tab | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
+| User clicks **Run query** (in Matching entrysets) | `setState({ preview: { status: "loading", data: null } })` → `dataPreview` repaints (the card shows a loader instead of the button) → `runQuery()` → guard → `setState({ preview })` → repaint. The mock server filters by `query`/`databases` for real — see §7/§10. There is no Prev/Next; the whole (short) list of matches comes back in one response and flows with the page. |
+| User opens/closes the docs (rail or ✕) | `setState({ sidebarCollapsed })` → `layout` toggles one CSS class and the rail's `aria-expanded`. No repaint. |
+| User clicks a workflow step | `setState({ activeView })` → `layout` swaps the main area. Filter view repaints from existing state; nothing refetches. |
 
 Each panel subscribes narrowly:
 
@@ -373,8 +372,10 @@ Concretely:
   `{ status: "idle", data: null }` and `preview` to
   `{ status: "idle", data: null, page: 1 }`. Old numbers and rows disappear the
   instant the scope changes on screen — before any new request goes out.
-  - Preview then shows: *"Press Run / Refresh to load matching rows."* (or,
-    for an anonymous visitor, *"Log in to preview data."* instead — §9).
+  - The Matching entrysets card then shows its ready state: an enabled **Run
+    query** button and, for an anonymous visitor or one missing compliance,
+    an advisory note ("You'll be asked to log in first." / "…confirm
+    compliance first.") — §9.
 - **If no database is selected:** no request fires; both panels show
   *"Select at least one database…"* and **Run** is disabled.
 - **If `issues` has errors:**
@@ -657,7 +658,7 @@ carry `errorMessages`/`infoMessages` instead of a count. A missing / empty
 ### `POST /api/query`
 
 Body: `{ "query": <QueryNode tree>, "databases": string[], "page": number, "pageSize": number }`.
-Called only on **Run / Refresh**. Same `400` validation as `/api/stats`. The
+Called only when the user clicks **Run query** (§9). Same `400` validation as `/api/stats`. The
 mock scopes `ROWS` (every entryset, flattened) to the selected databases,
 evaluates the query against them, and maps matching rows back to their
 source entrysets, capped at 25. `page`/`pageSize` are accepted but unused —
@@ -706,9 +707,9 @@ interface AuthUser {
 `POST /api/query` requires both a session (`401 { error }` without one) and
 a compliance acknowledgment (`403 { error }` without one) — everything else
 (`schema`, `databases`, `individuals`, `stats`) stays anonymous-accessible.
-`canRunQuery` is NOT auth- or compliance-aware; neither is `syncRunButton` —
-Run always genuinely attempts the request, and `main.ts` reacts to whatever
-status code comes back (§5, §9). A `401` always redirects into login. A
+`canRunQuery` is NOT auth- or compliance-aware, and neither is `dataPreview.ts`'s
+enabling of the Run button — Run always genuinely attempts the request, and
+`main.ts` reacts to whatever status code comes back (§5, §9). A `401` always redirects into login. A
 `403` only means "authenticated, but some requirement is unmet", and
 compliance may not be the only such requirement (a real backend may also
 refuse a user access to a database). So on a `403`, `main.ts` first asks
@@ -822,56 +823,43 @@ doesn't recognize.
 
 ## 9. Panels
 
-### Top menu — `authStatus.ts`
+### Top bar — `accountMenu.ts`
 
-Its own panel (`data-panel="auth"`, painted independently). Anonymous shows
-a `Log in` link (`GET /api/auth/login` — a real navigation, not a fetch);
-authenticated shows the user's name + a `Log out` button. **Display only:**
-`syncRunButton` does not read `auth.status` — Run always attempts the
-request, and `main.ts` reacts to a `401` response by redirecting here (§7).
-The link's `href` is `LOGIN_URL` (follows `VITE_API_BASE`) and it carries
-`data-flow-link`, so the in-progress query is saved before the navigation.
-If `GET /api/auth/me` itself fails (anything other than `200`/`401`), startup
-treats the visitor as anonymous and logs the error instead of failing the
-whole app. Login state is display-only, and most of the app works without it.
-
-### Top menu — `complianceStatus.ts`
-
-Its own panel (`data-panel="compliance"`, painted independently of
-`authStatus.ts`). "Required" shows a `Start compliance check` link
-(`GET /api/compliance/start`); "acknowledged" shows the stored reason (its
-`ackedAt` timestamp in a tooltip) + an `Invalidate` button. Also
-display-only: `main.ts` reacts to a `403` response by redirecting here (after
-confirming via `GET /api/compliance/status` that compliance is what's
-missing — §7), never a pre-check of this widget's state.
+Its own panel (`data-panel="account"`). Anonymous: a `Log in` button
+(`LOGIN_URL`, a real navigation, `data-flow-link` so the in-progress query is
+saved first). Authenticated: a chip with the user's name and a compliance
+badge (`✓ Compliance` or `Compliance needed`) that opens a native `<details>`
+menu: the compliance reason and when it was given + `Invalidate`, or
+`Start compliance check` (`COMPLIANCE_START_URL`, `data-flow-link`); then
+`Log out`. Outside clicks and Escape close it. **Display only:** Run is never
+gated on it — `main.ts` reacts to a `401`/`403` from `POST /api/query` (§7).
+If `GET /api/auth/me` fails (anything but `200`/`401`) the visitor is treated
+as anonymous and the error is logged.
 
 ### Centre, above the builder — `databasePicker.ts`
 
-Its own panel (`data-panel="dbpicker"`, painted independently of the query
-builder). A Fomantic `ui checkbox` per `state.databases` entry, plus
-**Select all** / **Select none** shortcuts. Toggling calls `onDatabasesChange`
-in `main.ts`, which treats it exactly like a query edit (§6): same-`setState`
-clear of stats/preview, debounced `refreshStats()`. Zero selected → the panels
-show a "Select at least one database" hint and **Run** is disabled.
+Its own panel (`data-panel="dbpicker"`). A card with one pill toggle per
+`state.databases` entry (a native checkbox inside a styled label — no
+plugin), "N of M selected", and **All** / **None** buttons. Toggling calls
+`onDatabasesChange` in `main.ts`, which treats it exactly like a query edit
+(§6). Zero selected → an amber "Select at least one database." note, and the
+statistics and Matching entrysets cards explain why they are empty.
 
-### Left — `docsSidebar.ts`
+### Left — `docsSidebar.ts` (data dictionary)
 
-Built entirely from `state.individuals` (GET /api/individuals) — **not**
-`state.schema`; both now describe the same vehicle-telemetry entryset/individual
-model (see §7, §10), just via two separate API responses/state slices, so the
-docs sidebar renders independently of the query builder's field catalog. A
-Fomantic `ui accordion`: one section per `group` (18 subsystem groups, e.g.
-`engine`, `tires_wheels`, `metadata`), each listing its items — name, tags,
-`description`/`comment`, and a percentage computed client-side (`matchRatio()`
-from `format.ts`) as `Individual.totalCount` divided by the sum of every
-loaded database's `DatabasesResponse.totalEntrysets` — the backend supplies no
-percentage directly, only the raw `totalCount` — and its `fields` (`name`,
-falling back to `label`, + `type`). A plain `ui input` at the top filters items
-by name (`String.includes`, no plugin) — matching items stay visible, others
-get `display:none`; empty
-group sections are not hidden. Collapse is a CSS class toggled in `layout.ts`
-(`sidebarCollapsed`) — sets the left column to `display:none` and widens the
-centre; no repaint.
+Built from `state.individuals` (GET /api/individuals) — not `state.schema`.
+Hidden behind the docs rail by default (`sidebarCollapsed` starts `true`);
+the rail and the card's ✕ both toggle it. One native `<details>` per `group`
+(18 subsystem groups, e.g. `engine`, `tires_wheels`, `metadata`), each
+listing its items: name, tags, `description`, italic `comment`, "In N
+entrysets (x%)" (`matchRatio` against the sum of every database's
+`totalEntrysets`), and field chips (`name`, falling back to `label`, + type).
+Group names and tags are shown in the backend's casing with underscores as
+spaces (`displayLabel`). The search box filters with `matchDocs` (item name,
+field label or name; case-insensitive): matching groups open and show "N
+matches", other groups and items are hidden, and "No items match …" appears
+when nothing does. The filter sets `hidden`/`open` on the painted DOM instead
+of repainting, so typing keeps focus.
 
 ### Centre — `queryBuilder.ts`
 
@@ -880,8 +868,14 @@ on node kind, `groupHtml` renders a group and recurses into its children via
 `nodeHtml`, and `conditionHtml` renders one condition row (no function called
 `renderGroup` exists).
 
-- A group = a Fomantic `ui segment` with an **AND / OR** `ui buttons` toggle,
-  **+ Condition** and **+ Group** buttons, and (if not the root) **Remove group**.
+- A group = a coloured bracket (3 px left border with short top/bottom arms)
+  over a faint tint — blue for ALL (AND), amber for ANY (OR); nested tints
+  stack, and hovering highlights only the innermost group (pure CSS).
+  Header: collapse caret · "Match [ALL | ANY] of the following" · **+
+  Condition** · **+ Group** · ✕ (not on the root). Between children a small
+  AND/OR joiner sits on the bracket. A collapsed group folds to one line: its
+  `queryToText` summary and "N conditions". **+ Group** inserts `newGroup()`,
+  which already holds one empty condition.
 - A condition = three cascading dropdowns followed by a value control:
   1. **Item** `ui dropdown` (searchable) — built from `state.individuals`; picking
      one stages `individualId` on the condition.
@@ -900,7 +894,12 @@ on node kind, `groupHtml` renders a group and recurses into its children via
   Changing the Item resets Field, Operator, and the value to empty/null — the
   same cascade-reset pattern that changing Field already applies one level
   down to Operator/value.
-- Nodes in `state.issues` get a red `ui message` under the row.
+- Issues show under their row/group header: `kind: "incomplete"` as a quiet
+  grey hint, `kind: "invalid"` in red (§11). The card's footer shows the
+  whole query in plain English (`queryToText`) once it is complete,
+  otherwise how many parts still need attention. Condition rows are a CSS
+  grid inside a size container: below ~640 px of row width the value and ✕
+  wrap to a second line.
 
 **Event wiring:** one delegated listener on the panel container, reading
 `data-node-id` and `data-action` attributes. The recursive HTML stays a pure
@@ -920,46 +919,50 @@ Every number in this panel goes through `src/ui/format.ts` so it stays inside a
 - **`barWidth(match, total)`** — a CSS `max(…%, 2px)`, so any nonzero match shows a
   2 px sliver, visibly distinct from zero.
 
-Layout, top to bottom: a compact headline (sum of `matchCount` across the
-successful lines received so far against a denominator summed from those
-lines' `DatabasesResponse.totalEntrysets`, big + `of … · matchRatio` small)
-and a thin bar. The headline never shows a failed database as zero. With no
+A ~15rem card, sticky beside the builder. Top to bottom: the headline (big
+compact sum of `matchCount` over the successful lines so far, labelled
+"matching entrysets", then "ratio of total" and a thin bar), then **By
+database** — one compact grid row per streamed line: name · bar · ratio
+(exact figures on hover), or for a failed database its `errorMessages` in
+red with `infoMessages` beneath — then, while loading, "Waiting on N more
+databases…". The headline never shows a failed database as zero. With no
 successful line yet it shows no number at all ("No results yet." while
 loading, "No database returned a result…" once done). When some lines
-failed, it adds "Excludes N database(s) that failed". Then comes the **By database** segment — one row per streamed line so
-far, success (`compact(matchCount) / compact(totalEntrysets) · matchRatio`,
-thin bar, exact figures on hover, any `infoMessages`) or failure
-(`errorMessages` + `infoMessages` as a red message) — inside a
-`.qb-stat-perdb` scroll region
-(`max-height: 45vh`, replacing the old per-field-block scroll region now that
-there are no field blocks); then, while `status` is `"loading"`, a "Waiting on
-N more database(s)…" line. The whole stats column is `position: sticky` so it
-tracks the viewport while a tall query builder scrolls past. `status`
-branches: `idle` → hint from §6; `error` → `ui negative message`, no data.
-There is no longer a per-field-block list — the real backend can currently
-only return counts, not aggregated min/max/avg/buckets/earliest/latest.
+failed, it adds "Excludes N database(s) that failed". The whole stats column
+is `position: sticky` so it tracks the viewport while a tall query builder
+scrolls past. `status` branches: `idle` → "Counting matches…" (the debounce
+window); `error` → `ui negative message`, no data. There is no per-field-block
+list — the real backend can currently only return counts, not aggregated
+min/max/avg/buckets/earliest/latest.
 
-### Bottom — `dataPreview.ts`
+### Main column, under the query — `dataPreview.ts` (Matching entrysets)
 
-**Run / Refresh** button (disabled while `issues` has errors or while
-loading — same gating as before). On success: a **summary index list**, one
-compact row per entryset in `EntrysetsResponse.entrysets` — not a full
-item-by-item grid. Design rationale: entrysets are heterogeneous (each is a
-different event, most likely holding a different subset of `individual.json`'s
-items), so a grid needs either items-as-rows (fine for a handful of
-entrysets-as-columns, but entrysets don't scale past ~5-6 columns on screen)
-or entrysets-as-rows (scales entrysets fine, but then *items* become columns
-and the union across many varied entrysets can easily reach 60-100+, needing
-horizontal scroll — worse UX than vertical). A summary list sidesteps the
-problem entirely: no per-item columns, so it scales to 20+ entrysets just by
-scrolling vertically (`.qb-entryset-list`, `max-height: 45vh`, same pattern as
-`.qb-stat-perdb`).
+Owns the app's only **Run query** button. States: query not runnable (no
+database / no condition / unfinished) → disabled button + the reason; ready
+(`preview.status === "idle"`) → enabled button + an advisory note for
+anonymous users or missing compliance; loading → loader; error → red message
++ **Try again**; ok → "Matching entrysets · N" and the list, with no Run
+button (the card resets to "ready" whenever the query or scope changes, §6,
+so there is one run per query). `wireDataPreview` attaches one delegated
+click listener that calls `runPreview()`.
+
+On success: a **summary index list**, one compact row per entryset in
+`EntrysetsResponse.entrysets` — not a full item-by-item grid. Design
+rationale: entrysets are heterogeneous (each is a different event, most
+likely holding a different subset of `individual.json`'s items), so a grid
+needs either items-as-rows (fine for a handful of entrysets-as-columns, but
+entrysets don't scale past ~5-6 columns on screen) or entrysets-as-rows
+(scales entrysets fine, but then *items* become columns and the union across
+many varied entrysets can easily reach 60-100+, needing horizontal scroll —
+worse UX than vertical). A summary list sidesteps the problem entirely: no
+per-item columns, so it scales to 20+ entrysets just by scrolling vertically
+(`.qb-entryset-list`, flowing with the page).
 
 Each row is a native `<details>/<summary>` element (no JS wiring needed for
 expand/collapse):
 
 - **Summary line**: entryset id, "When" (`observation_window.from_timestamp`,
-  locale-formatted), "Vehicle" (`vehicle_identity.vehicle_type`, both falling
+  `formatWhen`, e.g. 7 Nov 2024, 09:15), "Vehicle" (`vehicle_identity.vehicle_type`, both falling
   back to `—` if that metadata item is absent), the distinct non-`metadata`
   `group`s present as badges (first 3, `+N` overflow — computed by
   cross-referencing `state.individuals`), and the total item count.
@@ -969,8 +972,7 @@ expand/collapse):
   this to be replaced by a link/route into that viewer once it exists.
 
 `/api/query` filters for real (§7, §10), so this list changes with the query
-and selected databases. No pagination (§7). `status: "idle"` → hint from §6
-(an anonymous visitor sees a login prompt instead of the Run/Refresh hint).
+and selected databases. No pagination (§7).
 
 ---
 
@@ -1070,18 +1072,24 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
   an inline `onclick`, so the page works under a strict Content-Security-Policy.
   `GET /api/auth/me` failing is *not* fatal — see §9.
 - No retries, no error-boundary machinery — just visible messages.
+- Query validation issues come in two kinds (`Issue.kind`): `incomplete`
+  (something not filled in yet — a grey hint) and `invalid` (refers to
+  something that cannot work — red). Both block running; only the display
+  differs.
 
 ---
 
 ## 12. Testing & tooling
 
-### Tests (Vitest, unit only, all on `src/query/`)
+### Tests (Vitest, unit only, on pure modules)
 
 - `tree.test.ts` — add/update/remove/find return correct new trees; inputs unmutated.
 - `validate.test.ts` — each issue type is reported; a complete query yields `[]`.
 - `summary.test.ts` — representative trees produce the expected text.
+- `tests/ui/docsFilter.test.ts` — data-dictionary filter matching.
+- `tests/ui/format.test.ts` / `statsPanel.test.ts` / `valueControl.test.ts` — formatting helpers and the few pure render helpers.
 - Fixture request/response objects double as contract examples.
-- No component tests — the view layer is deliberately too thin (state → string).
+- No DOM/component tests — the view layer is deliberately too thin to be worth it (repo rule).
 
 ### Scripts
 
@@ -1133,3 +1141,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-23 | OAuth2 authorization-code login: only `POST /api/query` is gated (`401` without a session) — schema/databases/individuals/stats stay anonymous-accessible. The IdP's redirect URI points at the backend (`GET /api/auth/callback`), not the SPA, so the frontend never handles the auth code/state/tokens — it only reads `GET /api/auth/me`'s result via a new `AppState.auth`. `canRunQuery` deliberately stays auth-unaware (shared with `refreshStats`); the auth requirement is layered on separately at `syncRunButton`/`runPreview`. New top-menu widget (`src/ui/authStatus.ts`) for login/logout. Mock server (`mock-server/auth.ts` + new routes in `index.ts`) simulates the whole IdP round trip in-process to stay offline-first — none of it is reusable in production (see the design spec's §7 for the full list of new real backend requirements). Rebased onto the API-contract-rename work above (bare-array `getDatabases`/`getIndividuals`, streaming `getStats`, client-side `buildFieldCatalog`, no `GET /api/schema`) — `client.ts`'s `ApiError` class (added for this feature) is preserved through that rebase and is now the type every client function throws. Design: `docs/superpowers/specs/2026-09-22-oauth2-login-design.md`. |
 | 2026-09-23 | Compliance-logging redirect gate: `POST /api/query` now also requires a compliance acknowledgment (`403` without one), gated the same way login is (`401`) — via a second mock-service redirect flow (`mock-server/auth.ts`'s compliance session/token logic + `mock-server/index.ts`'s `/api/compliance/*` and `/mock-compliance/*` routes), the reason attached to the *same* session record rather than a second cookie. The frontend no longer pre-checks `auth`/`compliance` status before allowing Run — `syncRunButton` reverted to its pre-OAuth shape, and `main.ts` reacts generically to a `401`/`403` on the actual request, which will cover any future protected endpoint for free. The in-progress query survives both redirects via a new `src/util/pendingQuery.ts` (`sessionStorage`, restored on a `?resume=1` return-hop) — deliberately with no automatic retry or chaining, so the mechanism can never redirect-loop: the user always clicks Run again to retry. New top-menu widget (`src/ui/complianceStatus.ts`). Every successful extraction is also logged to a dev-only in-memory audit list (`mock-server/audit.ts`) standing in for a real audit-service call. Also rebased, alongside the OAuth2 row above, onto the API-contract-rename work — `getStats`'s streaming NDJSON shape and `buildFieldCatalog` were unaffected by this feature, so `refreshStats` kept its post-rename implementation untouched through both rebases. Design: `docs/superpowers/specs/2026-09-23-compliance-logging-design.md`. |
 | 2026-09-23 | Production-readiness hardening (review before first production deploy). **Requests:** `client.ts` gains a shared 60 s timeout (`TimeoutError`; for the `/stats` stream it is an idle timeout that restarts on each chunk) and optional `AbortSignal`s on `getStats`/`runQuery`; `main.ts` replaces the `statsRun` counter with a `requestSlot()` per request kind that aborts superseded requests and supplies the identity half of the stale guard, and `cancelInFlight()` runs on every query/scope edit and on logout (§6). **Auth/compliance:** a `403` from `/api/query` only redirects into compliance if `GET /api/compliance/status` says `"required"`, otherwise the error is shown (a non-compliance `403` used to redirect in an endless circle); a non-401 failure of `GET /api/auth/me` no longer fails startup; `LOGIN_URL`/`COMPLIANCE_START_URL` are exported from `client.ts` and follow `VITE_API_BASE` (previously hardcoded `/api/...` in five places), and flow links are marked `data-flow-link`. **Correctness/UI:** `valueTypeFor` accepts common SQL type spellings case-insensitively (previously only the mock's four); the stats headline never presents failed databases as zero and notes how many it excludes; a restored pending query is structurally validated and its database ids filtered to ones that still exist; the startup error page escapes the server's message and drops its inline `onclick`; node ids and entryset ids are escaped in markup; menu tabs, the Docs toggle and Select all/none are keyboard-focusable (`href="#"` + `preventDefault`). **Build:** `THIRD-PARTY-NOTICES.txt` is emitted into `dist/` by a Vite plugin (exempted by exact path in `check:offline`), removing the manual copy step. **Decision:** re-examined bringing back `GET /api/schema` and kept the client-side catalog (§7). |
+| 2026-09-23 | UI/UX refresh (`docs/superpowers/specs/2026-09-23-ui-ux-refresh-design.md`). Layout: dark top bar with workflow steps and an account menu (replaces `authStatus.ts` + `complianceStatus.ts` with `accountMenu.ts`, a native `<details>` menu); docs collapsed into a rail (`sidebarCollapsed` starts `true`); main column stacks databases (pill toggles), the query card and "Matching entrysets"; a pinned ~15rem statistics column. Query builder: ALL/ANY groups as coloured brackets with tint + hover highlight, AND/OR joiners between children, collapsed groups summarised with `queryToText`, a plain-English footer, CSS-grid condition rows with a container query. `Issue.kind` (`incomplete` → grey hint, `invalid` → red); `newGroup()` now holds one empty condition. Run moved from the top bar into the Matching entrysets card (`syncRunButton` removed; `wireDataPreview` added) — request handling unchanged. Data dictionary: `<details>` groups instead of the Fomantic accordion, a filter (`docsFilter.ts`) that opens matching groups, backend casing with underscores as spaces. `format.ts` gains `displayLabel` / `countLabel` / `formatWhen`. |

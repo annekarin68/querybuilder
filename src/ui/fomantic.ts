@@ -4,13 +4,11 @@ import $ from "jquery";
 export function activate(container: HTMLElement): void {
   $(container).find(".ui.dropdown").dropdown({ fullTextSearch: true });
   $(container).find(".ui.checkbox").checkbox();
-  $(container).find(".ui.accordion").accordion();
 }
 
 export function destroy(container: HTMLElement): void {
   $(container).find(".ui.dropdown").dropdown("destroy");
   $(container).find(".ui.checkbox").checkbox("destroy");
-  $(container).find(".ui.accordion").accordion("destroy");
 }
 
 /**

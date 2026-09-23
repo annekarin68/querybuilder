@@ -55,15 +55,11 @@ export function renderValueControl(
     if (field.valueType === "enum") {
       const from = Array.isArray(value) ? value[0] : undefined;
       const to = Array.isArray(value) ? value[1] : undefined;
-      return `${enumDropdown(field, from, false, 'data-range="from"')}
-              <span style="margin:0 .4rem">to</span>
-              ${enumDropdown(field, to, false, 'data-range="to"')}`;
+      return `<div class="qb-range">${enumDropdown(field, from, false, 'data-range="from"')}<span class="qb-range-to">to</span>${enumDropdown(field, to, false, 'data-range="to"')}</div>`;
     }
     const from = Array.isArray(value) ? value[0] : "";
     const to = Array.isArray(value) ? value[1] : "";
-    return `<div class="ui input" style="margin-right:.3rem">${scalarInput(field, from, "value", 'data-range="from"')}</div>
-      <span style="margin:0 .4rem">to</span>
-      <div class="ui input">${scalarInput(field, to, "value", 'data-range="to"')}</div>`;
+    return `<div class="qb-range"><div class="ui input">${scalarInput(field, from, "value", 'data-range="from"')}</div><span class="qb-range-to">to</span><div class="ui input">${scalarInput(field, to, "value", 'data-range="to"')}</div></div>`;
   }
   // arity "one"
   if (field.valueType === "boolean") {

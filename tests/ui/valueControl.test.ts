@@ -66,6 +66,16 @@ describe("renderValueControl", () => {
     expect(html).toContain("placeholder");
     expect(html).toContain('value="a, b"');
   });
+
+  it("uses classes, not inline styles, for the range layout", () => {
+    const num = renderValueControl(field({ valueType: "number" }), op("two"), [1, 2]);
+    const en = renderValueControl(enumField, op("two"), ["a", "b"]);
+    for (const html of [num, en]) {
+      expect(html).not.toContain("style=");
+      expect(html).toContain('class="qb-range"');
+      expect(html).toContain('class="qb-range-to"');
+    }
+  });
 });
 
 describe("defaultValueFor", () => {

@@ -36,6 +36,7 @@ describe("store", () => {
     expect(initialState.preview.status).toBe("idle");
     expect(initialState.auth.status).toBe("loading");
     expect(initialState.compliance.status).toBe("loading");
+    expect(initialState.sidebarCollapsed).toBe(true);
   });
 });
 
@@ -64,14 +65,18 @@ describe("canRunQuery", () => {
   });
 
   it("false when there's a blocking (error-severity) issue", () => {
-    expect(canRunQuery(state({ issues: [{ nodeId: "x", message: "m", severity: "error" }] }))).toBe(
-      false,
-    );
+    expect(
+      canRunQuery(
+        state({ issues: [{ nodeId: "x", message: "m", severity: "error", kind: "invalid" }] }),
+      ),
+    ).toBe(false);
   });
 
   it("true when the only issue is a warning", () => {
     expect(
-      canRunQuery(state({ issues: [{ nodeId: "x", message: "m", severity: "warning" }] })),
+      canRunQuery(
+        state({ issues: [{ nodeId: "x", message: "m", severity: "warning", kind: "invalid" }] }),
+      ),
     ).toBe(true);
   });
 

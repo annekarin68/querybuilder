@@ -24,4 +24,10 @@ export interface Issue {
   nodeId: string;
   message: string;
   severity: "error" | "warning";
+  /**
+   * "incomplete": something the user simply hasn't filled in yet — shown as a
+   * quiet hint. "invalid": the query refers to something that cannot work —
+   * shown in red. Both block running when severity is "error".
+   */
+  kind: "incomplete" | "invalid";
 }

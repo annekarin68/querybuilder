@@ -31,6 +31,19 @@ describe("tree", () => {
     expect(c.value).toBeNull();
   });
 
+  it("newGroup starts as an AND group holding one empty condition", () => {
+    const g = newGroup();
+    expect(g).toMatchObject({ kind: "group", operator: "AND" });
+    expect(g.children).toHaveLength(1);
+    expect(g.children[0]).toMatchObject({
+      kind: "condition",
+      individualId: null,
+      fieldId: null,
+      operatorId: null,
+      value: null,
+    });
+  });
+
   it("addChild returns a new tree with the node appended, original unchanged", () => {
     const root = emptyQuery();
     const c = newCondition();
@@ -47,7 +60,8 @@ describe("tree", () => {
     const c = newCondition();
     const next = addChild(withGroup, g.id, c);
     const found = findNode(next, g.id) as import("../../src/query/types").Group;
-    expect(found.children[0]).toBe(c);
+    expect(found.children).toHaveLength(2);
+    expect(found.children[1]).toBe(c);
   });
 
   it("updateNode shallow-merges a patch into one node only", () => {
@@ -77,7 +91,8 @@ describe("tree", () => {
     t = addChild(t, root.id, g);
     t = addChild(t, g.id, newCondition());
     t = addChild(t, g.id, newCondition());
-    expect(countConditions(t)).toBe(3);
+    // 1 at the root + g's own starter condition + 2 added to g
+    expect(countConditions(t)).toBe(4);
   });
 
   describe("stripCollapsed", () => {

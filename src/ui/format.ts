@@ -1,6 +1,7 @@
 /**
- * Number formatting for the statistics panel, where a real backend can return
- * counts from a handful to billions and percentages down to ~1e-10.
+ * Display formatting shared by the panels: numbers and proportions for the
+ * statistics (a real backend can return counts from a handful to billions and
+ * percentages down to ~1e-10), plus labels, counts and timestamps.
  *
  * `locale` is optional and defaults to the viewer's locale; tests pass an
  * explicit locale so assertions are deterministic.
@@ -54,4 +55,29 @@ export function barWidth(match: number, total: number): string {
   const pct = (match / total) * 100;
   const pctStr = pct >= 0.01 ? String(Math.round(pct * 100) / 100) : "0.01";
   return `max(${pctStr}%, 2px)`;
+}
+
+/** A backend identifier shown as text (a group name, a tag): the backend's own
+ *  casing, with underscores shown as spaces. "battery_ev" → "battery ev". */
+export function displayLabel(s: string): string {
+  return s.replace(/_/g, " ");
+}
+
+/** "1 entryset" / "9 entrysets" / "12,345 entrysets". */
+export function countLabel(
+  n: number,
+  singular: string,
+  plural = `${singular}s`,
+  locale?: string,
+): string {
+  return `${n.toLocaleString(locale)} ${n === 1 ? singular : plural}`;
+}
+
+/** A timestamp short enough to stay on one line: "7 Nov 2024, 08:15" (en-GB).
+ *  Missing → "—"; unparseable → returned unchanged. */
+export function formatWhen(iso: string | undefined, locale?: string, timeZone?: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short", timeZone });
 }
