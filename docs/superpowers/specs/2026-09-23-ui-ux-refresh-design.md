@@ -72,8 +72,9 @@ toolchain for a colour change); replacing Fomantic with hand-written components
 
 - **Top bar** — dark navy. App name; the `Filter | Review | Approval | Done`
   views drawn as numbered steps (same `activeView` state; non-Filter steps still
-  show the "Coming soon" placeholder). On the right one **account menu** (a
-  Fomantic dropdown):
+  show the "Coming soon" placeholder). On the right one **account menu** — a
+  native `<details>` dropdown (Fomantic's dropdown treats a clicked item as a
+  selection and rewrites its trigger text; this menu holds actions):
   - anonymous → a `Log in` button (`LOGIN_URL`, `data-flow-link`);
   - authenticated → a chip `‹name› · ✓ Compliance` (or `· Compliance needed`,
     amber). The menu holds the compliance reason + acknowledged-at time, then
@@ -247,8 +248,8 @@ Unit tests only, per the repo's no-DOM-tests rule:
 
 ## 10. Documentation
 
-`docs/ARCHITECTURE.md`: §1 screen-layout diagram and bullets, §3 (accordion
-leaves the airlock list; the account dropdown joins it), §5 (render triggers:
+`docs/ARCHITECTURE.md`: §1 screen-layout diagram and bullets, §3 (the accordion
+leaves the airlock list), §5 (render triggers:
 account menu, preview owns the Run button), §9 panels (account menu, docs rail +
 filter, stats column, matching entrysets, soft hints), §11 (incomplete vs invalid
 display), §13 changelog row. README: no new rules.

@@ -399,3 +399,92 @@ body {
   margin-top: 0.35rem;
   color: #9f3a38;
 }
+
+/* ---- Account menu (src/ui/accountMenu.ts) ---- */
+.qb-account {
+  position: relative;
+}
+.qb-account-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--qb-topbar-2);
+  color: var(--qb-topbar-text);
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+.qb-account-chip::-webkit-details-marker {
+  display: none;
+}
+.qb-account-chip .icon {
+  margin: 0;
+}
+.qb-account-chip:focus-visible {
+  outline: 2px solid #fff;
+}
+.qb-account-name {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.qb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.qb-badge .icon {
+  margin: 0;
+  font-size: 0.8em;
+}
+.qb-badge-ok {
+  background: rgba(33, 186, 69, 0.2);
+  color: #a7f0b8;
+}
+.qb-badge-warn {
+  background: rgba(224, 138, 0, 0.25);
+  color: #ffd08a;
+}
+.qb-account-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 30;
+  width: 18rem;
+  background: var(--qb-surface);
+  color: var(--qb-text);
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  box-shadow: 0 8px 24px rgba(15, 30, 45, 0.18);
+}
+.qb-account-section {
+  padding: 0.75rem;
+}
+.qb-account-section + .qb-account-section {
+  border-top: 1px solid var(--qb-border);
+}
+.qb-account-label {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--qb-muted);
+}
+.qb-account-reason {
+  margin: 0 0 0.25rem;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+.qb-account-meta {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}

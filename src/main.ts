@@ -32,8 +32,7 @@ import type { Group, QueryNode } from "./query/types";
 import { debounce } from "./util/debounce";
 import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
-import { renderAuthStatus, wireAuthStatus } from "./ui/authStatus";
-import { renderComplianceStatus, wireComplianceStatus } from "./ui/complianceStatus";
+import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { renderDocsSidebar } from "./ui/docsSidebar";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
@@ -377,17 +376,13 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     },
   },
   {
-    keys: ["auth"],
+    keys: ["auth", "compliance"],
     run: (s) => {
-      renderAuthStatus(s);
-      wireAuthStatus(panelEls().auth, onLogout);
-    },
-  },
-  {
-    keys: ["compliance", "auth"],
-    run: (s) => {
-      renderComplianceStatus(s);
-      wireComplianceStatus(panelEls().compliance, onInvalidateCompliance);
+      renderAccountMenu(s);
+      wireAccountMenu(panelEls().account, {
+        onLogout,
+        onInvalidate: onInvalidateCompliance,
+      });
     },
   },
 ];
@@ -426,8 +421,7 @@ renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
 syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
-renderAuthStatus(store.getState()); // "" while auth.status is "loading"
-renderComplianceStatus(store.getState()); // "" while compliance.status is "loading"
+renderAccountMenu(store.getState()); // "" while auth.status is "loading"
 Promise.all([
   getDatabases(),
   getIndividuals(),

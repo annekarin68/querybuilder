@@ -13,8 +13,7 @@ let els: {
   center: HTMLElement;
   stats: HTMLElement;
   preview: HTMLElement;
-  auth: HTMLElement;
-  compliance: HTMLElement;
+  account: HTMLElement;
 };
 let bodyEl: HTMLElement;
 let railEl: HTMLButtonElement;
@@ -37,8 +36,7 @@ export function renderShell(root: HTMLElement): void {
       </nav>
       <div class="qb-topbar-right">
         <button class="ui primary button" data-menu="run" disabled>Run / Refresh</button>
-        <div data-panel="auth"></div>
-        <div data-panel="compliance"></div>
+        <div data-panel="account"></div>
       </div>
     </header>
     <div class="qb-body qb-docs-collapsed">
@@ -62,8 +60,7 @@ export function renderShell(root: HTMLElement): void {
     center: root.querySelector<HTMLElement>('[data-panel="center"]')!,
     stats: root.querySelector<HTMLElement>('[data-panel="stats"]')!,
     preview: root.querySelector<HTMLElement>('[data-panel="preview"]')!,
-    auth: root.querySelector<HTMLElement>('[data-panel="auth"]')!,
-    compliance: root.querySelector<HTMLElement>('[data-panel="compliance"]')!,
+    account: root.querySelector<HTMLElement>('[data-panel="account"]')!,
   };
 }
 
