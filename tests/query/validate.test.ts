@@ -122,7 +122,7 @@ describe("validateQuery", () => {
 
   it("a non-root empty group is an error", () => {
     const root = emptyQuery();
-    const g = newGroup();
+    const g = { ...newGroup(), children: [] };
     const tree = addChild(root, root.id, g);
     expect(validateQuery(tree, schema)).toContainEqual({
       nodeId: g.id,

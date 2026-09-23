@@ -26,8 +26,11 @@ export function newCondition(): Condition {
   };
 }
 
+/** A new AND group, pre-populated with one empty condition so it is usable
+ *  straight away (the "+ Group" button). A group can still become empty when
+ *  its last condition is removed — validate.ts reports that case. */
 export function newGroup(): Group {
-  return { kind: "group", id: id("g"), operator: "AND", children: [] };
+  return { kind: "group", id: id("g"), operator: "AND", children: [newCondition()] };
 }
 
 /** Return a copy of `node` with `fn` applied to every node in the tree (post-order). */
