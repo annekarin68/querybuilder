@@ -3,7 +3,7 @@ import type { Facet } from "../api/types";
 export type ValueType = "string" | "number" | "boolean" | "date" | "enum";
 export type Arity = "none" | "one" | "two" | "many";
 
-/** One queryable field: an (facet, field) pair from GET /api/individuals. */
+/** One queryable field: a (facet, field) pair from GET /api/individuals. */
 export interface CatalogField {
   /** The dotted "itemLabel.fieldLabel" id a condition stores as `fieldId`. */
   label: string;

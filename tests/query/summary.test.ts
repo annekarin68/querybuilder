@@ -11,7 +11,7 @@ const field = (label: string, name: string, options?: string[]): CatalogField =>
   options,
   operatorIds: [],
 });
-const schema: FieldCatalog = {
+const catalog: FieldCatalog = {
   fields: [
     field("heightCm", "Height (cm)"),
     field("foliage", "Has foliage"),
@@ -20,7 +20,7 @@ const schema: FieldCatalog = {
 };
 describe("queryToText", () => {
   it("empty query", () => {
-    expect(queryToText(emptyQuery(), schema)).toBe("(empty query)");
+    expect(queryToText(emptyQuery(), catalog)).toBe("(empty query)");
   });
 
   it("single condition, no parens at root", () => {
@@ -28,7 +28,7 @@ describe("queryToText", () => {
     const c = newCondition();
     let t = addChild(root, root.id, c);
     t = updateNode(t, c.id, { fieldId: "heightCm", operatorId: "gte", value: 20 });
-    expect(queryToText(t, schema)).toBe("Height (cm) Greater than or equal 20");
+    expect(queryToText(t, catalog)).toBe("Height (cm) Greater than or equal 20");
   });
 
   it("values print as-is; nested group gets parens", () => {
@@ -45,7 +45,7 @@ describe("queryToText", () => {
     t = updateNode(t, c2.id, { fieldId: "foliage", operatorId: "eq", value: true });
     t = addChild(t, g.id, c3);
     t = updateNode(t, c3.id, { fieldId: "species", operatorId: "in", value: ["oak", "fern"] });
-    expect(queryToText(t, schema)).toBe(
+    expect(queryToText(t, catalog)).toBe(
       "Height (cm) Greater than or equal 20 AND (Has foliage Equals true OR Species Is any of oak, fern)",
     );
   });
@@ -55,6 +55,6 @@ describe("queryToText", () => {
     const c = newCondition();
     let t = addChild(root, root.id, c);
     t = updateNode(t, c.id, { fieldId: "species", operatorId: "isEmpty", value: null });
-    expect(queryToText(t, schema)).toBe("Species Is empty");
+    expect(queryToText(t, catalog)).toBe("Species Is empty");
   });
 });
