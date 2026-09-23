@@ -11,13 +11,14 @@ import "fomantic-ui-css/semantic.min.css";
 import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
-import { getDatabases, getIndividuals, getSchema, getStats, runQuery } from "./api/client";
+import { getDatabases, getIndividuals, getMe, getSchema, getStats, logout, runQuery } from "./api/client";
 import { canRunQuery, store, type AppState } from "./state";
 import { addChild, newCondition, stripCollapsed } from "./query/tree";
 import { validateQuery } from "./query/validate";
 import type { Group, QueryNode } from "./query/types";
 import { debounce } from "./util/debounce";
 import { onMenu, panelEls, renderShell, setActiveView, setSidebarCollapsed } from "./ui/layout";
+import { renderAuthStatus, wireAuthStatus } from "./ui/authStatus";
 import { renderDocsSidebar } from "./ui/docsSidebar";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { renderQueryBuilder, wireQueryBuilder } from "./ui/queryBuilder";
@@ -81,6 +82,7 @@ function runGuarded<T>(
 }
 
 function runPreview(): void {
+  if (store.getState().auth.status !== "authenticated") return;
   // page/pageSize are sent for API-shape stability; the response is capped at
   // 25 entrysets regardless (see EntrysetsResponse in api/types.ts).
   runGuarded(
@@ -94,7 +96,23 @@ function runPreview(): void {
 function syncRunButton(state = store.getState()): void {
   const btn = document.querySelector<HTMLButtonElement>('[data-menu="run"]');
   if (!btn) return;
-  btn.disabled = !(canRunQuery(state) && state.preview.status !== "loading");
+  btn.disabled = !(
+    canRunQuery(state) &&
+    state.preview.status !== "loading" &&
+    state.auth.status === "authenticated"
+  );
+}
+
+function onLogout(): void {
+  logout()
+    .then(() => {
+      store.setState({ auth: { status: "anonymous", user: null } });
+    })
+    .catch((err) => {
+      // Best-effort: nothing more actionable to show beyond the button
+      // still being there for the user to try again.
+      console.error("Logout failed:", errorMessage(err));
+    });
 }
 
 const refreshStats = debounce(() => {
@@ -175,10 +193,17 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     run: (s) => renderStatsPanel(s),
   },
   {
-    keys: ["preview", "query", "issues", "schema", "selectedDatabaseIds", "individuals"],
+    keys: ["preview", "query", "issues", "schema", "selectedDatabaseIds", "individuals", "auth"],
     run: (s) => {
       renderDataPreview(s);
       syncRunButton(s);
+    },
+  },
+  {
+    keys: ["auth"],
+    run: (s) => {
+      renderAuthStatus(s);
+      wireAuthStatus(panelEls().auth, onLogout);
     },
   },
 ];
@@ -195,8 +220,9 @@ renderStatsPanel(store.getState()); // initial state ("" while schema is null)
 renderDataPreview(store.getState()); // initial idle message
 syncRunButton(); // top-menu Run starts disabled
 renderDocsSidebar(store.getState()); // initial loader
-Promise.all([getSchema(), getDatabases(), getIndividuals()])
-  .then(([schema, dbResp, individuals]) => {
+renderAuthStatus(store.getState()); // "" while auth.status is "loading"
+Promise.all([getSchema(), getDatabases(), getIndividuals(), getMe()])
+  .then(([schema, dbResp, individuals, user]) => {
     const seeded = addChild(
       store.getState().query as Group,
       (store.getState().query as Group).id,
@@ -213,6 +239,7 @@ Promise.all([getSchema(), getDatabases(), getIndividuals()])
       selectedDatabaseIds: dbResp.databases.map((d) => d.id),
       query: seeded,
       issues,
+      auth: { status: user ? "authenticated" : "anonymous", user },
     });
   })
   .catch((err) => {
