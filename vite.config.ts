@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
 /**
@@ -55,8 +56,30 @@ function stripRemoteJs(): Plugin {
   };
 }
 
+/**
+ * Licence compliance: the minifier drops vendor licence banners, so
+ * THIRD-PARTY-NOTICES.txt is the licence notice for the bundled jQuery /
+ * Fomantic-UI / Lato code. Emit it into dist/ on every build so deploying
+ * dist/ always ships it — no manual copy step to forget. (The repo-root file
+ * stays the single source; scripts/check-offline.mjs exempts this one file,
+ * whose licence URLs are document text the app never fetches.)
+ */
+function emitLicenseNotices(): Plugin {
+  return {
+    name: "emit-license-notices",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "THIRD-PARTY-NOTICES.txt",
+        source: readFileSync("THIRD-PARTY-NOTICES.txt", "utf8"),
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [stripRemoteCss(), stripRemoteJs()],
+  plugins: [stripRemoteCss(), stripRemoteJs(), emitLicenseNotices()],
   esbuild: { legalComments: "eof" },
   server: {
     port: 5173,

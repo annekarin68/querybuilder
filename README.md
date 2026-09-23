@@ -49,10 +49,32 @@ Other scripts:
 
 See `docs/ARCHITECTURE.md` §4.
 
+## Deploying `dist/`
+
+`npm run build` produces a self-contained static site. When serving it:
+
+- **Serve it at the root of its host** (`https://host/`). Asset URLs are absolute
+  (`/assets/...`), and the backend's login/compliance callbacks redirect the
+  browser to `/?resume=1`. To host under a sub-path, build with
+  `vite build --base=/sub/path/` and make the backend redirect there too.
+- **API location.** Every request goes to `VITE_API_BASE` (default `/api`, same
+  origin). The login and compliance links follow it too. It is fixed at build
+  time: `VITE_API_BASE=/other npm run build`.
+- **Caching.** Files under `assets/` have content-hashed names, so they can be
+  cached forever (`Cache-Control: public, max-age=31536000, immutable`). Serve
+  `index.html` with `Cache-Control: no-cache` so a new deploy takes effect
+  immediately.
+- **Content-Security-Policy.** The app needs no inline scripts and no
+  off-origin hosts. Fomantic uses inline `style` attributes, so a workable
+  policy is `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:`
+  (Fomantic's CSS embeds a few small icon fonts and images as `data:` URIs).
+- **Licence notice.** `dist/THIRD-PARTY-NOTICES.txt` is emitted by the build.
+  Deploy it along with the rest of `dist/`.
+
 ## Licenses
 
 Third-party license texts for every bundled dependency are in
 `THIRD-PARTY-NOTICES.txt` at the repo root. The JS minifier does not preserve
-vendor licence banners in the bundle, so **when you deploy `dist/`, copy
-`THIRD-PARTY-NOTICES.txt` alongside it** — that file is the licence notice for the
-bundled jQuery / Fomantic-UI / Lato code.
+vendor licence banners in the bundle, so the build copies that file into
+`dist/` automatically (see `emitLicenseNotices` in `vite.config.ts`). It is the
+licence notice for the bundled jQuery / Fomantic-UI / Lato code.

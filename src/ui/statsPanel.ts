@@ -64,13 +64,31 @@ function perDatabaseHtml(state: AppState): string {
   </div>`;
 }
 
-function headlineHtml(state: AppState): string {
-  const { lines } = state.stats;
-  const matchCount = lines.filter((l) => l.success).reduce((s, l) => s + (l.matchCount ?? 0), 0);
-  const total = lines.reduce((s, l) => {
-    const db = databaseFor(state.databases, l.label);
-    return s + (l.success && db ? db.totalEntrysets : 0);
-  }, 0);
+/**
+ * The combined headline sums only the databases that succeeded. A failed
+ * database has no count at all (StatsResponse.matchCount is deliberately
+ * optional), so the headline must never present failures as "0 matched": with
+ * no successes yet it shows no number, and when some failed it says the total
+ * excludes them.
+ */
+export function headlineHtml(state: AppState): string {
+  const { lines, status } = state.stats;
+  const succeeded = lines.filter((l) => l.success);
+  const failed = lines.length - succeeded.length;
+  const failedNote =
+    failed > 0
+      ? `<div class="ui small text qb-stat-failed">Excludes ${failed} database${failed === 1 ? "" : "s"} that failed (see below).</div>`
+      : "";
+  if (succeeded.length === 0) {
+    const text =
+      status === "loading" ? "No results yet." : "No database returned a result for this query.";
+    return `<div class="ui segment"><div class="qb-stat-sub">${text}</div></div>`;
+  }
+  const matchCount = succeeded.reduce((s, l) => s + (l.matchCount ?? 0), 0);
+  const total = succeeded.reduce(
+    (s, l) => s + (databaseFor(state.databases, l.label)?.totalEntrysets ?? 0),
+    0,
+  );
   return `<div class="ui segment">
     <div class="qb-stat-headline" title="${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
       <span class="qb-stat-big">${escapeHtml(compact(matchCount))}</span>
@@ -79,6 +97,7 @@ function headlineHtml(state: AppState): string {
     <div class="ui tiny progress" style="margin:.35rem 0 0">
       <div class="bar" style="width:${barWidth(matchCount, total)}"></div>
     </div>
+    ${failedNote}
   </div>`;
 }
 

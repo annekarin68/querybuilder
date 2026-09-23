@@ -1,9 +1,9 @@
-import type { QueryNode } from "../query/types";
+import type { Group, QueryNode } from "../query/types";
 
 const KEY = "qb:pending-query";
 
 interface PendingQuery {
-  query: QueryNode;
+  query: Group;
   selectedDatabaseIds: string[];
 }
 
@@ -23,16 +23,54 @@ export function savePendingQuery(query: QueryNode, selectedDatabaseIds: string[]
   }
 }
 
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Structural check on a tree read back from storage. The entry may have been
+ * written by an older build of the app (a deploy can land between the redirect
+ * out and the return hop), so it is untrusted input — a malformed tree must be
+ * dropped here rather than crash rendering or validation later.
+ */
+function isQueryNode(v: unknown): v is QueryNode {
+  if (!isObject(v) || typeof v.id !== "string") return false;
+  if (v.kind === "condition") {
+    const nullableString = (x: unknown) => x === null || typeof x === "string";
+    return (
+      nullableString(v.individualId) && nullableString(v.fieldId) && nullableString(v.operatorId)
+    );
+  }
+  return (
+    v.kind === "group" &&
+    (v.operator === "AND" || v.operator === "OR") &&
+    Array.isArray(v.children) &&
+    v.children.every(isQueryNode)
+  );
+}
+
 /**
  * Reads and clears the saved query, if any. A missing key, a storage error,
- * and corrupted JSON are all treated the same: nothing to restore.
+ * corrupted JSON, and a structurally invalid entry are all treated the same:
+ * nothing to restore. The root must be a group — the query builder's root is
+ * always one.
  */
 export function takePendingQuery(): PendingQuery | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
     sessionStorage.removeItem(KEY);
-    return JSON.parse(raw) as PendingQuery;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      !isObject(parsed) ||
+      !isQueryNode(parsed.query) ||
+      parsed.query.kind !== "group" ||
+      !Array.isArray(parsed.selectedDatabaseIds) ||
+      !parsed.selectedDatabaseIds.every((id) => typeof id === "string")
+    ) {
+      return null;
+    }
+    return { query: parsed.query, selectedDatabaseIds: parsed.selectedDatabaseIds as string[] };
   } catch {
     return null;
   }

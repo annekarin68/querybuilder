@@ -5,13 +5,15 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-23 — Compliance-logging redirect gate added
-alongside OAuth2 login: `POST /api/query` requires both a session and a
-compliance acknowledgment (`401`/`403`), each triggering its own redirect
-flow; everything else stays anonymous-accessible. Both features are
-rebased onto the API contract rename (bare-array
-`getDatabases`/`getIndividuals`, streaming `getStats`, client-side
-`buildFieldCatalog`, no `GET /api/schema`). See §13 for the full changelog.
+Last updated: 2026-09-23 — Production-readiness hardening: in-flight
+requests are aborted when superseded and time out after 60 s of silence; a
+`403` only redirects into compliance when `/api/compliance/status` confirms
+it is what's missing; an `/api/auth/me` outage no longer takes the app down;
+login/compliance URLs follow `VITE_API_BASE`; the field-type mapping accepts
+common SQL type spellings; the licence notice ships inside `dist/`. The
+decision to keep building the field catalog client-side (no
+`GET /api/schema`) was re-examined and upheld — see §7. See §13 for the full
+changelog.
 
 ---
 
@@ -124,7 +126,9 @@ external host, the app may hang or fail when taken offline. Therefore:
 4. **Guard script.** `npm run check:offline` scans the built `dist/` for any
    `http://` or `https://` URL that is not our own API and exits non-zero if it
    finds one. Run in CI and before any release. This is the automated backstop for
-   rules 1–3.
+   rules 1–3. Exactly one file is exempt: `dist/THIRD-PARTY-NOTICES.txt`, which
+   `vite.config.ts` (`emitLicenseNotices`) copies from the repo root on every
+   build. It quotes licence URLs as document text and is never loaded by the app.
 5. **Reproducible installs.** `package-lock.json` is committed; use `npm ci`. The
    machine that builds `dist/` needs internet for `npm ci` once; the machine that
    *serves* `dist/` never does.
@@ -390,6 +394,15 @@ Concretely:
   snapshot (deep copy or stable stringify) of the query it was made for. When it
   resolves, if `getState().query` no longer equals that snapshot, the response is
   discarded. A slow earlier request can never overwrite results for a newer query.
+  The snapshot is paired with **request identity**: `main.ts` keeps one
+  `requestSlot()` per kind (stats, preview), and a response only counts if its
+  request is still the slot's current one — an edit-and-undo can make an old
+  request's key equal the new one's, so the key alone isn't enough.
+- **Superseded requests are aborted, not just ignored.** Every query edit,
+  database-selection change, and logout calls `cancelInFlight()`, and starting a
+  new request aborts the previous one of the same kind (`AbortController`,
+  passed through `client.ts`). Without this, each edit would leave an
+  `/api/stats` stream running against every selected database on the backend.
 
 > **Streaming and "never stale" are compatible.** While `stats.status` is `"loading"`, `stats.lines` legitimately holds fewer entries than `selectedDatabaseIds` — that's a query result still arriving, not a stale one. The invariant this section protects is that every line in `stats.lines` belongs to the `(query, selectedDatabaseIds)` pair currently on screen; the stale-response guard is checked once per streamed line (not just once per request), so a line that arrives after the user has changed the query/scope is discarded before it reaches `AppState`.
 
@@ -404,11 +417,28 @@ message unwrapped from `{ error }`) on any non-2xx response.
 ```ts
 getDatabases(): Promise<DatabasesResponse[]>
 getIndividuals(): Promise<Individual[]>
-getStats(query: QueryNode, databases: string[], onLine: (line: StatsResponse) => void): Promise<void>
-runQuery(query: QueryNode, databases: string[], page: number, pageSize: number): Promise<EntrysetsResponse>
+getStats(query: QueryNode, databases: string[], onLine: (line: StatsResponse) => void, signal?: AbortSignal): Promise<void>
+runQuery(query: QueryNode, databases: string[], page: number, pageSize: number, signal?: AbortSignal): Promise<EntrysetsResponse>
 getMe(): Promise<AuthUser | null>
 logout(): Promise<void>
+getComplianceStatus(): Promise<ComplianceStatus>
+invalidateCompliance(): Promise<void>
+
+LOGIN_URL             // `${VITE_API_BASE}/auth/login` — navigation target, not a fetch
+COMPLIANCE_START_URL  // `${VITE_API_BASE}/compliance/start`
 ```
+
+Every request carries a **timeout** (`REQUEST_TIMEOUT_MS`, 60 s): if the server
+sends nothing for that long the request is aborted and rejects with a
+`TimeoutError` ("The server took too long to respond…"). For the streamed
+`/stats` body the clock restarts on every chunk, so a slow stream that is still
+making progress is never cut off. An optional `signal` lets the caller abort
+(see §6); the promise then rejects with the abort reason.
+
+The login/compliance entry points are exported as URLs built from the same
+`VITE_API_BASE` as every fetch, so no other file hardcodes `/api/...`. Links
+into those flows carry a `data-flow-link` attribute, which is how `main.ts`
+spots them to save the in-progress query first (§9).
 
 ### There is no schema/operators endpoint
 
@@ -441,12 +471,42 @@ export interface CatalogOperator {
 ```
 
 `valueType` is mapped from each `IndividualField.type` (falling back to
-`format`); **enum detection is `values.length > 0`, deliberately never
+`format`) by `valueTypeFor()`. The mapping is case-insensitive, ignores
+size/precision parameters (`DECIMAL(10,2)`, `VARCHAR(255)`), treats any
+`TIMESTAMP …` variant as a date, and covers the common SQL spellings
+(`INT`/`INTEGER`/`SMALLINT`/`BIGINT`/`REAL`/`FLOAT`/`DOUBLE`/`DECIMAL`/
+`NUMERIC`, `BOOL`/`BOOLEAN`, `DATE`/`DATETIME`/`TIMESTAMP`) rather than only
+the four the mock data happens to use. A type it doesn't recognise becomes
+`"string"`, which silently loses the comparison operators, so when the real
+backend's type list is known, check it against `TYPE_NAMES`. **Enum detection is `values.length > 0`, deliberately never
 `cardinality`** — `cardinality` is informational-only telemetry from the real
 backend, and branching the frontend on it would couple the UI to a backend
 implementation detail (the frontend/backend decoupling rule; see §13).
 `operatorIds` come from a fixed per-`valueType` profile (`OPERATOR_PROFILE`),
 never from a specific field.
+
+#### Should `GET /api/schema` come back? (re-examined 2026-09-23 — no)
+
+Keep deriving the catalog client-side. The reasons:
+
+- **Nothing to fetch it from.** The real backend has no schema endpoint.
+  Adding one to the mock would bring back exactly the mistake Revision 2
+  corrected: a guessed contract that the frontend then depends on.
+- **It would duplicate data we already load.** Every field in the catalog is
+  one (individual, field) pair from `GET /api/individuals`, which the sidebar
+  and the Item dropdown need anyway. A second endpoint would mean a second
+  request at startup and two sources that can disagree.
+- **The client-side part is small and stable.** `OPERATORS` and
+  `OPERATOR_PROFILE` are UI decisions (which operators to offer for a number,
+  say). They don't depend on the backend, so they belong in the frontend.
+
+The one real argument for a server-side schema is type mapping. The backend
+knows its own type names, and the frontend can only guess at them
+(`valueTypeFor` above). The fix for that is narrower than a new endpoint: if
+the mapping ever becomes a problem, ask the backend to add one normalised
+field to `IndividualField` (e.g. `valueType: "string" | "number" | "boolean" |
+"date"`) and prefer it over `type`/`format` in `valueTypeFor`. That keeps a
+single source of truth, one request, and the UI-side operator rules in the UI.
 
 ### `GET /api/databases`
 
@@ -648,7 +708,14 @@ a compliance acknowledgment (`403 { error }` without one) — everything else
 (`schema`, `databases`, `individuals`, `stats`) stays anonymous-accessible.
 `canRunQuery` is NOT auth- or compliance-aware; neither is `syncRunButton` —
 Run always genuinely attempts the request, and `main.ts` reacts to whatever
-status code comes back (§5, §9). This pattern would generalize to a future
+status code comes back (§5, §9). A `401` always redirects into login. A
+`403` only means "authenticated, but some requirement is unmet", and
+compliance may not be the only such requirement (a real backend may also
+refuse a user access to a database). So on a `403`, `main.ts` first asks
+`GET /api/compliance/status`. It redirects into compliance only if that says
+`"required"`; otherwise it shows the `403`'s own error message. Redirecting on
+every `403` would send such a user round the compliance flow forever with no
+explanation. This pattern would generalize to a future
 protected endpoint returning the same `401`/`403` conditions — but only from
 a call site triggered by an explicit user gesture, same as `runPreview`'s own
 Run-click origin. It must never wrap an automatically-fired request (e.g. the
@@ -762,6 +829,11 @@ a `Log in` link (`GET /api/auth/login` — a real navigation, not a fetch);
 authenticated shows the user's name + a `Log out` button. **Display only:**
 `syncRunButton` does not read `auth.status` — Run always attempts the
 request, and `main.ts` reacts to a `401` response by redirecting here (§7).
+The link's `href` is `LOGIN_URL` (follows `VITE_API_BASE`) and it carries
+`data-flow-link`, so the in-progress query is saved before the navigation.
+If `GET /api/auth/me` itself fails (anything other than `200`/`401`), startup
+treats the visitor as anonymous and logs the error instead of failing the
+whole app. Login state is display-only, and most of the app works without it.
 
 ### Top menu — `complianceStatus.ts`
 
@@ -769,8 +841,9 @@ Its own panel (`data-panel="compliance"`, painted independently of
 `authStatus.ts`). "Required" shows a `Start compliance check` link
 (`GET /api/compliance/start`); "acknowledged" shows the stored reason (its
 `ackedAt` timestamp in a tooltip) + an `Invalidate` button. Also
-display-only: `main.ts` reacts to a `403` response by redirecting here,
-never a pre-check of this widget's state.
+display-only: `main.ts` reacts to a `403` response by redirecting here (after
+confirming via `GET /api/compliance/status` that compliance is what's
+missing — §7), never a pre-check of this widget's state.
 
 ### Centre, above the builder — `databasePicker.ts`
 
@@ -850,7 +923,10 @@ Every number in this panel goes through `src/ui/format.ts` so it stays inside a
 Layout, top to bottom: a compact headline (sum of `matchCount` across the
 successful lines received so far against a denominator summed from those
 lines' `DatabasesResponse.totalEntrysets`, big + `of … · matchRatio` small)
-and a thin bar; the **By database** segment — one row per streamed line so
+and a thin bar. The headline never shows a failed database as zero. With no
+successful line yet it shows no number at all ("No results yet." while
+loading, "No database returned a result…" once done). When some lines
+failed, it adds "Excludes N database(s) that failed". Then comes the **By database** segment — one row per streamed line so
 far, success (`compact(matchCount) / compact(totalEntrysets) · matchRatio`,
 thin bar, exact figures on hover, any `infoMessages`) or failure
 (`errorMessages` + `infoMessages` as a red message) — inside a
@@ -980,11 +1056,19 @@ language"; the frontend knows it only through `src/api/types.ts`.
 
 One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 
-- `client.ts` throws an `ApiError` (carries the response's HTTP `status`) with a readable message on any non-2xx.
+- `client.ts` throws an `ApiError` (carries the response's HTTP `status`) with a readable message on any non-2xx,
+  and a `TimeoutError` when the server goes silent for `REQUEST_TIMEOUT_MS` (§7) —
+  so no panel can sit on "Loading" forever with Run disabled.
 - Async panels catch it, write `{ status: "error", data: null, error }`, render a
-  `ui negative message`. Per §6, data is nulled — never left stale.
-- Schema load failure at startup is fatal: replace `#app` with a full-page
-  `ui negative message` + Reload button.
+  `ui negative message`. Per §6, data is nulled — never left stale. Errors from a
+  request that was aborted because it was superseded never reach a panel (the
+  §6 identity guard drops them).
+- A failure loading databases/individuals at startup is fatal: replace `#app`
+  with a full-page `ui negative message` + Reload button. The message is
+  HTML-escaped like every other server-supplied string (it can come from an
+  `{ error }` body), and the button is wired with `addEventListener` rather than
+  an inline `onclick`, so the page works under a strict Content-Security-Policy.
+  `GET /api/auth/me` failing is *not* fatal — see §9.
 - No retries, no error-boundary machinery — just visible messages.
 
 ---
@@ -1048,3 +1132,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-22 | API contract correction (Revision 2): the initial rename (id/label -> label/name, streamed StatsResponse) guessed at shapes that didn't match the real production backend. Corrected against the actual contract: StatsResponse's identifier is `label` (not the guessed `database`), `matchCount` is optional (not a discriminated union), `errorMessages` (not `validationErrors`), and `totalCount` doesn't exist on the wire at all — the stats panel now derives its per-database denominator from `DatabasesResponse.totalEntrysets`. `DatabasesResponse` gained `description`/`owner`/`percentageOfTotal` and dropped its `{databases:[...]}` wrapper (GET /api/databases now returns a bare array, as does GET /api/individuals). `Individual.id_number`/`stats.{percentage,count}` became `idNumber`/`totalCount`; `IndividualField` gained `cardinality`/`values`/`format`. `GET /api/schema` was removed entirely — it was never part of the real API — and replaced by `src/query/fieldCatalog.ts`'s client-side `buildFieldCatalog`, which derives the same field catalog from `Individual[]` data already being fetched; enum detection is `values.length > 0`, deliberately never `cardinality`, per the frontend/backend decoupling requirement (the real backend's cardinality-20 threshold is an implementation detail the frontend must not depend on). Design: `docs/superpowers/specs/2026-09-22-api-types-refactoring-design.md` (Revision 2). |
 | 2026-09-23 | OAuth2 authorization-code login: only `POST /api/query` is gated (`401` without a session) — schema/databases/individuals/stats stay anonymous-accessible. The IdP's redirect URI points at the backend (`GET /api/auth/callback`), not the SPA, so the frontend never handles the auth code/state/tokens — it only reads `GET /api/auth/me`'s result via a new `AppState.auth`. `canRunQuery` deliberately stays auth-unaware (shared with `refreshStats`); the auth requirement is layered on separately at `syncRunButton`/`runPreview`. New top-menu widget (`src/ui/authStatus.ts`) for login/logout. Mock server (`mock-server/auth.ts` + new routes in `index.ts`) simulates the whole IdP round trip in-process to stay offline-first — none of it is reusable in production (see the design spec's §7 for the full list of new real backend requirements). Rebased onto the API-contract-rename work above (bare-array `getDatabases`/`getIndividuals`, streaming `getStats`, client-side `buildFieldCatalog`, no `GET /api/schema`) — `client.ts`'s `ApiError` class (added for this feature) is preserved through that rebase and is now the type every client function throws. Design: `docs/superpowers/specs/2026-09-22-oauth2-login-design.md`. |
 | 2026-09-23 | Compliance-logging redirect gate: `POST /api/query` now also requires a compliance acknowledgment (`403` without one), gated the same way login is (`401`) — via a second mock-service redirect flow (`mock-server/auth.ts`'s compliance session/token logic + `mock-server/index.ts`'s `/api/compliance/*` and `/mock-compliance/*` routes), the reason attached to the *same* session record rather than a second cookie. The frontend no longer pre-checks `auth`/`compliance` status before allowing Run — `syncRunButton` reverted to its pre-OAuth shape, and `main.ts` reacts generically to a `401`/`403` on the actual request, which will cover any future protected endpoint for free. The in-progress query survives both redirects via a new `src/util/pendingQuery.ts` (`sessionStorage`, restored on a `?resume=1` return-hop) — deliberately with no automatic retry or chaining, so the mechanism can never redirect-loop: the user always clicks Run again to retry. New top-menu widget (`src/ui/complianceStatus.ts`). Every successful extraction is also logged to a dev-only in-memory audit list (`mock-server/audit.ts`) standing in for a real audit-service call. Also rebased, alongside the OAuth2 row above, onto the API-contract-rename work — `getStats`'s streaming NDJSON shape and `buildFieldCatalog` were unaffected by this feature, so `refreshStats` kept its post-rename implementation untouched through both rebases. Design: `docs/superpowers/specs/2026-09-23-compliance-logging-design.md`. |
+| 2026-09-23 | Production-readiness hardening (review before first production deploy). **Requests:** `client.ts` gains a shared 60 s timeout (`TimeoutError`; for the `/stats` stream it is an idle timeout that restarts on each chunk) and optional `AbortSignal`s on `getStats`/`runQuery`; `main.ts` replaces the `statsRun` counter with a `requestSlot()` per request kind that aborts superseded requests and supplies the identity half of the stale guard, and `cancelInFlight()` runs on every query/scope edit and on logout (§6). **Auth/compliance:** a `403` from `/api/query` only redirects into compliance if `GET /api/compliance/status` says `"required"`, otherwise the error is shown (a non-compliance `403` used to redirect in an endless circle); a non-401 failure of `GET /api/auth/me` no longer fails startup; `LOGIN_URL`/`COMPLIANCE_START_URL` are exported from `client.ts` and follow `VITE_API_BASE` (previously hardcoded `/api/...` in five places), and flow links are marked `data-flow-link`. **Correctness/UI:** `valueTypeFor` accepts common SQL type spellings case-insensitively (previously only the mock's four); the stats headline never presents failed databases as zero and notes how many it excludes; a restored pending query is structurally validated and its database ids filtered to ones that still exist; the startup error page escapes the server's message and drops its inline `onclick`; node ids and entryset ids are escaped in markup; menu tabs, the Docs toggle and Select all/none are keyboard-focusable (`href="#"` + `preventDefault`). **Build:** `THIRD-PARTY-NOTICES.txt` is emitted into `dist/` by a Vite plugin (exempted by exact path in `check:offline`), removing the manual copy step. **Decision:** re-examined bringing back `GET /api/schema` and kept the client-side catalog (§7). |

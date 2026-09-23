@@ -1,5 +1,6 @@
 import type { AppState } from "../state";
 import type { Entryset, Individual } from "../api/types";
+import { COMPLIANCE_START_URL, LOGIN_URL } from "../api/client";
 import { countConditions } from "../query/tree";
 import { hasBlockingErrors } from "../query/validate";
 import { panelEls } from "./layout";
@@ -48,7 +49,7 @@ function entrysetRowHtml(entryset: Entryset, byLabel: Map<string, Individual>): 
   return `
     <details class="qb-entryset-row">
       <summary>
-        <span class="qb-er-id">#${entryset.id}</span>
+        <span class="qb-er-id">#${escapeHtml(entryset.id)}</span>
         <span class="qb-er-when">${escapeHtml(formatWhen(typeof when === "string" ? when : undefined))}</span>
         <span class="qb-er-vehicle">${escapeHtml(typeof vehicle === "string" ? vehicle : "—")}</span>
         <span class="qb-er-groups">${groupsBadgesHtml(entryset, byLabel)}</span>
@@ -89,14 +90,14 @@ export function renderDataPreview(state: AppState): void {
     if (state.auth.status === "anonymous") {
       paint(
         el,
-        `<h4 class="ui header">Data preview</h4><div class="ui info message">Log in to preview data. <a href="/api/auth/login">Log in</a></div>`,
+        `<h4 class="ui header">Data preview</h4><div class="ui info message">Log in to preview data. <a href="${escapeHtml(LOGIN_URL)}" data-flow-link>Log in</a></div>`,
       );
       return;
     }
     if (state.compliance.status === "required") {
       paint(
         el,
-        `<h4 class="ui header">Data preview</h4><div class="ui info message">Confirm compliance to preview data. <a href="/api/compliance/start">Start compliance check</a></div>`,
+        `<h4 class="ui header">Data preview</h4><div class="ui info message">Confirm compliance to preview data. <a href="${escapeHtml(COMPLIANCE_START_URL)}" data-flow-link>Start compliance check</a></div>`,
       );
       return;
     }

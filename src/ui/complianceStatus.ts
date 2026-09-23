@@ -1,4 +1,5 @@
 import type { AppState } from "../state";
+import { COMPLIANCE_START_URL } from "../api/client";
 import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 
@@ -23,7 +24,10 @@ export function renderComplianceStatus(state: AppState): void {
     return;
   }
   if (state.compliance.status === "required") {
-    paint(el, `<a href="/api/compliance/start" class="ui small button">Start compliance check</a>`);
+    paint(
+      el,
+      `<a href="${escapeHtml(COMPLIANCE_START_URL)}" data-flow-link class="ui small button">Start compliance check</a>`,
+    );
     return;
   }
   paint(

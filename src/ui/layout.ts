@@ -23,14 +23,14 @@ export function renderShell(root: HTMLElement): void {
     <div class="ui borderless menu" style="margin:0;border-radius:0">
       <span class="header item">Query Builder</span>
       <div class="right menu">
-        <a class="item" data-menu="toggle-sidebar"><i class="bars icon"></i> Docs</a>
+        <a class="item" href="#" role="button" data-menu="toggle-sidebar"><i class="bars icon"></i> Docs</a>
         <div class="item"><button class="ui primary button" data-menu="run" disabled>Run / Refresh</button></div>
         <div class="item" data-panel="auth"></div>
         <div class="item" data-panel="compliance"></div>
       </div>
     </div>
     <div class="ui pointing secondary menu" data-menu="views" style="margin:0 1rem">
-      ${VIEWS.map((v) => `<a class="item${v.id === "filter" ? " active" : ""}" data-view="${v.id}">${v.label}</a>`).join("")}
+      ${VIEWS.map((v) => `<a class="item${v.id === "filter" ? " active" : ""}" href="#" data-view="${v.id}">${v.label}</a>`).join("")}
     </div>
     <div class="qb-body">
       <aside class="qb-col-docs" data-panel="docs"></aside>
@@ -85,6 +85,11 @@ export function setSidebarCollapsed(collapsed: boolean): void {
   bodyEl.classList.toggle("qb-docs-collapsed", collapsed);
 }
 
+/**
+ * The menu's link-style controls carry `href="#"` only so they are
+ * keyboard-focusable (an `<a>` without `href` is skipped by Tab and ignores
+ * Enter) — every handler below calls preventDefault so the URL hash never changes.
+ */
 export function onMenu(handler: {
   view(v: ActiveView): void;
   toggleSidebar(): void;
@@ -92,10 +97,13 @@ export function onMenu(handler: {
 }): void {
   document.querySelector('[data-menu="views"]')!.addEventListener("click", (e) => {
     const item = (e.target as HTMLElement).closest<HTMLElement>("[data-view]");
-    if (item) handler.view(item.dataset.view as ActiveView);
+    if (!item) return;
+    e.preventDefault();
+    handler.view(item.dataset.view as ActiveView);
   });
-  document
-    .querySelector('[data-menu="toggle-sidebar"]')!
-    .addEventListener("click", () => handler.toggleSidebar());
+  document.querySelector('[data-menu="toggle-sidebar"]')!.addEventListener("click", (e) => {
+    e.preventDefault();
+    handler.toggleSidebar();
+  });
   document.querySelector('[data-menu="run"]')!.addEventListener("click", () => handler.run());
 }
