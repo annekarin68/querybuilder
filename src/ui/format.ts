@@ -58,7 +58,7 @@ export function barWidth(match: number, total: number): string {
 }
 
 /** A backend identifier shown as text (a group name, a tag): the backend's own
- *  casing, with underscores shown as spaces. "battery_ev" → "battery ev". */
+ *  casing, with underscores shown as spaces. "some_label" → "some label". */
 export function displayLabel(s: string): string {
   return s.replace(/_/g, " ");
 }

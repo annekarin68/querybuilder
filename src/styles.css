@@ -794,7 +794,8 @@ body {
 }
 .qb-entryset-row summary {
   display: grid;
-  grid-template-columns: 3rem 10.5rem minmax(0, 9rem) minmax(0, 1fr) auto;
+  /* Set inline by dataPreview.ts from the configured ROW_COLUMNS. */
+  grid-template-columns: var(--qb-er-grid, 3rem minmax(0, 1fr) auto);
   gap: 0.75rem;
   align-items: center;
   padding: 0.5rem 0.75rem;
@@ -813,16 +814,15 @@ body {
 .qb-er-id {
   font-weight: 700;
 }
-.qb-er-when,
 .qb-er-count {
   color: var(--qb-muted);
   white-space: nowrap;
 }
-.qb-er-vehicle {
+.qb-er-cell {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  color: var(--qb-muted);
 }
 .qb-er-groups {
   display: flex;

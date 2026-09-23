@@ -206,7 +206,7 @@ are the only two files that may import jquery (ESLint enforces it).
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
   main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/individuals/auth/compliance; wire subscriptions; hold the refreshStats / runPreview orchestrators; reacts to 401/403 generically to trigger the login/compliance redirects.
-  config.ts            Hand-edited display settings: HIDDEN_ROW_BADGES (tags/groups never shown as Matching entrysets badges). Deployment-specific values live here, not inline in ui/.
+  config.ts            Hand-edited display settings — the ONLY place src/ may name backend data (items, fields, tags, groups); all empty by default. HIDDEN_ROW_BADGES (tags/groups never shown as Matching entrysets badges), ROW_COLUMNS (item.field values shown as columns on each row). Enforced by tests/noBackendDataInSrc.test.ts.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
@@ -975,9 +975,12 @@ per-item columns, so it scales to 20+ entrysets just by scrolling vertically
 Each row is a native `<details>/<summary>` element (no JS wiring needed for
 expand/collapse):
 
-- **Summary line**: entryset id, "When" (`observation_window.from_timestamp`,
-  `formatWhen`, e.g. 7 Nov 2024, 09:15), "Vehicle" (`vehicle_identity.vehicle_type`, both falling
-  back to `—` if that metadata item is absent), badges for the entryset's
+- **Summary line**: entryset id, then one cell per `ROW_COLUMNS` entry in
+  `src/config.ts` (none by default) — the entryset's value for that
+  `item.field` (`rowCell`: `—` when absent; `format: "datetime"` →
+  `formatWhen`), hover "heading: value". Each row is its own CSS grid, so the
+  tracks (`rowGrid`, set as `--qb-er-grid` on the list) never depend on
+  content: 12rem for dates, `minmax(0, 10rem)` + ellipsis for text. Then badges for the entryset's
   items — computed by `entrysetBadges` cross-referencing `state.individuals`,
   leaving out any tag or group listed in `HIDDEN_ROW_BADGES` (`src/config.ts`;
   case-insensitive; hides only that badge, not the item's others; empty by
@@ -1107,6 +1110,8 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 - `validate.test.ts` — each issue type is reported; a complete query yields `[]`.
 - `summary.test.ts` — representative trees produce the expected text.
 - `tests/ui/docsFilter.test.ts` — data-dictionary filter matching.
+- `tests/ui/dataPreview.test.ts` — row badges (`entrysetBadges`), configured columns (`rowCell`, `rowGrid`).
+- `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock item, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
 - `tests/ui/format.test.ts` / `statsPanel.test.ts` / `valueControl.test.ts` — formatting helpers and the few pure render helpers.
 - Fixture request/response objects double as contract examples.
 - No DOM/component tests — the view layer is deliberately too thin to be worth it (repo rule).
@@ -1165,3 +1170,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-23 | Data dictionary sectioned by our own `tags` instead of the third-party `group` (`docsFilter.ts` `tagsOf`/`groupByTag`; `matchDocs` counts per tag): alphabetical tag sections, multi-tag items listed under each, untagged items in a final **Untagged** section; `group` is now a small "Group: …" line, omitted when blank (the backend may send `""`). Blank-safe text everywhere via `format.ts` `text()`: database pills' hover is `databaseTitle` ("owner: description", either, or none); field chips gain a hover `fieldTitle` (comment, then "Third-party: description"); blank item `description`/`comment` are omitted. Mock: `speeding_event` has a blank `group`/`description` and one field `comment`, to exercise these paths. |
 | 2026-09-23 | Matching entrysets rows show tags and groups: `dataPreview.ts` `entrysetBadges` returns both, ranked by frequency within the entryset (ties alphabetical), metadata items skipped, blanks dropped. Tags render first as filled `.qb-tag` chips (max 3), then groups as dashed-outline `.qb-group-badge` pills (max 2), each with its own `+N` overflow whose hover lists the hidden values. Tests: `tests/ui/dataPreview.test.ts`. |
 | 2026-09-23 | Removed the hard-coded `"metadata"` exclusion from the Matching entrysets badges (the real databases have no such group). New `src/config.ts` `HIDDEN_ROW_BADGES = { tags, groups }` (empty by default) lists values to omit; matching ignores case/whitespace and hides only that badge. `entrysetBadges` takes the lists as an optional parameter (defaulting to the config) so tests don't depend on it. With the mock data, the metadata items' `metadata` group and tags now appear as badges unless listed there. |
+| 2026-09-23 | The frontend no longer names any backend data. The Matching entrysets "When"/"Vehicle" columns (hard-coded mock items `observation_window.from_timestamp` / `vehicle_identity.vehicle_type`) are replaced by `ROW_COLUMNS` in `src/config.ts` (`{ heading, item, field, format? }[]`, empty by default → rows show id, badges, item count). `rowCell` / `rowGrid` in `dataPreview.ts`; `.qb-er-when`/`.qb-er-vehicle` → `.qb-er-cell`; the row grid template comes from `--qb-er-grid`. Mock-specific wording removed from comments (`types.ts`, `state.ts`, `format.ts`). New guard test `tests/noBackendDataInSrc.test.ts`. |

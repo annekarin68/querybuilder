@@ -6,7 +6,7 @@ import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, formatWhen, text } from "./format";
 import { tagsOf, UNTAGGED } from "./docsFilter";
-import { HIDDEN_ROW_BADGES } from "../config";
+import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
 
 /** How many tag / group badges to show inline before collapsing the rest into "+N". */
 const MAX_TAG_BADGES = 3;
@@ -73,15 +73,38 @@ function tagsAndGroupsHtml(entryset: Entryset, byLabel: Map<string, Individual>)
   );
 }
 
-function entrysetRowHtml(entryset: Entryset, byLabel: Map<string, Individual>): string {
-  const vehicle = entryset.items["vehicle_identity"]?.["vehicle_type"];
-  const when = entryset.items["observation_window"]?.["from_timestamp"];
+/** The text of one configured column for one entryset ("—" when absent). */
+export function rowCell(entryset: Entryset, col: RowColumn): string {
+  const v = entryset.items[col.item]?.[col.field];
+  if (v === undefined || v === null || v === "") return "—";
+  return col.format === "datetime" ? formatWhen(String(v)) : String(v);
+}
+
+/** The row grid: id, one column per ROW_COLUMNS entry, badges, item count.
+ *  Every row is its own grid, so tracks must not depend on content or the
+ *  columns would misalign: dates get a fixed width that fits a medium
+ *  date + short time; text is capped and ellipsised, full value on hover. */
+export function rowGrid(columns: RowColumn[]): string {
+  const cols = columns.map((c) => (c.format === "datetime" ? "12rem" : "minmax(0, 10rem)"));
+  return ["3rem", ...cols, "minmax(0, 1fr)", "auto"].join(" ");
+}
+
+function entrysetRowHtml(
+  entryset: Entryset,
+  byLabel: Map<string, Individual>,
+  columns: RowColumn[],
+): string {
+  const cells = columns
+    .map((col) => {
+      const value = rowCell(entryset, col);
+      return `<span class="qb-er-cell" title="${escapeHtml(`${col.heading}: ${value}`)}">${escapeHtml(value)}</span>`;
+    })
+    .join("");
   return `
     <details class="qb-entryset-row">
       <summary>
         <span class="qb-er-id">#${escapeHtml(entryset.id)}</span>
-        <span class="qb-er-when">${escapeHtml(formatWhen(typeof when === "string" ? when : undefined))}</span>
-        <span class="qb-er-vehicle">${escapeHtml(typeof vehicle === "string" ? vehicle : "—")}</span>
+        ${cells}
         <span class="qb-er-groups">${tagsAndGroupsHtml(entryset, byLabel)}</span>
         <span class="qb-er-count">${countLabel(Object.keys(entryset.items).length, "item")}</span>
       </summary>
@@ -179,7 +202,7 @@ export function renderDataPreview(state: AppState): void {
     el,
     card(
       `<p class="qb-preview-note qb-muted">Showing ${countLabel(entrysets.length, "entryset")} — click a row to see its full JSON.</p>
-       <div class="qb-entryset-list">${entrysets.map((e) => entrysetRowHtml(e, byLabel)).join("")}</div>`,
+       <div class="qb-entryset-list" style="--qb-er-grid: ${rowGrid(ROW_COLUMNS)}">${entrysets.map((e) => entrysetRowHtml(e, byLabel, ROW_COLUMNS)).join("")}</div>`,
       entrysets.length,
     ),
   );

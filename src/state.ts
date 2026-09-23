@@ -17,7 +17,7 @@ export interface AppState {
   schema: ReturnType<typeof buildFieldCatalog> | null;
   /** The databases the query can be scoped to (loaded once). */
   databases: DatabasesResponse[] | null;
-  /** The vehicle telemetry data model backing the docs sidebar (loaded once). */
+  /** The data model backing the docs sidebar (loaded once). */
   individuals: Individual[] | null;
   /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
   auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
