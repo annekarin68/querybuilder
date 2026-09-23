@@ -5,9 +5,9 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-16 — Data preview redesigned as a multi-entryset summary
-list (`POST /api/query` now returns `{ entrysets: [...] }`), with 5 varied
-example entrysets to exercise it.
+Last updated: 2026-09-23 — OAuth2 authorization-code login added: only
+`POST /api/query` requires a session; everything else stays
+anonymous-accessible. See §13 for the full changelog entry.
 
 ---
 
@@ -23,7 +23,7 @@ the app runs end to end during development.
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│  top ui menu: app title ······················ [☰ Docs]  [Run] │
+│  top ui menu: app title ············· [☰ Docs]  [Run]  [Log in] │
 ├───────────────────────────────────────────────────────────────┤
 │  secondary pointing ui menu:  Filter | Review | Approval | Done│
 ├────────────┬────────────────────────────────────┬──────────────┤
@@ -51,7 +51,6 @@ the app runs end to end during development.
 - The Review / Approval / Done views. Tabs exist; content does not.
 - Any real backend. The mock server stands in and shares no code with `src/`.
 - Saving / sharing / restoring queries (URL state, persistence).
-- Authentication.
 
 ---
 
@@ -194,7 +193,7 @@ are the only two files that may import jquery (ESLint enforces it).
 ```
 src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
-  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema; wire subscriptions; hold the refreshStats / runPreview orchestrators.
+  main.ts              Bootstrap: import setup-jquery + Fomantic; render layout shell; load schema/databases/individuals/auth; wire subscriptions; hold the refreshStats / runPreview orchestrators.
   state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store`.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
@@ -220,9 +219,14 @@ src/
     dataPreview.ts     render for the bottom panel — a summary list of
                        entrysets (POST /api/query), NOT a paged row table.
                        See §9.
+    authStatus.ts      render + wiring for the top-menu login/logout widget
+                       (its own panel, data-panel="auth"). See §9.
 mock-server/
   index.ts             Dev-only. Plain Node http: routing + JSON I/O + paginate().
                        Starts only when run as the entrypoint.
+  auth.ts              Session/state/code logic for the fake-IdP login round
+                       trip: startLogin/issueFakeCode/exchangeCodeForSession
+                       (in-memory, dev-only) + cookie helpers. See §7, §10.
   schema.ts            FieldDef/OperatorDef/ValueType/Arity types, OPERATORS,
                        and buildFields(individuals) — the generic field
                        catalog, derived purely from individual.json's
@@ -279,6 +283,8 @@ export interface AppState {
   schema: SchemaResponse | null;      // loaded once at startup
   databases: Array<{ id; label }> | null;   // loaded once (GET /api/databases)
   individuals: IndividualsResponse | null;  // loaded once (GET /api/individuals); drives docsSidebar and the query builder's Item dropdown
+  /** Who's logged in, if anyone — populated once at startup via GET /api/auth/me. */
+  auth: { status: "loading" | "authenticated" | "anonymous"; user: AuthUser | null };
   selectedDatabaseIds: string[];      // which databases the query runs against; [] = nothing runs
   activeView: "filter" | "review" | "approval" | "done";  // secondary menu; default "filter"
 
@@ -378,6 +384,8 @@ getSchema(): Promise<SchemaResponse>
 getDatabases(): Promise<DatabasesResponse>
 getStats(query: QueryNode, databases: string[]): Promise<StatsResponse>
 runQuery(query: QueryNode, databases: string[], page: number, pageSize: number): Promise<QueryResponse>
+getMe(): Promise<AuthUser | null>
+logout(): Promise<void>
 ```
 
 ### `GET /api/schema`
@@ -506,6 +514,33 @@ comparison grid doesn't scale past a handful of entrysets in either
 orientation; a summary list does). There is no pagination — the whole list is
 returned in one response and scrolls internally.
 
+### Auth (`GET /api/auth/login`, `GET /api/auth/callback`, `GET /api/auth/me`, `POST /api/auth/logout`)
+
+OAuth2 authorization-code login against an internal, LAN-reachable identity
+provider (never a public one — see §2's offline-first constraint). The
+IdP's redirect URI points at the backend, not the SPA, so the frontend
+never handles the auth code, CSRF `state`, or tokens.
+
+```ts
+interface AuthUser {
+  name: string;
+}
+```
+
+- `GET /api/auth/login` — starts the flow, redirects to the IdP.
+- `GET /api/auth/callback?code=&state=` — exchanges the code server-to-server
+  (client secret never leaves the backend), sets a `qb_session` `HttpOnly`/
+  `SameSite=Lax` cookie (`Secure` too, in production — see §10), redirects
+  to `/`.
+- `GET /api/auth/me` — `200 AuthUser` with a valid session cookie, `401`
+  otherwise.
+- `POST /api/auth/logout` — clears the session, `204`.
+
+Only `POST /api/query` requires a session (`401 { error }` without one) —
+everything else (`schema`, `databases`, `individuals`, `stats`) stays
+anonymous-accessible. `canRunQuery` is NOT auth-aware; the Run button and
+`runPreview()` layer the auth check on separately (§5, §9).
+
 ### Errors
 
 Every endpoint, on 4xx/5xx: `{ "error": "human readable message" }`. `client.ts`
@@ -574,6 +609,15 @@ doesn't recognize.
 ---
 
 ## 9. Panels
+
+### Top menu — `authStatus.ts`
+
+Its own panel (`data-panel="auth"`, painted independently). Anonymous shows
+a `Log in` link (`GET /api/auth/login` — a real navigation, not a fetch);
+authenticated shows the user's name + a `Log out` button. The Run button
+(`main.ts`'s `syncRunButton`) additionally requires `auth.status ===
+"authenticated"`, on top of its existing `canRunQuery` check — stats stay
+anonymous-accessible, only the Run/Refresh preview action is gated.
 
 ### Centre, above the builder — `databasePicker.ts`
 
@@ -715,6 +759,15 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
   `"individualLabel.fieldLabel"` keys matching the schema's field ids, plus
   a synthetic `__db` key from `databaseIdForEntrysetId` — once at startup
   (`ROWS`).
+- `mock-server/auth.ts` simulates the entire OAuth round trip in-process:
+  `/api/auth/login` redirects to a tiny server-rendered "Mock IdP" page
+  (`/mock-idp/authorize`, never bundled by Vite) that hands back a fake
+  code via `/mock-idp/authorize/confirm`, which `/api/auth/callback`
+  "exchanges" (no real network call) for an in-memory session. **None of
+  this is reusable in production** — a real backend needs a real IdP
+  integration, real PKCE/client-secret handling, session storage that
+  survives process restarts, and a `Secure` cookie flag (the mock omits it
+  since local dev runs over plain `http`).
 - `POST /api/stats` scopes `ROWS` to the selected databases
   (`filterByDatabases`, keyed on `row.__db`), evaluates the query
   (`matches`), and scales the sample's match rate onto each database's
@@ -798,3 +851,4 @@ npm run check:offline scan dist/ for off-origin http(s) URLs; non-zero if any fo
 | 2026-09-16 | Finalized the entrysets transition: the query builder, database picker, and stats panel now run against the entryset/individual model (previously only the docs sidebar and preview did). Replaced the plant/species mock (`catalog.ts`, `data.ts`) with `schema.ts` (field catalog built purely from `individual.json`'s declared shape), `databases.ts` (7 arbitrary, content-agnostic databases partitioned by a hash of each entryset's id), and `rows.ts` (flattens entrysets into the flat rows the existing matching engine expects). `POST /api/query` now filters for real instead of always returning every entryset. `evaluate.ts`'s `computeBlocks` takes `fields` as an explicit parameter instead of importing a data-specific catalog. Sample data grew from 5 to 21 entrysets so every database has real sample data. No changes to `src/` — it already consumed the API purely through its typed contract. |
 | 2026-09-16 | Query builder's condition row now cascades **Item → Field → Operator** (previously just Field → Operator): the user first picks an individual from `state.individuals`, which filters the Field dropdown to that item's fields, shown by short slug. `Condition` gained `individualId: string | null` (UI-staging only; `fieldId` remains the sole authoritative target, so `validate.ts`, `summary.ts`, and the mock backend needed no changes). Changing Item resets Field/Operator/value, mirroring the existing Field→Operator reset. No backend or schema-contract changes. |
 | 2026-09-16 | Frontend/backend separation audit: `src/` had no runtime coupling to `mock-server/` (no imports; the contract already ran entirely through `src/api/types.ts` + `src/api/client.ts`), but several comments named mock-server internals directly (`mock-server/databases.ts`, `individual.json`, "the mock server does not paginate", a hardcoded "7 databases" / "(mock) 6-billion-entryset" fact) — these would go stale or mislead once swapped for a real backend. Reworded them to describe only the API contract (`GET /api/databases`, `GET /api/individuals`, `EntrysetsResponse`). Added a second ESLint airlock (`eslint.config.js`, alongside the existing jQuery one, §3): `src/**` may not import `mock-server/*` at all — must go through `src/api/*`. |
+| 2026-09-23 | OAuth2 authorization-code login: only `POST /api/query` is gated (`401` without a session) — schema/databases/individuals/stats stay anonymous-accessible. The IdP's redirect URI points at the backend (`GET /api/auth/callback`), not the SPA, so the frontend never handles the auth code/state/tokens — it only reads `GET /api/auth/me`'s result via a new `AppState.auth`. `canRunQuery` deliberately stays auth-unaware (shared with `refreshStats`); the auth requirement is layered on separately at `syncRunButton`/`runPreview`. New top-menu widget (`src/ui/authStatus.ts`) for login/logout. Mock server (`mock-server/auth.ts` + new routes in `index.ts`) simulates the whole IdP round trip in-process to stay offline-first — none of it is reusable in production (see the design spec's §7 for the full list of new real backend requirements). Design: `docs/superpowers/specs/2026-09-22-oauth2-login-design.md`. |
