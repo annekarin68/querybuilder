@@ -1,10 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { argv } from "node:process";
-import { buildFields, OPERATORS } from "./schema";
 import { DATABASES } from "./databases";
 import {
   matches,
-  computeBlocks,
+  buildStatsLine,
   filterByDatabases,
   perDatabaseCounts,
   scaleCount,
@@ -34,9 +33,11 @@ import {
 } from "./auth";
 import { logQueryAudit } from "./audit";
 
-const FIELDS = buildFields(INDIVIDUALS);
-
 const PORT = 3001;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function paginate<T>(items: T[], page: number, pageSize: number) {
   const size = Math.min(Math.max(1, Math.floor(pageSize) || 1), 100);
@@ -144,17 +145,13 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   try {
-    if (req.method === "GET" && url.pathname === "/api/schema") {
-      sendJson(res, 200, { fields: FIELDS, operators: OPERATORS });
-      return;
-    }
     if (req.method === "GET" && url.pathname === "/api/databases") {
-      // `size` is mock-internal (drives the reported magnitudes) — not part of the contract.
-      sendJson(res, 200, { databases: DATABASES.map(({ id, label }) => ({ id, label })) });
+      // Every field on DatabaseDef IS the wire contract now — send the array directly.
+      sendJson(res, 200, DATABASES);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/individuals") {
-      sendJson(res, 200, { individuals: INDIVIDUALS });
+      sendJson(res, 200, INDIVIDUALS);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/auth/login") {
@@ -288,28 +285,36 @@ const server = createServer(async (req, res) => {
       const query = body.query as JsonNode;
       const ids = body.databases as string[];
 
-      // The sample drives match RATES; DATABASES[].size drives the
-      // MAGNITUDE the API reports, so the UI sees realistic large numbers.
-      const perDatabase = perDatabaseCounts(query, ROWS, ids).map((c) => {
-        const size = DATABASES.find((d) => d.id === c.id)?.size ?? 0;
-        return {
-          id: c.id,
-          label: DATABASES.find((d) => d.id === c.id)?.label ?? c.id,
-          totalCount: size,
-          matchCount: scaleCount(c.matchCount, c.totalCount, size),
-        };
-      });
-      const totalCount = perDatabase.reduce((s, d) => s + d.totalCount, 0);
-      const matchCount = perDatabase.reduce((s, d) => s + d.matchCount, 0);
-
-      const scoped = filterByDatabases(ROWS, ids);
-      const sampleMatch = scoped.filter((r) => matches(query, r)).length;
-      const blocks = computeBlocks(query, scoped, FIELDS, {
-        total: scoped.length ? totalCount / scoped.length : 1,
-        match: sampleMatch ? matchCount / sampleMatch : 1,
-      });
-
-      sendJson(res, 200, { matchCount, totalCount, blocks, perDatabase });
+      // Compute before committing the response header: if this (pure, cheap)
+      // computation ever threw, the catch block below must still be able to
+      // send a normal JSON error response — which requires no header sent yet.
+      const counts = perDatabaseCounts(query, ROWS, ids);
+      res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8" });
+      for (const c of counts) {
+        const db = DATABASES.find((d) => d.label === c.label);
+        const totalEntrysets = db?.totalEntrysets ?? 0;
+        // Dev-only: occasionally (~5%) simulate a database that can't answer, so
+        // the UI's per-database failure path gets exercised without a real backend.
+        const line = buildStatsLine(
+          Math.random() < 0.05
+            ? {
+                label: c.label,
+                fail: {
+                  errorMessages: [],
+                  infoMessages: ["This database could not be reached. Try again shortly."],
+                },
+              }
+            : {
+                label: c.label,
+                // The sample drives match RATES; DATABASES[].totalEntrysets drives
+                // the MAGNITUDE the API reports, so the UI sees realistic numbers.
+                matchCount: scaleCount(c.matchCount, c.totalCount, totalEntrysets),
+              },
+        );
+        res.write(JSON.stringify(line) + "\n");
+        await delay(150 + Math.random() * 250); // visibly stream in dev, roughly 150-400ms
+      }
+      res.end();
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/query") {
@@ -351,6 +356,14 @@ const server = createServer(async (req, res) => {
     }
     sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });
   } catch (err) {
+    // A throw after the /api/stats route has already written its 200 NDJSON
+    // header (e.g. mid-stream) can't be turned into a JSON error response —
+    // sendJson's own res.writeHead would throw ERR_HTTP_HEADERS_SENT. Just end
+    // the response instead of trying (and failing) to report the error.
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
     if (err instanceof BadBodyError) {
       sendJson(res, 400, { error: err.message });
       return;

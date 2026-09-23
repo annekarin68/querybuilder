@@ -4,8 +4,8 @@ import type { Row } from "./evaluate";
 
 /**
  * Flattens one entryset's nested `items[individualLabel][fieldLabel]` shape
- * into the flat `"individualLabel.fieldLabel"` keys the schema's field ids
- * use (see mock-server/schema.ts), plus a synthetic `__db` key (see
+ * into the flat `"individualLabel.fieldLabel"` keys the schema's field labels
+ * use (see src/query/fieldCatalog.ts), plus a synthetic `__db` key (see
  * mock-server/databases.ts) used only for database scoping.
  */
 export function flattenEntryset(entryset: Entryset): Row {

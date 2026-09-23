@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { canRunQuery, createStore, initialState, type AppState } from "../src/state";
 import { addChild, emptyQuery, newCondition } from "../src/query/tree";
-import type { SchemaResponse } from "../src/api/types";
+import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
 describe("store", () => {
   it("setState shallow-merges and keeps other keys", () => {
@@ -40,7 +40,7 @@ describe("store", () => {
 });
 
 describe("canRunQuery", () => {
-  const schema: SchemaResponse = { fields: [], operators: [] };
+  const schema = buildFieldCatalog([]);
 
   function state(
     overrides: Partial<Pick<AppState, "schema" | "issues" | "query" | "selectedDatabaseIds">> = {},
