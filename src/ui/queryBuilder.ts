@@ -270,7 +270,7 @@ export function wireQueryBuilder(
     // dropdown *before* calling its onChange. Handling both would run
     // handleRowChange twice, the second time on a detached row, and write back
     // stale values. So every <select> is handled ONLY via bindDropdowns below;
-    // this listener handles the plain <input>s (text/number/date, the range
+    // this listener handles the plain <input>s (text/number, the range
     // pair and the boolean toggle's checkbox).
     if (target instanceof HTMLSelectElement) return;
     const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");

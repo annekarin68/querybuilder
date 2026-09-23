@@ -1,5 +1,6 @@
 import type { Condition, Issue, QueryNode } from "./types";
 import { findField, findOperator, type FieldCatalog } from "./fieldCatalog";
+import { isUtcTimestamp } from "./dates";
 
 export function hasBlockingErrors(issues: Issue[]): boolean {
   return issues.some((i) => i.severity === "error");
@@ -47,6 +48,12 @@ function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void
     const v = c.value;
     if (!Array.isArray(v) || v.length !== 2 || v.some(isEmptyScalar)) {
       out.push(incomplete(c.id, "Enter both values."));
+    }
+  }
+  if (fieldDef.valueType === "date" && (op.arity === "one" || op.arity === "two")) {
+    const values = Array.isArray(c.value) ? c.value : [c.value];
+    if (values.some((v) => !isEmptyScalar(v) && !isUtcTimestamp(v))) {
+      out.push(invalid(c.id, "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z."));
     }
   }
   if (op.arity === "many") {

@@ -14,6 +14,7 @@ const catalog: FieldCatalog = {
   fields: [
     field("species", "enum", ["eq", "in", "isEmpty"]),
     field("branches", "number", ["eq", "between", "isEmpty"]),
+    field("seenAt", "date", ["eq", "between"]),
   ],
 };
 
@@ -160,5 +161,42 @@ describe("validateQuery", () => {
     expect(
       hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error", kind: "incomplete" }]),
     ).toBe(true);
+  });
+
+  describe("date values", () => {
+    const withDate = (operatorId: string, value: unknown) => {
+      const root = emptyQuery();
+      const c = newCondition();
+      const tree = updateNode(addChild(root, root.id, c), c.id, {
+        fieldId: "seenAt",
+        operatorId,
+        value,
+      });
+      return { issues: validateQuery(tree, catalog), id: c.id };
+    };
+    const badDate = (nodeId: string) => ({
+      nodeId,
+      message: "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.",
+      severity: "error",
+      kind: "invalid",
+    });
+
+    it("accepts a full or partial UTC timestamp", () => {
+      expect(withDate("eq", "2024-11").issues).toEqual([]);
+      expect(withDate("between", ["2024", "2024-11-06T14:30Z"]).issues).toEqual([]);
+    });
+
+    it("rejects anything else", () => {
+      const one = withDate("eq", "06/11/2024");
+      expect(one.issues).toEqual([badDate(one.id)]);
+      const two = withDate("between", ["2024", "2024-11-06 14:30"]);
+      expect(two.issues).toEqual([badDate(two.id)]);
+    });
+
+    it("an empty value is still just incomplete", () => {
+      const { issues } = withDate("eq", "");
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatchObject({ kind: "incomplete" });
+    });
   });
 });

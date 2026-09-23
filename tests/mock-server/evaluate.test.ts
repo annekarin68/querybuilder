@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matches, type JsonNode } from "../../mock-server/evaluate";
+import { matches, utcSpan, type JsonNode } from "../../mock-server/evaluate";
 
 const row = {
   species: "oak",
@@ -69,30 +69,66 @@ describe("matches", () => {
   });
 });
 
-describe("date conditions on timestamp values (calendar days, UTC)", () => {
+describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
+  const span = (v: string) => utcSpan(v)?.map((t) => new Date(t).toISOString());
+
+  it.each([
+    ["2024", "2024-01-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"],
+    ["2024-12", "2024-12-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"],
+    ["2024-02-28", "2024-02-28T00:00:00.000Z", "2024-02-29T00:00:00.000Z"],
+    ["2024-11-06T23Z", "2024-11-06T23:00:00.000Z", "2024-11-07T00:00:00.000Z"],
+    ["2024-11-06T14:32", "2024-11-06T14:32:00.000Z", "2024-11-06T14:33:00.000Z"],
+    ["2024-11-06T14:32:05Z", "2024-11-06T14:32:05.000Z", "2024-11-06T14:32:06.000Z"],
+    ["2024-11-06T14:32:05.1Z", "2024-11-06T14:32:05.100Z", "2024-11-06T14:32:05.200Z"],
+    ["2024-11-06T14:32:05.123Z", "2024-11-06T14:32:05.123Z", "2024-11-06T14:32:05.124Z"],
+  ])("%s → [%s, %s)", (v, start, end) => {
+    expect(span(v)).toEqual([start, end]);
+  });
+
+  it("is null for anything else", () => {
+    expect(utcSpan("oak")).toBeNull();
+    expect(utcSpan(2024)).toBeNull();
+  });
+});
+
+describe("date conditions: the user's operator at the precision they typed (UTC)", () => {
   const seen = { seenAt: "2024-11-06T14:32:00Z" };
+  const is = (operatorId: string, value: unknown) =>
+    matches(cond("seenAt", operatorId, value), seen);
 
-  it("eq / neq compare the timestamp's day", () => {
-    expect(matches(cond("seenAt", "eq", "2024-11-06"), seen)).toBe(true);
-    expect(matches(cond("seenAt", "eq", "2024-11-07"), seen)).toBe(false);
-    expect(matches(cond("seenAt", "neq", "2024-11-06"), seen)).toBe(false);
+  it("eq / neq: the stored time falls inside / outside the span", () => {
+    expect(is("eq", "2024")).toBe(true);
+    expect(is("eq", "2024-11-06")).toBe(true);
+    expect(is("eq", "2024-11-06T14")).toBe(true);
+    expect(is("eq", "2024-11-06T14:32Z")).toBe(true);
+    expect(is("eq", "2024-11-06T14:33Z")).toBe(false);
+    expect(is("eq", "2024-11-07")).toBe(false);
+    expect(is("neq", "2024-11-06")).toBe(false);
+    expect(is("neq", "2024-11-07")).toBe(true);
   });
 
-  it("between includes both end days", () => {
-    expect(matches(cond("seenAt", "between", ["2024-11-06", "2024-11-06"]), seen)).toBe(true);
-    expect(matches(cond("seenAt", "between", ["2024-11-01", "2024-11-06"]), seen)).toBe(true);
-    expect(matches(cond("seenAt", "between", ["2024-11-07", "2024-11-09"]), seen)).toBe(false);
+  it("before / after exclude the whole span", () => {
+    expect(is("after", "2024-11-06")).toBe(false);
+    expect(is("before", "2024-11-06")).toBe(false);
+    expect(is("after", "2024-11-06T13")).toBe(true);
+    expect(is("before", "2024-11-06T15")).toBe(true);
+    expect(is("before", "2024-11-07")).toBe(true);
   });
 
-  it("before / after exclude the day itself", () => {
-    expect(matches(cond("seenAt", "after", "2024-11-06"), seen)).toBe(false);
-    expect(matches(cond("seenAt", "before", "2024-11-06"), seen)).toBe(false);
-    expect(matches(cond("seenAt", "after", "2024-11-05"), seen)).toBe(true);
-    expect(matches(cond("seenAt", "before", "2024-11-07"), seen)).toBe(true);
+  it("between includes both end spans", () => {
+    expect(is("between", ["2024-11-06", "2024-11-06"])).toBe(true);
+    expect(is("between", ["2024-11", "2024-11-06T14"])).toBe(true);
+    expect(is("between", ["2024-11-06T15", "2024-12"])).toBe(false);
   });
 
-  it("uses the UTC day, whatever offset the timestamp is written in", () => {
+  it("uses UTC, whatever offset the stored value is written in", () => {
     const late = { seenAt: "2024-11-06T23:30:00-02:00" }; // 2024-11-07 01:30 UTC
     expect(matches(cond("seenAt", "eq", "2024-11-07"), late)).toBe(true);
+  });
+
+  it('a plain "YYYY-MM-DD" stored value is midnight UTC', () => {
+    const day = { plantedOn: "2024-11-06" };
+    expect(matches(cond("plantedOn", "eq", "2024-11-06T00"), day)).toBe(true);
+    expect(matches(cond("plantedOn", "before", "2024-11-06"), day)).toBe(false);
   });
 });
