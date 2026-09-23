@@ -84,6 +84,13 @@ export function renderDataPreview(state: AppState): void {
   if (p.status === "idle") {
     // onQueryChange nulls preview.data in the same setState that writes the query,
     // so "idle" always means "nothing current" — never run yet, or edited since.
+    if (state.auth.status === "anonymous") {
+      paint(
+        el,
+        `<h4 class="ui header">Data preview</h4><div class="ui info message">Log in to preview data. <a href="/api/auth/login">Log in</a></div>`,
+      );
+      return;
+    }
     paint(
       el,
       `<h4 class="ui header">Data preview</h4><div class="ui info message">Press <b>Run / Refresh</b> to load sample entrysets.</div>`,
