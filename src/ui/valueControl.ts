@@ -1,4 +1,5 @@
 import type { CatalogField, CatalogOperator } from "../query/fieldCatalog";
+import { UTC_TIMESTAMP_HINT } from "../query/dates";
 import { escapeHtml, optionsHtml } from "./panel";
 
 /**
@@ -27,10 +28,14 @@ function enumDropdown(field: CatalogField, current: unknown, multiple: boolean):
   </select>`;
 }
 
+/** A date is typed, not picked: a full or partial ISO UTC timestamp
+ *  ("2024", "2024-11-06", "2024-11-06T14:30Z"; see src/query/dates.ts). */
+const DATE_ATTRS = `placeholder="${UTC_TIMESTAMP_HINT}" spellcheck="false" autocomplete="off"`;
+
 function scalarInput(field: CatalogField, current: unknown, attrs: string): string {
-  const type =
-    field.valueType === "number" ? "number" : field.valueType === "date" ? "date" : "text";
-  return `<div class="ui input"><input type="${type}" data-part="value" ${attrs} value="${escapeHtml(current ?? "")}" /></div>`;
+  const type = field.valueType === "number" ? "number" : "text";
+  const extra = field.valueType === "date" ? ` ${DATE_ATTRS}` : "";
+  return `<div class="ui input"><input type="${type}" data-part="value" ${attrs}${extra} value="${escapeHtml(current ?? "")}" /></div>`;
 }
 
 export function renderValueControl(

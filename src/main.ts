@@ -29,7 +29,6 @@ import { runBlocker, store, type AppState } from "./state";
 import { addChild, countConditions, newCondition, sameSemantics } from "./query/tree";
 import { validateQuery } from "./query/validate";
 import type { Group } from "./query/types";
-import { toWireQuery } from "./query/wire";
 import { debounce } from "./util/debounce";
 import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
 import { requestSlot, type SlotRequest } from "./util/requestSlot";
@@ -100,12 +99,12 @@ function redirectInto(url: string): void {
  */
 function runPreview(): void {
   const state = store.getState();
-  if (runBlocker(state) || !state.catalog) return;
+  if (runBlocker(state)) return;
   const req = previewSlot.start();
   const showError = (err: unknown) =>
     store.setState({ preview: { status: "error", error: errorMessage(err) } });
   store.setState({ preview: { status: "loading" } });
-  runQuery(toWireQuery(state.query, state.catalog), state.selectedDatabaseIds, req.signal)
+  runQuery(state.query, state.selectedDatabaseIds, req.signal)
     .then((data) => {
       if (!req.isStale()) store.setState({ preview: { status: "ok", data } });
     })
@@ -124,12 +123,12 @@ function runPreview(): void {
 /** Statistics, streamed one line per database and refetched live (debounced). */
 const refreshStats = debounce(() => {
   const state = store.getState();
-  if (runBlocker(state) || !state.catalog) return;
+  if (runBlocker(state)) return;
   const req: SlotRequest = statsSlot.start();
   store.setState({ stats: { status: "loading", lines: [], error: null } });
   const lines = () => store.getState().stats.lines;
   getStats(
-    toWireQuery(state.query, state.catalog),
+    state.query,
     state.selectedDatabaseIds,
     (line) => {
       if (!req.isStale()) {

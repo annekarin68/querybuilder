@@ -15,28 +15,79 @@ export interface JsonGroup {
 }
 export type JsonNode = JsonCondition | JsonGroup;
 
-const INSTANT = /^\d{4}-\d{2}-\d{2}T/;
-
-/**
- * Numbers compare as numbers. A condition value that is a full ISO timestamp
- * ("2024-11-06T00:00:00.000Z" — how the frontend sends dates, see
- * docs/ARCHITECTURE.md §7 "Dates") compares as an instant, so a row value in
- * any offset, or a plain "YYYY-MM-DD" (midnight UTC), orders correctly.
- * Everything else compares as text.
- */
 function cmp(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
-  if (typeof a === "string" && typeof b === "string" && INSTANT.test(b)) {
-    const ta = Date.parse(a);
-    const tb = Date.parse(b);
-    if (!Number.isNaN(ta) && !Number.isNaN(tb)) return ta - tb;
-  }
   return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+}
+
+const PARTIAL_UTC =
+  /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2})(?::(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?Z?)?)?)?$/;
+
+/**
+ * The span of time a full or partial ISO UTC timestamp covers, as
+ * [start, end) in epoch ms: "2024-11" is all of November 2024,
+ * "2024-11-06T14" the hour from 14:00 UTC. How the frontend sends dates —
+ * docs/ARCHITECTURE.md §7 "Dates". Null if `v` isn't one.
+ */
+export function utcSpan(v: unknown): [number, number] | null {
+  if (typeof v !== "string") return null;
+  const m = PARTIAL_UTC.exec(v);
+  if (!m) return null;
+  const [, year, month, day, hour, minute, second, fraction] = m;
+  const parts = [
+    Number(year),
+    month ? Number(month) - 1 : 0,
+    day ? Number(day) : 1,
+    hour ? Number(hour) : 0,
+    minute ? Number(minute) : 0,
+    second ? Number(second) : 0,
+    fraction ? Number(fraction.padEnd(3, "0")) : 0,
+  ] as const;
+  // The last part the value spells out is the one its span is one unit of.
+  const last = [year, month, day, hour, minute, second, fraction].filter(Boolean).length - 1;
+  const end: number[] = [...parts];
+  end[last]! += last === 6 ? 10 ** (3 - fraction!.length) : 1;
+  const utc = (p: readonly number[]) => Date.UTC(p[0]!, p[1]!, p[2], p[3], p[4], p[5], p[6]);
+  return [utc(parts), utc(end)];
+}
+
+/**
+ * A date condition against a stored timestamp (or "YYYY-MM-DD", read as
+ * midnight UTC): the backend's interpretation of the user's operator at the
+ * precision they typed. Undefined when this isn't one — the generic
+ * comparison applies instead.
+ */
+function dateMatches(c: JsonCondition, v: Row[string] | undefined): boolean | undefined {
+  const t = typeof v === "string" ? Date.parse(v) : NaN;
+  if (Number.isNaN(t)) return undefined;
+  if (c.operatorId === "between") {
+    if (!Array.isArray(c.value) || c.value.length !== 2) return undefined;
+    const from = utcSpan(c.value[0]);
+    const to = utcSpan(c.value[1]);
+    return from && to ? t >= from[0] && t < to[1] : undefined;
+  }
+  const span = utcSpan(c.value);
+  if (!span) return undefined;
+  const [start, end] = span;
+  switch (c.operatorId) {
+    case "eq":
+      return t >= start && t < end;
+    case "neq":
+      return t < start || t >= end;
+    case "before":
+      return t < start;
+    case "after":
+      return t >= end;
+    default:
+      return undefined;
+  }
 }
 
 function conditionMatches(c: JsonCondition, row: Row): boolean {
   if (!c.fieldId || !c.operatorId) return false;
   const v = row[c.fieldId];
+  const asDate = dateMatches(c, v);
+  if (asDate !== undefined) return asDate;
   switch (c.operatorId) {
     case "eq":
       return v === c.value;

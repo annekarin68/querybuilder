@@ -5,8 +5,9 @@
 > architecture, the API contract, the state shape, or a panel's behaviour. If the
 > code and this file disagree, that is a bug in one of them.
 
-Last updated: 2026-09-23 — date conditions go on the wire as full UTC
-timestamps (`src/query/wire.ts`, §7 "Dates", issue #24). Earlier the same day:
+Last updated: 2026-09-23 — a date condition's value is a full or partial ISO
+UTC timestamp, typed by the user and sent as is; the backend interprets it
+(§7 "Dates", issue #24). Earlier the same day:
 code-review fixes: one stale-response rule (`requestSlot`), `AppState.catalog`
 (was `schema`), `runBlocker`, dead code removed, CI added. Also: the frontend now says **events** (was "entrysets") and
 **facets** (was "individuals" / "items"); the backend's wire names are
@@ -247,7 +248,7 @@ src/
     conditionEdit.ts   nextCondition(cond, picks, catalog, readValue) — the Facet → Field → Operator → value cascade when a row changes; defaultValueFor().
     validate.ts        validateQuery(tree, catalog) -> Issue[]; hasBlockingErrors(issues).
     summary.ts         queryToText(tree, catalog) -> human-readable string (display only).
-    wire.ts            toWireQuery(tree, catalog) -> the tree as sent to /stats and /query (date days → UTC timestamps, §7 "Dates").
+    dates.ts           isUtcTimestamp(v): a full or partial ISO UTC timestamp? (§7 "Dates") + the input's placeholder.
     fieldCatalog.ts    buildFieldCatalog(facets) -> FieldCatalog, the fixed OPERATORS list, findField / findOperator — derives the query builder's fields client-side; the real API has no schema/operators endpoint.
   ui/
     fomantic.ts        The jQuery airlock (activate / destroy / onDropdownChange).
@@ -285,7 +286,7 @@ mock-server/
                        dotted "facetLabel.fieldLabel" keys + a
                        synthetic __db key) and ROWS, every event
                        flattened once at startup.
-  evaluate.ts          matches(node, row) recursive evaluator (ISO timestamps compare as instants, §7) + filterByDatabases(rows, ids) /
+  evaluate.ts          matches(node, row) recursive evaluator (date conditions by the precision typed, `utcSpan`, §7) + filterByDatabases(rows, ids) /
                        perDatabaseCounts(query, rows, ids) (keyed on row.__db) +
                        scaleCount(part, whole, target) + buildStatsLine(outcome) — turns one
                        database's raw outcome into the StatsResponse line /api/stats streams
@@ -807,33 +808,32 @@ for forwarding to a real audit service (§10).
 
 ### Dates
 
-A `date` field (backend type `DATE`, `DATETIME` or `TIMESTAMP …`) gets a date
-picker, so on screen a condition's value is a **calendar day**, `"YYYY-MM-DD"`
-(a `between` value is two of them). The backend expects **full ISO 8601 UTC
-timestamps**, so before a query is sent `toWireQuery`
-(`src/query/wire.ts`) rewrites every date condition into plain instant
-comparisons against UTC day starts, using the existing `gte` / `lt`
-operators. With `D` = `D`T00:00:00.000Z and `D+1` the next day's start:
+A `date` field (backend type `DATE`, `DATETIME` or `TIMESTAMP …`) takes a
+**full or partial ISO 8601 UTC timestamp**: as much of
+`YYYY-MM-DDTHH:mm:ss.sssZ` as the user knows, cut off after any part —
+`2024`, `2024-11`, `2024-11-06`, `2024-11-06T14`, `2024-11-06T14:32Z`,
+`2024-11-06T14:32:05.123Z`. The trailing `Z` is optional; other offsets are
+not accepted (the value is always UTC). The user types it into a text box
+(placeholder `YYYY-MM-DDTHH:mm:ssZ`); `validate.ts` rejects anything else
+with an `invalid` issue, using `isUtcTimestamp` (`src/query/dates.ts`).
 
-| On screen | On the wire |
+**The query is sent as the user built it**: the operator they chose
+(`eq`, `neq`, `before`, `after`, `between`) and the value exactly as typed.
+The frontend never rewrites a date condition. **The backend decides** which
+stored timestamps match. The mock (`mock-server/evaluate.ts`) treats the
+value as the span of time its precision covers (`utcSpan`: `2024-11` is all
+of November 2024, `2024-11-06T14` the hour from 14:00 UTC) and compares the
+stored instant with it:
+
+| Operator | Mock: matches when the stored instant (UTC) is… |
 |---|---|
-| `eq D` | group `AND` [`gte D`, `lt D+1`] |
-| `neq D` | group `OR` [`lt D`, `gte D+1`] |
-| `before D` | `lt D` |
-| `after D` | `gte D+1` |
-| `between [A, B]` | group `AND` [`gte A`, `lt B+1`] (both days included) |
-| `isEmpty` / `isNotEmpty` | unchanged |
+| `eq` / `neq` | inside / outside the span |
+| `before` / `after` | before the span starts / at or after it ends |
+| `between [A, B]` | from the start of A's span to the end of B's (both included) |
 
-So "Equals 2024-11-06" is sent as `>= "2024-11-06T00:00:00.000Z"` and
-`< "2024-11-07T00:00:00.000Z"`, and matches `2024-11-06T14:32:00Z`. Days are
-UTC days, whatever the viewer's timezone. The backend only compares
-instants; it never needs to know a condition was a calendar day. A generated
-node reuses the condition's `id` (the group) or appends `.from` / `.to`. The
-on-screen query, the saved pending query and `sameSemantics` all keep the
-calendar days — only the request body changes. The mock compares a condition
-value that is an ISO timestamp as an instant (`mock-server/evaluate.ts`
-`cmp`), so row values in any offset, or a plain `"YYYY-MM-DD"` (midnight
-UTC), order correctly.
+So "Equals `2024-11-06`" matches `2024-11-06T14:32:00Z`, and "After
+`2024-11-06`" does not. This is the mock's reading; the real backend owns the
+rule.
 
 ### Errors
 
@@ -899,8 +899,7 @@ Display only; has no bearing on what is sent to the API.
 
 ### Wire format
 
-The tree is sent as JSON, `JSON.stringify(toWireQuery(query, catalog))`: the
-on-screen tree, except that date conditions become UTC timestamp comparisons
+The tree is sent as-is, `JSON.stringify(query)` — date conditions included
 (§7 "Dates"). No custom DSL string on the wire.
 Since `Condition` gained `facetId`, the tree can now carry that one UI-only
 key on the wire too — the backend simply ignores it, same as any other field it
@@ -985,7 +984,7 @@ on node kind, `groupHtml` renders a group and recurses into its children via
   4. A **value** control chosen by the operator's `arity` × the field's
      `valueType`:
      - `none` → no control
-     - `one` → single `ui input` / enum `ui dropdown` / boolean `ui checkbox` / date input
+     - `one` → single `ui input` / enum `ui dropdown` / boolean `ui checkbox` / date text box (partial UTC timestamp, §7 "Dates")
      - `two` (numbers and dates only) → two inputs (from / to)
      - `many` (enums only) → multiple `ui dropdown` (chips)
 
@@ -1196,12 +1195,12 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 
 ### Tests (Vitest, unit only, on pure modules)
 
-- `tests/query/` — `tree` (immutable edits, `sameSemantics`), `validate` (each issue type), `summary` (text), `fieldCatalog` (type mapping, enums, names, lookups), `conditionEdit` (the row cascade), `wire` (date conditions → UTC timestamps).
+- `tests/query/` — `tree` (immutable edits, `sameSemantics`), `validate` (each issue type), `summary` (text), `fieldCatalog` (type mapping, enums, names, lookups), `conditionEdit` (the row cascade), `dates` (which partial UTC timestamps are accepted).
 - `tests/state.test.ts` — the store and `runBlocker` / `canRunQuery`.
 - `tests/api/client.test.ts` — requests, error unwrapping, NDJSON streaming, timeouts, aborts.
 - `tests/util/` — `debounce`, `pendingQuery` (save/restore, untrusted input), `requestSlot` (the stale-response rule).
 - `tests/ui/` — `docsFilter`, `dataPreview` (badges, row columns), `statsPanel` (headline), `format`, `valueControl` (markup + accessible names).
-- `tests/mock-server/` — auth flows (incl. expiry), audit, databases, rows, the evaluator (incl. instant comparison and date conditions end to end through `toWireQuery`), stats lines, data integrity, the bare-array wire shapes.
+- `tests/mock-server/` — auth flows (incl. expiry), audit, databases, rows, the evaluator (incl. `utcSpan` and date conditions at each precision), stats lines, data integrity, the bare-array wire shapes.
 - `tests/noBackendDataInSrc.test.ts` — fails if any file in `src/` or `index.html` names a mock facet, database or owner, or an underscored field/tag/group name. The mock dataset is fictional and the real names differ; such names belong only in `src/config.ts`, which ships empty.
 - Fixture request/response objects double as contract examples.
 - No DOM/component tests — the view layer is deliberately too thin to be worth it (repo rule).
@@ -1267,4 +1266,4 @@ every pull request and push to `main`.
 | 2026-09-23 | The frontend no longer names any backend data. The Matching entrysets "When"/"Vehicle" columns (hard-coded mock items `observation_window.from_timestamp` / `vehicle_identity.vehicle_type`) are replaced by `ROW_COLUMNS` in `src/config.ts` (`{ heading, item, field, format? }[]`, empty by default → rows show id, badges, item count). `rowCell` / `rowGrid` in `dataPreview.ts`; `.qb-er-when`/`.qb-er-vehicle` → `.qb-er-cell`; the row grid template comes from `--qb-er-grid`. Mock-specific wording removed from comments (`types.ts`, `state.ts`, `format.ts`). New guard test `tests/noBackendDataInSrc.test.ts`. |
 | 2026-09-23 | Terminology: "Entrysets" renamed to **Events** and "Individuals" (shown in the UI as "Item") renamed to **Facets** across `src/`, the frontend tests and this document (UI text, `EventRecord`/`EventsResponse`/`Facet`/`FacetField`, `getFacets`, `AppState.facets`, `Condition.facetId`, `RowColumn.facet`, `DocsMatch.facets`, `.qb-event-*` / `.qb-doc-facet*` CSS). The event type is `EventRecord`, not `Event`, so it doesn't shadow the DOM `Event`. The wire contract is unchanged: `GET /api/individuals`, `totalEntrysets`, `entrysets` and `items` keep the backend's names. `Condition.individualId` → `facetId` changes the key in the query JSON sent to the backend; it's UI staging only and the backend ignores it. A pending query saved by an older build (`individualId`) fails `isQueryNode` and is dropped. See §1 "Terminology". |
 | 2026-09-23 | Code-review fixes (issues #24–#36). **Bugs:** date conditions compare the stored instant's UTC calendar day (new §7 "Dates"; "Equals" on a timestamp used to never match); logging out mid-stream no longer leaves statistics stuck loading, and logout/invalidation reset the preview themselves; the post-403 compliance check obeys the stale guard; the Field dropdown and summaries honour `FacetField.name`; the docs sidebar re-renders on `databases`. **Simplification:** one stale-response rule, `src/util/requestSlot.ts` (the `requestKey` content check was redundant); `AppState.schema` → `catalog` with one `FieldCatalog` type and `findField`/`findOperator` (operators no longer travel through state; enum options are plain strings); `AppState.query` is a `Group`; `preview` is a discriminated union; `runBlocker` replaces the three copies of the "can this run" check; `nextCondition` (`src/query/conditionEdit.ts`) holds the row cascade; the query builder has no module-level state and every panel is wired once; `getStats` uses the shared `send()`. **Dead code removed:** mock `paginate`, `runQuery`'s unused `page`/`pageSize`, unreachable value controls, catalog descriptions, `debounce.cancel`, a no-op Vite option. **Mock:** types imported from `src/api/types.ts` (type-only), expiring pending states/tokens, HTML error pages and a login redirect for navigations, server-side reason check, `MOCK_PORT`. **Docs/tooling:** CI workflow, `engines`, obsolete implementation plans deleted, specs marked historical, this document and the README brought back in line with the code. |
-| 2026-09-23 | Dates on the wire (issue #24): the backend expects full ISO UTC timestamps, not calendar days. New `src/query/wire.ts` `toWireQuery` rewrites each date condition into `gte` / `lt` comparisons against UTC day starts (`eq` → [day, next day), `neq` → outside it, `before` → `lt` day, `after` → `gte` next day, `between` → [from, day after to)), and `refreshStats` / `runPreview` send that instead of the raw tree. The on-screen query is unchanged. The mock drops its calendar-day special case and compares ISO timestamps as instants. §7 "Dates" and §8 "Wire format" rewritten. |
+| 2026-09-23 | Dates (issue #24): a date condition's value is now a full or partial ISO 8601 UTC timestamp (`2024` … `2024-11-06T14:32:05.123Z`, trailing `Z` optional), typed into a text box instead of picked from a date picker. New `src/query/dates.ts` `isUtcTimestamp`; `validate.ts` rejects other values as `invalid`. The query goes to the backend exactly as the user built it — operator and value unchanged — and the backend interprets it. The mock's `utcSpan` reads the value as the span its precision covers and matches `eq`/`neq`/`before`/`after`/`between` against it, replacing the earlier calendar-day rule. §7 "Dates" rewritten. |

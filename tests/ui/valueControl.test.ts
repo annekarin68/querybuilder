@@ -76,4 +76,12 @@ describe("renderValueControl accessible names", () => {
     expect(html).toContain('aria-label="From"');
     expect(html).toContain('aria-label="To"');
   });
+
+  it("a date field gets a text box for a (partial) UTC timestamp, not a date picker", () => {
+    const html = renderValueControl(field({ valueType: "date" }), op("one"), "2024-11");
+    expect(html).toContain('type="text"');
+    expect(html).not.toContain('type="date"');
+    expect(html).toContain('placeholder="YYYY-MM-DDTHH:mm:ssZ"');
+    expect(html).toContain('value="2024-11"');
+  });
 });
