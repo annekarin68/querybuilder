@@ -81,10 +81,10 @@ describe("displayLabel", () => {
 
 describe("countLabel", () => {
   it("singular for exactly one, plural otherwise, with digit grouping", () => {
-    expect(countLabel(1, "entryset", undefined, L)).toBe("1 entryset");
-    expect(countLabel(0, "entryset", undefined, L)).toBe("0 entrysets");
-    expect(countLabel(9, "entryset", undefined, L)).toBe("9 entrysets");
-    expect(countLabel(12345, "entryset", undefined, L)).toBe("12,345 entrysets");
+    expect(countLabel(1, "event", undefined, L)).toBe("1 event");
+    expect(countLabel(0, "event", undefined, L)).toBe("0 events");
+    expect(countLabel(9, "event", undefined, L)).toBe("9 events");
+    expect(countLabel(12345, "event", undefined, L)).toBe("12,345 events");
     expect(countLabel(2, "match", "matches", L)).toBe("2 matches");
   });
 });

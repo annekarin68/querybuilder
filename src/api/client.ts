@@ -3,8 +3,8 @@ import type {
   AuthUser,
   ComplianceStatus,
   DatabasesResponse,
-  EntrysetsResponse,
-  Individual,
+  EventsResponse,
+  Facet,
   StatsResponse,
 } from "./types";
 
@@ -115,8 +115,8 @@ export function getDatabases(): Promise<DatabasesResponse[]> {
   return request<DatabasesResponse[]>("/databases");
 }
 
-export function getIndividuals(): Promise<Individual[]> {
-  return request<Individual[]>("/individuals");
+export function getFacets(): Promise<Facet[]> {
+  return request<Facet[]>("/individuals");
 }
 
 /**
@@ -177,8 +177,8 @@ export function runQuery(
   page: number,
   pageSize: number,
   signal?: AbortSignal,
-): Promise<EntrysetsResponse> {
-  return request<EntrysetsResponse>("/query", {
+): Promise<EventsResponse> {
+  return request<EventsResponse>("/query", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query, databases, page, pageSize }),
@@ -189,7 +189,7 @@ export function runQuery(
 /**
  * Who's logged in, if anyone. A 401 here is a normal outcome (not logged
  * in) — resolves to `null` rather than throwing, so this can sit alongside
- * getDatabases()/getIndividuals() in main.ts's startup Promise.all without
+ * getDatabases()/getFacets() in main.ts's startup Promise.all without
  * an anonymous visitor tripping their fatal-load-failure path.
  */
 export function getMe(): Promise<AuthUser | null> {

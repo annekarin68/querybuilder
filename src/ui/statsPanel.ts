@@ -92,7 +92,7 @@ export function headlineHtml(state: AppState): string {
   );
   return `<div class="qb-stat-headline" title="${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
     <span class="qb-stat-big">${escapeHtml(compact(matchCount))}</span>
-    <div class="qb-stat-label">matching entrysets</div>
+    <div class="qb-stat-label">matching events</div>
     <div class="qb-stat-sub">${escapeHtml(matchRatio(matchCount, total))} of ${escapeHtml(compact(total))}</div>
     ${bar(matchCount, total)}
     ${failedNote}

@@ -5,7 +5,7 @@ import { databaseTitle } from "./format";
 
 /**
  * The database scope selector, above the query builder. Databases are
- * arbitrary partitions with no semantic tie to entryset content (returned by
+ * arbitrary partitions with no semantic tie to event content (returned by
  * GET /api/databases). Each one is a pill toggle — a real checkbox inside a
  * styled label, so it needs no plugin and works from the keyboard. Changing it
  * behaves like editing the query (see main.ts onDatabasesChange + §6).

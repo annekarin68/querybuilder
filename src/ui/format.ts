@@ -86,7 +86,7 @@ export function fieldTitle(f: { comment: string; description: string }): string 
   return [comment, description && `Third-party: ${description}`].filter(Boolean).join("\n");
 }
 
-/** "1 entryset" / "9 entrysets" / "12,345 entrysets". */
+/** "1 event" / "9 events" / "12,345 events". */
 export function countLabel(
   n: number,
   singular: string,

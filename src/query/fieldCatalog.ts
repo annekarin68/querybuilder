@@ -1,4 +1,4 @@
-import type { Individual } from "../api/types";
+import type { Facet } from "../api/types";
 
 export type ValueType = "string" | "number" | "boolean" | "date" | "enum";
 export type Arity = "none" | "one" | "two" | "many";
@@ -146,10 +146,10 @@ export function valueTypeFor(field: { type: string; format: string }): ValueType
 }
 
 /**
- * One queryable field per (individual, field) pair, derived purely from
- * already-fetched Individual[] data — the real API has no schema/operators
- * endpoint. Field label is the dotted "individualLabel.fieldLabel" path,
- * matching how an entryset nests its values, so it doubles as the flattened
+ * One queryable field per (facet, field) pair, derived purely from
+ * already-fetched Facet[] data — the real API has no schema/operators
+ * endpoint. Field label is the dotted "facetLabel.fieldLabel" path,
+ * matching how an event nests its values, so it doubles as the flattened
  * lookup key.
  *
  * Enum detection is `values.length > 0` — deliberately NEVER `cardinality`.
@@ -157,20 +157,20 @@ export function valueTypeFor(field: { type: string; format: string }): ValueType
  * detail that can change at any time; this catalog only reacts to whether
  * `values` actually has entries.
  */
-export function buildFieldCatalog(individuals: Individual[]): {
+export function buildFieldCatalog(facets: Facet[]): {
   fields: CatalogField[];
   operators: CatalogOperator[];
 } {
   const fields: CatalogField[] = [];
-  for (const ind of individuals) {
-    for (const f of ind.fields) {
+  for (const facet of facets) {
+    for (const f of facet.fields) {
       const isEnum = f.values.length > 0;
       const valueType = isEnum ? "enum" : valueTypeFor(f);
       fields.push({
-        label: `${ind.label}.${f.label}`,
-        name: `${ind.name}: ${f.label}`,
+        label: `${facet.label}.${f.label}`,
+        name: `${facet.name}: ${f.label}`,
         valueType,
-        description: f.description || ind.description,
+        description: f.description || facet.description,
         options: isEnum ? f.values.map((v) => ({ value: v, label: v })) : undefined,
         operatorIds: OPERATOR_PROFILE[valueType],
       });

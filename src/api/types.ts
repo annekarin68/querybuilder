@@ -24,7 +24,7 @@ export interface StatsResponse {
    *  per-database HTTP status in an NDJSON stream, so this is how failure
    *  is signaled instead. */
   success: boolean;
-  /** Individuals matched by this query in this database. Only meaningful
+  /** Events matched by this query in this database. Only meaningful
    *  when `success` is true — optional rather than a fabricated 0, so a
    *  failed database can never be misread as "zero rows matched." */
   matchCount?: number;
@@ -45,7 +45,8 @@ export interface DatabasesResponse {
   name: string;
   /** The title of this database's owner — the company that reported the data. */
   owner: string;
-  /** Total entrysets in this database. */
+  /** Total events in this database. (The backend still calls them
+   *  entrysets.) */
   totalEntrysets: number;
   /** This database's share of the total data across all databases — sums
    *  to 100% across every database returned. */
@@ -54,9 +55,9 @@ export interface DatabasesResponse {
   label: string;
 }
 
-/** One field an individual can report a value for (GET /api/individuals). */
-export interface IndividualField {
-  /** This field's locally unique, API-friendly "ID" within this individual. */
+/** One field a facet can report a value for (GET /api/individuals). */
+export interface FacetField {
+  /** This field's locally unique, API-friendly "ID" within this facet. */
   label: string;
   /** The field's actual type, defined by the backend (e.g. VARCHAR, BIGINT,
    *  TIMESTAMP). Takes precedence over `format` when both are present. */
@@ -83,11 +84,11 @@ export interface IndividualField {
 }
 
 /**
- * One item in the backend's data model — something an entryset may hold a
- * value for. The frontend knows no item by name: everything it shows about
- * items comes from this response (or from src/config.ts).
+ * One facet in the backend's data model — something an event may hold a
+ * value for. The frontend knows no facet by name: everything it shows about
+ * facets comes from this response (or from src/config.ts).
  */
-export interface Individual {
+export interface Facet {
   /** Unique "ID" for API requests — a permutation of `name` with special
    *  characters removed. */
   label: string;
@@ -95,7 +96,7 @@ export interface Individual {
   group: string;
   /** Our own tags, from a limited reusable pool. More useful than `group`. */
   tags: string[];
-  /** This individual's unique identification number. */
+  /** This facet's unique identification number. */
   idNumber: number;
   /** Descriptive name, shown to the user in place of `label`. */
   name: string;
@@ -103,28 +104,29 @@ export interface Individual {
   description: string;
   /** The backend's own, always-correct description. */
   comment: string;
-  /** How many times this individual appears across ALL databases. No
+  /** How many times this facet appears across ALL databases. No
    *  percentage is supplied — the frontend derives one from
    *  DatabasesResponse[].totalEntrysets (see docsSidebar.ts). */
   totalCount: number;
-  fields: IndividualField[];
+  fields: FacetField[];
 }
 
 /**
- * An entryset: one record, holding actual values
- * for a subset of the items returned by GET /api/individuals. `items` is keyed
- * by an Individual's `label`; each item's value object is keyed by one of
- * that item's field labels — see docs/ARCHITECTURE.md for the full shape.
+ * An event: one record, holding actual values
+ * for a subset of the facets returned by GET /api/individuals. `items` (the
+ * backend's key name) is keyed by a Facet's `label`; each facet's value object is keyed by one of
+ * that facet's field labels — see docs/ARCHITECTURE.md for the full shape.
  */
-export interface Entryset {
+export interface EventRecord {
   id: number;
   items: Record<string, Record<string, string | number | boolean>>;
 }
 
 /**
- * The entrysets matching the current query, scoped to the selected
+ * The events matching the current query, scoped to the selected
  * databases, capped at 25. No pagination.
  */
-export interface EntrysetsResponse {
-  entrysets: Entryset[];
+export interface EventsResponse {
+  /** The backend's key name for the events. */
+  entrysets: EventRecord[];
 }

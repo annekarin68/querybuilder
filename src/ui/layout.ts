@@ -21,7 +21,7 @@ let railEl: HTMLButtonElement;
 /**
  * The page frame, rendered once: a top bar (app name, workflow steps, account
  * area), then a docs rail + three columns — the data dictionary (collapsible,
- * starts collapsed), the main column (databases, query, matching entrysets)
+ * starts collapsed), the main column (databases, query, matching events)
  * and the pinned statistics column. Panels paint into the data-panel slots.
  */
 export function renderShell(root: HTMLElement): void {

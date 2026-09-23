@@ -1,7 +1,7 @@
 # Query Builder (frontend)
 
 A single-page query-builder UI. Build a filter with nested AND/OR groups; see live
-match statistics; browse a summary list of matching entrysets. All data comes from our
+match statistics; browse a summary list of matching events. All data comes from our
 API (`/api/schema`, `/api/databases`, `/api/stats`, `/api/query`). A dev-only mock
 server implements those endpoints so the app runs end to end locally. The query
 can be scoped to one or more "databases" (7 arbitrary, content-agnostic partitions

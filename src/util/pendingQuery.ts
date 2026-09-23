@@ -37,9 +37,7 @@ function isQueryNode(v: unknown): v is QueryNode {
   if (!isObject(v) || typeof v.id !== "string") return false;
   if (v.kind === "condition") {
     const nullableString = (x: unknown) => x === null || typeof x === "string";
-    return (
-      nullableString(v.individualId) && nullableString(v.fieldId) && nullableString(v.operatorId)
-    );
+    return nullableString(v.facetId) && nullableString(v.fieldId) && nullableString(v.operatorId);
   }
   return (
     v.kind === "group" &&

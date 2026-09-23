@@ -1,6 +1,6 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
-import type { Individual } from "../api/types";
+import type { Facet } from "../api/types";
 import type { CatalogField, CatalogOperator } from "../query/fieldCatalog";
 import {
   addChild,
@@ -46,18 +46,18 @@ function iconButton(action: string, label: string, icon: string, extra = ""): st
   return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
 }
 
-function individualDropdown(individuals: Individual[] | null, c: Condition): string {
+function facetDropdown(facets: Facet[] | null, c: Condition): string {
   const opts = optionsHtml(
-    individuals ?? [],
-    (ind) => ind.label,
-    (ind) => ind.name,
-    (ind) => ind.label === c.individualId,
+    facets ?? [],
+    (facet) => facet.label,
+    (facet) => facet.name,
+    (facet) => facet.label === c.facetId,
   );
-  return `<select class="ui selection dropdown" data-part="individual"><option value="">Item…</option>${opts}</select>`;
+  return `<select class="ui selection dropdown" data-part="facet"><option value="">Facet…</option>${opts}</select>`;
 }
 
 function fieldDropdown(schema: FieldCatalog, c: Condition): string {
-  const prefix = c.individualId ? `${c.individualId}.` : null;
+  const prefix = c.facetId ? `${c.facetId}.` : null;
   const opts = prefix
     ? optionsHtml(
         schema.fields.filter((f) => f.label.startsWith(prefix)),
@@ -87,7 +87,7 @@ function operatorDropdown(schema: FieldCatalog, c: Condition): string {
 
 function conditionHtml(
   schema: FieldCatalog,
-  individuals: Individual[] | null,
+  facets: Facet[] | null,
   c: Condition,
   issues: Issue[],
 ): string {
@@ -95,7 +95,7 @@ function conditionHtml(
   const operator = schema.operators.find((o) => o.label === c.operatorId);
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-grid">
-      ${individualDropdown(individuals, c)}
+      ${facetDropdown(facets, c)}
       ${fieldDropdown(schema, c)}
       ${operatorDropdown(schema, c)}
       <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
@@ -122,7 +122,7 @@ function collapseButton(collapsed: boolean): string {
  */
 function groupHtml(
   schema: FieldCatalog,
-  individuals: Individual[] | null,
+  facets: Facet[] | null,
   g: Group,
   issues: Issue[],
   isRoot: boolean,
@@ -145,7 +145,7 @@ function groupHtml(
   }
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
   const children = g.children
-    .map((child) => nodeHtml(schema, individuals, child, issues, false))
+    .map((child) => nodeHtml(schema, facets, child, issues, false))
     .join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head">
@@ -168,14 +168,14 @@ function groupHtml(
 
 function nodeHtml(
   schema: FieldCatalog,
-  individuals: Individual[] | null,
+  facets: Facet[] | null,
   node: QueryNode,
   issues: Issue[],
   isRoot: boolean,
 ): string {
   return node.kind === "group"
-    ? groupHtml(schema, individuals, node, issues, isRoot)
-    : conditionHtml(schema, individuals, node, issues);
+    ? groupHtml(schema, facets, node, issues, isRoot)
+    : conditionHtml(schema, facets, node, issues);
 }
 
 /** The query card's footer: the whole query in plain English once it is
@@ -206,7 +206,7 @@ export function renderQueryBuilder(state: AppState): void {
     el,
     `<div class="qb-card qb-query">
        <h2 class="qb-card-title">Query</h2>
-       ${nodeHtml(state.schema, state.individuals, state.query, state.issues, true)}
+       ${nodeHtml(state.schema, state.facets, state.query, state.issues, true)}
        <div class="qb-query-foot">${footerHtml(state, state.schema)}</div>
      </div>`,
   );
@@ -246,15 +246,15 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     const cond = findNode(q, nodeId);
     if (!cond || cond.kind !== "condition") return;
 
-    const individualSel = row.querySelector<HTMLSelectElement>('[data-part="individual"]');
+    const facetSel = row.querySelector<HTMLSelectElement>('[data-part="facet"]');
     const fieldSel = row.querySelector<HTMLSelectElement>('[data-part="field"]');
     const opSel = row.querySelector<HTMLSelectElement>('[data-part="operator"]');
 
-    const newIndividualId = individualSel ? individualSel.value || null : cond.individualId;
-    const individualChanged = newIndividualId !== cond.individualId;
+    const newFacetId = facetSel ? facetSel.value || null : cond.facetId;
+    const facetChanged = newFacetId !== cond.facetId;
 
-    const newFieldId = individualChanged ? null : fieldSel ? fieldSel.value || null : cond.fieldId;
-    const fieldChanged = individualChanged || newFieldId !== cond.fieldId;
+    const newFieldId = facetChanged ? null : fieldSel ? fieldSel.value || null : cond.fieldId;
+    const fieldChanged = facetChanged || newFieldId !== cond.fieldId;
     const newOperatorId = fieldChanged ? null : opSel ? opSel.value || null : cond.operatorId;
 
     const field = schemaRef?.fields.find((f) => f.label === newFieldId);
@@ -274,7 +274,7 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
     }
     onChange(
       updateNode(q, nodeId, {
-        individualId: newIndividualId,
+        facetId: newFacetId,
         fieldId: newFieldId,
         operatorId: newOperatorId,
         value,
@@ -332,7 +332,7 @@ export function wireQueryBuilder(container: HTMLElement, onChange: (next: Group)
       // silently dropped and the query would stop updating as the user types.
       if (
         target.matches(
-          'select[data-part="individual"], select[data-part="field"], select[data-part="operator"], select[data-part="value"]',
+          'select[data-part="facet"], select[data-part="field"], select[data-part="operator"], select[data-part="value"]',
         )
       ) {
         return;
