@@ -1,3 +1,8 @@
+/** Who's logged in, returned by GET /api/auth/me. */
+export interface AuthUser {
+  name: string;
+}
+
 export interface SchemaResponse {
   fields: {
     id: string;
