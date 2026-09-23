@@ -8,6 +8,9 @@ import {
   parseCookie,
   sessionCookieHeader,
   clearSessionCookieHeader,
+  loginStateCookieHeader,
+  clearLoginStateCookieHeader,
+  loginStateFromCookie,
 } from "../../mock-server/auth";
 
 describe("parseCookie", () => {
@@ -120,5 +123,24 @@ describe("cookie headers", () => {
 
   it("clearSessionCookieHeader expires the cookie immediately", () => {
     expect(clearSessionCookieHeader()).toContain("Max-Age=0");
+  });
+});
+
+describe("login-state binding cookie", () => {
+  it("loginStateCookieHeader includes the state, HttpOnly, and SameSite=Lax", () => {
+    const header = loginStateCookieHeader("abc123");
+    expect(header).toContain("qb_login_state=abc123");
+    expect(header).toContain("HttpOnly");
+    expect(header).toContain("SameSite=Lax");
+  });
+
+  it("loginStateFromCookie reads it back via parseCookie", () => {
+    const header = loginStateCookieHeader("xyz789");
+    const cookiePair = header.split(";")[0]!; // "qb_login_state=xyz789"
+    expect(loginStateFromCookie(cookiePair)).toBe("xyz789");
+  });
+
+  it("clearLoginStateCookieHeader expires it immediately", () => {
+    expect(clearLoginStateCookieHeader()).toContain("Max-Age=0");
   });
 });

@@ -354,7 +354,8 @@ Concretely:
   `{ status: "idle", data: null }` and `preview` to
   `{ status: "idle", data: null, page: 1 }`. Old numbers and rows disappear the
   instant the scope changes on screen — before any new request goes out.
-  - Preview then shows: *"Press Run / Refresh to load matching rows."*
+  - Preview then shows: *"Press Run / Refresh to load matching rows."* (or,
+    for an anonymous visitor, *"Log in to preview data."* instead — §9).
 - **If no database is selected:** no request fires; both panels show
   *"Select at least one database…"* and **Run** is disabled.
 - **If `issues` has errors:**
@@ -733,13 +734,17 @@ expand/collapse):
   this to be replaced by a link/route into that viewer once it exists.
 
 `/api/query` filters for real (§7, §10), so this list changes with the query
-and selected databases. No pagination (§7). `status: "idle"` → hint from §6.
+and selected databases. No pagination (§7). `status: "idle"` → hint from §6
+(an anonymous visitor sees a login prompt instead of the Run/Refresh hint).
 
 ---
 
 ## 10. Mock server (`mock-server/index.ts`)
 
-Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
+Dev-only. `npm run mock` starts it; Vite proxies `/api/*` and `/mock-idp/*`
+to it (the latter because `GET /api/auth/login`'s redirect is a real
+browser navigation to `/mock-idp/authorize`, not a fetch — proxying only
+`/api` would leave that hop unreachable under `npm run dev`). Plain Node
 `http`, no Express, heavily commented top to bottom.
 
 - `mock-server/schema.ts` builds the field/operator catalog purely from
@@ -765,9 +770,19 @@ Dev-only. `npm run mock` starts it; Vite proxies `/api/*` to it. Plain Node
   code via `/mock-idp/authorize/confirm`, which `/api/auth/callback`
   "exchanges" (no real network call) for an in-memory session. **None of
   this is reusable in production** — a real backend needs a real IdP
-  integration, real PKCE/client-secret handling, session storage that
-  survives process restarts, and a `Secure` cookie flag (the mock omits it
-  since local dev runs over plain `http`).
+  integration, real client-secret handling, the CSRF `state` bound to a
+  production session mechanism (the mock does this too — see below),
+  session storage that survives process restarts, and a `Secure` cookie
+  flag (the mock omits it since local dev runs over plain `http`). Whether
+  to add PKCE on top remains an open production decision (spec §2) — the
+  mock's absence of PKCE is not a recommendation either way.
+- `/api/auth/login` also sets a short-lived `qb_login_state` cookie
+  binding the CSRF `state` to the browser that started the login;
+  `/api/auth/callback` rejects the exchange unless the cookie's value
+  matches the callback's `state` param, closing a login-CSRF gap that the
+  single global set of pending `state` values alone doesn't cover (a
+  leaked/guessed callback URL could otherwise log a different browser into
+  the state-issuing browser's session). See the design spec's §7.
 - `POST /api/stats` scopes `ROWS` to the selected databases
   (`filterByDatabases`, keyed on `row.__db`), evaluates the query
   (`matches`), and scales the sample's match rate onto each database's

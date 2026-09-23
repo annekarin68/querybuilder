@@ -10,7 +10,16 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
-async function errorFromResponse(res: Response): Promise<Error> {
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function errorFromResponse(res: Response): Promise<ApiError> {
   let message = `${res.status} ${res.statusText}`;
   try {
     const body = (await res.json()) as { error?: string };
@@ -18,7 +27,7 @@ async function errorFromResponse(res: Response): Promise<Error> {
   } catch {
     /* keep the status-line message */
   }
-  return new Error(message);
+  return new ApiError(res.status, message);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

@@ -43,9 +43,10 @@ export function issueFakeCode(): string {
 
 export type ExchangeOutcome = { ok: true; sessionId: string } | { ok: false; error: string };
 
-/** Stands in for POSTing the code to the IdP's /token endpoint with the client secret.
- *  The mock skips the real network call and PKCE entirely (see the design spec's §6/§7)
- *  — a real backend does not. */
+/** Stands in for POSTing the code to the IdP's /token endpoint with the client
+ *  secret. The mock skips the real network call entirely. PKCE is a production
+ *  decision left open by the design (spec §2) — the mock does not simulate it
+ *  either way, which says nothing about whether production should use it. */
 export function exchangeCodeForSession(code: string, state: string): ExchangeOutcome {
   if (!PENDING_STATES.has(state)) return { ok: false, error: "Invalid or expired login attempt." };
   PENDING_STATES.delete(state);
@@ -86,4 +87,25 @@ export function sessionCookieHeader(sessionId: string): string {
 
 export function clearSessionCookieHeader(): string {
   return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+const LOGIN_STATE_COOKIE = "qb_login_state";
+
+/**
+ * Binds the CSRF `state` to the browser that started the login, so a leaked or
+ * guessed callback URL can't be replayed by a different browser to log a victim
+ * into an attacker's session (login CSRF) — the single global PENDING_STATES set
+ * alone only prevents *replay* of an already-used state, not this. Short-lived:
+ * only needs to survive the round trip to the IdP and back.
+ */
+export function loginStateCookieHeader(state: string): string {
+  return `${LOGIN_STATE_COOKIE}=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=300`;
+}
+
+export function clearLoginStateCookieHeader(): string {
+  return `${LOGIN_STATE_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+export function loginStateFromCookie(cookieHeader: string | undefined): string | undefined {
+  return parseCookie(cookieHeader, LOGIN_STATE_COOKIE);
 }

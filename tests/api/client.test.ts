@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getDatabases, getMe, getSchema, getStats, logout, runQuery } from "../../src/api/client";
+import {
+  ApiError,
+  getDatabases,
+  getMe,
+  getSchema,
+  getStats,
+  logout,
+  runQuery,
+} from "../../src/api/client";
 import { emptyQuery } from "../../src/query/tree";
 
 function mockFetchOnce(status: number, body: unknown) {
@@ -60,6 +68,12 @@ describe("api client", () => {
   it("falls back to status text when there is no error field", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, {}));
     await expect(getSchema()).rejects.toThrow("500 STATUS");
+  });
+
+  it("throws an ApiError carrying the response status", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(401, { error: "nope" }));
+    await expect(getSchema()).rejects.toBeInstanceOf(ApiError);
+    await expect(getSchema()).rejects.toMatchObject({ status: 401, message: "nope" });
   });
 
   it("getMe returns the user when logged in", async () => {

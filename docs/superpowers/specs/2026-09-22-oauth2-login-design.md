@@ -287,6 +287,11 @@ against the real internal IdP:
   enforcement.
 - Whatever production decides about PKCE (§2) and IdP-side logout (§2) —
   both are explicitly out of scope for this design, not decided against.
+- The CSRF `state` must be bound to the browser that started the login (the
+  mock does this via a short-lived `qb_login_state` cookie, checked at the
+  callback) and must expire — not just be single-use. A production
+  implementation needs the equivalent, tied to its own session/cookie
+  mechanism.
 
 ## 8. Testing
 

@@ -20,6 +20,9 @@ import {
   endSession,
   sessionCookieHeader,
   clearSessionCookieHeader,
+  loginStateCookieHeader,
+  clearLoginStateCookieHeader,
+  loginStateFromCookie,
 } from "./auth";
 
 const FIELDS = buildFields(INDIVIDUALS);
@@ -109,7 +112,10 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/auth/login") {
       const state = startLogin();
-      res.writeHead(302, { Location: `/mock-idp/authorize?state=${encodeURIComponent(state)}` });
+      res.writeHead(302, {
+        Location: `/mock-idp/authorize?state=${encodeURIComponent(state)}`,
+        "Set-Cookie": loginStateCookieHeader(state),
+      });
       res.end();
       return;
     }
@@ -130,12 +136,20 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/auth/callback") {
       const code = url.searchParams.get("code") ?? "";
       const state = url.searchParams.get("state") ?? "";
+      const boundState = loginStateFromCookie(req.headers.cookie);
+      if (boundState !== state) {
+        sendJson(res, 400, { error: "Invalid or expired login attempt." });
+        return;
+      }
       const outcome = exchangeCodeForSession(code, state);
       if (!outcome.ok) {
         sendJson(res, 400, { error: outcome.error });
         return;
       }
-      res.writeHead(302, { Location: "/", "Set-Cookie": sessionCookieHeader(outcome.sessionId) });
+      res.writeHead(302, {
+        Location: "/",
+        "Set-Cookie": [sessionCookieHeader(outcome.sessionId), clearLoginStateCookieHeader()],
+      });
       res.end();
       return;
     }

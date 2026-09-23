@@ -12,6 +12,7 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import {
+  ApiError,
   getDatabases,
   getIndividuals,
   getMe,
@@ -69,7 +70,7 @@ function runGuarded<T>(
   fetcher: (query: QueryNode, databases: string[]) => Promise<T>,
   onLoading: () => void,
   onSuccess: (data: T) => void,
-  onError: (message: string) => void,
+  onError: (err: unknown) => void,
 ): void {
   const state = store.getState();
   if (!canRunQuery(state)) return;
@@ -85,7 +86,7 @@ function runGuarded<T>(
     .catch((err) => {
       const s = store.getState();
       if (key !== requestKey(s.query, s.selectedDatabaseIds)) return;
-      onError(errorMessage(err));
+      onError(err);
     });
 }
 
@@ -97,7 +98,19 @@ function runPreview(): void {
     (query, databases) => runQuery(query, databases, 1, PAGE_SIZE),
     () => store.setState({ preview: { status: "loading", data: null, error: null } }),
     (data) => store.setState({ preview: { status: "ok", data, error: null } }),
-    (error) => store.setState({ preview: { status: "error", data: null, error } }),
+    (err) => {
+      if (err instanceof ApiError && err.status === 401) {
+        // The session ended after Run was enabled (a session-store restart in dev, a
+        // real expiry in production) — drop back to the anonymous UI instead of a
+        // misleading "authenticated" top menu next to a permission error.
+        store.setState({
+          auth: { status: "anonymous", user: null },
+          preview: { status: "idle", data: null, error: null },
+        });
+        return;
+      }
+      store.setState({ preview: { status: "error", data: null, error: errorMessage(err) } });
+    },
   );
 }
 
@@ -114,7 +127,10 @@ function syncRunButton(state = store.getState()): void {
 function onLogout(): void {
   logout()
     .then(() => {
-      store.setState({ auth: { status: "anonymous", user: null } });
+      store.setState({
+        auth: { status: "anonymous", user: null },
+        preview: { status: "idle", data: null, error: null },
+      });
     })
     .catch((err) => {
       // Best-effort: nothing more actionable to show beyond the button
@@ -128,7 +144,7 @@ const refreshStats = debounce(() => {
     (query, databases) => getStats(query, databases),
     () => store.setState({ stats: { status: "loading", data: null, error: null } }),
     (data) => store.setState({ stats: { status: "ok", data, error: null } }),
-    (error) => store.setState({ stats: { status: "error", data: null, error } }),
+    (err) => store.setState({ stats: { status: "error", data: null, error: errorMessage(err) } }),
   );
 }, 400);
 
