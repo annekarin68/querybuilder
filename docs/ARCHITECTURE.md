@@ -10,8 +10,9 @@
 > files named below; their doc comments are part of this documentation. The
 > history of how the design got here is archived in `docs/CHANGELOG.md` and in
 > the pull requests. Code comments refer to sections here **by title** (for
-> example `docs/ARCHITECTURE.md, "Correctness invariant"`), so keep titles
-> stable, or search the code for the old title when you rename one.
+> example `docs/ARCHITECTURE.md, "Correctness invariant"`).
+> `tests/docReferences.test.ts` fails if a cited title no longer exists, so
+> when you rename a section, update the comments it names.
 
 ---
 
@@ -253,7 +254,8 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
-                       src/query/tree.ts), plus app.test, lintRules, dateCases and noBackendDataInSrc.
+                       src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases and
+                       noBackendDataInSrc.
 scripts/check-offline.mjs  The offline guard ("Offline-first").
 vite.config.ts         Dev proxy to the mock, the offline plugins, emitting THIRD-PARTY-NOTICES.txt.
 eslint.config.js       ESLint + the two import airlocks (jQuery; src/ never imports mock-server/).
@@ -662,6 +664,8 @@ file it tests, in the same place under `tests/`. The ones to know about:
 - `tests/dateCases.ts` — date values shared by the frontend's and the mock's
   date tests, so their two copies of the timestamp pattern can't drift.
 - `tests/lintRules.test.ts` — the two ESLint airlocks still fire.
+- `tests/docReferences.test.ts` — every section of this file cited in code
+  (`docs/ARCHITECTURE.md, "…"`) still exists.
 - `tests/noBackendDataInSrc.test.ts` — fails if `src/` or `index.html` names
   a mock facet, field, tag, group, database or owner.
 - Fixtures use one neutral vocabulary: a `thing` facet with fields such as
