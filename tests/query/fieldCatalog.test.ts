@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildFieldCatalog,
+  fieldDisplayName,
   findField,
   findOperator,
   OPERATORS,
@@ -256,5 +257,13 @@ describe("valueTypeFor", () => {
   it("falls back to format only when type is empty", () => {
     expect(t("", "TIMESTAMP")).toBe("date");
     expect(t("BIGINT", "TIMESTAMP")).toBe("number");
+  });
+});
+
+describe("fieldDisplayName", () => {
+  it("is the field's name when the backend sends one, else its label", () => {
+    expect(fieldDisplayName({ label: "rpm", name: "Revolutions" })).toBe("Revolutions");
+    expect(fieldDisplayName({ label: "rpm", name: "" })).toBe("rpm");
+    expect(fieldDisplayName({ label: "rpm" })).toBe("rpm");
   });
 });

@@ -11,7 +11,8 @@ export interface SlotRequest {
  * At most one in-flight request of a kind (stats, preview). `start()` aborts the
  * previous one; `cancel()` aborts without starting another.
  *
- * This is the whole stale-response guard (docs/ARCHITECTURE.md §6): every
+ * This is the whole stale-response guard (docs/ARCHITECTURE.md, "Correctness
+ * invariant"): every
  * change to the query or the selected databases cancels the slot, so a
  * response is only applied while its request is still the slot's current one.
  * Checking identity rather than comparing query contents also covers

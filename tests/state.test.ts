@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { canRunQuery, createStore, initialState, runBlocker, type AppState } from "../src/state";
+import { createStore, initialState, runBlocker, type AppState } from "../src/state";
 import { addChild, emptyQuery, newCondition } from "../src/query/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
@@ -40,55 +40,6 @@ describe("store", () => {
   });
 });
 
-describe("canRunQuery", () => {
-  const catalog = buildFieldCatalog([]);
-
-  function state(
-    overrides: Partial<Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds">> = {},
-  ): Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds"> {
-    const root = emptyQuery();
-    return {
-      catalog,
-      issues: [],
-      query: addChild(root, root.id, newCondition()),
-      selectedDatabaseIds: ["alpha"],
-      ...overrides,
-    };
-  }
-
-  it("true when the catalog is loaded, no blocking issues, a condition exists, and a database is selected", () => {
-    expect(canRunQuery(state())).toBe(true);
-  });
-
-  it("false when the catalog hasn't loaded yet", () => {
-    expect(canRunQuery(state({ catalog: null }))).toBe(false);
-  });
-
-  it("false when there's a blocking (error-severity) issue", () => {
-    expect(
-      canRunQuery(
-        state({ issues: [{ nodeId: "x", message: "m", severity: "error", kind: "invalid" }] }),
-      ),
-    ).toBe(false);
-  });
-
-  it("true when the only issue is a warning", () => {
-    expect(
-      canRunQuery(
-        state({ issues: [{ nodeId: "x", message: "m", severity: "warning", kind: "invalid" }] }),
-      ),
-    ).toBe(true);
-  });
-
-  it("false when the query has no conditions", () => {
-    expect(canRunQuery(state({ query: emptyQuery() }))).toBe(false);
-  });
-
-  it("false when no database is selected", () => {
-    expect(canRunQuery(state({ selectedDatabaseIds: [] }))).toBe(false);
-  });
-});
-
 describe("runBlocker", () => {
   const catalog = buildFieldCatalog([]);
   const root = emptyQuery();
@@ -112,7 +63,7 @@ describe("runBlocker", () => {
     expect(
       runBlocker({
         ...ready,
-        issues: [{ nodeId: "x", message: "m", severity: "error", kind: "incomplete" }],
+        issues: [{ nodeId: "x", message: "m", kind: "incomplete" }],
       }),
     ).toBe("unfinished");
   });

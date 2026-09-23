@@ -6,7 +6,8 @@
 // body. So the global must be set from *another module* that appears earlier in the
 // import list than `fomantic-ui-css/semantic.min.js`. Setting it in `main.ts`'s body
 // is too late. This file is that earlier module, and the ONLY place (besides
-// `src/ui/fomantic.ts`) allowed to import jQuery. See docs/ARCHITECTURE.md §3.
+// `src/ui/fomantic.ts`) allowed to import jQuery. See docs/ARCHITECTURE.md,
+// "The bootstrap wrinkle".
 import $ from "jquery";
 
 declare global {

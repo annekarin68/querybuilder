@@ -1,5 +1,5 @@
 // Fails if the built dist/ references any off-origin http(s) URL.
-// See docs/ARCHITECTURE.md §2 (Offline-first).
+// See docs/ARCHITECTURE.md, "Offline-first".
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 

@@ -1,6 +1,5 @@
-import { runBlocker, type AppState, type RunBlocker } from "../state";
+import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../state";
 import type { DatabasesResponse, StatsResponse } from "../api/types";
-import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
@@ -46,17 +45,19 @@ function failureRowHtml(line: StatsResponse, db: DatabasesResponse | undefined):
   </div>`;
 }
 
+/** Statistics that have (some) lines: everything but the error state. */
+type StatsWithLines = Exclude<StatsState, { status: "error" }>;
+
 /** One row per database that has reported so far — success (ratio + bar),
  * failure (errorMessages in red, infoMessages beneath) — as each streamed line
  * arrives. */
-function perDatabaseHtml(state: AppState): string {
-  const { lines } = state.stats;
+function perDatabaseHtml(lines: StatsResponse[], databases: DatabasesResponse[] | null): string {
   if (!lines.length) return "";
   return `<h3 class="qb-stat-subtitle">By database</h3>
     <div class="qb-stat-perdb">
       ${lines
         .map((line) => {
-          const db = databaseFor(state.databases, line.label);
+          const db = databaseFor(databases, line.label);
           return line.success ? successRowHtml(line, db) : failureRowHtml(line, db);
         })
         .join("")}
@@ -70,8 +71,10 @@ function perDatabaseHtml(state: AppState): string {
  * no successes yet it shows no number, and when some failed it says the total
  * excludes them.
  */
-export function headlineHtml(state: AppState): string {
-  const { lines, status } = state.stats;
+export function headlineHtml(
+  { status, lines }: StatsWithLines,
+  databases: DatabasesResponse[] | null,
+): string {
   const succeeded = lines.filter((l) => l.success);
   const failed = lines.length - succeeded.length;
   const failedNote =
@@ -85,7 +88,7 @@ export function headlineHtml(state: AppState): string {
   }
   const matchCount = succeeded.reduce((s, l) => s + (l.matchCount ?? 0), 0);
   const total = succeeded.reduce(
-    (s, l) => s + (databaseFor(state.databases, l.label)?.totalEntrysets ?? 0),
+    (s, l) => s + (databaseFor(databases, l.label)?.totalEntrysets ?? 0),
     0,
   );
   return `<div class="qb-stat-headline" title="${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
@@ -98,9 +101,9 @@ export function headlineHtml(state: AppState): string {
 }
 
 /** While loading, how many selected databases haven't reported a line yet. */
-function pendingHtml(state: AppState): string {
-  if (state.stats.status !== "loading") return "";
-  const remaining = state.selectedDatabaseIds.length - state.stats.lines.length;
+function pendingHtml(stats: StatsWithLines, selectedCount: number): string {
+  if (stats.status !== "loading") return "";
+  const remaining = selectedCount - stats.lines.length;
   if (remaining <= 0) return "";
   return `<div class="qb-stat-pending"><span class="ui active mini inline loader"></span>Waiting on ${countLabel(remaining, "more database", "more databases")}…</div>`;
 }
@@ -122,8 +125,7 @@ const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
   unfinished: "Finish the query to see statistics.",
 };
 
-export function renderStatsPanel(state: AppState): void {
-  const el = panelEls().stats;
+export function renderStatsPanel(el: HTMLElement, state: AppState): void {
   const blocker = runBlocker(state);
   if (blocker === "loading") {
     paint(el, "");
@@ -133,23 +135,31 @@ export function renderStatsPanel(state: AppState): void {
     paint(el, card(state, placeholder(BLOCKED_MESSAGES[blocker])));
     return;
   }
-  const { status, lines, error } = state.stats;
-  if (status === "error") {
+  const stats = state.stats;
+  if (stats.status === "error") {
     paint(
       el,
       card(
         state,
-        `<div class="ui small negative message"><div class="header">Statistics failed</div><p>${escapeHtml(error ?? "")}</p></div>`,
+        `<div class="ui small negative message"><div class="header">Statistics failed</div><p>${escapeHtml(stats.error)}</p></div>`,
       ),
     );
     return;
   }
   // "idle" with a complete query = the debounce before the fetch starts.
-  if (status === "idle" || (status === "loading" && lines.length === 0)) {
+  if (stats.status === "idle" || (stats.status === "loading" && stats.lines.length === 0)) {
     paint(el, card(state, placeholder("Counting matches…")));
     return;
   }
   // The headline stays on top; the per-database list follows. The whole
   // column is sticky and scrolls internally (styles.css .qb-col-stats).
-  paint(el, card(state, `${headlineHtml(state)}${perDatabaseHtml(state)}${pendingHtml(state)}`));
+  paint(
+    el,
+    card(
+      state,
+      headlineHtml(stats, state.databases) +
+        perDatabaseHtml(stats.lines, state.databases) +
+        pendingHtml(stats, state.selectedDatabaseIds.length),
+    ),
+  );
 }

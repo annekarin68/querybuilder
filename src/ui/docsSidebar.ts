@@ -1,13 +1,13 @@
 import type { AppState } from "../state";
 import type { DatabasesResponse, Facet } from "../api/types";
-import { panelEls } from "./layout";
+import { fieldDisplayName } from "../query/fieldCatalog";
 import { escapeHtml, paint } from "./panel";
 import { compact, countLabel, displayLabel, fieldTitle, matchRatio, text } from "./format";
 import { groupByTag, matchDocs, tagsOf, UNTAGGED } from "./docsFilter";
 
-/** Total events across every loaded database — the denominator for an
- * facet's percentage, since the backend no longer sends one directly
- * (Facet only carries totalCount, an absolute figure). */
+/** Total events across every loaded database — the denominator for a
+ * facet's percentage. The backend sends no percentage: Facet only carries
+ * totalCount, an absolute figure. */
 function totalEvents(databases: DatabasesResponse[] | null): number {
   return databases?.reduce((s, d) => s + d.totalEntrysets, 0) ?? 0;
 }
@@ -23,7 +23,7 @@ function facetHtml(facet: Facet, total: number): string {
   const fields = facet.fields
     .map((f) => {
       const title = fieldTitle(f);
-      return `<span class="qb-field-chip"${title ? ` title="${escapeHtml(title)}"` : ""}><code>${escapeHtml(f.name || f.label)}</code><span class="qb-field-type">${escapeHtml(f.type || f.format)}</span></span>`;
+      return `<span class="qb-field-chip"${title ? ` title="${escapeHtml(title)}"` : ""}><code>${escapeHtml(fieldDisplayName(f))}</code><span class="qb-field-type">${escapeHtml(f.type || f.format)}</span></span>`;
     })
     .join("");
   return `<div class="qb-doc-facet" data-facet-label="${escapeHtml(facet.label)}">
@@ -56,10 +56,11 @@ function groupHtml(tag: string, facets: Facet[], total: number): string {
 
 /**
  * Show only what matches: hide non-matching facets and groups, open the groups
- * that have a match, and swap each group's size for its match count. This
- * sets hidden/open on the painted DOM directly instead of repainting — the
- * filter text is local to this panel (not AppState), and a repaint on every
- * keystroke would throw away the input's focus and caret.
+ * that have a match, and swap each group's size for its match count.
+ *
+ * This is the one place a panel changes its painted DOM directly instead of
+ * repainting: the filter text is local to this panel (not AppState), and a
+ * repaint on every keystroke would throw away the input's focus and caret.
  */
 function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
   const match = matchDocs(facets, query);
@@ -85,8 +86,7 @@ function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
   el.querySelector<HTMLElement>("[data-action='clear-filter']")!.hidden = query === "";
 }
 
-export function renderDocsSidebar(state: AppState): void {
-  const el = panelEls().docs;
+export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
   if (!state.facets) {
     paint(
       el,
@@ -94,9 +94,8 @@ export function renderDocsSidebar(state: AppState): void {
     );
     return;
   }
-  const facets = state.facets;
   const total = totalEvents(state.databases);
-  const groups = groupByTag(facets);
+  const groups = groupByTag(state.facets);
 
   paint(
     el,
@@ -116,18 +115,35 @@ export function renderDocsSidebar(state: AppState): void {
        </div>
      </div>`,
   );
+}
 
-  const input = el.querySelector<HTMLInputElement>("#qb-docs-filter")!;
-  const clear = () => {
-    input.value = "";
-    applyFilter(el, facets, "");
+/**
+ * Delegated listeners for the search box: typing filters, Escape or ✕ clears.
+ * Call once at startup. `getFacets` reads the current facets when an event
+ * fires, so the listeners never go stale across repaints.
+ */
+export function wireDocsSidebar(container: HTMLElement, getFacets: () => Facet[] | null): void {
+  const isSearch = (t: EventTarget | null): t is HTMLInputElement =>
+    t instanceof HTMLInputElement && t.id === "qb-docs-filter";
+  const filter = (text: string) => {
+    const facets = getFacets();
+    if (facets) applyFilter(container, facets, text);
   };
-  input.addEventListener("input", () => applyFilter(el, facets, input.value));
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && input.value) clear();
+
+  container.addEventListener("input", (e) => {
+    if (isSearch(e.target)) filter(e.target.value);
   });
-  el.querySelector("[data-action='clear-filter']")!.addEventListener("click", () => {
-    clear();
+  container.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !isSearch(e.target) || !e.target.value) return;
+    e.target.value = "";
+    filter("");
+  });
+  container.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest("[data-action='clear-filter']")) return;
+    const input = container.querySelector<HTMLInputElement>("#qb-docs-filter");
+    if (!input) return;
+    input.value = "";
+    filter("");
     input.focus();
   });
 }

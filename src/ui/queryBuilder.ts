@@ -13,11 +13,17 @@ import {
 } from "../query/tree";
 import { nextCondition } from "../query/conditionEdit";
 import { queryToText } from "../query/summary";
-import { panelEls } from "./layout";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange } from "./fomantic";
 import { countLabel } from "./format";
 import { readValueControl, renderValueControl } from "./valueControl";
+
+/** What every part of the tree's HTML needs, passed down the recursion. */
+interface BuilderCtx {
+  catalog: FieldCatalog;
+  facets: Facet[] | null;
+  issues: Issue[];
+}
 
 /**
  * Unfinished parts are quiet grey hints — the user simply isn't done yet. Only
@@ -79,23 +85,18 @@ function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
   return `<select class="ui selection dropdown" data-part="operator" aria-label="Operator"${field ? "" : " disabled"}><option value="">Operator…</option>${opts}</select>`;
 }
 
-function conditionHtml(
-  catalog: FieldCatalog,
-  facets: Facet[] | null,
-  c: Condition,
-  issues: Issue[],
-): string {
-  const field = findField(catalog, c.fieldId);
+function conditionHtml(ctx: BuilderCtx, c: Condition): string {
+  const field = findField(ctx.catalog, c.fieldId);
   const operator = findOperator(c.operatorId);
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-grid">
-      ${facetDropdown(facets, c)}
-      ${fieldDropdown(catalog, c)}
-      ${operatorDropdown(catalog, c)}
+      ${facetDropdown(ctx.facets, c)}
+      ${fieldDropdown(ctx.catalog, c)}
+      ${operatorDropdown(ctx.catalog, c)}
       <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
       ${iconButton("remove-node", "Remove condition", "times")}
     </div>
-    ${issuesHtml(c.id, issues)}
+    ${issuesHtml(c.id, ctx.issues)}
   </div>`;
 }
 
@@ -114,18 +115,12 @@ function collapseButton(collapsed: boolean): string {
  * "joiner" on the bracket line. A collapsed group folds to one line: its
  * plain-English summary and how many conditions it holds.
  */
-function groupHtml(
-  catalog: FieldCatalog,
-  facets: Facet[] | null,
-  g: Group,
-  issues: Issue[],
-  isRoot: boolean,
-): string {
+function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   const tone = g.operator === "OR" ? "or" : "and";
   const matchWord = g.operator === "OR" ? "ANY" : "ALL";
   const remove = isRoot ? "" : iconButton("remove-node", "Remove group", "times");
   if (g.collapsed) {
-    const text = queryToText(g, catalog);
+    const text = queryToText(g, ctx.catalog);
     return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
       <div class="qb-group-head">
         ${collapseButton(true)}
@@ -134,13 +129,11 @@ function groupHtml(
         <span class="qb-count">${countLabel(countConditions(g), "condition")}</span>
         ${remove}
       </div>
-      ${issuesHtml(g.id, issues)}
+      ${issuesHtml(g.id, ctx.issues)}
     </div>`;
   }
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
-  const children = g.children
-    .map((child) => nodeHtml(catalog, facets, child, issues, false))
-    .join(joiner);
+  const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head">
       ${collapseButton(false)}
@@ -155,21 +148,13 @@ function groupHtml(
       <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
       ${remove}
     </div>
-    ${issuesHtml(g.id, issues)}
+    ${issuesHtml(g.id, ctx.issues)}
     <div class="qb-children">${children}</div>
   </div>`;
 }
 
-function nodeHtml(
-  catalog: FieldCatalog,
-  facets: Facet[] | null,
-  node: QueryNode,
-  issues: Issue[],
-  isRoot: boolean,
-): string {
-  return node.kind === "group"
-    ? groupHtml(catalog, facets, node, issues, isRoot)
-    : conditionHtml(catalog, facets, node, issues);
+function nodeHtml(ctx: BuilderCtx, node: QueryNode, isRoot: boolean): string {
+  return node.kind === "group" ? groupHtml(ctx, node, isRoot) : conditionHtml(ctx, node);
 }
 
 /** The query card's footer: the whole query in plain English once it is
@@ -190,17 +175,17 @@ function footerHtml(state: AppState, catalog: FieldCatalog): string {
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
-export function renderQueryBuilder(state: AppState): void {
-  const el = panelEls().center;
+function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
     return;
   }
+  const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues: state.issues };
   paint(
     el,
     `<div class="qb-card qb-query">
        <h2 class="qb-card-title">Query</h2>
-       ${nodeHtml(state.catalog, state.facets, state.query, state.issues, true)}
+       ${nodeHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state, state.catalog)}</div>
      </div>`,
   );
@@ -211,15 +196,16 @@ export function renderQueryBuilder(state: AppState): void {
  * panel). Call ONCE at startup. The handlers read the current tree through
  * `getState()` when an event fires, so they never go stale across repaints.
  *
- * Returns `bindDropdowns`, which must run after every renderQueryBuilder():
- * Fomantic dropdowns don't emit a usable native "change", their onChange is
- * bound per element, and paint() replaces those elements.
+ * Returns the query builder's render function — the only way to paint it.
+ * Rendering and binding must happen together: Fomantic dropdowns don't emit a
+ * usable native "change", so their onChange is bound per element, and every
+ * paint replaces those elements.
  */
 export function wireQueryBuilder(
   container: HTMLElement,
   getState: () => AppState,
   onChange: (next: Group) => void,
-): () => void {
+): (state: AppState) => void {
   function handleRowChange(row: HTMLElement): void {
     const { query, catalog } = getState();
     const cond = findNode(query, row.dataset.nodeId!);
@@ -269,7 +255,7 @@ export function wireQueryBuilder(
     // Fomantic dispatches a native bubbling "change" on the <select> behind each
     // dropdown *before* calling its onChange. Handling both would run
     // handleRowChange twice, the second time on a detached row, and write back
-    // stale values. So every <select> is handled ONLY via bindDropdowns below;
+    // stale values. So every <select> is handled ONLY via onDropdownChange below;
     // this listener handles the plain <input>s (text/number, the range
     // pair and the boolean toggle's checkbox).
     if (target instanceof HTMLSelectElement) return;
@@ -277,9 +263,11 @@ export function wireQueryBuilder(
     if (row) handleRowChange(row);
   });
 
-  return () =>
+  return (state) => {
+    paintQueryBuilder(container, state);
     onDropdownChange(container, (el) => {
       const row = el.closest<HTMLElement>(".qb-condition[data-node-id]");
       if (row) handleRowChange(row);
     });
+  };
 }

@@ -56,8 +56,8 @@ export function startLogin(): string {
 
 /** Dev-only: stands in for the real IdP handing back a code after the user authenticates
  *  on its authorize page. Production's real IdP does this remotely over HTTPS — nothing
- *  here is reused by a real integration (see docs/superpowers/specs/
- *  2026-09-22-oauth2-login-design.md §7). */
+ *  here is reused by a real integration (issue #15;
+ *  docs/superpowers/specs/2026-09-22-oauth2-login-design.md, §7). */
 export function issueFakeCode(): string {
   const code = randomToken();
   FAKE_CODES.put(code, true);
@@ -68,8 +68,10 @@ export type ExchangeOutcome = { ok: true; sessionId: string } | { ok: false; err
 
 /** Stands in for POSTing the code to the IdP's /token endpoint with the client
  *  secret. The mock skips the real network call entirely. PKCE is a production
- *  decision left open by the design (spec §2) — the mock does not simulate it
- *  either way, which says nothing about whether production should use it. */
+ *  decision left open by the design (§2 of
+ *  docs/superpowers/specs/2026-09-22-oauth2-login-design.md) — the mock does
+ *  not simulate it either way, which says nothing about whether production
+ *  should use it. */
 export function exchangeCodeForSession(code: string, state: string): ExchangeOutcome {
   if (!PENDING_STATES.take(state)) return { ok: false, error: "Invalid or expired login attempt." };
   if (!FAKE_CODES.take(code)) return { ok: false, error: "Invalid or expired authorization code." };
@@ -102,7 +104,7 @@ export function parseCookie(header: string | undefined, name: string): string | 
 export function sessionCookieHeader(sessionId: string): string {
   // No `Secure` flag: local dev runs over plain http, and browsers drop `Secure`
   // cookies entirely on a non-https origin. Production runs behind TLS and MUST
-  // add `Secure` — see the design spec's §7.
+  // add `Secure` (issue #15; docs/superpowers/specs/2026-09-22-oauth2-login-design.md, §7).
   return `${SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/`;
 }
 
@@ -174,7 +176,7 @@ export function startCompliance(): string {
 /** Dev-only: stands in for the real compliance service handing back a token
  *  after the user submits their reason on its form. Production's real service
  *  does this remotely over HTTPS — nothing here is reused by a real
- *  integration (see the design spec's §7). */
+ *  integration (issue #15; docs/superpowers/specs/2026-09-23-compliance-logging-design.md, §7). */
 export function issueFakeComplianceToken(reason: string): string {
   const token = randomToken();
   PENDING_COMPLIANCE_REASONS.put(token, reason);

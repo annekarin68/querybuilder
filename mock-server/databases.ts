@@ -1,18 +1,13 @@
 import type { DatabasesResponse } from "../src/api/types";
 
-interface DatabaseSeed {
-  label: string;
-  name: string;
-  description: string;
-  owner: string;
-  totalEntrysets: number;
-}
+/** A database as written below; `percentageOfTotal` is computed from the sizes. */
+type DatabaseSeed = Omit<DatabasesResponse, "percentageOfTotal">;
 
 /**
  * Seven arbitrary, content-agnostic partitions — database identity carries
  * no meaning tied to entryset content (product decision: "the database
  * names do not really matter"). totalEntrysets values are hand-picked
- * constants spanning ~12K to ~5.6B, mirroring the old catalog's spread.
+ * constants spanning ~12K to ~5.6B, so the UI sees realistic magnitudes.
  */
 const SEEDS: DatabaseSeed[] = [
   {

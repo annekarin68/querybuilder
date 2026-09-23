@@ -115,7 +115,7 @@ export interface Facet {
  * An event: one record, holding actual values
  * for a subset of the facets returned by GET /api/individuals. `items` (the
  * backend's key name) is keyed by a Facet's `label`; each facet's value object is keyed by one of
- * that facet's field labels — see docs/ARCHITECTURE.md for the full shape.
+ * that facet's field labels (docs/ARCHITECTURE.md, "Naming").
  */
 export interface EventRecord {
   id: number;

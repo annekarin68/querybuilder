@@ -1,6 +1,5 @@
 import { runBlocker, type AppState, type RunBlocker } from "../state";
 import type { EventRecord, Facet } from "../api/types";
-import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, formatWhen, text } from "./format";
 import { tagsOf, UNTAGGED } from "./docsFilter";
@@ -126,8 +125,9 @@ function runBlock(message: string, enabled: boolean, note = "", label = "Run que
   </div>`;
 }
 
-/** Advisory only (§9): Run always attempts the request; main.ts reacts to the
- *  real 401/403 by redirecting into login/compliance and back. */
+/** Advisory only (docs/ARCHITECTURE.md, "Auth"): Run always attempts the
+ *  request; src/app.ts reacts to the real 401/403 by redirecting into
+ *  login/compliance and back. */
 function runNote(state: AppState): string {
   if (state.auth.status === "anonymous") return "You'll be asked to log in first.";
   if (state.auth.status === "authenticated" && state.compliance.status === "required") {
@@ -143,12 +143,12 @@ const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
   unfinished: "Finish the query to run it.",
 };
 
-export function renderDataPreview(state: AppState): void {
-  const el = panelEls().preview;
+export function renderDataPreview(el: HTMLElement, state: AppState): void {
   const p = state.preview;
 
-  // §6: this panel never shows anything that does not belong to the query on
-  // screen, and it says WHY it is empty.
+  // This panel never shows anything that does not belong to the query on
+  // screen, and it says WHY it is empty (docs/ARCHITECTURE.md, "Correctness
+  // invariant").
   const blocker = runBlocker(state);
   if (blocker === "loading") {
     paint(el, "");
@@ -158,7 +158,7 @@ export function renderDataPreview(state: AppState): void {
     paint(el, card(runBlock(BLOCKED_MESSAGES[blocker], false)));
     return;
   }
-  // onQueryChange/onDatabasesChange reset preview to "idle" in the same
+  // app.ts resets preview to "idle" (changeScope) in the same
   // setState that changes the query, so one run always belongs to one query.
   if (p.status === "idle") {
     paint(

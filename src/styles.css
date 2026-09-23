@@ -1,5 +1,5 @@
 /*
- * Theme layer on top of Fomantic UI (docs/superpowers/specs/2026-09-23-ui-ux-refresh-design.md).
+ * Theme layer on top of Fomantic UI (docs/ARCHITECTURE.md, "Screen layout").
  * Fomantic handles typography (it self-hosts Lato) and its widgets; this file
  * owns layout and colour. Colours and sizes live in the tokens below — change
  * them here, not in individual rules.
@@ -14,9 +14,23 @@
   --qb-muted: #5f6b7a;
   --qb-subtle: #8792a0;
 
+  --qb-text-on-fill: #ffffff; /* text on the top bar and on filled buttons/badges */
+  --qb-hover: rgba(0, 0, 0, 0.06);
+  --qb-chip: #eef1f4;
+  --qb-track: #e3e8ee; /* the empty part of a statistics bar */
+  --qb-selected-bg: #eaf4fc;
+  --qb-selected-text: #1f5f8f;
+  --qb-open-row: #eef4fa;
+  --qb-shadow: 0 8px 24px rgba(15, 30, 45, 0.18);
+
   --qb-topbar: #1b2a3a;
   --qb-topbar-2: #2d4257;
   --qb-topbar-text: #dbe6f0;
+  --qb-topbar-muted: #9fb0c2;
+  --qb-topbar-ok-bg: rgba(33, 186, 69, 0.2);
+  --qb-topbar-ok-text: #a7f0b8;
+  --qb-topbar-warn-bg: rgba(224, 138, 0, 0.25);
+  --qb-topbar-warn-text: #ffd08a;
 
   /* ALL / AND */
   --qb-and: #2185d0;
@@ -69,7 +83,7 @@ body {
   gap: 1.25rem;
   padding: 0 1rem;
   background: var(--qb-topbar);
-  color: #fff;
+  color: var(--qb-text-on-fill);
 }
 .qb-brand {
   font-weight: 700;
@@ -88,16 +102,16 @@ body {
   gap: 0.4rem;
   padding: 0.3rem 0.75rem;
   border-radius: 999px;
-  color: #9fb0c2;
+  color: var(--qb-topbar-muted);
   white-space: nowrap;
 }
 .qb-step:hover,
 .qb-step:focus-visible {
-  color: #fff;
+  color: var(--qb-text-on-fill);
 }
 .qb-step.is-active {
   background: var(--qb-topbar-2);
-  color: #fff;
+  color: var(--qb-text-on-fill);
 }
 .qb-step-num {
   display: inline-grid;
@@ -254,7 +268,7 @@ body {
   display: inline-block;
   padding: 0 0.45rem;
   border-radius: 3px;
-  background: #eef1f4;
+  background: var(--qb-chip);
   color: var(--qb-muted);
   font-size: 0.72rem;
   line-height: 1.5;
@@ -288,7 +302,7 @@ body {
   margin: 0;
 }
 .qb-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--qb-hover);
   color: var(--qb-text);
 }
 .qb-icon-btn:focus-visible {
@@ -336,8 +350,8 @@ body {
 }
 .qb-db-pill input:checked + span {
   border-color: var(--qb-and-soft);
-  background: #eaf4fc;
-  color: #1f5f8f;
+  background: var(--qb-selected-bg);
+  color: var(--qb-selected-text);
 }
 .qb-db-pill input:checked + span::before {
   border-color: var(--qb-and);
@@ -375,7 +389,7 @@ body {
   margin: 0;
 }
 .qb-account-chip:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--qb-text-on-fill);
 }
 .qb-account-name {
   max-width: 12rem;
@@ -397,12 +411,12 @@ body {
   font-size: 0.8em;
 }
 .qb-badge-ok {
-  background: rgba(33, 186, 69, 0.2);
-  color: #a7f0b8;
+  background: var(--qb-topbar-ok-bg);
+  color: var(--qb-topbar-ok-text);
 }
 .qb-badge-warn {
-  background: rgba(224, 138, 0, 0.25);
-  color: #ffd08a;
+  background: var(--qb-topbar-warn-bg);
+  color: var(--qb-topbar-warn-text);
 }
 .qb-account-menu {
   position: absolute;
@@ -414,7 +428,7 @@ body {
   color: var(--qb-text);
   border: 1px solid var(--qb-border);
   border-radius: var(--qb-radius);
-  box-shadow: 0 8px 24px rgba(15, 30, 45, 0.18);
+  box-shadow: var(--qb-shadow);
 }
 /* Fomantic's .ui.button is content-box, so a fluid button's width:100% (plus
    its own horizontal padding) overflows a narrow container like this menu's
@@ -529,7 +543,7 @@ body {
 }
 .qb-logic-btn.is-on {
   background: var(--qb-c);
-  color: #fff;
+  color: var(--qb-text-on-fill);
 }
 .qb-logic-btn:focus-visible {
   outline: 2px solid var(--qb-c);
@@ -559,7 +573,7 @@ body {
   padding: 0.05rem 0.4rem;
   border-radius: 3px;
   background: var(--qb-c);
-  color: #fff;
+  color: var(--qb-text-on-fill);
   font-size: 0.7rem;
   font-weight: 800;
 }
@@ -696,7 +710,7 @@ body {
   height: 6px;
   overflow: hidden;
   border-radius: 3px;
-  background: #e3e8ee;
+  background: var(--qb-track);
 }
 .qb-bar > i {
   display: block;
@@ -809,7 +823,7 @@ body {
   background: var(--qb-surface-2);
 }
 .qb-event-row[open] summary {
-  background: #eef4fa;
+  background: var(--qb-open-row);
 }
 .qb-er-id {
   font-weight: 700;

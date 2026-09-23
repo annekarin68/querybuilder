@@ -2,20 +2,16 @@ import type { Condition, Issue, QueryNode } from "./types";
 import { findField, findOperator, type FieldCatalog } from "./fieldCatalog";
 import { isUtcTimestamp } from "./dates";
 
-export function hasBlockingErrors(issues: Issue[]): boolean {
-  return issues.some((i) => i.severity === "error");
-}
-
 function isEmptyScalar(v: unknown): boolean {
   return v === null || v === undefined || v === "";
 }
 
 function incomplete(nodeId: string, message: string): Issue {
-  return { nodeId, message, severity: "error", kind: "incomplete" };
+  return { nodeId, message, kind: "incomplete" };
 }
 
 function invalid(nodeId: string, message: string): Issue {
-  return { nodeId, message, severity: "error", kind: "invalid" };
+  return { nodeId, message, kind: "invalid" };
 }
 
 function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {

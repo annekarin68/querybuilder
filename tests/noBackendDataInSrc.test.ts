@@ -8,7 +8,7 @@ import { DATABASES } from "../mock-server/databases";
  * The mock dataset is fictional, and the real backend's names differ, so the
  * frontend must never name anything from it — deployment-specific names go in
  * src/config.ts, which ships empty. This scans src/ and index.html for every
- * mock item, database and owner name, and every multi-word (underscored)
+ * mock facet, database and owner name, and every multi-word (underscored)
  * field, tag and group name. Short single words ("front", "count") are left
  * out: they are ordinary English and would match unrelated code.
  */

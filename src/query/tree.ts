@@ -36,7 +36,7 @@ function mapTree(node: QueryNode, fn: (n: QueryNode) => QueryNode): QueryNode {
   if (node.kind === "group") {
     const mapped: Group = {
       ...node,
-      children: node.children.map((c) => mapTree(c, fn) as Group | Condition),
+      children: node.children.map((c) => mapTree(c, fn)),
     };
     return fn(mapped);
   }
@@ -45,9 +45,7 @@ function mapTree(node: QueryNode, fn: (n: QueryNode) => QueryNode): QueryNode {
 
 export function addChild(tree: Group, parentId: string, node: QueryNode): Group {
   return mapTree(tree, (n) =>
-    n.kind === "group" && n.id === parentId
-      ? { ...n, children: [...n.children, node as Group | Condition] }
-      : n,
+    n.kind === "group" && n.id === parentId ? { ...n, children: [...n.children, node] } : n,
   ) as Group;
 }
 
@@ -79,11 +77,9 @@ export function countConditions(tree: QueryNode): number {
 
 /**
  * A copy of `tree` with every group's `collapsed` flag removed. `collapsed` is a
- * pure UI display flag, not part of the query's semantics — callers that need to
- * tell "did the actual filter change?" from "did the user just expand/collapse a
- * group?" compare trees through this first.
+ * pure UI display flag, not part of the query's semantics.
  */
-export function stripCollapsed(tree: QueryNode): QueryNode {
+function stripCollapsed(tree: QueryNode): QueryNode {
   return mapTree(tree, (n) => {
     if (n.kind === "group") delete n.collapsed;
     return n;

@@ -5,12 +5,12 @@ export type Arity = "none" | "one" | "two" | "many";
 
 /** One queryable field: a (facet, field) pair from GET /api/individuals. */
 export interface CatalogField {
-  /** The dotted "itemLabel.fieldLabel" id a condition stores as `fieldId`. */
+  /** The dotted "facetLabel.fieldLabel" id a condition stores as `fieldId`. */
   label: string;
   /** Display name, "Facet name: field name" — used in summaries. */
   name: string;
   /** The field's own display name (its `name`, else its `label`) — used in
-   *  the Field dropdown, where the item is already chosen. */
+   *  the Field dropdown, where the facet is already chosen. */
   fieldName: string;
   valueType: ValueType;
   /** The allowed values of an enum field. */
@@ -45,6 +45,12 @@ export const OPERATORS: CatalogOperator[] = [
   { label: "isEmpty", name: "Is empty", arity: "none" },
   { label: "isNotEmpty", name: "Is not empty", arity: "none" },
 ];
+
+/** How a field is shown to the user: its `name` when the backend sends one,
+ *  else its `label` (FacetField.name isn't populated yet). */
+export function fieldDisplayName(f: { label: string; name?: string }): string {
+  return f.name || f.label;
+}
 
 export function findField(catalog: FieldCatalog, label: string | null): CatalogField | undefined {
   return label ? catalog.fields.find((f) => f.label === label) : undefined;
@@ -125,7 +131,7 @@ export function buildFieldCatalog(facets: Facet[]): FieldCatalog {
     for (const f of facet.fields) {
       const isEnum = f.values.length > 0;
       const valueType = isEnum ? "enum" : valueTypeFor(f);
-      const fieldName = f.name || f.label;
+      const fieldName = fieldDisplayName(f);
       fields.push({
         label: `${facet.label}.${f.label}`,
         name: `${facet.name}: ${fieldName}`,

@@ -1,13 +1,12 @@
 import type { AppState } from "../state";
 import { COMPLIANCE_START_URL, LOGIN_URL } from "../api/client";
 import { formatWhen } from "./format";
-import { panelEls } from "./layout";
 import { escapeHtml, paint } from "./panel";
 
 /**
  * The top-bar account menu: login state and the compliance acknowledgment in
- * one place. Display-only, like the two widgets it replaced — Run is never
- * gated on it; main.ts reacts to POST /api/query's real 401/403 instead.
+ * one place. Display-only — Run is never
+ * gated on it; src/app.ts reacts to POST /api/query's real 401/403 instead.
  *
  * A native <details> dropdown rather than a Fomantic one: Fomantic's dropdown
  * treats a clicked item as a selection and rewrites the trigger's text, and
@@ -30,18 +29,18 @@ function complianceHtml(state: AppState): string {
     return `<p class="qb-account-meta">Running a query needs a compliance reason for this session.</p>
       <a class="ui fluid small primary button" href="${escapeHtml(COMPLIANCE_START_URL)}" data-flow-link>Start compliance check</a>`;
   }
-  return `<p class="qb-account-reason">“${escapeHtml(c.reason ?? "")}”</p>
+  return `<p class="qb-account-reason">“${escapeHtml(c.reason)}”</p>
     ${c.ackedAt ? `<p class="qb-account-meta">Given ${escapeHtml(formatWhen(c.ackedAt))}</p>` : ""}
     <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Invalidate</button>`;
 }
 
-export function renderAccountMenu(state: AppState): void {
-  const el = panelEls().account;
-  if (state.auth.status === "loading") {
+export function renderAccountMenu(el: HTMLElement, state: AppState): void {
+  const { auth } = state;
+  if (auth.status === "loading") {
     paint(el, "");
     return;
   }
-  if (state.auth.status === "anonymous") {
+  if (auth.status === "anonymous") {
     paint(
       el,
       `<a href="${escapeHtml(LOGIN_URL)}" data-flow-link class="ui small primary button">Log in</a>`,
@@ -53,7 +52,7 @@ export function renderAccountMenu(state: AppState): void {
     `<details class="qb-account">
        <summary class="qb-account-chip">
          <i class="user circle icon"></i>
-         <span class="qb-account-name">${escapeHtml(state.auth.user!.name)}</span>
+         <span class="qb-account-name">${escapeHtml(auth.user.name)}</span>
          ${badgeHtml(state)}
          <i class="dropdown icon"></i>
        </summary>

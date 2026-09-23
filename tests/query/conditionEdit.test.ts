@@ -12,17 +12,17 @@ const field = (label: string, valueType: CatalogField["valueType"]): CatalogFiel
 });
 const catalog: FieldCatalog = {
   fields: [
-    field("car.speed", "number"),
-    field("car.moving", "boolean"),
-    field("car.vin", "string"),
+    field("thing.size", "number"),
+    field("thing.active", "boolean"),
+    field("thing.name", "string"),
   ],
 };
 
 const cond = (over: Partial<Condition> = {}): Condition => ({
   kind: "condition",
   id: "c1",
-  facetId: "car",
-  fieldId: "car.speed",
+  facetId: "thing",
+  fieldId: "thing.size",
   operatorId: "gt",
   value: 50,
   ...over,
@@ -33,18 +33,18 @@ const onScreen = (value: unknown) => () => value;
 
 describe("nextCondition", () => {
   it("keeps what the user typed when only the value changed", () => {
-    const picks = { facetId: "car", fieldId: "car.speed", operatorId: "gt" };
+    const picks = { facetId: "thing", fieldId: "thing.size", operatorId: "gt" };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toMatchObject({
-      fieldId: "car.speed",
+      fieldId: "thing.size",
       operatorId: "gt",
       value: 70,
     });
   });
 
-  it("changing the item resets field, operator and value", () => {
-    const picks = { facetId: "truck", fieldId: "car.speed", operatorId: "gt" };
+  it("changing the facet resets field, operator and value", () => {
+    const picks = { facetId: "other", fieldId: "thing.size", operatorId: "gt" };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toEqual({
-      facetId: "truck",
+      facetId: "other",
       fieldId: null,
       operatorId: null,
       value: null,
@@ -52,21 +52,21 @@ describe("nextCondition", () => {
   });
 
   it("changing the field resets operator and value", () => {
-    const picks = { facetId: "car", fieldId: "car.vin", operatorId: "gt" };
+    const picks = { facetId: "thing", fieldId: "thing.name", operatorId: "gt" };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toMatchObject({
-      fieldId: "car.vin",
+      fieldId: "thing.name",
       operatorId: null,
       value: null,
     });
   });
 
   it("keeps the value when the operator changes to one of the same arity", () => {
-    const picks = { facetId: "car", fieldId: "car.speed", operatorId: "gte" };
+    const picks = { facetId: "thing", fieldId: "thing.size", operatorId: "gte" };
     expect(nextCondition(cond(), picks, catalog, onScreen(50)).value).toBe(50);
   });
 
   it("does not read the stale control when the operator's arity changes", () => {
-    const picks = { facetId: "car", fieldId: "car.speed", operatorId: "between" };
+    const picks = { facetId: "thing", fieldId: "thing.size", operatorId: "between" };
     const read = () => {
       throw new Error("must not read the old control");
     };
@@ -74,11 +74,11 @@ describe("nextCondition", () => {
   });
 
   it("a boolean field defaults to false, since a toggle cannot show 'unset'", () => {
-    const picks = { facetId: "car", fieldId: "car.moving", operatorId: null };
-    const next = nextCondition(cond({ fieldId: "car.speed" }), picks, catalog, onScreen(1));
+    const picks = { facetId: "thing", fieldId: "thing.active", operatorId: null };
+    const next = nextCondition(cond({ fieldId: "thing.size" }), picks, catalog, onScreen(1));
     expect(next.value).toBeNull();
     const withOp = nextCondition(
-      cond({ fieldId: "car.moving", operatorId: null, value: null }),
+      cond({ fieldId: "thing.active", operatorId: null, value: null }),
       { ...picks, operatorId: "eq" },
       catalog,
       onScreen(undefined),
