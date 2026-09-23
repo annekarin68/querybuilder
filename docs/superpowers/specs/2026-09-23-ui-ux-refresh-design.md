@@ -90,8 +90,9 @@ toolchain for a colour change); replacing Fomantic with hand-written components
   palette via CSS custom properties: primary / ALL = Fomantic blue `#2185d0`,
   ANY = amber `#e08a00`, invalid = red, incomplete hints = grey.
 - **Narrow widths** — the docs column starts collapsed at every width, so the
-  builder gets the room by default. Condition rows use a CSS container query: below ~640 px of available row width the value control and
-  ✕ wrap onto a second line instead of squeezing the dropdowns.
+  builder gets the room by default. Condition rows use a CSS container query:
+  below ~640 px of available row width the value control and ✕ wrap onto a
+  second line instead of squeezing the dropdowns.
 
 ## 4. Query builder
 
