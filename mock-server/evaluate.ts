@@ -15,31 +15,28 @@ export interface JsonGroup {
 }
 export type JsonNode = JsonCondition | JsonGroup;
 
-function cmp(a: unknown, b: unknown): number {
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
-}
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T/;
+const INSTANT = /^\d{4}-\d{2}-\d{2}T/;
 
 /**
- * The query sends dates as calendar days ("2024-11-06", from a date picker),
- * but timestamp fields hold instants ("2024-11-06T14:32:00Z"). Per the API
- * contract (docs/ARCHITECTURE.md §7, "Dates"), such a condition compares the
- * instant's UTC calendar day — so turn the row value into that day first.
+ * Numbers compare as numbers. A condition value that is a full ISO timestamp
+ * ("2024-11-06T00:00:00.000Z" — how the frontend sends dates, see
+ * docs/ARCHITECTURE.md §7 "Dates") compares as an instant, so a row value in
+ * any offset, or a plain "YYYY-MM-DD" (midnight UTC), orders correctly.
+ * Everything else compares as text.
  */
-function comparable(v: Row[string] | undefined, conditionValue: unknown): Row[string] | undefined {
-  const sample = Array.isArray(conditionValue) ? conditionValue[0] : conditionValue;
-  if (typeof sample !== "string" || !DAY.test(sample)) return v;
-  if (typeof v !== "string" || !TIMESTAMP.test(v)) return v;
-  const t = new Date(v);
-  return Number.isNaN(t.getTime()) ? v : t.toISOString().slice(0, 10);
+function cmp(a: unknown, b: unknown): number {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (typeof a === "string" && typeof b === "string" && INSTANT.test(b)) {
+    const ta = Date.parse(a);
+    const tb = Date.parse(b);
+    if (!Number.isNaN(ta) && !Number.isNaN(tb)) return ta - tb;
+  }
+  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
 }
 
 function conditionMatches(c: JsonCondition, row: Row): boolean {
   if (!c.fieldId || !c.operatorId) return false;
-  const v = comparable(row[c.fieldId], c.value);
+  const v = row[c.fieldId];
   switch (c.operatorId) {
     case "eq":
       return v === c.value;
