@@ -846,3 +846,100 @@ body {
   background: var(--qb-surface-2);
   font-size: 0.8em;
 }
+
+/* ---- Data dictionary (src/ui/docsSidebar.ts + docsFilter.ts) ---- */
+.qb-docs-search {
+  position: relative;
+  margin-bottom: 0.6rem;
+}
+.qb-docs-search > input {
+  padding-right: 2rem !important;
+}
+.qb-docs-clear {
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  transform: translateY(-50%);
+}
+.qb-docs-empty {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--qb-muted);
+}
+.qb-doc-group {
+  border-top: 1px solid var(--qb-border);
+}
+.qb-doc-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.qb-doc-group > summary::-webkit-details-marker {
+  display: none;
+}
+.qb-doc-group > summary::before {
+  content: "▸";
+  width: 0.8rem;
+  color: var(--qb-subtle);
+}
+.qb-doc-group[open] > summary::before {
+  content: "▾";
+}
+.qb-doc-group-name {
+  flex: 1 1 auto;
+}
+.qb-doc-items {
+  padding: 0 0 0.5rem 1.3rem;
+}
+.qb-doc-item {
+  padding: 0.5rem 0;
+  border-top: 1px dashed var(--qb-border);
+}
+.qb-doc-item:first-child {
+  border-top: none;
+}
+.qb-doc-name {
+  font-weight: 600;
+}
+.qb-doc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.25rem 0;
+}
+.qb-doc-desc,
+.qb-doc-comment,
+.qb-doc-count {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+}
+.qb-doc-comment {
+  font-style: italic;
+  color: var(--qb-muted);
+}
+.qb-doc-count {
+  color: var(--qb-muted);
+}
+.qb-doc-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.qb-field-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--qb-border);
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+.qb-field-type {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: var(--qb-subtle);
+}
