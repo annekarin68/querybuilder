@@ -232,7 +232,7 @@ src/
   setup-jquery.ts      Imported first by main.ts: publishes window.jQuery before Fomantic's JS evaluates (see §3, "the bootstrap wrinkle"). One of only two files allowed to import jquery.
   main.ts              Bootstrap: import setup-jquery + Fomantic; render the layout shell; wire every panel once; load databases/facets/auth/compliance and derive the field catalog; the panelRenderers table; the refreshStats / runPreview orchestrators, which react to 401/403 by redirecting into login/compliance.
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data (facets, fields, tags, groups); all empty by default. HIDDEN_ROW_BADGES (tags/groups never shown as Matching events badges), ROW_COLUMNS (facet.field values shown as columns on each row). Enforced by tests/noBackendDataInSrc.test.ts.
-  state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store` + runBlocker()/canRunQuery() — the one "can this query run, and if not why" check.
+  state.ts             AppState type + a ~15-line store (getState / setState / subscribe) + module singleton `store` + runBlocker() — the one "can this query run, and if not why" check.
   util/
     debounce.ts        debounce(fn, ms) — the one named debounce helper (used for the stats trigger).
     requestSlot.ts     requestSlot() — at most one in-flight request per kind, and the whole stale-response guard (§6).
@@ -756,7 +756,7 @@ interface AuthUser {
 `POST /api/query` requires both a session (`401 { error }` without one) and
 a compliance acknowledgment (`403 { error }` without one) — everything else
 (`databases`, `facets`, `stats`) stays anonymous-accessible.
-`canRunQuery` is NOT auth- or compliance-aware, and neither is `dataPreview.ts`'s
+`runBlocker` is NOT auth- or compliance-aware, and neither is `dataPreview.ts`'s
 enabling of the Run button — Run always genuinely attempts the request, and
 `main.ts` reacts to whatever status code comes back (§5, §9). A `401` always redirects into login. A
 `403` only means "authenticated, but some requirement is unmet", and
@@ -885,10 +885,10 @@ never mutated.
 ### `validate.ts`
 
 `validateQuery(tree, catalog): Issue[]` where
-`Issue = { nodeId: string; message: string; severity: "error" | "warning"; kind: "incomplete" | "invalid" }`.
+`Issue = { nodeId: string; message: string; kind: "incomplete" | "invalid" }`.
 Reports: condition with no field / no operator / a value that does not fit the
 operator's arity; empty groups. The Run button and the live stats fetch are gated
-on there being **no `error`-severity issues**.
+on there being **no issues at all**.
 
 ### `summary.ts`
 
@@ -1196,7 +1196,7 @@ One pattern everywhere (`idle` / `loading` / `ok` / `error`):
 ### Tests (Vitest, unit only, on pure modules)
 
 - `tests/query/` — `tree` (immutable edits, `sameSemantics`), `validate` (each issue type), `summary` (text), `fieldCatalog` (type mapping, enums, names, lookups), `conditionEdit` (the row cascade), `dates` (which partial UTC timestamps are accepted).
-- `tests/state.test.ts` — the store and `runBlocker` / `canRunQuery`.
+- `tests/state.test.ts` — the store and `runBlocker`.
 - `tests/api/client.test.ts` — requests, error unwrapping, NDJSON streaming, timeouts, aborts.
 - `tests/util/` — `debounce`, `pendingQuery` (save/restore, untrusted input), `requestSlot` (the stale-response rule).
 - `tests/ui/` — `docsFilter`, `dataPreview` (badges, row columns), `statsPanel` (headline), `format`, `valueControl` (markup + accessible names).

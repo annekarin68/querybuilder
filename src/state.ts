@@ -1,6 +1,5 @@
 import type { Group, Issue } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
-import { hasBlockingErrors } from "./query/validate";
 import type {
   AuthUser,
   DatabasesResponse,
@@ -83,12 +82,8 @@ export function runBlocker(state: RunInputs): RunBlocker | null {
   if (!state.catalog) return "loading";
   if (state.selectedDatabaseIds.length === 0) return "no-database";
   if (countConditions(state.query) === 0) return "no-condition";
-  if (hasBlockingErrors(state.issues)) return "unfinished";
+  if (state.issues.length > 0) return "unfinished";
   return null;
-}
-
-export function canRunQuery(state: RunInputs): boolean {
-  return runBlocker(state) === null;
 }
 
 type Listener = (state: AppState, changed: Set<keyof AppState>) => void;

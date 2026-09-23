@@ -169,7 +169,6 @@ export interface DatabaseOutcome {
   label: string;
   /** Present only on success. */
   matchCount?: number;
-  infoMessages?: string[];
   /** When set, this database's line reports failure instead of a count. */
   fail?: { errorMessages: string[]; infoMessages: string[] };
 }
@@ -185,11 +184,5 @@ export function buildStatsLine(outcome: DatabaseOutcome): StatsResponse {
     };
     return line;
   }
-  const line: StatsResponse = {
-    label: outcome.label,
-    success: true,
-    matchCount: outcome.matchCount,
-  };
-  if (outcome.infoMessages) line.infoMessages = outcome.infoMessages;
-  return line;
+  return { label: outcome.label, success: true, matchCount: outcome.matchCount };
 }

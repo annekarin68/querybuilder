@@ -20,14 +20,14 @@ export interface Group {
 
 export type QueryNode = Group | Condition;
 
+/** Something that stops the query from running. Any issue blocks Run. */
 export interface Issue {
   nodeId: string;
   message: string;
-  severity: "error" | "warning";
   /**
    * "incomplete": something the user simply hasn't filled in yet — shown as a
    * quiet hint. "invalid": the query refers to something that cannot work —
-   * shown in red. Both block running when severity is "error".
+   * shown in red.
    */
   kind: "incomplete" | "invalid";
 }

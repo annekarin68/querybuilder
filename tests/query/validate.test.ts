@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateQuery, hasBlockingErrors } from "../../src/query/validate";
+import { validateQuery } from "../../src/query/validate";
 import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
 import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../src/query/tree";
 
@@ -31,7 +31,6 @@ describe("validateQuery", () => {
     expect(issues).toContainEqual({
       nodeId: c.id,
       message: "Choose a field.",
-      severity: "error",
       kind: "incomplete",
     });
   });
@@ -44,7 +43,6 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: c.id,
       message: "Choose an operator.",
-      severity: "error",
       kind: "incomplete",
     });
   });
@@ -57,7 +55,6 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: c.id,
       message: "Enter a value.",
-      severity: "error",
       kind: "incomplete",
     });
   });
@@ -70,7 +67,6 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: c.id,
       message: "Enter both values.",
-      severity: "error",
       kind: "incomplete",
     });
   });
@@ -83,7 +79,6 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: c.id,
       message: "Choose at least one value.",
-      severity: "error",
       kind: "incomplete",
     });
   });
@@ -104,7 +99,6 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: c.id,
       message: "Unknown field.",
-      severity: "error",
       kind: "invalid",
     });
   });
@@ -118,7 +112,6 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: c.id,
       message: "That operator isn't available for this field.",
-      severity: "error",
       kind: "invalid",
     });
   });
@@ -131,7 +124,6 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: c.id,
       message: "Unknown operator.",
-      severity: "error",
       kind: "invalid",
     });
   });
@@ -143,24 +135,8 @@ describe("validateQuery", () => {
     expect(validateQuery(tree, catalog)).toContainEqual({
       nodeId: g.id,
       message: "Add a condition to this group.",
-      severity: "error",
       kind: "incomplete",
     });
-  });
-
-  it("hasBlockingErrors is true only when an error-severity issue is present", () => {
-    expect(
-      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "warning", kind: "incomplete" }]),
-    ).toBe(false);
-    expect(
-      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error", kind: "invalid" }]),
-    ).toBe(true);
-  });
-
-  it("incomplete issues block running just like invalid ones", () => {
-    expect(
-      hasBlockingErrors([{ nodeId: "x", message: "m", severity: "error", kind: "incomplete" }]),
-    ).toBe(true);
   });
 
   describe("date values", () => {
@@ -177,7 +153,6 @@ describe("validateQuery", () => {
     const badDate = (nodeId: string) => ({
       nodeId,
       message: "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.",
-      severity: "error",
       kind: "invalid",
     });
 

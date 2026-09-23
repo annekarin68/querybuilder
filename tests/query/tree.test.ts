@@ -8,7 +8,6 @@ import {
   removeNode,
   findNode,
   countConditions,
-  stripCollapsed,
   sameSemantics,
 } from "../../src/query/tree";
 
@@ -95,37 +94,6 @@ describe("tree", () => {
     // 1 at the root + g's own starter condition + 2 added to g
     expect(countConditions(t)).toBe(4);
   });
-
-  describe("stripCollapsed", () => {
-    it("removes collapsed from every group, at any depth", () => {
-      const root = emptyQuery();
-      const g = newGroup();
-      let t = addChild(root, root.id, g);
-      t = updateNode(t, root.id, { collapsed: true });
-      t = updateNode(t, g.id, { collapsed: false });
-      const stripped = stripCollapsed(t) as import("../../src/query/types").Group;
-      expect(stripped).not.toHaveProperty("collapsed");
-      expect(stripped.children[0]).not.toHaveProperty("collapsed");
-    });
-
-    it("leaves everything else (ids, conditions, values) unchanged", () => {
-      const root = emptyQuery();
-      const c = newCondition();
-      let t = addChild(root, root.id, c);
-      t = updateNode(t, c.id, { fieldId: "a.b", operatorId: "eq", value: "x" });
-      t = updateNode(t, root.id, { collapsed: true });
-      const stripped = stripCollapsed(t) as import("../../src/query/types").Group;
-      expect(stripped.id).toBe(t.id);
-      expect(stripped.children[0]).toMatchObject({ fieldId: "a.b", operatorId: "eq", value: "x" });
-    });
-
-    it("two trees differing only in collapsed strip to the same shape", () => {
-      const root = emptyQuery();
-      const t1 = updateNode(root, root.id, { collapsed: true });
-      const t2 = updateNode(root, root.id, { collapsed: false });
-      expect(JSON.stringify(stripCollapsed(t1))).toBe(JSON.stringify(stripCollapsed(t2)));
-    });
-  });
 });
 
 describe("sameSemantics", () => {
@@ -136,5 +104,30 @@ describe("sameSemantics", () => {
     const collapsed = updateNode(tree, g.id, { collapsed: true });
     expect(sameSemantics(tree, collapsed)).toBe(true);
     expect(sameSemantics(tree, updateNode(tree, g.id, { operator: "OR" }))).toBe(false);
+  });
+
+  it("ignores collapsed at any depth, set either way", () => {
+    const root = emptyQuery();
+    const g = newGroup();
+    const tree = addChild(root, root.id, g);
+    const folded = updateNode(updateNode(tree, root.id, { collapsed: true }), g.id, {
+      collapsed: false,
+    });
+    expect(sameSemantics(tree, folded)).toBe(true);
+  });
+
+  it("notices a changed value even when collapsed also changed", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    const tree = updateNode(addChild(root, root.id, c), c.id, { fieldId: "a.b", value: "x" });
+    const edited = updateNode(updateNode(tree, root.id, { collapsed: true }), c.id, { value: "y" });
+    expect(sameSemantics(tree, edited)).toBe(false);
+  });
+
+  it("does not modify the trees it compares", () => {
+    const root = emptyQuery();
+    const folded = { ...root, collapsed: true };
+    sameSemantics(root, folded);
+    expect(folded.collapsed).toBe(true);
   });
 });
