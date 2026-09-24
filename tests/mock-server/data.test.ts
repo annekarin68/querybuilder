@@ -104,4 +104,25 @@ describe("individual.json sample data", () => {
     expect(fromTimestamp.type).toBe("");
     expect(fromTimestamp.format).toBe("TIMESTAMP");
   });
+
+  it("transmission_gear.current_gear's values are deliberately out of date: an event holds a gear not in them", () => {
+    const gear = individualsByLabel
+      .get("transmission_gear")!
+      .fields.find((f) => f.label === "current_gear")!;
+    expect(gear.type).toBe("BIGINT");
+    expect(gear.values.length).toBeGreaterThan(0);
+    const used = entrysets
+      .map((e) => e.items.transmission_gear?.current_gear)
+      .filter((v) => v !== undefined)
+      .map(String);
+    expect(used.some((v) => !gear.values.includes(v))).toBe(true);
+  });
+
+  it("transmission_gear.is_in_manual_mode is a BOOLEAN field that lists its values", () => {
+    const manual = individualsByLabel
+      .get("transmission_gear")!
+      .fields.find((f) => f.label === "is_in_manual_mode")!;
+    expect(manual.type).toBe("BOOLEAN");
+    expect(manual.values).toEqual(["false", "true"]);
+  });
 });

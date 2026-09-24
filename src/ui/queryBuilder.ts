@@ -1,7 +1,13 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { Facet } from "../api/types";
-import { findField, findOperator, OPERATORS, type FieldCatalog } from "../query/fieldCatalog";
+import {
+  fieldsOfFacet,
+  findField,
+  findOperator,
+  OPERATORS,
+  type FieldCatalog,
+} from "../query/fieldCatalog";
 import {
   addChild,
   countConditions,
@@ -61,20 +67,17 @@ function facetDropdown(facets: Facet[] | null, c: Condition): string {
 }
 
 function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
-  const prefix = c.facetId ? `${c.facetId}.` : null;
-  const opts = prefix
-    ? optionsHtml(
-        catalog.fields.filter((f) => f.label.startsWith(prefix)),
-        (f) => f.label,
-        (f) => f.fieldName,
-        (f) => f.label === c.fieldId,
-      )
-    : "";
-  return `<select class="ui selection dropdown" data-part="field" aria-label="Field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
+  const opts = optionsHtml(
+    fieldsOfFacet(catalog, c.facetId),
+    (f) => f.fieldLabel,
+    (f) => f.fieldName,
+    (f) => f.fieldLabel === c.fieldId,
+  );
+  return `<select class="ui selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
 function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
-  const field = findField(catalog, c.fieldId);
+  const field = findField(catalog, c.facetId, c.fieldId);
   const ops = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.label)) : [];
   const opts = optionsHtml(
     ops,
@@ -86,7 +89,7 @@ function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
 }
 
 function conditionHtml(ctx: BuilderCtx, c: Condition): string {
-  const field = findField(ctx.catalog, c.fieldId);
+  const field = findField(ctx.catalog, c.facetId, c.fieldId);
   const operator = findOperator(c.operatorId);
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-grid">
@@ -255,10 +258,13 @@ export function wireQueryBuilder(
     // Fomantic dispatches a native bubbling "change" on the <select> behind each
     // dropdown *before* calling its onChange. Handling both would run
     // handleRowChange twice, the second time on a detached row, and write back
-    // stale values. So every <select> is handled ONLY via onDropdownChange below;
-    // this listener handles the plain <input>s (text/number, the range
-    // pair and the boolean toggle's checkbox).
-    if (target instanceof HTMLSelectElement) return;
+    // stale values. So every <select> is handled ONLY via onDropdownChange below.
+    // A search dropdown's own typing box (input.search) fires "change" too, when
+    // it loses focus on the mousedown before a menu click; repainting then would
+    // remove the item under the pointer before the click lands. So anything
+    // inside a .ui.dropdown is skipped, and this listener handles only the plain
+    // <input>s (text/number, the range pair and the boolean toggle's checkbox).
+    if (target instanceof HTMLSelectElement || target.closest(".ui.dropdown")) return;
     const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
     if (row) handleRowChange(row);
   });

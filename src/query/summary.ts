@@ -21,7 +21,7 @@ function formatValue(c: Condition, arity: Arity): string {
 }
 
 function conditionText(catalog: FieldCatalog, c: Condition): string {
-  const field = findField(catalog, c.fieldId);
+  const field = findField(catalog, c.facetId, c.fieldId);
   const op = findOperator(c.operatorId);
   const parts = [field?.name ?? "(field?)", op?.name ?? "(operator?)"];
   const val = op ? formatValue(c, op.arity) : "";

@@ -3,26 +3,23 @@ import { defaultValueFor, nextCondition } from "../../src/query/conditionEdit";
 import type { CatalogField, CatalogOperator, FieldCatalog } from "../../src/query/fieldCatalog";
 import type { Condition } from "../../src/query/types";
 
-const field = (label: string, valueType: CatalogField["valueType"]): CatalogField => ({
-  label,
-  name: label,
-  fieldName: label,
+const field = (fieldLabel: string, valueType: CatalogField["valueType"]): CatalogField => ({
+  facetLabel: "thing",
+  fieldLabel,
+  name: fieldLabel,
+  fieldName: fieldLabel,
   valueType,
   operatorIds: [],
 });
 const catalog: FieldCatalog = {
-  fields: [
-    field("thing.size", "number"),
-    field("thing.active", "boolean"),
-    field("thing.name", "string"),
-  ],
+  fields: [field("size", "number"), field("active", "boolean"), field("name", "string")],
 };
 
 const cond = (over: Partial<Condition> = {}): Condition => ({
   kind: "condition",
   id: "c1",
   facetId: "thing",
-  fieldId: "thing.size",
+  fieldId: "size",
   operatorId: "gt",
   value: 50,
   ...over,
@@ -33,16 +30,16 @@ const onScreen = (value: unknown) => () => value;
 
 describe("nextCondition", () => {
   it("keeps what the user typed when only the value changed", () => {
-    const picks = { facetId: "thing", fieldId: "thing.size", operatorId: "gt" };
+    const picks = { facetId: "thing", fieldId: "size", operatorId: "gt" };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toMatchObject({
-      fieldId: "thing.size",
+      fieldId: "size",
       operatorId: "gt",
       value: 70,
     });
   });
 
   it("changing the facet resets field, operator and value", () => {
-    const picks = { facetId: "other", fieldId: "thing.size", operatorId: "gt" };
+    const picks = { facetId: "other", fieldId: "size", operatorId: "gt" };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toEqual({
       facetId: "other",
       fieldId: null,
@@ -52,21 +49,21 @@ describe("nextCondition", () => {
   });
 
   it("changing the field resets operator and value", () => {
-    const picks = { facetId: "thing", fieldId: "thing.name", operatorId: "gt" };
+    const picks = { facetId: "thing", fieldId: "name", operatorId: "gt" };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toMatchObject({
-      fieldId: "thing.name",
+      fieldId: "name",
       operatorId: null,
       value: null,
     });
   });
 
   it("keeps the value when the operator changes to one of the same arity", () => {
-    const picks = { facetId: "thing", fieldId: "thing.size", operatorId: "gte" };
+    const picks = { facetId: "thing", fieldId: "size", operatorId: "gte" };
     expect(nextCondition(cond(), picks, catalog, onScreen(50)).value).toBe(50);
   });
 
   it("does not read the stale control when the operator's arity changes", () => {
-    const picks = { facetId: "thing", fieldId: "thing.size", operatorId: "between" };
+    const picks = { facetId: "thing", fieldId: "size", operatorId: "between" };
     const read = () => {
       throw new Error("must not read the old control");
     };
@@ -74,11 +71,11 @@ describe("nextCondition", () => {
   });
 
   it("a boolean field defaults to false, since a toggle cannot show 'unset'", () => {
-    const picks = { facetId: "thing", fieldId: "thing.active", operatorId: null };
-    const next = nextCondition(cond({ fieldId: "thing.size" }), picks, catalog, onScreen(1));
+    const picks = { facetId: "thing", fieldId: "active", operatorId: null };
+    const next = nextCondition(cond({ fieldId: "size" }), picks, catalog, onScreen(1));
     expect(next.value).toBeNull();
     const withOp = nextCondition(
-      cond({ fieldId: "thing.active", operatorId: null, value: null }),
+      cond({ fieldId: "active", operatorId: null, value: null }),
       { ...picks, operatorId: "eq" },
       catalog,
       onScreen(undefined),

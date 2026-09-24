@@ -49,7 +49,7 @@ export function nextCondition(
   const fieldChanged = facetChanged || fieldId !== cond.fieldId;
   const operatorId = fieldChanged ? null : picks.operatorId;
 
-  const field = findField(catalog, fieldId);
+  const field = findField(catalog, facetId, fieldId);
   const operator = findOperator(operatorId);
   const sameShape = findOperator(cond.operatorId)?.arity === operator?.arity;
 

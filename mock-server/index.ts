@@ -1,3 +1,4 @@
+import { loadEnv } from "vite";
 import { createMockServer } from "./server";
 
 // Starts the dev-only mock API (`npm run mock`, or `npm run dev` with Vite).
@@ -6,6 +7,10 @@ import { createMockServer } from "./server";
 
 /** Override with MOCK_PORT to run a second copy (e.g. another checkout) side by side. */
 const PORT = Number(process.env.MOCK_PORT) || 3001;
+
+/** The API prefix, from .env like the app's own (docs/ARCHITECTURE.md, "API contract"). */
+const apiBase = loadEnv("development", process.cwd(), "VITE_").VITE_API_BASE;
+if (!apiBase) throw new Error("VITE_API_BASE must be set (see .env).");
 
 /** A number from the environment variable `name`, or undefined when it isn't set. */
 function envNumber(name: string, min: number, max: number): number | undefined {
@@ -22,6 +27,7 @@ const failRate = envNumber("MOCK_FAIL_RATE", 0, 1);
 const lineDelay = envNumber("MOCK_STREAM_DELAY_MS", 0, 60_000);
 
 createMockServer({
+  apiBase,
   // By default about 5% of /api/stats lines fail, so the UI's per-database
   // failure path gets exercised without a real backend. MOCK_FAIL_RATE=0 turns
   // that off.
@@ -29,4 +35,4 @@ createMockServer({
   // By default each streamed line waits a random 150–400 ms, so the streaming
   // is visible in dev. MOCK_STREAM_DELAY_MS sets a fixed delay (0 = none).
   lineDelayMs: lineDelay === undefined ? () => 150 + Math.random() * 250 : () => lineDelay,
-}).listen(PORT, () => console.log(`Mock API on http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`Mock API on http://localhost:${PORT}${apiBase}`));

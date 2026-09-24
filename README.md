@@ -4,7 +4,8 @@ A single-page query-builder UI. Build a filter with nested AND/OR groups; see li
 match statistics; browse a summary list of matching events. Running a query
 requires login (OAuth2, via the backend) and a compliance reason for the session.
 
-All data comes from our API, under `VITE_API_BASE` (default `/api`): the facets
+All data comes from our API, under the API prefix `VITE_API_BASE`, set in
+`.env` (`/api/v1`): the facets
 of the data model (`GET /individuals` — the backend's name for them), the
 databases a query can be scoped to (`GET /databases`), live statistics
 (`POST /stats`), the matching events (`POST /query`), and the login and
@@ -44,8 +45,9 @@ Other scripts:
 ## Must-know rules for maintainers
 
 1. **Offline only.** The app must run on the LAN with no internet. Never add a CDN
-   link, web font, analytics snippet, or any `fetch`/`<script>` to a non-`/api`
-   host. `npm run check:offline` is the backstop and runs inside `npm run build`.
+   link, web font, analytics snippet, or any `fetch`/`<script>` outside the API
+   prefix (`VITE_API_BASE`). `npm run check:offline` is the backstop and runs
+   inside `npm run build`.
 2. **jQuery airlock.** `import $ from "jquery"` appears in only two files:
    `src/ui/fomantic.ts` (all real jQuery use — the Fomantic plugin activate/destroy
    airlock) and `src/setup-jquery.ts`, which does nothing but the
@@ -87,9 +89,13 @@ pull request and push to `main`.
   (`/assets/...`), and the backend's login/compliance callbacks redirect the
   browser to `/?resume=1`. To host under a sub-path, build with
   `vite build --base=/sub/path/` and make the backend redirect there too.
-- **API location.** Every request goes to `VITE_API_BASE` (default `/api`, same
-  origin). The login and compliance links follow it too. It is fixed at build
-  time: `VITE_API_BASE=/other npm run build`.
+- **API location.** Every request goes under `VITE_API_BASE`, set in the
+  committed `.env` (`/api/v1`, same origin). The login and compliance links
+  follow it too. The prefix carries the API version: moving to v2 is changing
+  that line. It is fixed at build time; override it per deployment in
+  `.env.production` or `.env.local`, or inline:
+  `VITE_API_BASE=/other/v1 npm run build`. The build stops if it is missing or
+  ends in `/`.
 - **Caching.** Files under `assets/` have content-hashed names, so they can be
   cached forever (`Cache-Control: public, max-age=31536000, immutable`). Serve
   `index.html` with `Cache-Control: no-cache` so a new deploy takes effect

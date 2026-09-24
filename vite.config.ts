@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 
 /**
  * Offline-first (docs/ARCHITECTURE.md, "Offline-first"): nothing may load from the internet, so
@@ -81,26 +81,45 @@ function emitLicenseNotices(): Plugin {
 /** Where `npm run mock` listens — keep in sync with mock-server/index.ts. */
 const mockApi = `http://localhost:${Number(process.env.MOCK_PORT) || 3001}`;
 
-export default defineConfig({
-  plugins: [stripRemoteCss(), stripRemoteJs(), emitLicenseNotices()],
-  server: {
-    port: 5173,
-    // /api/auth/login and /api/compliance/start both 302 the browser (a real
-    // navigation, not a fetch) to a mock-*/... path on this same origin — each
-    // redirect target must be proxied too, or the dev server serves the SPA
-    // shell instead of the mock service's page.
-    proxy: {
-      "/api": mockApi,
-      "/mock-idp": mockApi,
-      "/mock-compliance": mockApi,
+/**
+ * The API prefix from .env (docs/ARCHITECTURE.md, "API contract"). The app
+ * has no default of its own, so a missing value — or one ending in "/", which
+ * would double the slash in every URL — stops dev and build here, never in the
+ * running app.
+ */
+function apiBase(mode: string): string {
+  const base = loadEnv(mode, process.cwd(), "VITE_").VITE_API_BASE ?? "";
+  if (!base || base.endsWith("/")) {
+    throw new Error(
+      `VITE_API_BASE must be set, without a trailing slash (see .env); got "${base}".`,
+    );
+  }
+  return base;
+}
+
+export default defineConfig(({ mode }) => {
+  const api = apiBase(mode);
+  return {
+    plugins: [stripRemoteCss(), stripRemoteJs(), emitLicenseNotices()],
+    server: {
+      port: 5173,
+      // The API prefix goes to the mock. …/auth/login and …/compliance/start
+      // both 302 the browser (a real navigation, not a fetch) to a mock-*/...
+      // path on this same origin — each redirect target must be proxied too,
+      // or the dev server serves the SPA shell instead of the mock service's page.
+      proxy: {
+        [api]: mockApi,
+        "/mock-idp": mockApi,
+        "/mock-compliance": mockApi,
+      },
     },
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-    // Fomantic ships one prebuilt CSS file and one prebuilt JS file. Neither can
-    // be tree-shaken, so the bundle is big on purpose. Raise the warning
-    // threshold so a known, accepted size stops crying wolf on every build.
-    chunkSizeWarningLimit: 1500,
-  },
+    build: {
+      outDir: "dist",
+      emptyOutDir: true,
+      // Fomantic ships one prebuilt CSS file and one prebuilt JS file. Neither can
+      // be tree-shaken, so the bundle is big on purpose. Raise the warning
+      // threshold so a known, accepted size stops crying wolf on every build.
+      chunkSizeWarningLimit: 1500,
+    },
+  };
 });

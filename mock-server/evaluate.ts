@@ -1,23 +1,16 @@
-import type { StatsResponse } from "../src/api/types";
+import type { RequestCondition, RequestNode, StatsResponse } from "../src/api/types";
 
 export type Row = Record<string, string | number | boolean | null>;
 
-// The query tree as the evaluator reads it from a request body. Deliberately
-// NOT the frontend's QueryNode (src/query/types.ts): the body is untrusted
-// JSON, and these types list only what evaluation reads. The tree also
-// carries ids, `facetId` and `collapsed`, which the evaluator ignores.
-export interface JsonCondition {
-  kind: "condition";
-  fieldId: string | null;
-  operatorId: string | null;
-  value: unknown;
+// The query arrives as a QueryRequest (src/api/types.ts). server.ts checks its
+// shape (requestBody.ts) before anything here reads it.
+
+/** The key a facet's field value is stored under in a Row (mock-server/rows.ts).
+ *  A dotted key is fine here: it never leaves the mock, and the fictional data
+ *  has no dots in its labels. */
+export function rowKey(facetId: string, fieldId: string): string {
+  return `${facetId}.${fieldId}`;
 }
-export interface JsonGroup {
-  kind: "group";
-  operator: "AND" | "OR";
-  children: JsonNode[];
-}
-export type JsonNode = JsonCondition | JsonGroup;
 
 function cmp(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
@@ -88,7 +81,7 @@ export function utcSpan(v: unknown): [number, number] | null {
  * precision they typed. Undefined when this isn't one — the generic
  * comparison applies instead.
  */
-function dateMatches(c: JsonCondition, v: Row[string] | undefined): boolean | undefined {
+function dateMatches(c: RequestCondition, v: Row[string] | undefined): boolean | undefined {
   const t = typeof v === "string" ? Date.parse(v) : NaN;
   if (Number.isNaN(t)) return undefined;
   if (c.operatorId === "between") {
@@ -114,9 +107,8 @@ function dateMatches(c: JsonCondition, v: Row[string] | undefined): boolean | un
   }
 }
 
-function conditionMatches(c: JsonCondition, row: Row): boolean {
-  if (!c.fieldId || !c.operatorId) return false;
-  const v = row[c.fieldId];
+function conditionMatches(c: RequestCondition, row: Row): boolean {
+  const v = row[rowKey(c.facetId, c.fieldId)];
   const asDate = dateMatches(c, v);
   if (asDate !== undefined) return asDate;
   switch (c.operatorId) {
@@ -169,7 +161,7 @@ export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
  * backend does this as `COUNT(*) ... GROUP BY database`, cheap at any scale.
  */
 export function perDatabaseCounts(
-  query: JsonNode,
+  query: RequestNode,
   rows: Row[],
   databaseIds: string[],
 ): { label: string; matchCount: number; totalCount: number }[] {
@@ -183,7 +175,7 @@ export function perDatabaseCounts(
   });
 }
 
-export function matches(node: JsonNode, row: Row): boolean {
+export function matches(node: RequestNode, row: Row): boolean {
   if (node.kind === "condition") return conditionMatches(node, row);
   if (node.children.length === 0) return true;
   return node.operator === "AND"

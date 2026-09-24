@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createApp, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
-import type { DatabasesResponse, EventsResponse, Facet, StatsResponse } from "../src/api/types";
+import type {
+  DatabasesResponse,
+  EventsResponse,
+  Facet,
+  QueryRequest,
+  StatsResponse,
+} from "../src/api/types";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
+import { toQueryRequest } from "../src/query/request";
 import { addChild, emptyQuery, newCondition, updateNode } from "../src/query/tree";
-import type { Group, QueryNode } from "../src/query/types";
+import type { Group } from "../src/query/types";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
 import { savePendingQuery, takePendingQuery } from "../src/util/pendingQuery";
@@ -52,7 +59,7 @@ function runnableQuery(n = 3): Group {
   const c = newCondition();
   return updateNode(addChild(root, root.id, c), c.id, {
     facetId: "thing",
-    fieldId: "thing.size",
+    fieldId: "size",
     operatorId: "gt",
     value: n,
   });
@@ -158,8 +165,7 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     expect(store.getState().preview).toEqual({ status: "loading" });
     expect(api.runQuery).toHaveBeenCalledWith(
-      store.getState().query,
-      ["alpha", "beta"],
+      toQueryRequest(store.getState().query, ["alpha", "beta"]),
       expect.any(AbortSignal),
     );
     await flushPromises();
@@ -260,7 +266,7 @@ describe("statistics", () => {
     }[] = [];
     const api = fakeApi({
       getStats: vi.fn(
-        (_q: QueryNode, _d: string[], onLine: (l: StatsResponse) => void, signal?: AbortSignal) => {
+        (_body: QueryRequest, onLine: (l: StatsResponse) => void, signal?: AbortSignal) => {
           const done = deferred<void>();
           calls.push({ onLine, done, signal });
           return done.promise;
@@ -281,8 +287,7 @@ describe("statistics", () => {
 
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).toHaveBeenCalledWith(
-      next,
-      ["alpha", "beta"],
+      toQueryRequest(next, ["alpha", "beta"]),
       expect.any(Function),
       expect.any(AbortSignal),
     );

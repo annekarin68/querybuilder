@@ -3,11 +3,12 @@ import { queryToText } from "../../src/query/summary";
 import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
 import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../src/query/tree";
 
-const field = (label: string, name: string, options?: string[]): CatalogField => ({
-  label,
+const field = (fieldLabel: string, name: string, options?: string[]): CatalogField => ({
+  facetLabel: "thing",
+  fieldLabel,
   name,
   fieldName: name,
-  valueType: options ? "enum" : "string",
+  valueType: "string",
   options,
   operatorIds: [],
 });
@@ -27,7 +28,7 @@ describe("queryToText", () => {
     const root = emptyQuery();
     const c = newCondition();
     let t = addChild(root, root.id, c);
-    t = updateNode(t, c.id, { fieldId: "size", operatorId: "gte", value: 20 });
+    t = updateNode(t, c.id, { facetId: "thing", fieldId: "size", operatorId: "gte", value: 20 });
     expect(queryToText(t, catalog)).toBe("Size (cm) Greater than or equal 20");
   });
 
@@ -38,13 +39,23 @@ describe("queryToText", () => {
     const c2 = newCondition();
     const c3 = newCondition();
     let t = addChild(root, root.id, c1);
-    t = updateNode(t, c1.id, { fieldId: "size", operatorId: "gte", value: 20 });
+    t = updateNode(t, c1.id, { facetId: "thing", fieldId: "size", operatorId: "gte", value: 20 });
     t = addChild(t, root.id, g);
     t = updateNode(t, g.id, { operator: "OR" });
     t = addChild(t, g.id, c2);
-    t = updateNode(t, c2.id, { fieldId: "active", operatorId: "eq", value: true });
+    t = updateNode(t, c2.id, {
+      facetId: "thing",
+      fieldId: "active",
+      operatorId: "eq",
+      value: true,
+    });
     t = addChild(t, g.id, c3);
-    t = updateNode(t, c3.id, { fieldId: "color", operatorId: "in", value: ["red", "blue"] });
+    t = updateNode(t, c3.id, {
+      facetId: "thing",
+      fieldId: "color",
+      operatorId: "in",
+      value: ["red", "blue"],
+    });
     expect(queryToText(t, catalog)).toBe(
       "Size (cm) Greater than or equal 20 AND (Active Equals true OR Color Is any of red, blue)",
     );
@@ -54,7 +65,12 @@ describe("queryToText", () => {
     const root = emptyQuery();
     const c = newCondition();
     let t = addChild(root, root.id, c);
-    t = updateNode(t, c.id, { fieldId: "color", operatorId: "isEmpty", value: null });
+    t = updateNode(t, c.id, {
+      facetId: "thing",
+      fieldId: "color",
+      operatorId: "isEmpty",
+      value: null,
+    });
     expect(queryToText(t, catalog)).toBe("Color Is empty");
   });
 });
@@ -65,7 +81,12 @@ describe("queryToText with a value not entered yet", () => {
     const root = emptyQuery();
     const c = newCondition();
     return queryToText(
-      updateNode(addChild(root, root.id, c), c.id, { fieldId, operatorId, value }),
+      updateNode(addChild(root, root.id, c), c.id, {
+        facetId: "thing",
+        fieldId,
+        operatorId,
+        value,
+      }),
       catalog,
     );
   };

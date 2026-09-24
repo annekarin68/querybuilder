@@ -4,31 +4,35 @@ import {
   filterByDatabases,
   matches,
   perDatabaseCounts,
+  rowKey,
   scaleCount,
   utcSpan,
-  type JsonNode,
   type Row,
 } from "../../mock-server/evaluate";
+import type { RequestNode, RequestValue } from "../../src/api/types";
 import { MALFORMED, WELL_FORMED } from "../dateCases";
 
 const row = {
-  color: "red",
-  count: 12,
-  size: 200,
-  active: true,
-  spare: null,
-  madeOn: "2018-05-01",
-  note: "all good",
+  "thing.color": "red",
+  "thing.count": 12,
+  "thing.size": 200,
+  "thing.active": true,
+  "thing.spare": null,
+  "thing.madeOn": "2018-05-01",
+  "thing.note": "all good",
 };
 
-const cond = (fieldId: string, operatorId: string, value: unknown) => ({
+const cond = (fieldId: string, operatorId: string, value: RequestValue) => ({
   kind: "condition" as const,
+  id: "c",
+  facetId: "thing",
   fieldId,
   operatorId,
   value,
 });
-const group = (operator: "AND" | "OR", ...children: JsonNode[]) => ({
+const group = (operator: "AND" | "OR", ...children: RequestNode[]) => ({
   kind: "group" as const,
+  id: "g",
   operator,
   children,
 });
@@ -77,6 +81,16 @@ describe("matches", () => {
       true,
     );
   });
+  it("reads the value stored under rowKey(facetId, fieldId)", () => {
+    expect(rowKey("thing", "color")).toBe("thing.color");
+    expect(matches({ ...cond("color", "eq", "red"), facetId: "other" }, row)).toBe(false);
+  });
+
+  it("typed values match typed stored values, not their text", () => {
+    expect(matches(cond("active", "eq", true), row)).toBe(true);
+    expect(matches(cond("count", "in", [12, 13]), row)).toBe(true);
+    expect(matches(cond("count", "eq", "12"), row)).toBe(false);
+  });
 });
 
 describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
@@ -110,8 +124,8 @@ describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
 });
 
 describe("date conditions: the user's operator at the precision they typed (UTC)", () => {
-  const seen = { seenAt: "2024-11-06T14:32:00Z" };
-  const is = (operatorId: string, value: unknown) =>
+  const seen = { "thing.seenAt": "2024-11-06T14:32:00Z" };
+  const is = (operatorId: string, value: RequestValue) =>
     matches(cond("seenAt", operatorId, value), seen);
 
   it("eq / neq: the stored time falls inside / outside the span", () => {
@@ -140,12 +154,12 @@ describe("date conditions: the user's operator at the precision they typed (UTC)
   });
 
   it("uses UTC, whatever offset the stored value is written in", () => {
-    const late = { seenAt: "2024-11-06T23:30:00-02:00" }; // 2024-11-07 01:30 UTC
+    const late = { "thing.seenAt": "2024-11-06T23:30:00-02:00" }; // 2024-11-07 01:30 UTC
     expect(matches(cond("seenAt", "eq", "2024-11-07"), late)).toBe(true);
   });
 
   it('a plain "YYYY-MM-DD" stored value is midnight UTC', () => {
-    const day = { madeOn: "2024-11-06" };
+    const day = { "thing.madeOn": "2024-11-06" };
     expect(matches(cond("madeOn", "eq", "2024-11-06T00"), day)).toBe(true);
     expect(matches(cond("madeOn", "before", "2024-11-06"), day)).toBe(false);
   });
@@ -154,17 +168,27 @@ describe("date conditions: the user's operator at the precision they typed (UTC)
 // ---- database scoping and counts ------------------------------------------
 
 const rows: Row[] = [
-  { __db: "alpha", id: 1, count: 5 },
-  { __db: "beta", id: 2, count: 20 },
-  { __db: "alpha", id: 3, count: 30 },
-  { __db: "gamma", id: 4, count: 1 },
+  { __db: "alpha", id: 1, "thing.count": 5 },
+  { __db: "beta", id: 2, "thing.count": 20 },
+  { __db: "alpha", id: 3, "thing.count": 30 },
+  { __db: "gamma", id: 4, "thing.count": 1 },
 ];
 
-const matchAll: JsonNode = { kind: "group", operator: "AND", children: [] };
-const countGte10: JsonNode = {
+const matchAll: RequestNode = { kind: "group", id: "g", operator: "AND", children: [] };
+const countGte10: RequestNode = {
   kind: "group",
+  id: "g",
   operator: "AND",
-  children: [{ kind: "condition", fieldId: "count", operatorId: "gte", value: 10 }],
+  children: [
+    {
+      kind: "condition",
+      id: "c",
+      facetId: "thing",
+      fieldId: "count",
+      operatorId: "gte",
+      value: 10,
+    },
+  ],
 };
 
 describe("filterByDatabases", () => {

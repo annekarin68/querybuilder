@@ -6,10 +6,11 @@ import {
   filterByDatabases,
   perDatabaseCounts,
   scaleCount,
-  type JsonNode,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { ROWS } from "./rows";
+import { queryProblem } from "./requestBody";
+import type { QueryRequest } from "../src/api/types";
 import {
   startLogin,
   issueFakeCode,
@@ -42,6 +43,8 @@ import { logQueryAudit } from "./audit";
 
 /** Behaviour that index.ts reads from the environment and tests pin down. */
 export interface MockConfig {
+  /** The API prefix every route and redirect goes under, e.g. "/api/v1" (VITE_API_BASE in .env). */
+  apiBase: string;
   /** Share (0–1) of /api/stats lines that simulate an unreachable database. */
   failRate: number;
   /** Pause before each streamed /api/stats line, in ms. */
@@ -132,18 +135,16 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-/** The body of POST /api/stats and POST /api/query. */
-interface QueryBody {
-  query: JsonNode;
-  databases: string[];
-}
-
 /**
- * Reads and checks a /api/stats or /api/query body: `query` must be an object
- * (the tree), `databases` a non-empty string[]. For a bad body this sends the
- * 400 itself and returns null.
+ * Reads and checks a …/stats or …/query body: `query` must be a well-formed
+ * query tree whose root is a group (requestBody.ts), and `databases` a
+ * non-empty string[]. For a bad body this sends the 400 itself and returns
+ * null.
  */
-async function readQueryBody(req: IncomingMessage, res: ServerResponse): Promise<QueryBody | null> {
+async function readQueryBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<QueryRequest | null> {
   const body = await readJson(req);
   const { query, databases } = (typeof body === "object" && body !== null ? body : {}) as {
     query?: unknown;
@@ -161,7 +162,13 @@ async function readQueryBody(req: IncomingMessage, res: ServerResponse): Promise
     sendJson(res, 400, { error: "Select at least one database." });
     return null;
   }
-  return { query: query as JsonNode, databases };
+  const problem =
+    (query as { kind?: unknown }).kind === "group" ? queryProblem(query) : "query must be a group.";
+  if (problem) {
+    sendJson(res, 400, { error: `Malformed query: ${problem}` });
+    return null;
+  }
+  return { query: query as QueryRequest["query"], databases };
 }
 
 function delay(ms: number): Promise<void> {
@@ -227,7 +234,7 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   sendJson(res, 200, { entrysets });
 }
 
-// ---- login: app → /api/auth/login → mock IdP page → confirm → callback → app
+// ---- login: app → …/auth/login → mock IdP page → confirm → callback → app
 
 /** Starts a login: a fresh CSRF state, bound to this browser by a cookie. */
 function startLoginFlow(_req: IncomingMessage, res: ServerResponse) {
@@ -249,12 +256,12 @@ function showIdpPage(_req: IncomingMessage, res: ServerResponse, url: URL) {
 }
 
 /** The user "logged in" at the mock IdP: hand back a code, as a real IdP would. */
-function confirmIdpLogin(_req: IncomingMessage, res: ServerResponse, url: URL) {
+function confirmIdpLogin(_req: IncomingMessage, res: ServerResponse, url: URL, apiBase: string) {
   const state = url.searchParams.get("state") ?? "";
   const code = issueFakeCode();
   redirect(
     res,
-    `/api/auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+    `${apiBase}/auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
   );
 }
 
@@ -284,12 +291,12 @@ function logOut(req: IncomingMessage, res: ServerResponse) {
   res.end();
 }
 
-// ---- compliance: app → /api/compliance/start → mock form → submit → callback → app
+// ---- compliance: app → …/compliance/start → mock form → submit → callback → app
 
-function startComplianceFlow(req: IncomingMessage, res: ServerResponse) {
+function startComplianceFlow(req: IncomingMessage, res: ServerResponse, apiBase: string) {
   // A navigation: without a session (e.g. it expired, or the mock was
   // restarted), send the browser to log in rather than to a JSON error.
-  if (!sessionFor(req.headers.cookie)) return redirect(res, "/api/auth/login");
+  if (!sessionFor(req.headers.cookie)) return redirect(res, `${apiBase}/auth/login`);
   const state = startCompliance();
   redirect(
     res,
@@ -317,7 +324,7 @@ function showComplianceForm(_req: IncomingMessage, res: ServerResponse, url: URL
 }
 
 /** The form's POST (application/x-www-form-urlencoded): hand back a token. */
-async function submitComplianceForm(req: IncomingMessage, res: ServerResponse) {
+async function submitComplianceForm(req: IncomingMessage, res: ServerResponse, apiBase: string) {
   const form = new URLSearchParams(await readBody(req));
   const state = form.get("state") ?? "";
   const reason = (form.get("reason") ?? "").trim();
@@ -325,7 +332,7 @@ async function submitComplianceForm(req: IncomingMessage, res: ServerResponse) {
   const token = issueFakeComplianceToken(reason);
   redirect(
     res,
-    `/api/compliance/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
+    `${apiBase}/compliance/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
   );
 }
 
@@ -354,28 +361,30 @@ function invalidateCompliance(req: IncomingMessage, res: ServerResponse) {
 
 type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | Promise<void>;
 
-/** Every route, keyed by "METHOD /path". Add a route here. */
+/** Every route, keyed by "METHOD /path". Add a route here. The API's own
+ *  routes sit under `config.apiBase`; the stand-in services' pages don't. */
 function routes(config: MockConfig): Record<string, Handler> {
+  const api = config.apiBase;
   return {
-    "GET /api/databases": (_req, res) => sendJson(res, 200, DATABASES),
-    "GET /api/individuals": (_req, res) => sendJson(res, 200, INDIVIDUALS),
-    "POST /api/stats": (req, res) => streamStats(req, res, config),
-    "POST /api/query": queryEvents,
+    [`GET ${api}/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
+    [`GET ${api}/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
+    [`POST ${api}/stats`]: (req, res) => streamStats(req, res, config),
+    [`POST ${api}/query`]: queryEvents,
 
-    "GET /api/auth/login": startLoginFlow,
+    [`GET ${api}/auth/login`]: startLoginFlow,
     "GET /mock-idp/authorize": showIdpPage,
-    "GET /mock-idp/authorize/confirm": confirmIdpLogin,
-    "GET /api/auth/callback": finishLogin,
-    "GET /api/auth/me": currentUser,
-    "POST /api/auth/logout": logOut,
+    "GET /mock-idp/authorize/confirm": (req, res, url) => confirmIdpLogin(req, res, url, api),
+    [`GET ${api}/auth/callback`]: finishLogin,
+    [`GET ${api}/auth/me`]: currentUser,
+    [`POST ${api}/auth/logout`]: logOut,
 
-    "GET /api/compliance/start": startComplianceFlow,
+    [`GET ${api}/compliance/start`]: (req, res) => startComplianceFlow(req, res, api),
     "GET /mock-compliance/submit": showComplianceForm,
-    "POST /mock-compliance/submit": submitComplianceForm,
-    "GET /api/compliance/callback": finishCompliance,
-    "GET /api/compliance/status": (req, res) =>
+    "POST /mock-compliance/submit": (req, res) => submitComplianceForm(req, res, api),
+    [`GET ${api}/compliance/callback`]: finishCompliance,
+    [`GET ${api}/compliance/status`]: (req, res) =>
       sendJson(res, 200, complianceStatusFor(req.headers.cookie)),
-    "POST /api/compliance/invalidate": invalidateCompliance,
+    [`POST ${api}/compliance/invalidate`]: invalidateCompliance,
   };
 }
 

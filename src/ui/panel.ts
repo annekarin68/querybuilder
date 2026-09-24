@@ -20,7 +20,7 @@ export function escapeHtml(s: unknown): string {
 }
 
 /** One `<option>` per item, for any `<select>` built from a list — the shape shared
- * by every facet/field/operator/enum dropdown in the query builder and value control. */
+ * by every facet/field/operator/value dropdown in the query builder and value control. */
 export function optionsHtml<T>(
   items: readonly T[],
   toValue: (item: T) => string,

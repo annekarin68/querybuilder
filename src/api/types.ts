@@ -69,12 +69,13 @@ export interface FacetField {
    *  distinct from `description`. */
   comment: string;
   /** Distinct values for this field across all databases, as of right now.
-   *  Can be 0 to several billion. Informational only — NEVER branch on this
-   *  to decide whether a field is enum-like; check `values.length` instead. */
+   *  Can be 0 to several billion. Informational only — the frontend never
+   *  branches on it. */
   cardinality: number;
-  /** The field's actual distinct values, when the backend chooses to supply
-   *  them. Empty when not supplied — that emptiness, not `cardinality`, is
-   *  what determines whether a field is treated as an enum. */
+  /** The field's known distinct values, when the backend chooses to supply
+   *  them; empty otherwise. A static list built ahead of time, so it can be
+   *  out of date: the frontend only suggests these (a pick-list), always lets
+   *  the user enter other values, and never takes the field's type from them. */
   values: string[];
   /** A third-party type hint, used only when `type` is empty. */
   format: string;
@@ -130,3 +131,46 @@ export interface EventsResponse {
   /** The backend's key name for the events. */
   entrysets: EventRecord[];
 }
+
+// ---- the body of POST …/stats and POST …/query ------------------------------
+
+/**
+ * The query and where to run it — the body of POST {prefix}/stats and POST
+ * {prefix}/query (docs/ARCHITECTURE.md, "Wire format of the query"). Built by
+ * `toQueryRequest` (src/query/request.ts) from the query on screen.
+ */
+export interface QueryRequest {
+  /** `DatabasesResponse.label` of each database to run against. Never empty. */
+  databases: string[];
+  /** The query. Its root is always a group. */
+  query: RequestGroup;
+}
+
+export type RequestNode = RequestGroup | RequestCondition;
+
+export interface RequestGroup {
+  kind: "group";
+  /** The frontend's id for this node: opaque, unique within the request.
+   *  Reserved so a later error response can point at a node. */
+  id: string;
+  operator: "AND" | "OR";
+  /** Never empty. */
+  children: RequestNode[];
+}
+
+export interface RequestCondition {
+  kind: "condition";
+  id: string;
+  /** `Facet.label`. */
+  facetId: string;
+  /** `FacetField.label`, within that facet. */
+  fieldId: string;
+  /** An operator label, e.g. "gt". */
+  operatorId: string;
+  /** Shaped by the operator's arity: `null` (none), one value (one),
+   *  `[from, to]` (two) or a non-empty list (many). */
+  value: RequestValue;
+}
+
+export type RequestScalar = string | number | boolean;
+export type RequestValue = null | RequestScalar | RequestScalar[];

@@ -1,14 +1,16 @@
-import type { QueryNode } from "../query/types";
 import type {
   AuthUser,
   ComplianceStatus,
   DatabasesResponse,
   EventsResponse,
   Facet,
+  QueryRequest,
   StatsResponse,
 } from "./types";
 
-const BASE = import.meta.env.VITE_API_BASE ?? "/api";
+/** The API prefix from .env (docs/ARCHITECTURE.md, "API contract"). No
+ *  fallback here: vite.config.ts refuses to run without it. */
+const BASE = import.meta.env.VITE_API_BASE;
 
 /**
  * Where the browser navigates (a real page load, not a fetch) to start the login
@@ -130,20 +132,20 @@ function postJson(body: unknown, signal?: AbortSignal): RequestInit {
 }
 
 /**
- * POST /api/stats streams newline-delimited JSON: one StatsResponse per
- * selected database, as soon as that database's result is ready. `onLine` is
- * called once per line, in arrival order; the returned promise resolves when
- * the stream ends, or rejects (before any line is read) on a non-2xx response.
- * Aborting `signal` stops reading and rejects with the abort reason — callers
- * use it to drop a stream whose query is no longer on screen.
+ * POST …/stats (body: a QueryRequest) streams newline-delimited JSON: one
+ * StatsResponse per selected database, as soon as that database's result is
+ * ready. `onLine` is called once per line, in arrival order; the returned
+ * promise resolves when the stream ends, or rejects (before any line is read)
+ * on a non-2xx response. Aborting `signal` stops reading and rejects with the
+ * abort reason — callers use it to drop a stream whose query is no longer on
+ * screen.
  */
 export function getStats(
-  query: QueryNode,
-  databases: string[],
+  body: QueryRequest,
   onLine: (line: StatsResponse) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  return send("/stats", postJson({ query, databases }, signal), async (res, touch) => {
+  return send("/stats", postJson(body, signal), async (res, touch) => {
     if (!res.ok) throw await errorFromResponse(res);
     if (!res.body) throw new ApiError(res.status, "The server sent an empty statistics response.");
     const reader = res.body.getReader();
@@ -166,13 +168,9 @@ export function getStats(
   });
 }
 
-/** POST /api/query: the events matching the query (capped by the backend). */
-export function runQuery(
-  query: QueryNode,
-  databases: string[],
-  signal?: AbortSignal,
-): Promise<EventsResponse> {
-  return request<EventsResponse>("/query", postJson({ query, databases }, signal));
+/** POST …/query: the events matching `body` (capped by the backend). */
+export function runQuery(body: QueryRequest, signal?: AbortSignal): Promise<EventsResponse> {
+  return request<EventsResponse>("/query", postJson(body, signal));
 }
 
 /**

@@ -11,18 +11,26 @@ import {
 } from "../../src/query/tree";
 import type { Issue } from "../../src/query/types";
 
-const field = (label: string, valueType: CatalogField["valueType"], operatorIds: string[]) => ({
-  label,
-  name: label,
-  fieldName: label,
+const field = (
+  fieldLabel: string,
+  valueType: CatalogField["valueType"],
+  operatorIds: string[],
+  options?: string[],
+): CatalogField => ({
+  facetLabel: "thing",
+  fieldLabel,
+  name: fieldLabel,
+  fieldName: fieldLabel,
   valueType,
+  options,
   operatorIds,
 });
 const catalog: FieldCatalog = {
   fields: [
-    field("color", "enum", ["eq", "in", "isEmpty"]),
-    field("count", "number", ["eq", "between", "isEmpty"]),
+    field("color", "string", ["eq", "in", "isEmpty"], ["red", "blue"]),
+    field("count", "number", ["eq", "between", "in", "isEmpty"]),
     field("seenAt", "date", ["eq", "between"]),
+    field("active", "boolean", ["eq"]),
   ],
 };
 
@@ -30,7 +38,7 @@ const catalog: FieldCatalog = {
 function validateOne(patch: NodePatch = {}): { issues: Issue[]; id: string } {
   const root = emptyQuery();
   const c = newCondition();
-  const tree = updateNode(addChild(root, root.id, c), c.id, patch);
+  const tree = updateNode(addChild(root, root.id, c), c.id, { facetId: "thing", ...patch });
   return { issues: validateQuery(tree, catalog), id: c.id };
 }
 
@@ -67,14 +75,33 @@ describe("validateQuery", () => {
     expectIssue(patch, "Choose at least one value.", "incomplete");
   });
 
-  it("arity 'none' ignores the value", () => {
+  it("arity 'none' takes a null value", () => {
     expect(validateOne({ fieldId: "color", operatorId: "isEmpty", value: null }).issues).toEqual(
       [],
     );
   });
 
+  it("arity 'none' with any other value (a tampered saved query) is invalid", () => {
+    for (const value of [{}, "", "red", 0, false, [], undefined]) {
+      const patch = { fieldId: "color", operatorId: "isEmpty", value };
+      expectIssue(patch, "This operator takes no value.", "invalid");
+    }
+  });
+
   it("a field that is not in the catalog is invalid", () => {
     expectIssue({ fieldId: "nope", operatorId: "eq", value: "x" }, "Unknown field.", "invalid");
+  });
+
+  it("a field of another facet is unknown", () => {
+    expectIssue(
+      { facetId: "other", fieldId: "color", operatorId: "eq", value: "x" },
+      "Unknown field.",
+      "invalid",
+    );
+  });
+
+  it("a condition without a facet is incomplete", () => {
+    expectIssue({ facetId: null, fieldId: "color" }, "Choose a field.", "incomplete");
   });
 
   it("an operator the field does not offer is invalid", () => {
@@ -131,6 +158,85 @@ describe("validateQuery", () => {
         "Enter a value.",
         "incomplete",
       );
+    });
+  });
+
+  describe("value types", () => {
+    it.each([
+      [
+        "a number field holding text",
+        { fieldId: "count", operatorId: "eq", value: "12abc" },
+        "Enter a number.",
+      ],
+      [
+        "a number field holding a list",
+        { fieldId: "count", operatorId: "eq", value: [3] },
+        "Enter a number.",
+      ],
+      [
+        "a number range holding text",
+        { fieldId: "count", operatorId: "between", value: [1, "x"] },
+        "Enter a number.",
+      ],
+      [
+        "a number list holding text",
+        { fieldId: "count", operatorId: "in", value: [1, "x"] },
+        "Enter a number.",
+      ],
+      [
+        "a boolean field holding text",
+        { fieldId: "active", operatorId: "eq", value: "true" },
+        "Choose true or false.",
+      ],
+      [
+        "a string field holding a number",
+        { fieldId: "color", operatorId: "eq", value: 3 },
+        "Enter text.",
+      ],
+      [
+        "a string list holding a number",
+        { fieldId: "color", operatorId: "in", value: ["red", 3] },
+        "Enter text.",
+      ],
+    ])("%s is invalid", (_label, patch, message) => {
+      expectIssue(patch, message, "invalid");
+    });
+
+    it("accepts values of the field's type", () => {
+      for (const patch of [
+        { fieldId: "count", operatorId: "eq", value: 12 },
+        { fieldId: "count", operatorId: "in", value: [1, 2] },
+        { fieldId: "active", operatorId: "eq", value: false },
+        { fieldId: "color", operatorId: "eq", value: "red" },
+      ]) {
+        expect(validateOne(patch).issues).toEqual([]);
+      }
+    });
+
+    it("accepts a value that isn't on the pick-list — the list may be out of date", () => {
+      expect(validateOne({ fieldId: "color", operatorId: "eq", value: "violet" }).issues).toEqual(
+        [],
+      );
+      const list = { fieldId: "color", operatorId: "in", value: ["red", "violet"] };
+      expect(validateOne(list).issues).toEqual([]);
+    });
+  });
+
+  describe("ranges", () => {
+    it("a number range may not run backwards", () => {
+      const patch = { fieldId: "count", operatorId: "between", value: [10, 5] };
+      expectIssue(patch, "From must not be greater than To.", "invalid");
+    });
+
+    it("a number range may start and end on the same value", () => {
+      expect(
+        validateOne({ fieldId: "count", operatorId: "between", value: [5, 5] }).issues,
+      ).toEqual([]);
+    });
+
+    it("a date range's order is left to the backend", () => {
+      const patch = { fieldId: "seenAt", operatorId: "between", value: ["2025", "2024"] };
+      expect(validateOne(patch).issues).toEqual([]);
     });
   });
 });
