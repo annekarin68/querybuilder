@@ -279,7 +279,7 @@ docs/
   ARCHITECTURE.md      This file.
   CHANGELOG.md         The archived design history (not updated any more).
   superpowers/specs/   Historical design records of past features. Not maintained; this file wins.
-  superpowers/plans/   Historical implementation plans, likewise.
+  superpowers/plans/   A feature's implementation plan while it is being built; deleted once it is merged.
 ```
 
 ---
