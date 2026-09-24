@@ -277,6 +277,7 @@ docs/
   ARCHITECTURE.md      This file.
   CHANGELOG.md         The archived design history (not updated any more).
   superpowers/specs/   Historical design records of past features. Not maintained; this file wins.
+  superpowers/plans/   Historical implementation plans, likewise.
 ```
 
 ---
@@ -742,16 +743,19 @@ view is a stand-in for a dedicated event viewer planned later.
 Dev-only (`mock-server/`). `npm run mock` starts it; `npm run dev` starts it
 together with the Vite dev server (`npm run dev:app`). Plain Node `http`, no
 Express. `server.ts` has one route table, `routes()`, mapping `"METHOD /path"`
-to a named handler function — add a route there, and a test in `tests/mock-server/server.test.ts`, which drives the
-server over real HTTP.
+to a named handler function — add a route there, and a test in
+`tests/mock-server/server.test.ts`, which drives the server over real HTTP.
 
-- **Just another backend.** Nothing outside `mock-server/` knows the mock is
-  there. The dev server forwards the API prefix to `DEV_BACKEND_URL` (`.env`,
-  `http://localhost:3001`) and nothing else; the mock listens on that URL's
-  port. To develop against a real backend, set `DEV_BACKEND_URL` to it (in
-  `.env.local` or the environment) and run `npm run dev:app` instead of
-  `npm run dev`. No other change. The variable is not `VITE_`-prefixed, so it
-  never reaches the bundle; a built `dist/` is served next to the real API.
+- **Just another backend.** Neither the app nor `vite.config.ts` knows the
+  mock is there. The dev server forwards the API prefix to `DEV_BACKEND_URL`
+  (`.env`, `http://localhost:3001`) and nothing else; the mock listens on that
+  URL's port. To develop against a real backend, set `DEV_BACKEND_URL` to it
+  (in `.env.local` or the environment) and run `npm run dev:app` instead of
+  `npm run dev`; nothing in the frontend changes. Login and compliance then
+  only complete if that backend sends the browser back to the dev server
+  (`http://localhost:5173`) with cookies valid there — the backend's settings,
+  not ours. The variable is not `VITE_`-prefixed, so it never reaches the
+  bundle; a built `dist/` is served next to the real API.
 - **Prefix.** `index.ts` reads `VITE_API_BASE` from `.env` with Vite's
   `loadEnv`, as the app does, and passes it as `MockConfig.apiBase`. Every
   route and every redirect the mock issues is built from it — the stand-in

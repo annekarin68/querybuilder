@@ -95,14 +95,16 @@ function apiBase(mode: string): string {
 }
 
 /**
- * The backend the dev server forwards the API prefix to: DEV_BACKEND_URL from
- * .env — the mock server by default, or a real backend. Only the dev server
- * uses it; a built dist/ is served next to the real API instead.
+ * The backend the dev server (and `vite preview`) forwards the API prefix to:
+ * DEV_BACKEND_URL from .env — the mock server by default, or a real backend.
+ * A built dist/ doesn't use it: it is served next to the real API instead.
  */
 function devBackendUrl(mode: string): string {
   const url = loadEnv(mode, process.cwd(), "DEV_").DEV_BACKEND_URL ?? "";
-  if (!URL.canParse(url)) {
-    throw new Error(`DEV_BACKEND_URL must be a URL (see .env); got "${url}".`);
+  // Test the scheme too: URL.canParse alone accepts "localhost:3001", reading
+  // "localhost:" as the scheme, and the proxy would then fail on every request.
+  if (!/^https?:\/\//.test(url) || !URL.canParse(url)) {
+    throw new Error(`DEV_BACKEND_URL must be an http:// or https:// URL (see .env); got "${url}".`);
   }
   return url;
 }

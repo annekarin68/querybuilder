@@ -29,7 +29,9 @@ checkout), pick other ports: `DEV_BACKEND_URL=http://localhost:3011 npx concurre
 The dev server forwards the API prefix to `DEV_BACKEND_URL` (`.env`), which
 is where the mock listens. To develop against a real backend instead, set it
 in `.env.local` (or the environment) and start the app alone:
-`DEV_BACKEND_URL=https://backend.example npm run dev:app`.
+`DEV_BACKEND_URL=https://backend.example npm run dev:app`. Login and
+compliance then need that backend to send the browser back to
+`http://localhost:5173` (see `docs/ARCHITECTURE.md`, "Mock server").
 
 By default the mock streams statistics with a random 150–400 ms pause per
 database and fails about 5% of them on purpose, to show the loading and
