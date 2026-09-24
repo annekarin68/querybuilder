@@ -258,10 +258,13 @@ export function wireQueryBuilder(
     // Fomantic dispatches a native bubbling "change" on the <select> behind each
     // dropdown *before* calling its onChange. Handling both would run
     // handleRowChange twice, the second time on a detached row, and write back
-    // stale values. So every <select> is handled ONLY via onDropdownChange below;
-    // this listener handles the plain <input>s (text/number, the range
-    // pair and the boolean toggle's checkbox).
-    if (target instanceof HTMLSelectElement) return;
+    // stale values. So every <select> is handled ONLY via onDropdownChange below.
+    // A search dropdown's own typing box (input.search) fires "change" too, when
+    // it loses focus on the mousedown before a menu click; repainting then would
+    // remove the item under the pointer before the click lands. So anything
+    // inside a .ui.dropdown is skipped, and this listener handles only the plain
+    // <input>s (text/number, the range pair and the boolean toggle's checkbox).
+    if (target instanceof HTMLSelectElement || target.closest(".ui.dropdown")) return;
     const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
     if (row) handleRowChange(row);
   });

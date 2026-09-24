@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { CatalogField, CatalogOperator } from "../../src/query/fieldCatalog";
-import { parseEntry, renderValueControl } from "../../src/ui/valueControl";
+import {
+  optionEntry,
+  parseEntry,
+  readValueControl,
+  renderValueControl,
+} from "../../src/ui/valueControl";
 
 function field(overrides: Partial<CatalogField> = {}): CatalogField {
   return {
@@ -135,5 +140,51 @@ describe("parseEntry", () => {
     expect(parseEntry("", "number")).toBe("");
     expect(parseEntry("3", "string")).toBe("3");
     expect(parseEntry("2024-11", "date")).toBe("2024-11");
+  });
+});
+
+/** A stand-in <option>: `added` marks one Fomantic created for a typed entry. */
+function option(value: string, added = false): HTMLOptionElement {
+  return {
+    value,
+    classList: { contains: (c: string) => added && c === "addition" },
+  } as unknown as HTMLOptionElement;
+}
+
+describe("optionEntry", () => {
+  it("reads one of our own options exactly", () => {
+    expect(optionEntry(option("a&quot;b"))).toBe("a&quot;b");
+    expect(optionEntry(option('a"b'))).toBe('a"b');
+  });
+
+  it("undoes Fomantic's HTML escaping of a typed entry, so it reads back as typed", () => {
+    expect(optionEntry(option("a&quot;b", true))).toBe('a"b');
+    expect(optionEntry(option("a&lt;b&gt;c", true))).toBe("a<b>c");
+    expect(optionEntry(option("it&#x27;s", true))).toBe("it's");
+    expect(optionEntry(option("x&#x60;y", true))).toBe("x`y");
+    expect(optionEntry(option("p&amp;q", true))).toBe("p&q");
+    expect(optionEntry(option("c,d", true))).toBe("c,d");
+  });
+
+  it("decodes in one pass, never twice", () => {
+    expect(optionEntry(option("&amp;quot;", true))).toBe("&quot;");
+  });
+});
+
+describe("readValueControl on a free-entry dropdown", () => {
+  function rowWith(...selected: HTMLOptionElement[]): HTMLElement {
+    const select = { selectedOptions: selected };
+    return { querySelector: () => select } as unknown as HTMLElement;
+  }
+
+  it('returns "Is any of" entries exactly as typed or picked', () => {
+    const row = rowWith(option("Apple"), option("a&quot;b", true), option("c,d", true));
+    expect(readValueControl(row, "many", "string")).toEqual(["Apple", 'a"b', "c,d"]);
+  });
+
+  it("still types a number field's entries", () => {
+    expect(readValueControl(rowWith(option("4"), option("42", true)), "many", "number")).toEqual([
+      4, 42,
+    ]);
   });
 });

@@ -89,6 +89,29 @@ export function parseEntry(text: string, valueType: ValueType): string | number 
   return valueType === "number" && isNumberText(text) ? Number(text) : text;
 }
 
+/** What Fomantic's HTML escaping turns each character into (see optionEntry). */
+const FOMANTIC_ENTITIES: Record<string, string> = {
+  "&quot;": '"',
+  "&lt;": "<",
+  "&gt;": ">",
+  "&#x27;": "'",
+  "&#x60;": "`",
+  "&amp;": "&",
+};
+
+/**
+ * The entry an option of a free-entry dropdown stands for. Our own options
+ * (rendered from state) hold it exactly. An option Fomantic created for a
+ * typed entry (class `addition`) holds it HTML-escaped (`a"b` → `a&quot;b`),
+ * so that escaping is undone here, in one pass, and the value goes out as
+ * typed. Text that already looks like one of these entities (typing `&lt;`
+ * itself) comes back decoded: Fomantic stores it the same way as `<`.
+ */
+export function optionEntry(option: HTMLOptionElement): string {
+  if (!option.classList.contains("addition")) return option.value;
+  return option.value.replace(/&(?:quot|lt|gt|#x27|#x60|amp);/g, (e) => FOMANTIC_ENTITIES[e]!);
+}
+
 /** Reads back what `renderValueControl` rendered inside `row`. */
 export function readValueControl(
   row: HTMLElement,
@@ -104,11 +127,16 @@ export function readValueControl(
   }
   if (arity === "many") {
     const sel = row.querySelector<HTMLSelectElement>('select[data-part="value"]');
-    return sel ? Array.from(sel.selectedOptions).map((o) => parseEntry(o.value, valueType)) : [];
+    return sel
+      ? Array.from(sel.selectedOptions).map((o) => parseEntry(optionEntry(o), valueType))
+      : [];
   }
   const control = row.querySelector<HTMLElement>('[data-part="value"]');
   if (!control) return null;
-  if (control instanceof HTMLSelectElement) return parseEntry(control.value, valueType);
+  if (control instanceof HTMLSelectElement) {
+    const chosen = control.selectedOptions[0];
+    return parseEntry(chosen ? optionEntry(chosen) : "", valueType);
+  }
   if (control instanceof HTMLInputElement) return readInput(control, valueType);
   // The boolean toggle: a .ui.checkbox wrapper around the real checkbox.
   return control.querySelector<HTMLInputElement>("input")?.checked ?? false;

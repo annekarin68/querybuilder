@@ -614,7 +614,13 @@ values, plus anything typed); otherwise one input, a boolean toggle or a
 timestamp text box; a from–to pair (numbers and dates); or, for **Is any
 of**, a free-entry multi-select. Free-entry dropdowns are Fomantic `search`
 dropdowns with `allowAdditions` (`data-free-entry`, activated in
-`fomantic.ts`). A picked or typed entry becomes the field's type
+`fomantic.ts`): type an entry and press Enter, or pick one from the list.
+Their `delimiter` is a character no key can type, so a comma is part of an
+entry (`c,d` is one value) instead of splitting it. Fomantic HTML-escapes a
+typed entry in the `<option>` it creates for it (`a"b` → `a&quot;b`);
+`optionEntry` undoes that, so the entry goes out exactly as typed. (Typing
+an entity itself, such as `&lt;`, reads back as `<`: Fomantic stores both
+alike.) A picked or typed entry becomes the field's type
 (`parseEntry`: `"3"` → `3` on a number field; anything else stays as typed,
 for validation to report). Every control has an accessible name. Issues show
 under their row or group. The footer shows the whole query in plain English
@@ -624,6 +630,10 @@ Wiring: two delegated listeners (`click` for `data-action` buttons, `change`
 for plain `<input>`s) read the current tree through `getState()` when an event
 fires. Every `<select>` is a Fomantic dropdown, handled only through its
 `onChange` (handling the native `change` too would run the row update twice).
+The `change` listener skips everything inside a `.ui.dropdown`: a search
+dropdown's typing box fires `change` when it loses focus on the mousedown
+before a menu click, and repainting then would remove the item under the
+pointer before the click lands.
 
 ### Right — `statsPanel.ts`
 
