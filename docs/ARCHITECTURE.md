@@ -223,6 +223,7 @@ src/
   query/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, sameSemantics, …).
+    request.ts         toQueryRequest(query, databases) — the body sent to /stats and /query.
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE, TYPE_NAMES, findField /
                        fieldsOfFacet / findOperator, fieldDisplayName.
     conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row.
@@ -252,8 +253,8 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   index.ts             Reads VITE_API_BASE (.env), MOCK_PORT / MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS, starts the server.
   server.ts            createMockServer(config): one route table ("METHOD /path" -> handler).
   auth.ts, audit.ts    Fake login / compliance sessions and the audit log (in memory).
-  databases.ts, rows.ts, evaluate.ts, vehicleData.ts
-                       The 7 mock databases, the flattened rows, the query evaluator, the data loader.
+  databases.ts, rows.ts, evaluate.ts, requestBody.ts, vehicleData.ts
+                       The 7 mock databases, the flattened rows, the query evaluator, the request-body check, the data loader.
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
@@ -363,13 +364,12 @@ comments, `/api/stats` and the like are short for `{prefix}/stats`.
 |---|---|
 | `GET {prefix}/databases` | The databases to scope to — a bare array. |
 | `GET {prefix}/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
-| `POST {prefix}/stats` | Body `{ query, databases }`. Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
-| `POST {prefix}/query` | Body `{ query, databases }`. The matching events, capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
+| `POST {prefix}/stats` | Body: a `QueryRequest` ("Wire format of the query"). Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
+| `POST {prefix}/query` | Body: a `QueryRequest` ("Wire format of the query"). The matching events, capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
 | `GET {prefix}/auth/login`, `/callback`, `/me`, `POST /logout` | Login (below). |
 | `GET {prefix}/compliance/start`, `/callback`, `/status`, `POST /invalidate` | Compliance (below). |
 
-Both query bodies must have a `query` object and a non-empty `databases`
-array, or the answer is `400`.
+A body that isn't a well-formed `QueryRequest` is answered with `400`.
 
 ### Statistics lines
 
@@ -493,11 +493,32 @@ This is the mock's reading; the real backend owns the rule.
 
 ### Wire format of the query
 
-The query tree goes over the wire as-is, `JSON.stringify(query)`, in both
-`/api/stats` and `/api/query` bodies — no custom DSL. Besides the fields the
-backend needs (`kind`, `operator`, `children`, `facetId`, `fieldId`,
-`operatorId`, `value`), the tree carries two the backend can ignore: every
-node's `id` and a group's display-only `collapsed`.
+Both `/stats` and `/query` take a `QueryRequest` (`src/api/types.ts`):
+`{ databases, query }`. `databases` holds `DatabasesResponse.label`s, and
+`query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
+and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`). Every
+node carries the frontend's `id` for it. The backend treats it as opaque; it is
+reserved so a later error response can point at a condition.
+
+`toQueryRequest` (`src/query/request.ts`) builds the body from the query on
+screen. It is a projection, not a rewrite: operators and values go out exactly
+as the user built them, and only display state (`collapsed`) is left out. The
+UI's own `QueryNode` is never sent, so a change to the UI's model can't
+change the API. `app.ts` calls it only once `runBlocker` says the query can
+run, so it never meets an unfinished condition (it throws if it does).
+
+`value` is shaped by the operator's arity:
+
+| Arity (operators) | `value` |
+|---|---|
+| `none` (`isEmpty`, `isNotEmpty`) | `null` |
+| `one` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `before`, `after`, `contains`) | one value |
+| `two` (`between`) | `[from, to]` |
+| `many` (`in`) | a non-empty list |
+
+The mock answers a body that isn't a well-formed `QueryRequest` with `400`
+and a message naming the first problem (`mock-server/requestBody.ts`). The
+real backend should do the same.
 
 ---
 
@@ -512,6 +533,8 @@ node's `id` and a group's display-only `collapsed`.
 - **`tree.ts`** — pure and immutable: every edit is "read `state.query`, call
   one `tree.ts` function, write the new tree back". `sameSemantics` tells a
   real edit from a collapse toggle.
+- **`request.ts`** — `toQueryRequest`, the one place the tree becomes the
+  request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
   `incomplete` (not filled in yet, shown as a quiet grey hint) or `invalid`
   (can't work, shown in red). **Any issue blocks running.**
@@ -629,6 +652,10 @@ server over real HTTP.
   reached.
 - **`/api/query`** returns the matching events themselves, at most
   `QUERY_RESULT_CAP` (25).
+- **Request bodies** are checked against `QueryRequest` before anything reads
+  them (`requestBody.ts`, `queryProblem`): a malformed one gets a `400` naming
+  the first problem, e.g. `Malformed query: query.children[0].fieldId must be a
+  non-empty string.`
 - **Login and compliance** are simulated in-process (`auth.ts`): stand-in IdP
   and compliance pages, fake codes and tokens, in-memory sessions. CSRF
   `state` values are single-use, bound to the browser by a short-lived cookie

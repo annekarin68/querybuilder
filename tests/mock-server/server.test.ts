@@ -60,8 +60,23 @@ function compliant(): string {
   return cookie;
 }
 
-const matchAll = { kind: "group", operator: "AND", children: [] };
-const body = (databases: string[], query: unknown = matchAll) =>
+/** Every event has an observation window, so this query matches them all. */
+const everyEvent = {
+  kind: "group",
+  id: "g1",
+  operator: "AND",
+  children: [
+    {
+      kind: "condition",
+      id: "c1",
+      facetId: "observation_window",
+      fieldId: "from_timestamp",
+      operatorId: "isNotEmpty",
+      value: null,
+    },
+  ],
+};
+const body = (databases: string[], query: unknown = everyEvent) =>
   JSON.stringify({ query, databases });
 
 describe("GET /api/databases and /api/individuals", () => {
@@ -102,6 +117,21 @@ describe("POST /api/stats", () => {
       "Body must include a `query` tree.",
     ],
     ["query that is an array", body(["alpha"], []), "Body must include a `query` tree."],
+    [
+      "query whose root is a condition",
+      body(["alpha"], everyEvent.children[0]),
+      "Malformed query: query must be a group.",
+    ],
+    [
+      "query that is an empty group",
+      body(["alpha"], { ...everyEvent, children: [] }),
+      "Malformed query: query.children must be a non-empty list.",
+    ],
+    [
+      "condition without a field",
+      body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], fieldId: "" }] }),
+      "Malformed query: query.children[0].fieldId must be a non-empty string.",
+    ],
     ["no databases", body([]), "Select at least one database."],
   ])("answers 400 for a %s", async (_label, payload, error) => {
     const res = await post(`${API}/stats`, payload);

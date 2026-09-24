@@ -5,11 +5,13 @@ import type {
   DatabasesResponse,
   EventsResponse,
   Facet,
+  QueryRequest,
   StatsResponse,
 } from "./api/types";
 import { buildFieldCatalog } from "./query/fieldCatalog";
+import { toQueryRequest } from "./query/request";
 import { addChild, countConditions, newCondition, sameSemantics } from "./query/tree";
-import type { Group, QueryNode } from "./query/types";
+import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
 import { runBlocker, type AppState, type Store } from "./state";
 import { debounce } from "./util/debounce";
@@ -31,12 +33,11 @@ export interface AppApi {
   getMe(): Promise<AuthUser | null>;
   getComplianceStatus(): Promise<ComplianceStatus>;
   getStats(
-    query: QueryNode,
-    databases: string[],
+    body: QueryRequest,
     onLine: (line: StatsResponse) => void,
     signal?: AbortSignal,
   ): Promise<void>;
-  runQuery(query: QueryNode, databases: string[], signal?: AbortSignal): Promise<EventsResponse>;
+  runQuery(body: QueryRequest, signal?: AbortSignal): Promise<EventsResponse>;
   logout(): Promise<void>;
   invalidateCompliance(): Promise<void>;
 }
@@ -96,12 +97,13 @@ export function createApp({ store, api, navigate }: AppDeps) {
   function runPreview(): void {
     const state = store.getState();
     if (runBlocker(state)) return;
+    const body = toQueryRequest(state.query, state.selectedDatabaseIds);
     const req = previewSlot.start();
     const showError = (err: unknown) =>
       store.setState({ preview: { status: "error", error: errorMessage(err) } });
     store.setState({ preview: { status: "loading" } });
     api
-      .runQuery(state.query, state.selectedDatabaseIds, req.signal)
+      .runQuery(body, req.signal)
       .then((data) => {
         if (!req.isStale()) store.setState({ preview: { status: "ok", data } });
       })
@@ -121,13 +123,13 @@ export function createApp({ store, api, navigate }: AppDeps) {
   const refreshStats = debounce(() => {
     const state = store.getState();
     if (runBlocker(state)) return;
+    const body = toQueryRequest(state.query, state.selectedDatabaseIds);
     const req = statsSlot.start();
     const lines: StatsResponse[] = [];
     store.setState({ stats: { status: "loading", lines: [] } });
     api
       .getStats(
-        state.query,
-        state.selectedDatabaseIds,
+        body,
         (line) => {
           if (req.isStale()) return;
           lines.push(line);

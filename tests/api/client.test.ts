@@ -14,7 +14,26 @@ import {
   runQuery,
   TimeoutError,
 } from "../../src/api/client";
-import { emptyQuery } from "../../src/query/tree";
+import type { QueryRequest } from "../../src/api/types";
+
+const body: QueryRequest = {
+  databases: ["alpha", "beta"],
+  query: {
+    kind: "group",
+    id: "g1",
+    operator: "AND",
+    children: [
+      {
+        kind: "condition",
+        id: "c1",
+        facetId: "thing",
+        fieldId: "size",
+        operatorId: "gt",
+        value: 3,
+      },
+    ],
+  },
+};
 
 function mockFetchOnce(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -106,18 +125,14 @@ describe("api client", () => {
     expect(f).toHaveBeenCalledWith("/api/v1/individuals", { signal: expect.any(AbortSignal) });
   });
 
-  it("getStats POSTs the query tree + selected databases as JSON", async () => {
+  it("getStats POSTs the request body as JSON", async () => {
     const f = mockStreamFetch(200, [""]);
     vi.stubGlobal("fetch", f);
-    const q = emptyQuery();
-    await getStats(q, ["alpha", "beta"], () => {});
+    await getStats(body, () => {});
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe("/api/v1/stats");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({
-      query: JSON.parse(JSON.stringify(q)),
-      databases: ["alpha", "beta"],
-    });
+    expect(JSON.parse(init.body)).toEqual(body);
   });
 
   it("getStats streams NDJSON lines, calling onLine once per line, even split across chunks", async () => {
@@ -130,7 +145,7 @@ describe("api client", () => {
     const f = mockStreamFetch(200, [ndjson.slice(0, splitAt), ndjson.slice(splitAt)]);
     vi.stubGlobal("fetch", f);
     const received: unknown[] = [];
-    await getStats(emptyQuery(), ["alpha", "beta"], (line) => received.push(line));
+    await getStats(body, (line) => received.push(line));
     expect(received).toEqual(lines);
   });
 
@@ -138,16 +153,17 @@ describe("api client", () => {
     const f = mockFetchOnce(400, { error: "bad query tree" });
     vi.stubGlobal("fetch", f);
     const onLine = vi.fn();
-    await expect(getStats(emptyQuery(), ["alpha"], onLine)).rejects.toThrow("bad query tree");
+    await expect(getStats(body, onLine)).rejects.toThrow("bad query tree");
     expect(onLine).not.toHaveBeenCalled();
   });
 
-  it("runQuery POSTs just the query and databases", async () => {
+  it("runQuery POSTs the request body as JSON", async () => {
     const f = mockFetchOnce(200, { entrysets: [] });
     vi.stubGlobal("fetch", f);
-    await runQuery(emptyQuery(), ["rose"]);
-    const [, init] = f.mock.calls[0]!;
-    expect(Object.keys(JSON.parse(init.body)).sort()).toEqual(["databases", "query"]);
+    await runQuery(body);
+    const [url, init] = f.mock.calls[0]!;
+    expect(url).toBe("/api/v1/query");
+    expect(JSON.parse(init.body)).toEqual(body);
   });
 
   it("falls back to status text when there is no error field", async () => {
@@ -233,7 +249,7 @@ describe("api client", () => {
   it("runQuery rejects with the caller's abort reason when its signal aborts", async () => {
     vi.stubGlobal("fetch", hangingFetch());
     const ctrl = new AbortController();
-    const pending = runQuery(emptyQuery(), ["a"], ctrl.signal);
+    const pending = runQuery(body, ctrl.signal);
     ctrl.abort(new Error("superseded"));
     await expect(pending).rejects.toThrow("superseded");
   });
@@ -241,7 +257,7 @@ describe("api client", () => {
   it("getStats passes an abortable signal and rejects when it is aborted", async () => {
     vi.stubGlobal("fetch", hangingFetch());
     const ctrl = new AbortController();
-    const pending = getStats(emptyQuery(), ["a"], () => {}, ctrl.signal);
+    const pending = getStats(body, () => {}, ctrl.signal);
     ctrl.abort(new Error("superseded"));
     await expect(pending).rejects.toThrow("superseded");
   });
@@ -251,8 +267,6 @@ describe("api client", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, status: 204, statusText: "", body: null }),
     );
-    await expect(getStats(emptyQuery(), ["a"], () => {})).rejects.toThrow(
-      "empty statistics response",
-    );
+    await expect(getStats(body, () => {})).rejects.toThrow("empty statistics response");
   });
 });

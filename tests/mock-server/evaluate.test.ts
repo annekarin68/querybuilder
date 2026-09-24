@@ -7,9 +7,9 @@ import {
   rowKey,
   scaleCount,
   utcSpan,
-  type JsonNode,
   type Row,
 } from "../../mock-server/evaluate";
+import type { RequestNode, RequestValue } from "../../src/api/types";
 import { MALFORMED, WELL_FORMED } from "../dateCases";
 
 const row = {
@@ -22,15 +22,17 @@ const row = {
   "thing.note": "all good",
 };
 
-const cond = (fieldId: string, operatorId: string, value: unknown) => ({
+const cond = (fieldId: string, operatorId: string, value: RequestValue) => ({
   kind: "condition" as const,
+  id: "c",
   facetId: "thing",
   fieldId,
   operatorId,
   value,
 });
-const group = (operator: "AND" | "OR", ...children: JsonNode[]) => ({
+const group = (operator: "AND" | "OR", ...children: RequestNode[]) => ({
   kind: "group" as const,
+  id: "g",
   operator,
   children,
 });
@@ -83,6 +85,12 @@ describe("matches", () => {
     expect(rowKey("thing", "color")).toBe("thing.color");
     expect(matches({ ...cond("color", "eq", "red"), facetId: "other" }, row)).toBe(false);
   });
+
+  it("typed values match typed stored values, not their text", () => {
+    expect(matches(cond("active", "eq", true), row)).toBe(true);
+    expect(matches(cond("count", "in", [12, 13]), row)).toBe(true);
+    expect(matches(cond("count", "eq", "12"), row)).toBe(false);
+  });
 });
 
 describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
@@ -117,7 +125,7 @@ describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
 
 describe("date conditions: the user's operator at the precision they typed (UTC)", () => {
   const seen = { "thing.seenAt": "2024-11-06T14:32:00Z" };
-  const is = (operatorId: string, value: unknown) =>
+  const is = (operatorId: string, value: RequestValue) =>
     matches(cond("seenAt", operatorId, value), seen);
 
   it("eq / neq: the stored time falls inside / outside the span", () => {
@@ -166,12 +174,20 @@ const rows: Row[] = [
   { __db: "gamma", id: 4, "thing.count": 1 },
 ];
 
-const matchAll: JsonNode = { kind: "group", operator: "AND", children: [] };
-const countGte10: JsonNode = {
+const matchAll: RequestNode = { kind: "group", id: "g", operator: "AND", children: [] };
+const countGte10: RequestNode = {
   kind: "group",
+  id: "g",
   operator: "AND",
   children: [
-    { kind: "condition", facetId: "thing", fieldId: "count", operatorId: "gte", value: 10 },
+    {
+      kind: "condition",
+      id: "c",
+      facetId: "thing",
+      fieldId: "count",
+      operatorId: "gte",
+      value: 10,
+    },
   ],
 };
 

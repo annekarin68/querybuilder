@@ -6,10 +6,11 @@ import {
   filterByDatabases,
   perDatabaseCounts,
   scaleCount,
-  type JsonNode,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { ROWS } from "./rows";
+import { queryProblem } from "./requestBody";
+import type { QueryRequest } from "../src/api/types";
 import {
   startLogin,
   issueFakeCode,
@@ -134,18 +135,16 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-/** The body of POST /api/stats and POST /api/query. */
-interface QueryBody {
-  query: JsonNode;
-  databases: string[];
-}
-
 /**
- * Reads and checks a /api/stats or /api/query body: `query` must be an object
- * (the tree), `databases` a non-empty string[]. For a bad body this sends the
- * 400 itself and returns null.
+ * Reads and checks a …/stats or …/query body: `query` must be a well-formed
+ * query tree whose root is a group (requestBody.ts), and `databases` a
+ * non-empty string[]. For a bad body this sends the 400 itself and returns
+ * null.
  */
-async function readQueryBody(req: IncomingMessage, res: ServerResponse): Promise<QueryBody | null> {
+async function readQueryBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<QueryRequest | null> {
   const body = await readJson(req);
   const { query, databases } = (typeof body === "object" && body !== null ? body : {}) as {
     query?: unknown;
@@ -163,7 +162,13 @@ async function readQueryBody(req: IncomingMessage, res: ServerResponse): Promise
     sendJson(res, 400, { error: "Select at least one database." });
     return null;
   }
-  return { query: query as JsonNode, databases };
+  const problem =
+    (query as { kind?: unknown }).kind === "group" ? queryProblem(query) : "query must be a group.";
+  if (problem) {
+    sendJson(res, 400, { error: `Malformed query: ${problem}` });
+    return null;
+  }
+  return { query: query as QueryRequest["query"], databases };
 }
 
 function delay(ms: number): Promise<void> {
