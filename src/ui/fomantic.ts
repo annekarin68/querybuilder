@@ -3,8 +3,18 @@
 // "The Fomantic discipline".
 import $ from "jquery";
 
-/** Settings for every dropdown. */
-const DROPDOWN = { fullTextSearch: true };
+/**
+ * Settings for every dropdown. A search dropdown shows only the items
+ * containing the typed text as one piece, anywhere in the item ("exact").
+ * `true` would also match the typed letters spread out in order, which with
+ * many facets buries the real matches under loose ones.
+ *
+ * `selectOnKeydown: false`: the arrow keys only move the highlight and Enter
+ * picks. Fomantic's default selects on every arrow press, which fires
+ * onChange, and the repaint that follows replaces the open dropdown with a
+ * closed one — so the first ↓ picked the next item and closed the menu.
+ */
+const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false };
 
 /**
  * A free-entry dropdown (`data-free-entry`, set by valueControl.ts) also

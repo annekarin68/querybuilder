@@ -56,24 +56,24 @@ function iconButton(action: string, label: string, icon: string, extra = ""): st
   return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
 }
 
-function facetDropdown(facets: Facet[] | null, c: Condition): string {
+export function facetDropdown(facets: Facet[] | null, c: Condition): string {
   const opts = optionsHtml(
     facets ?? [],
     (facet) => facet.label,
     (facet) => facet.name,
     (facet) => facet.label === c.facetId,
   );
-  return `<select class="ui selection dropdown" data-part="facet" aria-label="Facet"><option value="">Facet…</option>${opts}</select>`;
+  return `<select class="ui search selection dropdown" data-part="facet" aria-label="Facet"><option value="">Facet…</option>${opts}</select>`;
 }
 
-function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
+export function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
   const opts = optionsHtml(
     fieldsOfFacet(catalog, c.facetId),
     (f) => f.fieldLabel,
     (f) => f.fieldName,
     (f) => f.fieldLabel === c.fieldId,
   );
-  return `<select class="ui selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
+  return `<select class="ui search selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
 function operatorDropdown(catalog: FieldCatalog, c: Condition): string {

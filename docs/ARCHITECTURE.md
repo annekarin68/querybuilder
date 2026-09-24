@@ -607,7 +607,14 @@ collapse caret, "Match [ALL | ANY] of the following", **+ Condition**, **+
 Group**, ✕ (not on the root). A collapsed group folds to its `queryToText`
 summary and "N conditions". A condition row is three cascading Fomantic
 dropdowns — **Facet**, **Field** (that facet's fields, `fieldsOfFacet`, by
-`fieldDisplayName`), **Operator** (the field's `operatorIds`) — then the value
+`fieldDisplayName`), **Operator** (the field's `operatorIds`). Facet and Field
+are Fomantic `search` dropdowns, since there can be many of them: typing
+filters the list to the names containing the typed text, ignoring case
+(`fullTextSearch: "exact"`, set for every dropdown in `fomantic.ts`; `true`
+would also match the letters spread out in order, which buried the real
+matches). In every dropdown the arrow keys only move the highlight and Enter
+picks (`selectOnKeydown: false`): selecting on each arrow press fired
+`onChange`, and the repaint closed the menu. Then comes the value
 control from `valueControl.ts`: nothing; for **Equals** /
 **Not equals** on a field with a pick-list, a free-entry dropdown (its known
 values, plus anything typed); otherwise one input, a boolean toggle or a
