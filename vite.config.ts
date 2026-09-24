@@ -78,9 +78,6 @@ function emitLicenseNotices(): Plugin {
   };
 }
 
-/** Where `npm run mock` listens — keep in sync with mock-server/index.ts. */
-const mockApi = `http://localhost:${Number(process.env.MOCK_PORT) || 3001}`;
-
 /**
  * The API prefix from .env (docs/ARCHITECTURE.md, "API contract"). The app
  * has no default of its own, so a missing value — or one ending in "/", which
@@ -97,21 +94,32 @@ function apiBase(mode: string): string {
   return base;
 }
 
+/**
+ * The backend the dev server (and `vite preview`) forwards the API prefix to:
+ * DEV_BACKEND_URL from .env — the mock server by default, or a real backend.
+ * A built dist/ doesn't use it: it is served next to the real API instead.
+ */
+function devBackendUrl(mode: string): string {
+  const url = loadEnv(mode, process.cwd(), "DEV_").DEV_BACKEND_URL ?? "";
+  // Test the scheme too: URL.canParse alone accepts "localhost:3001", reading
+  // "localhost:" as the scheme, and the proxy would then fail on every request.
+  if (!/^https?:\/\//.test(url) || !URL.canParse(url)) {
+    throw new Error(`DEV_BACKEND_URL must be an http:// or https:// URL (see .env); got "${url}".`);
+  }
+  return url;
+}
+
 export default defineConfig(({ mode }) => {
   const api = apiBase(mode);
   return {
     plugins: [stripRemoteCss(), stripRemoteJs(), emitLicenseNotices()],
     server: {
       port: 5173,
-      // The API prefix goes to the mock. …/auth/login and …/compliance/start
-      // both 302 the browser (a real navigation, not a fetch) to a mock-*/...
-      // path on this same origin — each redirect target must be proxied too,
-      // or the dev server serves the SPA shell instead of the mock service's page.
-      proxy: {
-        [api]: mockApi,
-        "/mock-idp": mockApi,
-        "/mock-compliance": mockApi,
-      },
+      // Everything the app asks of the backend is under the API prefix, so
+      // this one rule is the whole proxy. Pages the backend redirects the
+      // browser to (an IdP, a compliance service) are the backend's business:
+      // off-origin in production, under the prefix in the mock.
+      proxy: { [api]: devBackendUrl(mode) },
     },
     build: {
       outDir: "dist",

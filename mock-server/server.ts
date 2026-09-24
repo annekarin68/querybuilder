@@ -36,7 +36,9 @@ import { logQueryAudit } from "./audit";
 /**
  * The dev-only mock API: every route of the real API (docs/ARCHITECTURE.md,
  * "API contract") plus stand-in pages for the identity provider and the
- * compliance service. Plain Node `http`: one table maps "METHOD /path" to a
+ * compliance service. Everything is under the API prefix, so the frontend's
+ * dev server treats the mock like any backend: it forwards the prefix and
+ * nothing else. Plain Node `http`: one table maps "METHOD /path" to a
  * handler function (`routes` at the bottom). index.ts starts it; tests call
  * createMockServer directly (tests/mock-server/server.test.ts).
  */
@@ -237,21 +239,21 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
 // ---- login: app → …/auth/login → mock IdP page → confirm → callback → app
 
 /** Starts a login: a fresh CSRF state, bound to this browser by a cookie. */
-function startLoginFlow(_req: IncomingMessage, res: ServerResponse) {
+function startLoginFlow(_req: IncomingMessage, res: ServerResponse, apiBase: string) {
   const state = startLogin();
   redirect(
     res,
-    `/mock-idp/authorize?state=${encodeURIComponent(state)}`,
+    `${apiBase}/mock-idp/authorize?state=${encodeURIComponent(state)}`,
     loginStateCookieHeader(state),
   );
 }
 
 /** Dev-only stand-in for a real IdP's login screen. */
-function showIdpPage(_req: IncomingMessage, res: ServerResponse, url: URL) {
+function showIdpPage(_req: IncomingMessage, res: ServerResponse, url: URL, apiBase: string) {
   const state = url.searchParams.get("state") ?? "";
   const body = `<h1>Mock Identity Provider</h1>
     <p>This stands in for a real internal IdP during local development.</p>
-    <p><a href="/mock-idp/authorize/confirm?state=${encodeURIComponent(state)}">Log in as demo.user</a></p>`;
+    <p><a href="${apiBase}/mock-idp/authorize/confirm?state=${encodeURIComponent(state)}">Log in as demo.user</a></p>`;
   sendHtml(res, 200, page("Mock IdP", body));
 }
 
@@ -300,17 +302,17 @@ function startComplianceFlow(req: IncomingMessage, res: ServerResponse, apiBase:
   const state = startCompliance();
   redirect(
     res,
-    `/mock-compliance/submit?state=${encodeURIComponent(state)}`,
+    `${apiBase}/mock-compliance/submit?state=${encodeURIComponent(state)}`,
     complianceStateCookieHeader(state),
   );
 }
 
 /** Dev-only stand-in for a real compliance/audit service's submission form. */
-function complianceForm(state: string, error = ""): string {
+function complianceForm(apiBase: string, state: string, error = ""): string {
   const body = `<h1>Compliance Logging</h1>
     <p>This stands in for a real internal compliance/audit service during local development.</p>
     ${error ? `<p style="color:#b00">${escapeHtml(error)}</p>` : ""}
-    <form method="POST" action="/mock-compliance/submit">
+    <form method="POST" action="${apiBase}/mock-compliance/submit">
       <input type="hidden" name="state" value="${escapeHtml(state)}" />
       <label for="reason">Reason for this data extraction:</label><br/>
       <input type="text" id="reason" name="reason" required style="width:100%;margin:0.5rem 0;" />
@@ -319,8 +321,8 @@ function complianceForm(state: string, error = ""): string {
   return page("Mock Compliance Logging Service", body);
 }
 
-function showComplianceForm(_req: IncomingMessage, res: ServerResponse, url: URL) {
-  sendHtml(res, 200, complianceForm(url.searchParams.get("state") ?? ""));
+function showComplianceForm(_req: IncomingMessage, res: ServerResponse, url: URL, apiBase: string) {
+  sendHtml(res, 200, complianceForm(apiBase, url.searchParams.get("state") ?? ""));
 }
 
 /** The form's POST (application/x-www-form-urlencoded): hand back a token. */
@@ -328,7 +330,7 @@ async function submitComplianceForm(req: IncomingMessage, res: ServerResponse, a
   const form = new URLSearchParams(await readBody(req));
   const state = form.get("state") ?? "";
   const reason = (form.get("reason") ?? "").trim();
-  if (!reason) return sendHtml(res, 400, complianceForm(state, "Please enter a reason."));
+  if (!reason) return sendHtml(res, 400, complianceForm(apiBase, state, "Please enter a reason."));
   const token = issueFakeComplianceToken(reason);
   redirect(
     res,
@@ -361,8 +363,8 @@ function invalidateCompliance(req: IncomingMessage, res: ServerResponse) {
 
 type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | Promise<void>;
 
-/** Every route, keyed by "METHOD /path". Add a route here. The API's own
- *  routes sit under `config.apiBase`; the stand-in services' pages don't. */
+/** Every route, keyed by "METHOD /path". Add a route here. All of them sit
+ *  under `config.apiBase`, the stand-in services' pages included. */
 function routes(config: MockConfig): Record<string, Handler> {
   const api = config.apiBase;
   return {
@@ -371,16 +373,18 @@ function routes(config: MockConfig): Record<string, Handler> {
     [`POST ${api}/stats`]: (req, res) => streamStats(req, res, config),
     [`POST ${api}/query`]: queryEvents,
 
-    [`GET ${api}/auth/login`]: startLoginFlow,
-    "GET /mock-idp/authorize": showIdpPage,
-    "GET /mock-idp/authorize/confirm": (req, res, url) => confirmIdpLogin(req, res, url, api),
+    [`GET ${api}/auth/login`]: (req, res) => startLoginFlow(req, res, api),
+    [`GET ${api}/mock-idp/authorize`]: (req, res, url) => showIdpPage(req, res, url, api),
+    [`GET ${api}/mock-idp/authorize/confirm`]: (req, res, url) =>
+      confirmIdpLogin(req, res, url, api),
     [`GET ${api}/auth/callback`]: finishLogin,
     [`GET ${api}/auth/me`]: currentUser,
     [`POST ${api}/auth/logout`]: logOut,
 
     [`GET ${api}/compliance/start`]: (req, res) => startComplianceFlow(req, res, api),
-    "GET /mock-compliance/submit": showComplianceForm,
-    "POST /mock-compliance/submit": (req, res) => submitComplianceForm(req, res, api),
+    [`GET ${api}/mock-compliance/submit`]: (req, res, url) =>
+      showComplianceForm(req, res, url, api),
+    [`POST ${api}/mock-compliance/submit`]: (req, res) => submitComplianceForm(req, res, api),
     [`GET ${api}/compliance/callback`]: finishCompliance,
     [`GET ${api}/compliance/status`]: (req, res) =>
       sendJson(res, 200, complianceStatusFor(req.headers.cookie)),

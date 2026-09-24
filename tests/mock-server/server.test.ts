@@ -173,7 +173,7 @@ describe("login and compliance navigations", () => {
   it("GET /api/auth/login redirects to the mock IdP and binds the state to this browser", async () => {
     const res = await get(`${API}/auth/login`);
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toMatch(/^\/mock-idp\/authorize\?state=/);
+    expect(res.headers.get("location")).toMatch(`${API}/mock-idp/authorize?state=`);
     expect(res.headers.get("set-cookie")).toContain("qb_login_state=");
   });
 
@@ -192,7 +192,7 @@ describe("login and compliance navigations", () => {
   });
 
   it("the mock compliance form rejects a blank reason", async () => {
-    const res = await fetch(base + "/mock-compliance/submit", {
+    const res = await fetch(base + `${API}/mock-compliance/submit`, {
       method: "POST",
       body: new URLSearchParams({ state: "s", reason: "   " }),
     });
@@ -230,18 +230,26 @@ describe("the API prefix (MockConfig.apiBase)", () => {
   });
 
   it("the mock IdP sends the browser back to the login callback under the prefix", async () => {
-    const res = await get("/mock-idp/authorize/confirm?state=s");
+    const res = await get(`${API}/mock-idp/authorize/confirm?state=s`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toMatch(`${API}/auth/callback?code=`);
   });
 
   it("the mock compliance form sends the browser back to the callback under the prefix", async () => {
-    const res = await fetch(base + "/mock-compliance/submit", {
+    const res = await fetch(base + `${API}/mock-compliance/submit`, {
       method: "POST",
       redirect: "manual",
       body: new URLSearchParams({ state: "s", reason: "testing" }),
     });
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toMatch(`${API}/compliance/callback?token=`);
+  });
+  // So that the dev server's single proxy rule (the prefix) reaches every
+  // page the browser is sent to during login and compliance.
+  it("the stand-in pages link and post only under the prefix", async () => {
+    const idp = await (await get(`${API}/mock-idp/authorize?state=s`)).text();
+    expect(idp).toContain(`href="${API}/mock-idp/authorize/confirm?state=s"`);
+    const form = await (await get(`${API}/mock-compliance/submit?state=s`)).text();
+    expect(form).toContain(`action="${API}/mock-compliance/submit"`);
   });
 });

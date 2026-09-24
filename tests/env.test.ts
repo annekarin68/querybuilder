@@ -11,6 +11,10 @@ describe(".env", () => {
     expect(env).toMatch(/^VITE_API_BASE=\/api\/v\d+$/m);
   });
 
+  it("sets DEV_BACKEND_URL: the mock's URL, with the port it listens on", () => {
+    expect(env).toMatch(/^DEV_BACKEND_URL=http:\/\/localhost:\d+$/m);
+  });
+
   it("is what import.meta.env holds in tests", () => {
     expect(import.meta.env.VITE_API_BASE).toBe("/api/v1");
   });

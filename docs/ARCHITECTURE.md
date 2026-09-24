@@ -256,7 +256,7 @@ src/
     dataPreview.ts     Matching events and the Run button (render + wiring).
     accountMenu.ts     The top-bar account menu (render + wiring).
 mock-server/           Dev-only stand-in backend — see "Mock server".
-  index.ts             Reads VITE_API_BASE (.env), MOCK_PORT / MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS, starts the server.
+  index.ts             Reads VITE_API_BASE and DEV_BACKEND_URL (.env), MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS, starts the server.
   server.ts            createMockServer(config): one route table ("METHOD /path" -> handler).
   auth.ts, audit.ts    Fake login / compliance sessions and the audit log (in memory).
   databases.ts, rows.ts, evaluate.ts, requestBody.ts, vehicleData.ts
@@ -267,8 +267,9 @@ tests/                 One test file per source file it tests (tests/query/tree.
                        src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases and
                        noBackendDataInSrc.
 scripts/check-offline.mjs  The offline guard ("Offline-first").
-vite.config.ts         Dev proxy to the mock (under the API prefix), the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE is missing.
-.env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract").
+vite.config.ts         Dev proxy of the API prefix to DEV_BACKEND_URL, the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE or DEV_BACKEND_URL is missing.
+.env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract");
+                       DEV_BACKEND_URL — the backend the dev server proxies to ("Mock server").
 eslint.config.js       ESLint + the import airlocks (jQuery; src/ never imports mock-server/; only src/api/
                        imports src/api/types.ts).
 .github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main.
@@ -276,6 +277,7 @@ docs/
   ARCHITECTURE.md      This file.
   CHANGELOG.md         The archived design history (not updated any more).
   superpowers/specs/   Historical design records of past features. Not maintained; this file wins.
+  superpowers/plans/   Historical implementation plans, likewise.
 ```
 
 ---
@@ -739,17 +741,27 @@ view is a stand-in for a dedicated event viewer planned later.
 ## 10. Mock server
 
 Dev-only (`mock-server/`). `npm run mock` starts it; `npm run dev` starts it
-with Vite, which proxies the API prefix, `/mock-idp/*` and `/mock-compliance/*`
-to it (the latter two are pages the browser is redirected to during login and
-compliance). Plain Node `http`, no Express. `server.ts` has one route table,
-`routes()`, mapping `"METHOD /path"` to a named handler function — add a route
-there, and a test in `tests/mock-server/server.test.ts`, which drives the
-server over real HTTP.
+together with the Vite dev server (`npm run dev:app`). Plain Node `http`, no
+Express. `server.ts` has one route table, `routes()`, mapping `"METHOD /path"`
+to a named handler function — add a route there, and a test in
+`tests/mock-server/server.test.ts`, which drives the server over real HTTP.
 
+- **Just another backend.** Neither the app nor `vite.config.ts` knows the
+  mock is there. The dev server forwards the API prefix to `DEV_BACKEND_URL`
+  (`.env`, `http://localhost:3001`) and nothing else; the mock listens on that
+  URL's port. To develop against a real backend, set `DEV_BACKEND_URL` to it
+  (in `.env.local` or the environment) and run `npm run dev:app` instead of
+  `npm run dev`; nothing in the frontend changes. Login and compliance then
+  only complete if that backend sends the browser back to the dev server
+  (`http://localhost:5173`) with cookies valid there — the backend's settings,
+  not ours. The variable is not `VITE_`-prefixed, so it never reaches the
+  bundle; a built `dist/` is served next to the real API.
 - **Prefix.** `index.ts` reads `VITE_API_BASE` from `.env` with Vite's
-  `loadEnv`, as the app does, and passes it as `MockConfig.apiBase`. Every API
-  route and every redirect the mock issues is built from it. The stand-in
-  pages (`/mock-idp/*`, `/mock-compliance/*`) are not under it.
+  `loadEnv`, as the app does, and passes it as `MockConfig.apiBase`. Every
+  route and every redirect the mock issues is built from it — the stand-in
+  IdP and compliance pages too (`{prefix}/mock-idp/*`,
+  `{prefix}/mock-compliance/*`), so the one proxy rule reaches them. (A real
+  backend redirects to its own IdP and compliance service, off-origin.)
 - **Types, not code.** The mock types its data and responses with
   `import type` from `src/api/types.ts`, so the two can't drift. It shares no
   runtime code with `src/`, and `src/` never imports `mock-server/` (ESLint
@@ -775,11 +787,10 @@ server over real HTTP.
   (`qb_login_state`, `qb_compliance_state`), and expire after 5 minutes. None
   of this is reusable in production (issue #15).
 
-Three environment variables, read by `index.ts`:
+Besides `.env`, two environment variables, read by `index.ts`:
 
 | Variable | Default | What |
 |---|---|---|
-| `MOCK_PORT` | `3001` | Port to listen on (`vite.config.ts` proxies to the same). |
 | `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/stats` lines that simulate an unreachable database. `0` turns it off. |
 | `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/stats` line. `0` = no pause. |
 
@@ -832,8 +843,8 @@ file it tests, in the same place under `tests/`. The ones to know about:
 - Fixtures use one neutral vocabulary: a `thing` facet with fields such as
   `color`, `count`, `size`, `active`; databases `alpha` and `beta`.
 
-Scripts: `npm run dev` (mock + Vite), `mock`, `build` (typecheck + bundle +
-`check:offline`), `preview`, `test`, `test:watch`, `typecheck`, `lint`
+Scripts: `npm run dev` (mock + Vite), `dev:app` (Vite alone, for a real
+backend), `mock`, `build` (typecheck + bundle + `check:offline`), `preview`, `test`, `test:watch`, `typecheck`, `lint`
 (ESLint + Prettier), `check:offline`. CI (`.github/workflows/ci.yml`) runs
 typecheck, test, lint and build on every pull request and push to `main`.
 
@@ -891,8 +902,8 @@ styles in their own section of `src/styles.css`.
 2. Call it from `src/app.ts`: add it to `AppApi` and to `fakeApi` in
    `tests/app.test.ts`.
 3. A route in `mock-server/server.ts` (`routes()`) and a test in
-   `tests/mock-server/server.test.ts`. If the browser *navigates* to a new
-   mock-only path, proxy it in `vite.config.ts` too.
+   `tests/mock-server/server.test.ts`. Keep it under the API prefix, even a
+   mock-only page the browser navigates to: the dev server proxies nothing else.
 4. Describe it in "API contract".
 
 **…make new markup interactive with Fomantic?** Add its selector to

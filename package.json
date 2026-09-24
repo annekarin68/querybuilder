@@ -7,7 +7,8 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "dev": "concurrently -k -n mock,web -c blue,green \"npm:mock\" \"vite\"",
+    "dev": "concurrently -k -n mock,app -c blue,green \"npm:mock\" \"npm:dev:app\"",
+    "dev:app": "vite",
     "mock": "tsx watch mock-server/index.ts",
     "build": "tsc --noEmit && vite build && npm run check:offline",
     "preview": "vite preview",

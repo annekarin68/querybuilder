@@ -5,12 +5,19 @@ import { createMockServer } from "./server";
 // The server itself is in server.ts; this file only reads the settings below
 // from the environment and listens.
 
-/** Override with MOCK_PORT to run a second copy (e.g. another checkout) side by side. */
-const PORT = Number(process.env.MOCK_PORT) || 3001;
+const env = loadEnv("development", process.cwd(), ["VITE_", "DEV_"]);
 
 /** The API prefix, from .env like the app's own (docs/ARCHITECTURE.md, "API contract"). */
-const apiBase = loadEnv("development", process.cwd(), "VITE_").VITE_API_BASE;
+const apiBase = env.VITE_API_BASE;
 if (!apiBase) throw new Error("VITE_API_BASE must be set (see .env).");
+
+/**
+ * The port of DEV_BACKEND_URL (.env): the dev server sends the API prefix
+ * there, so listening on it is what makes the mock the backend of `npm run dev`.
+ */
+const backendUrl = env.DEV_BACKEND_URL ?? "";
+const port = URL.canParse(backendUrl) ? Number(new URL(backendUrl).port) : 0;
+if (!port) throw new Error("DEV_BACKEND_URL must be a URL with a port (see .env).");
 
 /** A number from the environment variable `name`, or undefined when it isn't set. */
 function envNumber(name: string, min: number, max: number): number | undefined {
@@ -35,4 +42,4 @@ createMockServer({
   // By default each streamed line waits a random 150–400 ms, so the streaming
   // is visible in dev. MOCK_STREAM_DELAY_MS sets a fixed delay (0 = none).
   lineDelayMs: lineDelay === undefined ? () => 150 + Math.random() * 250 : () => lineDelay,
-}).listen(PORT, () => console.log(`Mock API on http://localhost:${PORT}${apiBase}`));
+}).listen(port, () => console.log(`Mock API on http://localhost:${port}${apiBase}`));
