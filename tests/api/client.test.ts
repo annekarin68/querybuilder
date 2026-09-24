@@ -81,7 +81,7 @@ describe("api client", () => {
         percentageOfTotal: 100,
       },
     ]);
-    expect(f).toHaveBeenCalledWith("/api/databases", { signal: expect.any(AbortSignal) });
+    expect(f).toHaveBeenCalledWith("/api/v1/databases", { signal: expect.any(AbortSignal) });
   });
 
   it("getFacets GETs /api/individuals and returns the parsed bare array", async () => {
@@ -103,7 +103,7 @@ describe("api client", () => {
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);
     expect(out[0]?.label).toBe("engine_rpm");
-    expect(f).toHaveBeenCalledWith("/api/individuals", { signal: expect.any(AbortSignal) });
+    expect(f).toHaveBeenCalledWith("/api/v1/individuals", { signal: expect.any(AbortSignal) });
   });
 
   it("getStats POSTs the query tree + selected databases as JSON", async () => {
@@ -112,7 +112,7 @@ describe("api client", () => {
     const q = emptyQuery();
     await getStats(q, ["alpha", "beta"], () => {});
     const [url, init] = f.mock.calls[0]!;
-    expect(url).toBe("/api/stats");
+    expect(url).toBe("/api/v1/stats");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({
       query: JSON.parse(JSON.stringify(q)),
@@ -166,7 +166,7 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     const out = await getMe();
     expect(out).toEqual({ name: "demo.user" });
-    expect(f).toHaveBeenCalledWith("/api/auth/me", { signal: expect.any(AbortSignal) });
+    expect(f).toHaveBeenCalledWith("/api/v1/auth/me", { signal: expect.any(AbortSignal) });
   });
 
   it("getMe returns null on 401 rather than throwing", async () => {
@@ -184,7 +184,7 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     await logout();
     const [url, init] = f.mock.calls[0]!;
-    expect(url).toBe("/api/auth/logout");
+    expect(url).toBe("/api/v1/auth/logout");
     expect(init.method).toBe("POST");
   });
 
@@ -198,7 +198,9 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     const out = await getComplianceStatus();
     expect(out).toEqual({ status: "required" });
-    expect(f).toHaveBeenCalledWith("/api/compliance/status", { signal: expect.any(AbortSignal) });
+    expect(f).toHaveBeenCalledWith("/api/v1/compliance/status", {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("invalidateCompliance POSTs to /api/compliance/invalidate", async () => {
@@ -206,7 +208,7 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     await invalidateCompliance();
     const [url, init] = f.mock.calls[0]!;
-    expect(url).toBe("/api/compliance/invalidate");
+    expect(url).toBe("/api/v1/compliance/invalidate");
     expect(init.method).toBe("POST");
   });
 
@@ -216,8 +218,8 @@ describe("api client", () => {
   });
 
   it("builds the login / compliance redirect URLs from the same API base as fetches", () => {
-    expect(LOGIN_URL).toBe("/api/auth/login");
-    expect(COMPLIANCE_START_URL).toBe("/api/compliance/start");
+    expect(LOGIN_URL).toBe("/api/v1/auth/login");
+    expect(COMPLIANCE_START_URL).toBe("/api/v1/compliance/start");
   });
 
   it("rejects with a TimeoutError when the server stays silent past REQUEST_TIMEOUT_MS", async () => {

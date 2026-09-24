@@ -8,7 +8,9 @@ import type {
   StatsResponse,
 } from "./types";
 
-const BASE = import.meta.env.VITE_API_BASE ?? "/api";
+/** The API prefix from .env (docs/ARCHITECTURE.md, "API contract"). No
+ *  fallback here: vite.config.ts refuses to run without it. */
+const BASE = import.meta.env.VITE_API_BASE;
 
 /**
  * Where the browser navigates (a real page load, not a fetch) to start the login

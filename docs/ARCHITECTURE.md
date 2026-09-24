@@ -132,8 +132,8 @@ the one that is easier to read and debug.
 nothing else* — no internet. So:
 
 1. **No external hosts, ever.** The only network calls go to our API, under
-   `VITE_API_BASE` (default `/api`, same origin). No CDNs, web fonts,
-   analytics, external error tracking or remote favicon.
+   `VITE_API_BASE` (`/api/v1`, same origin — set in `.env`). No CDNs, web
+   fonts, analytics, external error tracking or remote favicon.
 2. **All third-party code is installed from npm and bundled by Vite** into
    `dist/`: jQuery, Fomantic UI CSS/JS, fonts, icons. `dist/` is self-contained
    and can be served by any static file server on the LAN.
@@ -246,7 +246,7 @@ src/
     dataPreview.ts     Matching events and the Run button (render + wiring).
     accountMenu.ts     The top-bar account menu (render + wiring).
 mock-server/           Dev-only stand-in backend — see "Mock server".
-  index.ts             Reads MOCK_PORT / MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS and starts the server.
+  index.ts             Reads VITE_API_BASE (.env), MOCK_PORT / MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS, starts the server.
   server.ts            createMockServer(config): one route table ("METHOD /path" -> handler).
   auth.ts, audit.ts    Fake login / compliance sessions and the audit log (in memory).
   databases.ts, rows.ts, evaluate.ts, vehicleData.ts
@@ -257,7 +257,8 @@ tests/                 One test file per source file it tests (tests/query/tree.
                        src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases and
                        noBackendDataInSrc.
 scripts/check-offline.mjs  The offline guard ("Offline-first").
-vite.config.ts         Dev proxy to the mock, the offline plugins, emitting THIRD-PARTY-NOTICES.txt.
+vite.config.ts         Dev proxy to the mock (under the API prefix), the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE is missing.
+.env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract").
 eslint.config.js       ESLint + the two import airlocks (jQuery; src/ never imports mock-server/).
 .github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main.
 docs/
@@ -337,22 +338,32 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
 
 `src/api/types.ts` is the contract: every request and response type, with doc
 comments saying what each field means. `src/api/client.ts` is the only file
-that calls `fetch()`: one function per endpoint, all under `VITE_API_BASE`
-(default `/api`). Every JSON endpoint answers a 4xx/5xx with
+that calls `fetch()`: one function per endpoint, all under one **API prefix**,
+`VITE_API_BASE`. Every JSON endpoint answers a 4xx/5xx with
 `{ "error": "human readable message" }`, which the client throws as an
 `ApiError` carrying the HTTP `status`. Every request has a 60 s timeout
 (`REQUEST_TIMEOUT_MS`, rejecting with a `TimeoutError`); for the streamed
 `/stats` body the clock restarts on every chunk, so a slow stream that is
 still making progress is never cut off.
 
+**The API prefix** is set in one place, the committed `.env`
+(`VITE_API_BASE=/api/v1`), and carries the API version: moving to v2 means
+changing that line. A deployment overrides it with `.env.local`,
+`.env.production` or an environment variable at build time. `client.ts` has no
+fallback, and `vite.config.ts` stops dev and build when the prefix is missing
+or ends in `/`. The whole API moves with it, the login and compliance flows
+included, so the backend registers its callback URLs under the deployed
+prefix. The mock server reads the same `.env`. In this document and in code
+comments, `/api/stats` and the like are short for `{prefix}/stats`.
+
 | Endpoint | What |
 |---|---|
-| `GET /api/databases` | The databases to scope to — a bare array. |
-| `GET /api/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
-| `POST /api/stats` | Body `{ query, databases }`. Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
-| `POST /api/query` | Body `{ query, databases }`. The matching events, capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
-| `GET /api/auth/login`, `/callback`, `/me`, `POST /logout` | Login (below). |
-| `GET /api/compliance/start`, `/callback`, `/status`, `POST /invalidate` | Compliance (below). |
+| `GET {prefix}/databases` | The databases to scope to — a bare array. |
+| `GET {prefix}/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
+| `POST {prefix}/stats` | Body `{ query, databases }`. Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
+| `POST {prefix}/query` | Body `{ query, databases }`. The matching events, capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
+| `GET {prefix}/auth/login`, `/callback`, `/me`, `POST /logout` | Login (below). |
+| `GET {prefix}/compliance/start`, `/callback`, `/status`, `POST /invalidate` | Compliance (below). |
 
 Both query bodies must have a `query` object and a non-empty `databases`
 array, or the answer is `400`.
@@ -589,13 +600,17 @@ view is a stand-in for a dedicated event viewer planned later.
 ## 10. Mock server
 
 Dev-only (`mock-server/`). `npm run mock` starts it; `npm run dev` starts it
-with Vite, which proxies `/api/*`, `/mock-idp/*` and `/mock-compliance/*` to it
-(the latter two are pages the browser is redirected to during login and
+with Vite, which proxies the API prefix, `/mock-idp/*` and `/mock-compliance/*`
+to it (the latter two are pages the browser is redirected to during login and
 compliance). Plain Node `http`, no Express. `server.ts` has one route table,
 `routes()`, mapping `"METHOD /path"` to a named handler function — add a route
 there, and a test in `tests/mock-server/server.test.ts`, which drives the
 server over real HTTP.
 
+- **Prefix.** `index.ts` reads `VITE_API_BASE` from `.env` with Vite's
+  `loadEnv`, as the app does, and passes it as `MockConfig.apiBase`. Every API
+  route and every redirect the mock issues is built from it. The stand-in
+  pages (`/mock-idp/*`, `/mock-compliance/*`) are not under it.
 - **Types, not code.** The mock types its data and responses with
   `import type` from `src/api/types.ts`, so the two can't drift. It shares no
   runtime code with `src/`, and `src/` never imports `mock-server/` (ESLint

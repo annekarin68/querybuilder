@@ -10,7 +10,8 @@ interface JQuery {
 }
 
 // Our build-time settings on Vite's `import.meta.env` (the rest comes from
-// `vite/client`, listed in tsconfig.json "types").
+// `vite/client`, listed in tsconfig.json "types"). Set in .env.
 interface ImportMetaEnv {
-  readonly VITE_API_BASE?: string;
+  /** The API prefix, e.g. "/api/v1" — no default: vite.config.ts stops without it. */
+  readonly VITE_API_BASE: string;
 }
