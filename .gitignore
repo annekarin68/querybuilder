@@ -1,11 +1,31 @@
+# Dependencies and build output
 node_modules/
 dist/
 *.tsbuildinfo
-.DS_Store
 
-# Superpowers SDD scratch (git-ignored)
-.superpowers/
+# Test output (Vitest coverage, Playwright browser checks)
+coverage/
+test-results/
+playwright-report/
 
 # Vite
 .vite/
+# Local-only overrides, e.g. .env.local (the committed .env holds the defaults)
 *.local
+
+# Logs
+*.log
+
+# Editors and OS files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Claude Code: worktrees and personal settings
+.claude/worktrees/
+.claude/settings.local.json
+
+# Superpowers SDD scratch
+.superpowers/
