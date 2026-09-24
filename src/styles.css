@@ -622,9 +622,11 @@ body {
   width: 100%;
   min-width: 0;
 }
+/* A long name ends in "…". Clipped at the side only: Fomantic's line-height
+   here is 1em, so `overflow: hidden` also cut off the tails of p, g and y. */
 .qb-cond-grid .ui.selection.dropdown > .text {
   display: block;
-  overflow: hidden;
+  overflow-x: clip;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

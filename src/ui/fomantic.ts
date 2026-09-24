@@ -43,6 +43,17 @@ export function destroy(container: HTMLElement): void {
 }
 
 /**
+ * Put the cursor in dropdown `el` (in its typing box, if it has one) and open
+ * its menu. Does nothing if it is disabled. Focus alone doesn't open a
+ * Fomantic dropdown (`showOnFocus` is off, so Tab doesn't pop menus open).
+ */
+export function openDropdown(el: HTMLElement): void {
+  if (el.classList.contains("disabled")) return;
+  (el.querySelector<HTMLElement>("input.search") ?? el).focus();
+  $(el).dropdown("show");
+}
+
+/**
  * Bind Fomantic dropdowns' onChange within `container`. Fomantic dropdowns do not
  * emit a native "change" event, so panels cannot rely on delegated listeners for them.
  * Call this AFTER activate(). `el` is the .ui.dropdown element that changed.

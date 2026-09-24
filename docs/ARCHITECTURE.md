@@ -169,9 +169,9 @@ state. The hazard is contained in one file and one helper:
 
 - **`src/ui/fomantic.ts`** — the only file that uses jQuery.
   `activate(container)` turns markup into Fomantic components,
-  `destroy(container)` tears them down, and `onDropdownChange` binds a
+  `destroy(container)` tears them down, `onDropdownChange` binds a
   dropdown's `onChange` (Fomantic dropdowns don't emit a usable native
-  `change`).
+  `change`), and `openDropdown` focuses a dropdown and opens its menu.
 - **`src/ui/panel.ts`** — `paint(container, html)`: `destroy`, swap
   `innerHTML`, `activate`. The only way a panel updates its DOM.
 
@@ -235,7 +235,7 @@ src/
     requestSlot.ts     At most one request per kind in flight; the whole stale-response guard.
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
   ui/
-    fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange.
+    fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown.
     panel.ts           paint(), escapeHtml(), optionsHtml().
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed,
                        onMenu.
@@ -607,14 +607,7 @@ collapse caret, "Match [ALL | ANY] of the following", **+ Condition**, **+
 Group**, ✕ (not on the root). A collapsed group folds to its `queryToText`
 summary and "N conditions". A condition row is three cascading Fomantic
 dropdowns — **Facet**, **Field** (that facet's fields, `fieldsOfFacet`, by
-`fieldDisplayName`), **Operator** (the field's `operatorIds`). Facet and Field
-are Fomantic `search` dropdowns, since there can be many of them: typing
-filters the list to the names containing the typed text, ignoring case
-(`fullTextSearch: "exact"`, set for every dropdown in `fomantic.ts`; `true`
-would also match the letters spread out in order, which buried the real
-matches). In every dropdown the arrow keys only move the highlight and Enter
-picks (`selectOnKeydown: false`): selecting on each arrow press fired
-`onChange`, and the repaint closed the menu. Then comes the value
+`fieldDisplayName`), **Operator** (the field's `operatorIds`) — then the value
 control from `valueControl.ts`: nothing; for **Equals** /
 **Not equals** on a field with a pick-list, a free-entry dropdown (its known
 values, plus anything typed); otherwise one input, a boolean toggle or a
@@ -632,6 +625,25 @@ alike.) A picked or typed entry becomes the field's type
 for validation to report). Every control has an accessible name. Issues show
 under their row or group. The footer shows the whole query in plain English
 once it is complete, otherwise how many parts still need attention.
+
+Finding and picking in the dropdowns (settings in `fomantic.ts`, cursor
+movement in `queryBuilder.ts`):
+
+- **Typing filters.** Facet, Field and Operator are Fomantic `search`
+  dropdowns, like the free-entry ones: typing shows only the items containing
+  the typed text, ignoring case (`fullTextSearch: "exact"`, for every
+  dropdown). `true` would also match the letters spread out in order, which
+  with many facets buried the real matches.
+- **Arrow keys move, Enter picks** (`selectOnKeydown: false`). Fomantic's
+  default picks on every arrow press; that fires `onChange`, and the repaint
+  replaced the open dropdown with a closed one.
+- **The cursor moves on.** A choice in Facet, Field or Operator puts the
+  cursor in the next part of the row (`NEXT_PART`, `focusPart`), so a whole
+  condition can be built from the keyboard: the next dropdown opens
+  (`openDropdown`), or the cursor goes to the first value box. Without this
+  the repaint would lose the cursor. Operator is a search dropdown partly for
+  this: a click on a search dropdown whose menu is already open keeps it open,
+  where a plain one would close it.
 
 Wiring: two delegated listeners (`click` for `data-action` buttons, `change`
 for plain `<input>`s) read the current tree through `getState()` when an event
