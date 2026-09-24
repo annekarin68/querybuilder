@@ -24,7 +24,12 @@ npm run dev        # mock API on :3001, app on http://localhost:5173
 
 In the mock, **Log in** signs you in as `demo.user`, and any non-blank reason
 passes the compliance check. To run a second copy side by side (another
-checkout), pick other ports: `MOCK_PORT=3011 npx concurrently -k "npm:mock" "vite --port 5181"`.
+checkout), pick other ports: `DEV_BACKEND_URL=http://localhost:3011 npx concurrently -k "npm:mock" "vite --port 5181"`.
+
+The dev server forwards the API prefix to `DEV_BACKEND_URL` (`.env`), which
+is where the mock listens. To develop against a real backend instead, set it
+in `.env.local` (or the environment) and start the app alone:
+`DEV_BACKEND_URL=https://backend.example npm run dev:app`.
 
 By default the mock streams statistics with a random 150–400 ms pause per
 database and fails about 5% of them on purpose, to show the loading and
@@ -35,6 +40,7 @@ Other scripts:
 
 | Script | What |
 |---|---|
+| `npm run dev:app` | The app alone, without the mock (for a real backend at `DEV_BACKEND_URL`). |
 | `npm run build` | Type-check, bundle to `dist/`, then fail if any off-origin URL leaked in. |
 | `npm run preview` | Serve the built `dist/`. |
 | `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client, the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
