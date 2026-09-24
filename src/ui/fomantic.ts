@@ -3,8 +3,18 @@
 // "The Fomantic discipline".
 import $ from "jquery";
 
-/** Settings for every dropdown. */
-const DROPDOWN = { fullTextSearch: true };
+/**
+ * Settings for every dropdown. A search dropdown shows only the items
+ * containing the typed text as one piece, anywhere in the item ("exact").
+ * `true` would also match the typed letters spread out in order, which with
+ * many facets buries the real matches under loose ones.
+ *
+ * `selectOnKeydown: false`: the arrow keys only move the highlight and Enter
+ * picks. Fomantic's default selects on every arrow press, which fires
+ * onChange, and the repaint that follows replaces the open dropdown with a
+ * closed one — so the first ↓ picked the next item and closed the menu.
+ */
+const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false };
 
 /**
  * A free-entry dropdown (`data-free-entry`, set by valueControl.ts) also
@@ -30,6 +40,17 @@ export function activate(container: HTMLElement): void {
 export function destroy(container: HTMLElement): void {
   $(container).find(".ui.dropdown").dropdown("destroy");
   $(container).find(".ui.checkbox").checkbox("destroy");
+}
+
+/**
+ * Put the cursor in dropdown `el` (in its typing box, if it has one) and open
+ * its menu. Does nothing if it is disabled. Focus alone doesn't open a
+ * Fomantic dropdown (`showOnFocus` is off, so Tab doesn't pop menus open).
+ */
+export function openDropdown(el: HTMLElement): void {
+  if (el.classList.contains("disabled")) return;
+  (el.querySelector<HTMLElement>("input.search") ?? el).focus();
+  $(el).dropdown("show");
 }
 
 /**

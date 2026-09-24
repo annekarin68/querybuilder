@@ -20,7 +20,7 @@ import {
 import { nextCondition } from "../query/conditionEdit";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
-import { onDropdownChange } from "./fomantic";
+import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel } from "./format";
 import { readValueControl, renderValueControl } from "./valueControl";
 
@@ -56,27 +56,27 @@ function iconButton(action: string, label: string, icon: string, extra = ""): st
   return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
 }
 
-function facetDropdown(facets: Facet[] | null, c: Condition): string {
+export function facetDropdown(facets: Facet[] | null, c: Condition): string {
   const opts = optionsHtml(
     facets ?? [],
     (facet) => facet.label,
     (facet) => facet.name,
     (facet) => facet.label === c.facetId,
   );
-  return `<select class="ui selection dropdown" data-part="facet" aria-label="Facet"><option value="">Facet…</option>${opts}</select>`;
+  return `<select class="ui search selection dropdown" data-part="facet" aria-label="Facet"><option value="">Facet…</option>${opts}</select>`;
 }
 
-function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
+export function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
   const opts = optionsHtml(
     fieldsOfFacet(catalog, c.facetId),
     (f) => f.fieldLabel,
     (f) => f.fieldName,
     (f) => f.fieldLabel === c.fieldId,
   );
-  return `<select class="ui selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
+  return `<select class="ui search selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
-function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
+export function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
   const field = findField(catalog, c.facetId, c.fieldId);
   const ops = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.label)) : [];
   const opts = optionsHtml(
@@ -85,7 +85,30 @@ function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
     (o) => o.name,
     (o) => o.label === c.operatorId,
   );
-  return `<select class="ui selection dropdown" data-part="operator" aria-label="Operator"${field ? "" : " disabled"}><option value="">Operator…</option>${opts}</select>`;
+  return `<select class="ui search selection dropdown" data-part="operator" aria-label="Operator"${field ? "" : " disabled"}><option value="">Operator…</option>${opts}</select>`;
+}
+
+/** Where the cursor goes after a choice in a condition row's dropdown, so a
+ *  whole condition can be built from the keyboard. */
+const NEXT_PART: Record<string, string> = { facet: "field", field: "operator", operator: "value" };
+
+/**
+ * Put the cursor in `part` of condition `nodeId`'s row, opening it if it is a
+ * dropdown. The value is a dropdown, one or two text boxes or a toggle: the
+ * cursor goes to the first. Does nothing for a value the operator doesn't take.
+ */
+function focusPart(container: HTMLElement, nodeId: string, part: string): void {
+  const row = container.querySelector(`.qb-condition[data-node-id="${CSS.escape(nodeId)}"]`);
+  const slot =
+    part === "value"
+      ? row?.querySelector<HTMLElement>(".qb-value")
+      : row?.querySelector(`select[data-part="${part}"]`)?.closest<HTMLElement>(".ui.dropdown");
+  if (!slot) return;
+  const dropdown = slot.matches(".ui.dropdown")
+    ? slot
+    : slot.querySelector<HTMLElement>(".ui.dropdown");
+  if (dropdown) openDropdown(dropdown);
+  else slot.querySelector("input")?.focus();
 }
 
 function conditionHtml(ctx: BuilderCtx, c: Condition): string {
@@ -209,12 +232,14 @@ export function wireQueryBuilder(
   getState: () => AppState,
   onChange: (next: Group) => void,
 ): (state: AppState) => void {
-  function handleRowChange(row: HTMLElement): void {
+  /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
+  function handleRowChange(row: HTMLElement, changedPart?: string): void {
     const { query, catalog } = getState();
     const cond = findNode(query, row.dataset.nodeId!);
     if (!catalog || !cond || cond.kind !== "condition") return;
     const picked = (part: string) =>
       row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
+    const nextPart = changedPart && picked(changedPart) ? NEXT_PART[changedPart] : undefined;
     const patch = nextCondition(
       cond,
       {
@@ -226,6 +251,9 @@ export function wireQueryBuilder(
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
     onChange(updateNode(query, cond.id, patch));
+    // onChange repaints at once, replacing the row, so the cursor is lost:
+    // put it in the next part of the new row.
+    if (nextPart) focusPart(container, cond.id, nextPart);
   }
 
   container.addEventListener("click", (e) => {
@@ -273,7 +301,7 @@ export function wireQueryBuilder(
     paintQueryBuilder(container, state);
     onDropdownChange(container, (el) => {
       const row = el.closest<HTMLElement>(".qb-condition[data-node-id]");
-      if (row) handleRowChange(row);
+      if (row) handleRowChange(row, el.querySelector("select")?.dataset.part);
     });
   };
 }
