@@ -45,7 +45,7 @@ Other scripts:
 | `npm run dev:app` | The app alone, without the mock (for a real backend at `DEV_BACKEND_URL`). |
 | `npm run build` | Type-check, bundle to `dist/`, then fail if any off-origin URL leaked in. |
 | `npm run preview` | Serve the built `dist/`. |
-| `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client, the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
+| `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client and its contract checks (also against the mock server), the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint + Prettier check. |
 | `npm run check:offline` | Scan `dist/` for off-origin `http(s)` URLs. |
@@ -77,7 +77,12 @@ Other scripts:
    tested in `tests/app.test.ts`; `src/main.ts` only wires it to the page.
 6. **The frontend never names backend data.** Facets, fields, tags and groups are
    learned at runtime; the only place to name them is `src/config.ts`.
-7. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
+7. **Only `src/api/` knows the backend.** It reads every response through the
+   checks in `src/api/contract.ts` (never `as SomeType`), so a response that
+   breaks the contract fails with a message naming the request and the field
+   ("Unexpected response from GET …"). See `docs/ARCHITECTURE.md`, "Reading
+   responses".
+8. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
    architectural change.
 
 ## Layout of the code

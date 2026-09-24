@@ -8,7 +8,8 @@ import {
 } from "./fieldCatalog";
 import { isUtcTimestamp } from "./dates";
 
-function isEmptyScalar(v: unknown): boolean {
+/** Whether a single value is still unset: nothing chosen or typed yet. */
+export function isBlankValue(v: unknown): boolean {
   return v === null || v === undefined || v === "";
 }
 
@@ -26,9 +27,9 @@ function shapeProblem(arity: Arity, v: unknown): string | null {
     case "none": // checked before this, in checkCondition
       return null;
     case "one":
-      return isEmptyScalar(v) ? "Enter a value." : null;
+      return isBlankValue(v) ? "Enter a value." : null;
     case "two":
-      return Array.isArray(v) && v.length === 2 && !v.some(isEmptyScalar)
+      return Array.isArray(v) && v.length === 2 && !v.some(isBlankValue)
         ? null
         : "Enter both values.";
     case "many":

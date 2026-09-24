@@ -121,6 +121,7 @@ function consumeResumeParam(): boolean {
  * onclick either: a strict Content-Security-Policy would block it.
  */
 function showFatalError(err: unknown): void {
+  console.error("Could not load the app:", err);
   root.innerHTML = `<div class="ui negative message" style="margin:2rem">
       <div class="header">Could not load the app</div>
       <p>${escapeHtml(errorMessage(err))}</p>

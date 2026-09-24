@@ -1,10 +1,12 @@
 import {
   isNumberText,
+  type Arity,
   type CatalogField,
   type CatalogOperator,
   type ValueType,
 } from "../query/fieldCatalog";
 import { UTC_TIMESTAMP_HINT } from "../query/dates";
+import { isBlankValue } from "../query/validate";
 import { escapeHtml, optionsHtml } from "./panel";
 
 /**
@@ -21,7 +23,7 @@ const PICK_OPERATORS = new Set(["eq", "neq"]);
 /** The value(s) a control currently holds, as the strings its <option>s use. */
 function chosenValues(current: unknown, multiple: boolean): string[] {
   if (multiple) return Array.isArray(current) ? current.map(String) : [];
-  return current === null || current === undefined || current === "" ? [] : [String(current)];
+  return isBlankValue(current) ? [] : [String(current)];
 }
 
 /**
@@ -113,11 +115,7 @@ export function optionEntry(option: HTMLOptionElement): string {
 }
 
 /** Reads back what `renderValueControl` rendered inside `row`. */
-export function readValueControl(
-  row: HTMLElement,
-  arity: CatalogOperator["arity"],
-  valueType: CatalogField["valueType"],
-): unknown {
+export function readValueControl(row: HTMLElement, arity: Arity, valueType: ValueType): unknown {
   if (arity === "none") return null;
   if (arity === "two") {
     return [
@@ -142,6 +140,6 @@ export function readValueControl(
   return control.querySelector<HTMLInputElement>("input")?.checked ?? false;
 }
 
-function readInput(el: HTMLInputElement | null, valueType: CatalogField["valueType"]): unknown {
+function readInput(el: HTMLInputElement | null, valueType: ValueType): unknown {
   return el ? parseEntry(el.value, valueType) : null;
 }

@@ -80,21 +80,15 @@ export function wireAccountMenu(
     else if (t.closest("[data-action='invalidate-compliance']")) handlers.onInvalidate();
   });
   // A <details> menu doesn't close itself on an outside click or on Escape.
-  const close = () =>
-    container
-      .querySelector<HTMLDetailsElement>("details.qb-account[open]")
-      ?.removeAttribute("open");
+  const openMenu = () => container.querySelector<HTMLDetailsElement>("details.qb-account[open]");
   document.addEventListener("click", (e) => {
-    if (!container.contains(e.target as Node)) close();
+    if (!container.contains(e.target as Node)) openMenu()?.removeAttribute("open");
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    const details = container.querySelector<HTMLDetailsElement>("details.qb-account[open]");
-    if (!details) return;
-    const focusWasInMenu = details.contains(document.activeElement);
-    close();
-    if (focusWasInMenu) {
-      details.querySelector<HTMLElement>("summary.qb-account-chip")?.focus();
-    }
+    const menu = openMenu();
+    if (e.key !== "Escape" || !menu) return;
+    const focusWasInMenu = menu.contains(document.activeElement);
+    menu.removeAttribute("open");
+    if (focusWasInMenu) menu.querySelector<HTMLElement>("summary.qb-account-chip")?.focus();
   });
 }

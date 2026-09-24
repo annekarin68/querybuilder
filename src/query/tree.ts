@@ -76,17 +76,12 @@ export function countConditions(tree: QueryNode): number {
 }
 
 /**
- * A copy of `tree` with every group's `collapsed` flag removed. `collapsed` is a
- * pure UI display flag, not part of the query's semantics.
+ * Whether two trees filter the same way, i.e. differ at most in `collapsed`:
+ * a display-only flag, not part of what the query means. Compares the two as
+ * JSON with every `collapsed` left out.
  */
-function stripCollapsed(tree: QueryNode): QueryNode {
-  return mapTree(tree, (n) => {
-    if (n.kind === "group") delete n.collapsed;
-    return n;
-  });
-}
-
-/** Whether two trees filter the same way, i.e. differ at most in `collapsed`. */
 export function sameSemantics(a: QueryNode, b: QueryNode): boolean {
-  return JSON.stringify(stripCollapsed(a)) === JSON.stringify(stripCollapsed(b));
+  const withoutCollapsed = (key: string, value: unknown) =>
+    key === "collapsed" ? undefined : value;
+  return JSON.stringify(a, withoutCollapsed) === JSON.stringify(b, withoutCollapsed);
 }

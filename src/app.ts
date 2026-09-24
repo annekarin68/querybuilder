@@ -1,5 +1,6 @@
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "./api/client";
-import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "./model";
+import type * as client from "./api/client";
+import type { Compliance, DatabaseResult } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
 import { addChild, countConditions, newCondition, sameSemantics } from "./query/tree";
 import type { Group } from "./query/types";
@@ -17,24 +18,20 @@ import { requestSlot } from "./util/requestSlot";
  * main.ts wires it to the page.
  */
 
-/** The API functions the app calls — src/api/client.ts in the browser. They
- *  take and return the frontend's own model (src/model.ts), never the
- *  backend's types. */
-export interface AppApi {
-  getDatabases(): Promise<Database[]>;
-  getFacets(): Promise<Facet[]>;
-  getMe(): Promise<User | null>;
-  getComplianceStatus(): Promise<Compliance>;
-  getStats(
-    query: Group,
-    databaseIds: string[],
-    onResult: (result: DatabaseResult) => void,
-    signal?: AbortSignal,
-  ): Promise<void>;
-  runQuery(query: Group, databaseIds: string[], signal?: AbortSignal): Promise<EventRecord[]>;
-  logout(): Promise<void>;
-  invalidateCompliance(): Promise<void>;
-}
+/** The API functions the app calls: src/api/client.ts in the browser, a fake
+ *  in tests. They take and return the frontend's own model (src/model.ts),
+ *  never the backend's types. */
+export type AppApi = Pick<
+  typeof client,
+  | "getDatabases"
+  | "getFacets"
+  | "getMe"
+  | "getComplianceStatus"
+  | "getStats"
+  | "runQuery"
+  | "logout"
+  | "invalidateCompliance"
+>;
 
 export interface AppDeps {
   store: Store;
@@ -46,6 +43,8 @@ export interface AppDeps {
 /** How long the query must stay unchanged before statistics are fetched. */
 export const STATS_DEBOUNCE_MS = 400;
 
+/** The text a panel shows for a failed request. The error itself (with its
+ *  stack) goes to the console, for whoever is debugging. */
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -92,8 +91,10 @@ export function createApp({ store, api, navigate }: AppDeps) {
     const state = store.getState();
     if (runBlocker(state)) return;
     const req = previewSlot.start();
-    const showError = (err: unknown) =>
+    const showError = (err: unknown) => {
+      console.error("Run query failed:", err);
       store.setState({ preview: { status: "error", error: errorMessage(err) } });
+    };
     store.setState({ preview: { status: "loading" } });
     api
       .runQuery(state.query, state.selectedDatabaseIds, req.signal)
@@ -134,9 +135,9 @@ export function createApp({ store, api, navigate }: AppDeps) {
         if (!req.isStale()) store.setState({ stats: { status: "ok", results } });
       })
       .catch((err) => {
-        if (!req.isStale()) {
-          store.setState({ stats: { status: "error", error: errorMessage(err) } });
-        }
+        if (req.isStale()) return;
+        console.error("Statistics failed:", err);
+        store.setState({ stats: { status: "error", error: errorMessage(err) } });
       });
   }, STATS_DEBOUNCE_MS);
 

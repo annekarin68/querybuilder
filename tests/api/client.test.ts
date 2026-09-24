@@ -14,6 +14,7 @@ import {
   runQuery,
   TimeoutError,
 } from "../../src/api/client";
+import { ContractError } from "../../src/api/contract";
 import { toQueryRequest } from "../../src/api/request";
 import type { Group } from "../../src/query/types";
 
@@ -36,13 +37,11 @@ const databaseIds = ["alpha", "beta"];
 /** What the client should send for `query` in `databaseIds`. */
 const body = toQueryRequest(query, databaseIds);
 
+/** A fetch that answers every call with `body` as JSON (or as-is, if it is a
+ *  string) and the given status. */
 function mockFetchOnce(status: number, body: unknown) {
-  return vi.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: "STATUS",
-    json: async () => body,
-  } as Response);
+  const text = typeof body === "string" ? body : JSON.stringify(body);
+  return vi.fn(async () => new Response(text, { status, statusText: "STATUS" }));
 }
 
 function mockStreamFetch(status: number, chunks: string[]) {
@@ -53,13 +52,7 @@ function mockStreamFetch(status: number, chunks: string[]) {
       controller.close();
     },
   });
-  return vi.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: "STATUS",
-    body,
-    json: async () => ({}),
-  } as unknown as Response);
+  return vi.fn(async () => new Response(body, { status, statusText: "STATUS" }));
 }
 
 /** A fetch that never answers on its own — it only settles when its signal aborts. */
@@ -94,7 +87,10 @@ describe("api client", () => {
     expect(out).toEqual([
       { id: "alpha", name: "ALPHA", description: "", owner: "", eventCount: 1 },
     ]);
-    expect(f).toHaveBeenCalledWith("/api/v1/databases", { signal: expect.any(AbortSignal) });
+    expect(f).toHaveBeenCalledWith("/api/v1/databases", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("getFacets GETs /api/individuals and returns the facets in the frontend's model", async () => {
@@ -116,17 +112,20 @@ describe("api client", () => {
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);
     expect(out[0]?.id).toBe("engine_rpm");
-    expect(f).toHaveBeenCalledWith("/api/v1/individuals", { signal: expect.any(AbortSignal) });
+    expect(f).toHaveBeenCalledWith("/api/v1/individuals", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("getStats POSTs the request body as JSON", async () => {
     const f = mockStreamFetch(200, [""]);
     vi.stubGlobal("fetch", f);
     await getStats(query, databaseIds, () => {});
-    const [url, init] = f.mock.calls[0]!;
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/v1/stats");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual(body);
+    expect(JSON.parse(init.body as string)).toEqual(body);
   });
 
   it("getStats streams NDJSON lines, calling onResult once per line, even split across chunks", async () => {
@@ -158,9 +157,9 @@ describe("api client", () => {
     const f = mockFetchOnce(200, { entrysets: [] });
     vi.stubGlobal("fetch", f);
     await runQuery(query, databaseIds);
-    const [url, init] = f.mock.calls[0]!;
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/v1/query");
-    expect(JSON.parse(init.body)).toEqual(body);
+    expect(JSON.parse(init.body as string)).toEqual(body);
   });
 
   it("runQuery returns the events in the frontend's model", async () => {
@@ -189,9 +188,11 @@ describe("api client", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("falls back to status text when there is no error field", async () => {
+  it("falls back to the request and status line when there is no error field", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, {}));
-    await expect(getDatabases()).rejects.toThrow("500 STATUS");
+    await expect(getDatabases()).rejects.toThrow("GET /api/v1/databases failed: 500 STATUS");
+    vi.stubGlobal("fetch", mockFetchOnce(502, "<html>Bad Gateway</html>"));
+    await expect(getDatabases()).rejects.toThrow("GET /api/v1/databases failed: 502 STATUS");
   });
 
   it("throws an ApiError carrying the response status", async () => {
@@ -205,7 +206,10 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     const out = await getMe();
     expect(out).toEqual({ name: "demo.user" });
-    expect(f).toHaveBeenCalledWith("/api/v1/auth/me", { signal: expect.any(AbortSignal) });
+    expect(f).toHaveBeenCalledWith("/api/v1/auth/me", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("getMe returns null on 401 rather than throwing", async () => {
@@ -222,7 +226,7 @@ describe("api client", () => {
     const f = mockFetchOnce(200, {});
     vi.stubGlobal("fetch", f);
     await logout();
-    const [url, init] = f.mock.calls[0]!;
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/v1/auth/logout");
     expect(init.method).toBe("POST");
   });
@@ -238,6 +242,7 @@ describe("api client", () => {
     const out = await getComplianceStatus();
     expect(out).toEqual({ status: "required" });
     expect(f).toHaveBeenCalledWith("/api/v1/compliance/status", {
+      method: "GET",
       signal: expect.any(AbortSignal),
     });
   });
@@ -246,7 +251,7 @@ describe("api client", () => {
     const f = mockFetchOnce(200, {});
     vi.stubGlobal("fetch", f);
     await invalidateCompliance();
-    const [url, init] = f.mock.calls[0]!;
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/v1/compliance/invalidate");
     expect(init.method).toBe("POST");
   });
@@ -288,10 +293,52 @@ describe("api client", () => {
   it("getStats throws a readable error when a 2xx response has no body", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: true, status: 204, statusText: "", body: null }),
+      vi.fn(async () => new Response(null, { status: 204 })),
     );
     await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
-      "empty statistics response",
+      "Unexpected response from POST /api/v1/stats: the body is empty.",
+    );
+  });
+});
+
+describe("a response that breaks the API contract", () => {
+  it("rejects with a ContractError naming the request and the field", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, [{ name: "ALPHA", totalEntrysets: 1 }]));
+    const err = await getDatabases().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ContractError);
+    expect((err as Error).message).toBe(
+      'Unexpected response from GET /api/v1/databases: "[0].label" should be non-blank text, but it is missing.',
+    );
+  });
+
+  it("a web page instead of JSON says so, and what to check", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, "<!doctype html><title>Query Builder</title>"));
+    await expect(getFacets()).rejects.toThrow(
+      /GET \/api\/v1\/individuals: the body should be JSON.*check VITE_API_BASE/,
+    );
+  });
+
+  it("an events answer without its list", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, []));
+    await expect(runQuery(query, databaseIds)).rejects.toThrow(
+      "Unexpected response from POST /api/v1/query: the response should be an object, but it is a list.",
+    );
+  });
+
+  it("a statistics line that isn't JSON names its line, and stops the stream", async () => {
+    const ok = JSON.stringify({ label: "alpha", success: true, matchCount: 1 });
+    vi.stubGlobal("fetch", mockStreamFetch(200, [`${ok}\nnot json\n${ok}\n`]));
+    const onResult = vi.fn();
+    await expect(getStats(query, databaseIds, onResult)).rejects.toThrow(
+      'Unexpected response from POST /api/v1/stats, line 2: the body should be JSON, but it starts with "not json".',
+    );
+    expect(onResult).toHaveBeenCalledOnce();
+  });
+
+  it("a statistics line without a database names its line and field", async () => {
+    vi.stubGlobal("fetch", mockStreamFetch(200, [JSON.stringify({ success: true }) + "\n"]));
+    await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
+      'POST /api/v1/stats, line 1: "label" should be non-blank text, but it is missing.',
     );
   });
 });

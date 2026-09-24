@@ -1,9 +1,11 @@
 import {
   findField,
   findOperator,
+  type Arity,
   type CatalogField,
   type CatalogOperator,
   type FieldCatalog,
+  type ValueType,
 } from "./fieldCatalog";
 import type { Condition } from "./types";
 
@@ -41,7 +43,7 @@ export function nextCondition(
   cond: Condition,
   picks: RowPicks,
   catalog: FieldCatalog,
-  readValue: (arity: CatalogOperator["arity"], valueType: CatalogField["valueType"]) => unknown,
+  readValue: (arity: Arity, valueType: ValueType) => unknown,
 ): Pick<Condition, "facetId" | "fieldId" | "operatorId" | "value"> {
   const facetId = picks.facetId;
   const facetChanged = facetId !== cond.facetId;

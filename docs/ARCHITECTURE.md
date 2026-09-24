@@ -225,6 +225,8 @@ src/
     client.ts          The ONLY file that calls fetch(). One function per endpoint; timeouts; ApiError.
                        Takes and returns the model, never the backend's types.
     types.ts           The backend's request/response types. This IS the API contract.
+    contract.ts        Checks each response value against the contract as it is read: ResponseValue,
+                       ResponseObject, ContractError ("Reading responses").
     response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, …).
     request.ts         toQueryRequest(query, databaseIds) — the body sent to /stats and /query.
   query/
@@ -356,7 +358,10 @@ model ("Data model"). It is the only file that calls `fetch()`: one function
 per endpoint, all under one **API prefix**,
 `VITE_API_BASE`. Every JSON endpoint answers a 4xx/5xx with
 `{ "error": "human readable message" }`, which the client throws as an
-`ApiError` carrying the HTTP `status`. Every request has a 60 s timeout
+`ApiError` carrying the HTTP `status` (without such a body, the message names
+the request and the status line: `GET /api/v1/databases failed: 502 Bad
+Gateway`). A 2xx answer that doesn't match the contract is thrown as a
+`ContractError` ("Reading responses"). Every request has a 60 s timeout
 (`REQUEST_TIMEOUT_MS`, rejecting with a `TimeoutError`); for the streamed
 `/stats` body the clock restarts on every chunk, so a slow stream that is
 still making progress is never cut off.
@@ -389,7 +394,8 @@ A body that isn't a well-formed `QueryRequest` is answered with `400`.
 the app's words, not the backend's. **Only `src/api/` knows the backend's
 names.** `client.ts` runs every response through a function in
 `src/api/response.ts` (`toDatabase`, `toFacet`, `toEvent`,
-`toDatabaseResult`, …) before returning it, and builds every request body with
+`toDatabaseResult`, …), which checks it while reading it ("Reading
+responses"), before returning it, and builds every request body with
 `toQueryRequest` (`src/api/request.ts`, "Wire format of the query"). State,
 the app logic and the panels use only the model. ESLint enforces the boundary:
 outside `src/api/`, importing `src/api/types.ts` is an error
@@ -414,9 +420,48 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **A statistics line** becomes a `DatabaseResult` that is either `"ok"`
   (with a `matchCount`) or `"failed"` (with `errors`): see below.
 
-Only what the app uses is mapped. `DatabasesResponse.percentageOfTotal`,
+- **A missing name.** A database or facet with a blank `name` shows its id.
+
+Only what the app uses is mapped (and checked). `DatabasesResponse.percentageOfTotal`,
 `IndividualResponse.idNumber` and `IndividualFieldResponse.cardinality` are
 left out; add them to the model when a panel needs them.
+
+### Reading responses
+
+TypeScript types say nothing about what a server really sends: `res.json() as
+T` would let a renamed or missing field travel on until some panel failed with
+`Cannot read properties of undefined`, far from the cause. So no response is
+cast. `client.ts` wraps each JSON body in a `ResponseValue`
+(`src/api/contract.ts`), and the functions in `response.ts` read it one key
+at a time through a `ResponseObject<T>`, where `T` is the response's type in
+`types.ts` (so a key the type doesn't have won't compile). Every read checks
+the value it reads. There are two kinds:
+
+| Read | For | When the value is missing or wrong |
+|---|---|---|
+| `id`, `number`, `boolean`, `list`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest | throws a `ContractError` |
+| `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
+| `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` in `types.ts` | becomes `""`, `[]` or `undefined`; a warning only if the value is there but of the wrong kind |
+
+A `ContractError`'s message names the request and the place in the body,
+written as it would be in JavaScript:
+
+```
+Unexpected response from GET /api/v1/individuals: "[3].fields" should be a list, but it is missing.
+Unexpected response from POST /api/v1/stats, line 2: "label" should be non-blank text, but it is missing.
+Unexpected response from GET /api/v1/databases: the body should be JSON, but it starts with "<!doctype html>…". That looks like a web page, not the API: check VITE_API_BASE in .env, and that the backend (or `npm run mock`) is running.
+```
+
+It is shown where any failed request is shown (the full-page startup error,
+the statistics panel, Matching events) and logged to the console with its
+stack. **Decision: only break on what the app needs.** A missing description
+leaves a blank and a warning, not a dead app; keys the app doesn't read are
+never checked; unknown keys are ignored. A warning is logged once per page
+load, not once per item, so the console stays readable.
+
+`tests/api/mockContract.test.ts` runs the real client against the mock server
+and fails on any `ContractError` or warning, so the mock and `response.ts`
+can't drift apart unnoticed.
 
 ### Statistics lines
 
@@ -806,9 +851,11 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   `idle` → `loading` → `ok` or `error`. Panels render every status, including
   a placeholder saying why they are empty.
 - `client.ts` throws an `ApiError` (with the HTTP `status`) on any non-2xx,
-  and a `TimeoutError` when the server goes silent, so no panel can sit on
-  "Loading" forever. The panel then shows a `ui negative message` with the
-  text; no old data is kept ("Correctness invariant"). Errors of requests
+  a `ContractError` when a response doesn't match the contract ("Reading
+  responses"), and a `TimeoutError` when the server goes silent, so no panel
+  can sit on "Loading" forever. The panel then shows a `ui negative message`
+  with the text; no old data is kept ("Correctness invariant"). The error
+  itself, with its stack, is logged to the console. Errors of requests
   aborted because they were superseded never reach a panel.
 - Failing to load databases or facets at startup is fatal: `#app` is replaced
   by an error and a **Reload** button (the message escaped like every
@@ -829,9 +876,10 @@ file it tests, in the same place under `tests/`. The ones to know about:
   restoring a saved query. The most important behaviour lives here.
 - `tests/query/` — tree, validation, summary, field catalog, the row cascade,
   dates.
-- `tests/api/` — the client over a stubbed `fetch`, and the translation both
-  ways: `response.test.ts` (backend → model) and `request.test.ts` (query →
-  request body).
+- `tests/api/` — the client over a stubbed `fetch`, the contract checks
+  (`contract.test.ts`), and the translation both ways: `response.test.ts`
+  (backend → model) and `request.test.ts` (query → request body).
+  `mockContract.test.ts` runs the real client against the mock server.
 - `tests/mock-server/server.test.ts` — every mock route over real HTTP.
 - `tests/dateCases.ts` — date values shared by the frontend's and the mock's
   date tests, so their two copies of the timestamp pattern can't drift.
@@ -870,10 +918,18 @@ only `src/api/` imports `src/api/types.ts`).
    team — the operator's `id` is part of the wire format.
 
 **…follow a backend rename or reshape** (say `totalEntrysets` becomes
-`entrysetCount`)? Change the type in `src/api/types.ts` and the matching
-function in `src/api/response.ts` (or `request.ts`), and its test in
-`tests/api/`. `npm run typecheck` shows what else still uses the old name:
-only `src/api/` and the mock server should. See "Data model".
+`entrysetCount`)? Change the type in `src/api/types.ts`; `npm run typecheck`
+then points at the line in `src/api/response.ts` (or `request.ts`) that reads
+the old name, and at the mock server. Fix those and their tests in
+`tests/api/`. Nothing outside `src/api/` and `mock-server/` should need a
+change. See "Data model".
+
+**…find out why the app says "Unexpected response from …"?** That is a
+`ContractError`: the backend sent something `src/api/types.ts` doesn't allow.
+The message names the request and the field. Look at the real response in the
+browser's Network tab: if the backend changed on purpose, follow the rename
+above; otherwise it is a backend bug. A console warning of the same form means
+a display-only value was missing and is shown blank. See "Reading responses".
 
 **…support another backend type name** (say `SMALLSERIAL`)? Add it to
 `TYPE_NAMES` in `src/query/fieldCatalog.ts` and a case to the `valueTypeFor`
@@ -895,12 +951,13 @@ styles in their own section of `src/styles.css`.
 **…add an API endpoint?**
 1. Its types in `src/api/types.ts`; the frontend's type for what it returns
    in `src/model.ts` (if none fits yet) and a `to…` function in
-   `src/api/response.ts` that builds it, with a test in
-   `tests/api/response.test.ts`; a function in `src/api/client.ts` that
-   returns the model (use `request` / `requestNoContent`, which add the base
-   path, timeout and `ApiError`).
-2. Call it from `src/app.ts`: add it to `AppApi` and to `fakeApi` in
-   `tests/app.test.ts`.
+   `src/api/response.ts` that builds it from a `ResponseObject` ("Reading
+   responses"), with a test in `tests/api/response.test.ts`; a function in
+   `src/api/client.ts` that returns the model (use `getJson` / `postJson` /
+   `post`, which add the prefix, the timeout, `ApiError` and the JSON check),
+   and a case in `tests/api/mockContract.test.ts`.
+2. Call it from `src/app.ts`: add its name to `AppApi` and add it to
+   `fakeApi` in `tests/app.test.ts`.
 3. A route in `mock-server/server.ts` (`routes()`) and a test in
    `tests/mock-server/server.test.ts`. Keep it under the API prefix, even a
    mock-only page the browser navigates to: the dev server proxies nothing else.
