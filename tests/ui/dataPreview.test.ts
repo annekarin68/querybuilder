@@ -1,34 +1,33 @@
 import { describe, it, expect } from "vitest";
-import type { EventRecord, Facet } from "../../src/api/types";
+import type { EventRecord, Facet } from "../../src/model";
 import { eventBadges, rowCell, rowGrid } from "../../src/ui/dataPreview";
 
-function facet(label: string, group: string, tags: string[]): Facet {
+function facet(id: string, group: string, tags: string[]): Facet {
   return {
-    label,
-    group,
+    id,
+    name: id,
     tags,
-    name: label,
-    idNumber: 0,
-    description: "",
+    group,
     comment: "",
-    totalCount: 0,
+    description: "",
+    eventCount: 0,
     fields: [],
   };
 }
 
-const byLabel = new Map(
+const byId = new Map(
   [
     facet("observation_window", "metadata", ["rear", "front"]),
     facet("engine_rpm", "engine", ["high_frequency", "critical"]),
-    facet("engine_oil_pressure", "engine", ["critical", " "]),
+    facet("engine_oil_pressure", "engine", ["critical"]),
     facet("wheel_speed", "tires_wheels", []),
     facet("speeding_event", "", ["regulatory"]),
-  ].map((i) => [i.label, i]),
+  ].map((f) => [f.id, f]),
 );
 
-const event = (...labels: string[]): EventRecord => ({
+const event = (...facetIds: string[]): EventRecord => ({
   id: 1,
-  items: Object.fromEntries(labels.map((l) => [l, {}])),
+  values: Object.fromEntries(facetIds.map((id) => [id, {}])),
 });
 
 const none = { tags: [], groups: [] };
@@ -36,12 +35,12 @@ const none = { tags: [], groups: [] };
 describe("eventBadges", () => {
   it("collects distinct tags and groups, most common first", () => {
     expect(
-      eventBadges(event("wheel_speed", "engine_rpm", "engine_oil_pressure"), byLabel, none),
+      eventBadges(event("wheel_speed", "engine_rpm", "engine_oil_pressure"), byId, none),
     ).toEqual({ tags: ["critical", "high_frequency"], groups: ["engine", "tires_wheels"] });
   });
 
   it("breaks ties alphabetically", () => {
-    expect(eventBadges(event("speeding_event", "engine_rpm"), byLabel, none)).toEqual({
+    expect(eventBadges(event("speeding_event", "engine_rpm"), byId, none)).toEqual({
       tags: ["critical", "high_frequency", "regulatory"],
       groups: ["engine"],
     });
@@ -49,28 +48,28 @@ describe("eventBadges", () => {
 
   it("hides listed tags and groups, ignoring case and whitespace, keeping the facet's others", () => {
     const hidden = { tags: [" Critical "], groups: ["METADATA"] };
-    expect(eventBadges(event("observation_window", "engine_rpm"), byLabel, hidden)).toEqual({
+    expect(eventBadges(event("observation_window", "engine_rpm"), byId, hidden)).toEqual({
       tags: ["front", "high_frequency", "rear"],
       groups: ["engine"],
     });
   });
 
   it("has nothing hard-coded: with no hidden values every group shows", () => {
-    expect(eventBadges(event("observation_window"), byLabel, none)).toEqual({
+    expect(eventBadges(event("observation_window"), byId, none)).toEqual({
       tags: ["front", "rear"],
       groups: ["metadata"],
     });
   });
 
-  it("drops a blank group but keeps that facet's tags", () => {
-    expect(eventBadges(event("speeding_event"), byLabel, none)).toEqual({
+  it("shows no group badge for a facet without a group, but keeps its tags", () => {
+    expect(eventBadges(event("speeding_event"), byId, none)).toEqual({
       tags: ["regulatory"],
       groups: [],
     });
   });
 
   it("ignores facets the dictionary doesn't know", () => {
-    expect(eventBadges(event("unknown_item"), byLabel, none)).toEqual({
+    expect(eventBadges(event("unknown_item"), byId, none)).toEqual({
       tags: [],
       groups: [],
     });
@@ -80,7 +79,7 @@ describe("eventBadges", () => {
 describe("rowCell", () => {
   const e: EventRecord = {
     id: 7,
-    items: { thing: { kind: "alpha", count: 3, on: false, blank: "", at: "not a date" } },
+    values: { thing: { kind: "alpha", count: 3, on: false, blank: "", at: "not a date" } },
   };
 
   it("shows the configured facet.field value as text", () => {
@@ -98,7 +97,7 @@ describe("rowCell", () => {
   it("formats datetime columns, passing unparseable values through", () => {
     const at = { heading: "At", facet: "thing", field: "at", format: "datetime" as const };
     expect(rowCell(e, at)).toBe("not a date");
-    const iso = { ...e, items: { thing: { at: "2024-11-07T08:15:00Z" } } };
+    const iso = { ...e, values: { thing: { at: "2024-11-07T08:15:00Z" } } };
     expect(rowCell(iso, at)).not.toBe("2024-11-07T08:15:00Z");
     expect(rowCell(iso, at)).toMatch(/2024/);
   });

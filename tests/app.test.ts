@@ -1,15 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createApp, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
-import type {
-  DatabasesResponse,
-  EventsResponse,
-  Facet,
-  QueryRequest,
-  StatsResponse,
-} from "../src/api/types";
+import type { Database, DatabaseResult, EventRecord, Facet } from "../src/model";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
-import { toQueryRequest } from "../src/query/request";
 import { addChild, emptyQuery, newCondition, updateNode } from "../src/query/tree";
 import type { Group } from "../src/query/types";
 import { validateQuery } from "../src/query/validate";
@@ -20,35 +13,25 @@ import { savePendingQuery, takePendingQuery } from "../src/util/pendingQuery";
 
 const facets: Facet[] = [
   {
-    label: "thing",
+    id: "thing",
     name: "Thing",
-    group: "",
     tags: [],
-    idNumber: 1,
-    description: "",
+    group: "",
     comment: "",
-    totalCount: 10,
+    description: "",
+    eventCount: 10,
     fields: [
-      {
-        label: "size",
-        type: "BIGINT",
-        format: "",
-        description: "",
-        comment: "",
-        cardinality: 0,
-        values: [],
-      },
+      { id: "size", name: "size", typeName: "BIGINT", comment: "", description: "", values: [] },
     ],
   },
 ];
 
-const db = (label: string): DatabasesResponse => ({
-  label,
-  name: label.toUpperCase(),
+const db = (id: string): Database => ({
+  id,
+  name: id.toUpperCase(),
   description: "",
   owner: "",
-  totalEntrysets: 100,
-  percentageOfTotal: 50,
+  eventCount: 100,
 });
 const databases = [db("alpha"), db("beta")];
 const catalog = buildFieldCatalog(facets);
@@ -77,11 +60,12 @@ function ready(query = runnableQuery()): Partial<AppState> {
   };
 }
 
-const events: EventsResponse = { entrysets: [{ id: 1, items: {} }] };
-const line = (label: string, matchCount: number): StatsResponse => ({
-  label,
-  success: true,
+const events: EventRecord[] = [{ id: 1, values: {} }];
+const line = (databaseId: string, matchCount: number): DatabaseResult => ({
+  databaseId,
+  status: "ok",
   matchCount,
+  notes: [],
 });
 
 function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
@@ -92,7 +76,7 @@ function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
     getComplianceStatus: vi.fn(async () => ({
       status: "acknowledged" as const,
       reason: "audit",
-      ackedAt: "2026-09-23T10:00:00Z",
+      givenAt: "2026-09-23T10:00:00Z",
     })),
     getStats: vi.fn(async () => {}),
     runQuery: vi.fn(async () => events),
@@ -165,11 +149,12 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     expect(store.getState().preview).toEqual({ status: "loading" });
     expect(api.runQuery).toHaveBeenCalledWith(
-      toQueryRequest(store.getState().query, ["alpha", "beta"]),
+      store.getState().query,
+      ["alpha", "beta"],
       expect.any(AbortSignal),
     );
     await flushPromises();
-    expect(store.getState().preview).toEqual({ status: "ok", data: events });
+    expect(store.getState().preview).toEqual({ status: "ok", events });
   });
 
   it("a 401 saves the query and goes to log in", async () => {
@@ -236,7 +221,7 @@ describe("runPreview (the Run query button)", () => {
   });
 
   it("ignores events that arrive after the query changed", async () => {
-    const response = deferred<EventsResponse>();
+    const response = deferred<EventRecord[]>();
     const { app, store } = setup(ready(), fakeApi({ runQuery: vi.fn(() => response.promise) }));
     app.runPreview();
     app.onQueryChange(runnableQuery(4));
@@ -260,13 +245,18 @@ describe("statistics", () => {
   /** getStats that hands each call's line callback back to the test. */
   function streamingApi() {
     const calls: {
-      onLine: (l: StatsResponse) => void;
+      onLine: (l: DatabaseResult) => void;
       done: ReturnType<typeof deferred<void>>;
       signal?: AbortSignal;
     }[] = [];
     const api = fakeApi({
       getStats: vi.fn(
-        (_body: QueryRequest, onLine: (l: StatsResponse) => void, signal?: AbortSignal) => {
+        (
+          _query: Group,
+          _databaseIds: string[],
+          onLine: (l: DatabaseResult) => void,
+          signal?: AbortSignal,
+        ) => {
           const done = deferred<void>();
           calls.push({ onLine, done, signal });
           return done.promise;
@@ -282,26 +272,30 @@ describe("statistics", () => {
     const { app, store } = setup(ready(), api);
     const next = runnableQuery(5);
     app.onQueryChange(next);
-    expect(store.getState().stats).toMatchObject({ status: "idle", lines: [] });
+    expect(store.getState().stats).toMatchObject({ status: "idle", results: [] });
     expect(api.getStats).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).toHaveBeenCalledWith(
-      toQueryRequest(next, ["alpha", "beta"]),
+      next,
+      ["alpha", "beta"],
       expect.any(Function),
       expect.any(AbortSignal),
     );
-    expect(store.getState().stats).toMatchObject({ status: "loading", lines: [] });
+    expect(store.getState().stats).toMatchObject({ status: "loading", results: [] });
 
     calls[0]!.onLine(line("alpha", 7));
-    expect(store.getState().stats).toMatchObject({ status: "loading", lines: [line("alpha", 7)] });
+    expect(store.getState().stats).toMatchObject({
+      status: "loading",
+      results: [line("alpha", 7)],
+    });
 
     calls[0]!.onLine(line("beta", 2));
     calls[0]!.done.resolve();
     await flushPromises();
     expect(store.getState().stats).toMatchObject({
       status: "ok",
-      lines: [line("alpha", 7), line("beta", 2)],
+      results: [line("alpha", 7), line("beta", 2)],
     });
   });
 
@@ -317,7 +311,7 @@ describe("statistics", () => {
     calls[0]!.onLine(line("alpha", 7));
     calls[0]!.done.resolve();
     await flushPromises();
-    expect(store.getState().stats).toMatchObject({ status: "idle", lines: [] });
+    expect(store.getState().stats).toMatchObject({ status: "idle", results: [] });
 
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).toHaveBeenCalledTimes(2);
@@ -346,7 +340,7 @@ describe("statistics", () => {
 // ---- query and database changes -------------------------------------------
 
 describe("query and database changes", () => {
-  const shown: Partial<AppState> = { preview: { status: "ok", data: events } };
+  const shown: Partial<AppState> = { preview: { status: "ok", events } };
 
   it("an edit clears the preview at once and revalidates", () => {
     const { app, store } = setup({ ...ready(), ...shown });
@@ -385,9 +379,9 @@ describe("query and database changes", () => {
 describe("logging out and invalidating compliance", () => {
   const signedIn: Partial<AppState> = {
     ...ready(),
-    preview: { status: "ok", data: events },
+    preview: { status: "ok", events },
     auth: { status: "authenticated", user: { name: "pat" } },
-    compliance: { status: "acknowledged", reason: "audit", ackedAt: null },
+    compliance: { status: "acknowledged", reason: "audit", givenAt: null },
   };
 
   it("logout clears the preview at once, even if logging out fails", async () => {

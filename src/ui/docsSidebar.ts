@@ -1,15 +1,14 @@
 import type { AppState } from "../state";
-import type { DatabasesResponse, Facet } from "../api/types";
-import { fieldDisplayName } from "../query/fieldCatalog";
+import type { Database, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
-import { compact, countLabel, displayLabel, fieldTitle, matchRatio, text } from "./format";
+import { compact, countLabel, displayLabel, fieldTitle, matchRatio } from "./format";
 import { groupByTag, matchDocs, tagsOf, UNTAGGED } from "./docsFilter";
 
 /** Total events across every loaded database — the denominator for a
- * facet's percentage. The backend sends no percentage: Facet only carries
- * totalCount, an absolute figure. */
-function totalEvents(databases: DatabasesResponse[] | null): number {
-  return databases?.reduce((s, d) => s + d.totalEntrysets, 0) ?? 0;
+ * facet's percentage. The backend sends no percentage: a Facet only carries
+ * `eventCount`, an absolute figure. */
+function totalEvents(databases: Database[] | null): number {
+  return databases?.reduce((s, d) => s + d.eventCount, 0) ?? 0;
 }
 
 function facetHtml(facet: Facet, total: number): string {
@@ -17,23 +16,21 @@ function facetHtml(facet: Facet, total: number): string {
   const tags = tagList.length
     ? `<div class="qb-doc-tags">${tagList.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
     : "";
-  const group = text(facet.group);
-  const description = text(facet.description);
-  const comment = text(facet.comment);
+  const { group, description, comment } = facet;
   const fields = facet.fields
     .map((f) => {
       const title = fieldTitle(f);
-      return `<span class="qb-field-chip"${title ? ` title="${escapeHtml(title)}"` : ""}><code>${escapeHtml(fieldDisplayName(f))}</code><span class="qb-field-type">${escapeHtml(f.type || f.format)}</span></span>`;
+      return `<span class="qb-field-chip"${title ? ` title="${escapeHtml(title)}"` : ""}><code>${escapeHtml(f.name)}</code><span class="qb-field-type">${escapeHtml(f.typeName)}</span></span>`;
     })
     .join("");
-  return `<div class="qb-doc-facet" data-facet-label="${escapeHtml(facet.label)}">
+  return `<div class="qb-doc-facet" data-facet-id="${escapeHtml(facet.id)}">
       <div class="qb-doc-name">${escapeHtml(facet.name)}</div>
       ${tags}
       ${group ? `<p class="qb-doc-source" title="Third-party group">Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
       ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
       ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
-      <p class="qb-doc-count" title="${escapeHtml(facet.totalCount.toLocaleString())} of ${total.toLocaleString()} events">
-        In ${compact(facet.totalCount)} events (${matchRatio(facet.totalCount, total)})
+      <p class="qb-doc-count" title="${escapeHtml(facet.eventCount.toLocaleString())} of ${total.toLocaleString()} events">
+        In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})
       </p>
       <div class="qb-doc-fields">${fields}</div>
     </div>`;
@@ -64,8 +61,8 @@ function groupHtml(tag: string, facets: Facet[], total: number): string {
  */
 function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
   const match = matchDocs(facets, query);
-  el.querySelectorAll<HTMLElement>("[data-facet-label]").forEach((node) => {
-    node.hidden = match !== null && !match.facets.has(node.dataset.facetLabel!);
+  el.querySelectorAll<HTMLElement>("[data-facet-id]").forEach((node) => {
+    node.hidden = match !== null && !match.facets.has(node.dataset.facetId!);
   });
   el.querySelectorAll<HTMLDetailsElement>("details[data-group]").forEach((group) => {
     const count = group.querySelector<HTMLElement>("[data-group-count]")!;

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   buildFieldCatalog,
-  fieldDisplayName,
   fieldsOfFacet,
   findField,
   findOperator,
@@ -10,88 +9,54 @@ import {
   pickListFor,
   valueTypeFor,
 } from "../../src/query/fieldCatalog";
-import type { Facet } from "../../src/api/types";
+import type { Facet, Field } from "../../src/model";
+
+/** A field with blank text and no values; `over` sets the rest. */
+const field = (id: string, typeName: string, over: Partial<Field> = {}): Field => ({
+  id,
+  name: id,
+  typeName,
+  comment: "",
+  description: "",
+  values: [],
+  ...over,
+});
 
 const facets: Facet[] = [
   {
-    label: "engine_rpm",
-    group: "engine",
-    tags: [],
-    idNumber: 1,
+    id: "engine_rpm",
     name: "Engine RPM",
-    description: "Engine rotational speed.",
+    tags: [],
+    group: "engine",
     comment: "",
-    totalCount: 100,
+    description: "Engine rotational speed.",
+    eventCount: 100,
     fields: [
-      {
-        label: "value_rpm",
-        type: "BIGINT",
-        description: "",
-        comment: "",
-        cardinality: 5000,
-        values: [],
-        format: "",
-      },
-      {
-        label: "redline_rpm",
-        type: "BIGINT",
-        description: "Redline for this engine.",
-        comment: "",
-        cardinality: 5000,
-        values: [],
-        format: "",
-      },
-      {
-        label: "is_over_rev",
-        type: "BOOLEAN",
-        description: "",
-        comment: "",
-        cardinality: 2,
-        values: [],
-        format: "",
-      },
+      field("value_rpm", "BIGINT"),
+      field("redline_rpm", "BIGINT", { description: "Redline for this engine." }),
+      field("is_over_rev", "BOOLEAN"),
     ],
   },
   {
-    label: "vehicle_identity",
-    group: "metadata",
-    tags: [],
-    idNumber: 2,
+    id: "vehicle_identity",
     name: "Vehicle identity",
-    description: "Identifying info for the vehicle.",
+    tags: [],
+    group: "metadata",
     comment: "",
-    totalCount: 100,
-    fields: [
-      {
-        label: "vin",
-        type: "VARCHAR",
-        description: "",
-        comment: "",
-        cardinality: 5000,
-        values: [],
-        format: "",
-      },
-      {
-        label: "vehicle_type",
-        type: "VARCHAR",
-        description: "",
-        comment: "",
-        cardinality: 5000,
-        values: [],
-        format: "",
-      },
-    ],
+    description: "Identifying info for the vehicle.",
+    eventCount: 100,
+    fields: [field("vin", "VARCHAR"), field("vehicle_type", "VARCHAR")],
   },
 ];
 
-/** The catalog field for (facet label, field label), built from `facets`. */
-const pick = (facetLabel: string, fieldLabel: string) =>
-  findField(buildFieldCatalog(facets), facetLabel, fieldLabel);
+/** The catalog field for (facet id, field id), built from `facets`. */
+const pick = (facetId: string, fieldId: string) =>
+  findField(buildFieldCatalog(facets), facetId, fieldId);
 
 describe("buildFieldCatalog", () => {
-  it("names each field by its facet's label and its own label", () => {
+  it("names each field by its facet's id and its own id", () => {
     const { fields } = buildFieldCatalog(facets);
-    expect(fields.map((f) => [f.facetLabel, f.fieldLabel])).toEqual([
+    expect(fields.map((f) => [f.facetId, f.fieldId])).toEqual([
       ["engine_rpm", "value_rpm"],
       ["engine_rpm", "redline_rpm"],
       ["engine_rpm", "is_over_rev"],
@@ -100,53 +65,23 @@ describe("buildFieldCatalog", () => {
     ]);
   });
 
-  it("maps backend type to valueType", () => {
+  it("maps the field's type name to valueType", () => {
     expect(pick("engine_rpm", "value_rpm")?.valueType).toBe("number");
     expect(pick("engine_rpm", "is_over_rev")?.valueType).toBe("boolean");
     expect(pick("vehicle_identity", "vin")?.valueType).toBe("string");
   });
 
-  it("falls back to format when type is empty", () => {
-    const withFallback: Facet[] = [
-      {
-        ...facets[0]!,
-        fields: [
-          {
-            label: "observed_at",
-            type: "",
-            description: "",
-            comment: "",
-            cardinality: 100_000,
-            values: [],
-            format: "TIMESTAMP",
-          },
-        ],
-      },
-    ];
-    const { fields } = buildFieldCatalog(withFallback);
-    expect(fields[0]?.valueType).toBe("date");
-  });
-
-  it("name combines the facet's name and the field's label", () => {
-    expect(pick("engine_rpm", "value_rpm")?.name).toBe("Engine RPM: value_rpm");
-  });
-
-  it("shows the field's name when the backend sends one, falling back to its label", () => {
+  it("name combines the facet's name and the field's name", () => {
     const named: Facet[] = [
-      {
-        ...facets[0]!,
-        fields: [{ ...facets[0]!.fields[0]!, name: "Engine speed" }, facets[0]!.fields[1]!],
-      },
+      { ...facets[0]!, fields: [field("value_rpm", "BIGINT", { name: "Engine speed" })] },
     ];
-    const { fields } = buildFieldCatalog(named);
-    expect(fields[0]).toMatchObject({
+    expect(buildFieldCatalog(named).fields[0]).toMatchObject({
       name: "Engine RPM: Engine speed",
       fieldName: "Engine speed",
     });
-    expect(fields[1]).toMatchObject({ name: "Engine RPM: redline_rpm", fieldName: "redline_rpm" });
   });
 
-  it("findField needs both labels", () => {
+  it("findField needs both ids", () => {
     const catalog = buildFieldCatalog(facets);
     expect(findField(catalog, "vehicle_identity", "vin")?.valueType).toBe("string");
     expect(findField(catalog, "vehicle_identity", null)).toBeUndefined();
@@ -154,25 +89,18 @@ describe("buildFieldCatalog", () => {
     expect(findField(catalog, "engine_rpm", "vin")).toBeUndefined();
   });
 
-  it("assigns operatorIds per valueType, all of which are real operator labels", () => {
+  it("assigns operatorIds per valueType, all of which are real operator ids", () => {
     const { fields } = buildFieldCatalog(facets);
-    const opLabels = new Set(OPERATORS.map((o) => o.label));
+    const opIds = new Set(OPERATORS.map((o) => o.id));
     for (const f of fields) {
       expect(f.operatorIds.length).toBeGreaterThan(0);
-      for (const label of f.operatorIds) expect(opLabels.has(label)).toBe(true);
+      for (const id of f.operatorIds) expect(opIds.has(id)).toBe(true);
     }
   });
 
   /** The one field of a facet whose only field has this declared type and these values. */
   const only = (type: string, values: string[]) =>
-    buildFieldCatalog([
-      {
-        ...facets[1]!,
-        fields: [
-          { label: "f", type, description: "", comment: "", cardinality: 500, values, format: "" },
-        ],
-      },
-    ]).fields[0]!;
+    buildFieldCatalog([{ ...facets[1]!, fields: [field("f", type, { values })] }]).fields[0]!;
 
   it("offers operators by value type only", () => {
     expect(only("VARCHAR", []).operatorIds).toEqual([
@@ -236,45 +164,35 @@ describe("buildFieldCatalog", () => {
       expect(d.options).toBeUndefined();
     });
 
-    it("no values, no pick-list — whatever the cardinality", () => {
+    it("no values, no pick-list", () => {
       expect(only("VARCHAR", []).options).toBeUndefined();
     });
 
-    it("pickListFor copies, never shares, the backend's list", () => {
+    it("pickListFor copies, never shares, the field's list", () => {
       const values = ["a"];
       expect(pickListFor("string", values)).not.toBe(values);
     });
   });
 });
 
-describe("field identity: the (facet label, field label) pair", () => {
+describe("field identity: the (facet id, field id) pair", () => {
   // Joined with a dot, both of these fields would be "a.b.c".
   const dotted: Facet[] = [
-    {
-      ...facets[0]!,
-      label: "a.b",
-      name: "A.B",
-      fields: [{ ...facets[0]!.fields[0]!, label: "c", type: "BIGINT" }],
-    },
-    {
-      ...facets[0]!,
-      label: "a",
-      name: "A",
-      fields: [{ ...facets[0]!.fields[0]!, label: "b.c", type: "BOOLEAN" }],
-    },
+    { ...facets[0]!, id: "a.b", name: "A.B", fields: [field("c", "BIGINT")] },
+    { ...facets[0]!, id: "a", name: "A", fields: [field("b.c", "BOOLEAN")] },
   ];
 
-  it("findField matches both labels, so dotted labels can't collide", () => {
+  it("findField matches both ids, so dotted ids can't collide", () => {
     const catalog = buildFieldCatalog(dotted);
     expect(findField(catalog, "a.b", "c")?.valueType).toBe("number");
     expect(findField(catalog, "a", "b.c")?.valueType).toBe("boolean");
     expect(findField(catalog, "a", "c")).toBeUndefined();
   });
 
-  it("fieldsOfFacet lists only that facet's fields, even when another facet's label starts the same", () => {
+  it("fieldsOfFacet lists only that facet's fields, even when another facet's id starts the same", () => {
     const catalog = buildFieldCatalog(dotted);
-    expect(fieldsOfFacet(catalog, "a").map((f) => f.fieldLabel)).toEqual(["b.c"]);
-    expect(fieldsOfFacet(catalog, "a.b").map((f) => f.fieldLabel)).toEqual(["c"]);
+    expect(fieldsOfFacet(catalog, "a").map((f) => f.fieldId)).toEqual(["b.c"]);
+    expect(fieldsOfFacet(catalog, "a.b").map((f) => f.fieldId)).toEqual(["c"]);
     expect(fieldsOfFacet(catalog, null)).toEqual([]);
   });
 });
@@ -284,7 +202,7 @@ describe("OPERATORS", () => {
     for (const o of OPERATORS) expect(["none", "one", "two", "many"]).toContain(o.arity);
   });
 
-  it("findOperator looks an operator up by label", () => {
+  it("findOperator looks an operator up by id", () => {
     expect(findOperator("between")?.arity).toBe("two");
     expect(findOperator("nope")).toBeUndefined();
     expect(findOperator(null)).toBeUndefined();
@@ -292,7 +210,7 @@ describe("OPERATORS", () => {
 });
 
 describe("valueTypeFor", () => {
-  const t = (type: string, format = "") => valueTypeFor({ type, format });
+  const t = valueTypeFor;
 
   it.each([
     ["BIGINT", "number"],
@@ -311,19 +229,6 @@ describe("valueTypeFor", () => {
     ["something_new", "string"],
   ] as const)("maps %s -> %s", (type, expected) => {
     expect(t(type)).toBe(expected);
-  });
-
-  it("falls back to format only when type is empty", () => {
-    expect(t("", "TIMESTAMP")).toBe("date");
-    expect(t("BIGINT", "TIMESTAMP")).toBe("number");
-  });
-});
-
-describe("fieldDisplayName", () => {
-  it("is the field's name when the backend sends one, else its label", () => {
-    expect(fieldDisplayName({ label: "rpm", name: "Revolutions" })).toBe("Revolutions");
-    expect(fieldDisplayName({ label: "rpm", name: "" })).toBe("rpm");
-    expect(fieldDisplayName({ label: "rpm" })).toBe("rpm");
   });
 });
 

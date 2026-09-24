@@ -3,11 +3,11 @@ import { defaultValueFor, nextCondition } from "../../src/query/conditionEdit";
 import type { CatalogField, CatalogOperator, FieldCatalog } from "../../src/query/fieldCatalog";
 import type { Condition } from "../../src/query/types";
 
-const field = (fieldLabel: string, valueType: CatalogField["valueType"]): CatalogField => ({
-  facetLabel: "thing",
-  fieldLabel,
-  name: fieldLabel,
-  fieldName: fieldLabel,
+const field = (fieldId: string, valueType: CatalogField["valueType"]): CatalogField => ({
+  facetId: "thing",
+  fieldId,
+  name: fieldId,
+  fieldName: fieldId,
   valueType,
   operatorIds: [],
 });
@@ -84,7 +84,7 @@ describe("nextCondition", () => {
   });
 });
 
-const op = (arity: CatalogOperator["arity"]): CatalogOperator => ({ label: "o", name: "O", arity });
+const op = (arity: CatalogOperator["arity"]): CatalogOperator => ({ id: "o", name: "O", arity });
 
 describe("defaultValueFor", () => {
   it("boolean field + arity one defaults to false (a toggle can't represent unset)", () => {

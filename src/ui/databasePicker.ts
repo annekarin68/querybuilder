@@ -20,7 +20,7 @@ export function renderDatabasePicker(el: HTMLElement, state: AppState): void {
     .map((d) => {
       const title = databaseTitle(d);
       return `<label class="qb-db-pill"${title ? ` title="${escapeHtml(title)}"` : ""}>
-        <input type="checkbox" data-db-id="${escapeHtml(d.label)}"${selected.has(d.label) ? " checked" : ""} />
+        <input type="checkbox" data-db-id="${escapeHtml(d.id)}"${selected.has(d.id) ? " checked" : ""} />
         <span>${escapeHtml(d.name)}</span>
       </label>`;
     })

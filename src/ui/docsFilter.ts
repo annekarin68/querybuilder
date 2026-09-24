@@ -1,14 +1,13 @@
-import type { Facet } from "../api/types";
+import type { Facet } from "../model";
 
-/** Section key for facets with no (non-blank) tags. Never a real tag, since
- *  blank tags are dropped by `tagsOf`. */
+/** Section key for facets with no tags. Never a real tag: `Facet.tags` holds
+ *  no blanks. */
 export const UNTAGGED = "";
 
-/** A facet's tags as data-dictionary section keys: trimmed, blanks and
- *  duplicates dropped, or `[UNTAGGED]` when nothing is left. */
+/** A facet's tags as data-dictionary section keys: its tags, or `[UNTAGGED]`
+ *  when it has none. */
 export function tagsOf(facet: Facet): string[] {
-  const tags = [...new Set(facet.tags.map((t) => t.trim()).filter(Boolean))];
-  return tags.length ? tags : [UNTAGGED];
+  return facet.tags.length ? facet.tags : [UNTAGGED];
 }
 
 /**
@@ -35,7 +34,7 @@ export function groupByTag(facets: Facet[]): Map<string, Facet[]> {
 
 /** What the data-dictionary filter matched. */
 export interface DocsMatch {
-  /** `Facet.label` of every matching facet. */
+  /** `Facet.id` of every matching facet. */
   facets: Set<string>;
   /** Section key (a tag, or `UNTAGGED`) → how many of its facets match
    *  (sections with none are absent). */
@@ -44,19 +43,19 @@ export interface DocsMatch {
 
 /**
  * Which data-dictionary entries match the filter text: a case-insensitive
- * substring of the facet's name, or of any of its fields' label or name.
+ * substring of the facet's name, or of any of its fields' id or name.
  * Returns null for a blank filter (nothing is being filtered).
  */
 export function matchDocs(all: Facet[], text: string): DocsMatch | null {
   const q = text.trim().toLowerCase();
   if (!q) return null;
-  const has = (s: string | undefined) => (s ?? "").toLowerCase().includes(q);
+  const has = (s: string) => s.toLowerCase().includes(q);
   const facets = new Set<string>();
   const groups = new Map<string, number>();
   for (const facet of all) {
-    const hit = has(facet.name) || facet.fields.some((f) => has(f.label) || has(f.name));
+    const hit = has(facet.name) || facet.fields.some((f) => has(f.id) || has(f.name));
     if (!hit) continue;
-    facets.add(facet.label);
+    facets.add(facet.id);
     for (const tag of tagsOf(facet)) groups.set(tag, (groups.get(tag) ?? 0) + 1);
   }
   return { facets, groups };

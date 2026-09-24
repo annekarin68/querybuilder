@@ -30,7 +30,7 @@ function complianceHtml(state: AppState): string {
       <a class="ui fluid small primary button" href="${escapeHtml(COMPLIANCE_START_URL)}" data-flow-link>Start compliance check</a>`;
   }
   return `<p class="qb-account-reason">“${escapeHtml(c.reason)}”</p>
-    ${c.ackedAt ? `<p class="qb-account-meta">Given ${escapeHtml(formatWhen(c.ackedAt))}</p>` : ""}
+    ${c.givenAt ? `<p class="qb-account-meta">Given ${escapeHtml(formatWhen(c.givenAt))}</p>` : ""}
     <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Invalidate</button>`;
 }
 

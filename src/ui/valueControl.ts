@@ -74,7 +74,7 @@ export function renderValueControl(
       <input type="checkbox" aria-label="Value"${value === true ? " checked" : ""} /><label>true</label>
     </div>`;
   }
-  if (field.options && PICK_OPERATORS.has(operator.label)) {
+  if (field.options && PICK_OPERATORS.has(operator.id)) {
     return freeEntryDropdown(field, value, false);
   }
   return scalarInput(field, value, 'aria-label="Value"');

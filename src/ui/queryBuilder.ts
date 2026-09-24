@@ -1,6 +1,6 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
-import type { Facet } from "../api/types";
+import type { Facet } from "../model";
 import {
   fieldsOfFacet,
   findField,
@@ -59,9 +59,9 @@ function iconButton(action: string, label: string, icon: string, extra = ""): st
 export function facetDropdown(facets: Facet[] | null, c: Condition): string {
   const opts = optionsHtml(
     facets ?? [],
-    (facet) => facet.label,
+    (facet) => facet.id,
     (facet) => facet.name,
-    (facet) => facet.label === c.facetId,
+    (facet) => facet.id === c.facetId,
   );
   return `<select class="ui search selection dropdown" data-part="facet" aria-label="Facet"><option value="">Facet…</option>${opts}</select>`;
 }
@@ -69,21 +69,21 @@ export function facetDropdown(facets: Facet[] | null, c: Condition): string {
 export function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
   const opts = optionsHtml(
     fieldsOfFacet(catalog, c.facetId),
-    (f) => f.fieldLabel,
+    (f) => f.fieldId,
     (f) => f.fieldName,
-    (f) => f.fieldLabel === c.fieldId,
+    (f) => f.fieldId === c.fieldId,
   );
   return `<select class="ui search selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
 export function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
   const field = findField(catalog, c.facetId, c.fieldId);
-  const ops = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.label)) : [];
+  const ops = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.id)) : [];
   const opts = optionsHtml(
     ops,
-    (o) => o.label,
+    (o) => o.id,
     (o) => o.name,
-    (o) => o.label === c.operatorId,
+    (o) => o.id === c.operatorId,
   );
   return `<select class="ui search selection dropdown" data-part="operator" aria-label="Operator"${field ? "" : " disabled"}><option value="">Operator…</option>${opts}</select>`;
 }
