@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildFieldCatalog,
   fieldDisplayName,
+  fieldsOfFacet,
   findField,
   findOperator,
   OPERATORS,
@@ -81,23 +82,26 @@ const facets: Facet[] = [
   },
 ];
 
+/** The catalog field for (facet label, field label), built from `facets`. */
+const pick = (facetLabel: string, fieldLabel: string) =>
+  findField(buildFieldCatalog(facets), facetLabel, fieldLabel);
+
 describe("buildFieldCatalog", () => {
-  it("labels are dotted facetLabel.fieldLabel", () => {
+  it("names each field by its facet's label and its own label", () => {
     const { fields } = buildFieldCatalog(facets);
-    expect(fields.map((f) => f.label)).toEqual([
-      "engine_rpm.value_rpm",
-      "engine_rpm.redline_rpm",
-      "engine_rpm.is_over_rev",
-      "vehicle_identity.vin",
-      "vehicle_identity.vehicle_type",
+    expect(fields.map((f) => [f.facetLabel, f.fieldLabel])).toEqual([
+      ["engine_rpm", "value_rpm"],
+      ["engine_rpm", "redline_rpm"],
+      ["engine_rpm", "is_over_rev"],
+      ["vehicle_identity", "vin"],
+      ["vehicle_identity", "vehicle_type"],
     ]);
   });
 
   it("maps backend type to valueType", () => {
-    const { fields } = buildFieldCatalog(facets);
-    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.valueType).toBe("number");
-    expect(fields.find((f) => f.label === "engine_rpm.is_over_rev")?.valueType).toBe("boolean");
-    expect(fields.find((f) => f.label === "vehicle_identity.vin")?.valueType).toBe("string");
+    expect(pick("engine_rpm", "value_rpm")?.valueType).toBe("number");
+    expect(pick("engine_rpm", "is_over_rev")?.valueType).toBe("boolean");
+    expect(pick("vehicle_identity", "vin")?.valueType).toBe("string");
   });
 
   it("falls back to format when type is empty", () => {
@@ -122,10 +126,7 @@ describe("buildFieldCatalog", () => {
   });
 
   it("name combines the facet's name and the field's label", () => {
-    const { fields } = buildFieldCatalog(facets);
-    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.name).toBe(
-      "Engine RPM: value_rpm",
-    );
+    expect(pick("engine_rpm", "value_rpm")?.name).toBe("Engine RPM: value_rpm");
   });
 
   it("shows the field's name when the backend sends one, falling back to its label", () => {
@@ -143,11 +144,12 @@ describe("buildFieldCatalog", () => {
     expect(fields[1]).toMatchObject({ name: "Engine RPM: redline_rpm", fieldName: "redline_rpm" });
   });
 
-  it("findField looks a field up by its dotted label", () => {
+  it("findField needs both labels", () => {
     const catalog = buildFieldCatalog(facets);
-    expect(findField(catalog, "vehicle_identity.vin")?.valueType).toBe("string");
-    expect(findField(catalog, "nope")).toBeUndefined();
-    expect(findField(catalog, null)).toBeUndefined();
+    expect(findField(catalog, "vehicle_identity", "vin")?.valueType).toBe("string");
+    expect(findField(catalog, "vehicle_identity", null)).toBeUndefined();
+    expect(findField(catalog, null, "vin")).toBeUndefined();
+    expect(findField(catalog, "engine_rpm", "vin")).toBeUndefined();
   });
 
   it("assigns operatorIds per valueType, all of which are real operator labels", () => {
@@ -157,11 +159,8 @@ describe("buildFieldCatalog", () => {
       expect(f.operatorIds.length).toBeGreaterThan(0);
       for (const label of f.operatorIds) expect(opLabels.has(label)).toBe(true);
     }
-    expect(fields.find((f) => f.label === "engine_rpm.is_over_rev")?.operatorIds).toEqual([
-      "eq",
-      "neq",
-    ]);
-    expect(fields.find((f) => f.label === "engine_rpm.value_rpm")?.operatorIds).toEqual([
+    expect(pick("engine_rpm", "is_over_rev")?.operatorIds).toEqual(["eq", "neq"]);
+    expect(pick("engine_rpm", "value_rpm")?.operatorIds).toEqual([
       "eq",
       "neq",
       "gt",
@@ -192,7 +191,7 @@ describe("buildFieldCatalog", () => {
       },
     ];
     const { fields } = buildFieldCatalog(withValues);
-    const field = fields.find((f) => f.label === "vehicle_identity.vehicle_type");
+    const field = fields[0];
     expect(field?.valueType).toBe("enum");
     expect(field?.options).toEqual(["sedan", "van"]);
     expect(field?.operatorIds).toEqual(["eq", "neq", "in", "isEmpty", "isNotEmpty"]);
@@ -217,6 +216,38 @@ describe("buildFieldCatalog", () => {
     ];
     const { fields } = buildFieldCatalog(lowCardinalityNoValues);
     expect(fields.every((f) => f.valueType !== "enum")).toBe(true);
+  });
+});
+
+describe("field identity: the (facet label, field label) pair", () => {
+  // Joined with a dot, both of these fields would be "a.b.c".
+  const dotted: Facet[] = [
+    {
+      ...facets[0]!,
+      label: "a.b",
+      name: "A.B",
+      fields: [{ ...facets[0]!.fields[0]!, label: "c", type: "BIGINT" }],
+    },
+    {
+      ...facets[0]!,
+      label: "a",
+      name: "A",
+      fields: [{ ...facets[0]!.fields[0]!, label: "b.c", type: "BOOLEAN" }],
+    },
+  ];
+
+  it("findField matches both labels, so dotted labels can't collide", () => {
+    const catalog = buildFieldCatalog(dotted);
+    expect(findField(catalog, "a.b", "c")?.valueType).toBe("number");
+    expect(findField(catalog, "a", "b.c")?.valueType).toBe("boolean");
+    expect(findField(catalog, "a", "c")).toBeUndefined();
+  });
+
+  it("fieldsOfFacet lists only that facet's fields, even when another facet's label starts the same", () => {
+    const catalog = buildFieldCatalog(dotted);
+    expect(fieldsOfFacet(catalog, "a").map((f) => f.fieldLabel)).toEqual(["b.c"]);
+    expect(fieldsOfFacet(catalog, "a.b").map((f) => f.fieldLabel)).toEqual(["c"]);
+    expect(fieldsOfFacet(catalog, null)).toEqual([]);
   });
 });
 

@@ -1,19 +1,18 @@
 import { ENTRYSETS, type Entryset } from "./vehicleData";
 import { databaseIdForEntrysetId } from "./databases";
-import type { Row } from "./evaluate";
+import { rowKey, type Row } from "./evaluate";
 
 /**
  * Flattens one entryset's nested `items[individualLabel][fieldLabel]` shape
- * into flat `"individualLabel.fieldLabel"` keys — the same dotted labels the
- * frontend's field catalog gives its fields (src/query/fieldCatalog.ts), so a
- * condition's `fieldId` is a key of the row — plus a synthetic `__db` key (see
+ * into flat `rowKey(individualLabel, fieldLabel)` keys, so a condition's
+ * (facetId, fieldId) pair finds its value — plus a synthetic `__db` key (see
  * mock-server/databases.ts) used only for database scoping.
  */
 export function flattenEntryset(entryset: Entryset): Row {
   const row: Row = { id: entryset.id, __db: databaseIdForEntrysetId(entryset.id) };
   for (const [individualLabel, fields] of Object.entries(entryset.items)) {
     for (const [fieldLabel, value] of Object.entries(fields)) {
-      row[`${individualLabel}.${fieldLabel}`] = value;
+      row[rowKey(individualLabel, fieldLabel)] = value;
     }
   }
   return row;

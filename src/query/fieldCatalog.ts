@@ -5,8 +5,12 @@ export type Arity = "none" | "one" | "two" | "many";
 
 /** One queryable field: a (facet, field) pair from GET /api/individuals. */
 export interface CatalogField {
-  /** The dotted "facetLabel.fieldLabel" id a condition stores as `fieldId`. */
-  label: string;
+  /** The facet's `Facet.label` — what a condition stores as `facetId`. */
+  facetLabel: string;
+  /** The field's own `FacetField.label`, within that facet — what a condition
+   *  stores as `fieldId`. A field is named by this pair, never by one joined
+   *  string: a label may itself contain a ".". */
+  fieldLabel: string;
   /** Display name, "Facet name: field name" — used in summaries. */
   name: string;
   /** The field's own display name (its `name`, else its `label`) — used in
@@ -52,8 +56,20 @@ export function fieldDisplayName(f: { label: string; name?: string }): string {
   return f.name || f.label;
 }
 
-export function findField(catalog: FieldCatalog, label: string | null): CatalogField | undefined {
-  return label ? catalog.fields.find((f) => f.label === label) : undefined;
+export function findField(
+  catalog: FieldCatalog,
+  facetId: string | null,
+  fieldId: string | null,
+): CatalogField | undefined {
+  return facetId && fieldId
+    ? catalog.fields.find((f) => f.facetLabel === facetId && f.fieldLabel === fieldId)
+    : undefined;
+}
+
+/** The fields of one facet, in catalog order — what the Field dropdown lists
+ *  once a facet is chosen. */
+export function fieldsOfFacet(catalog: FieldCatalog, facetId: string | null): CatalogField[] {
+  return facetId ? catalog.fields.filter((f) => f.facetLabel === facetId) : [];
 }
 
 export function findOperator(label: string | null): CatalogOperator | undefined {
@@ -118,8 +134,8 @@ export function valueTypeFor(field: { type: string; format: string }): ValueType
 /**
  * One queryable field per (facet, field) pair, derived purely from
  * already-fetched Facet[] data — the real API has no schema endpoint.
- * Field label is the dotted "facetLabel.fieldLabel" path, matching how an
- * event nests its values.
+ * Each field is named by the pair (`facetLabel`, `fieldLabel`), matching how
+ * an event nests its values.
  *
  * Enum detection is `values.length > 0` — deliberately NEVER `cardinality`.
  * The backend's own rule for when it populates `values` is an implementation
@@ -133,7 +149,8 @@ export function buildFieldCatalog(facets: Facet[]): FieldCatalog {
       const valueType = isEnum ? "enum" : valueTypeFor(f);
       const fieldName = fieldDisplayName(f);
       fields.push({
-        label: `${facet.label}.${f.label}`,
+        facetLabel: facet.label,
+        fieldLabel: f.label,
         name: `${facet.name}: ${fieldName}`,
         fieldName,
         valueType,

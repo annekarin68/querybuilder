@@ -5,9 +5,10 @@ export type Row = Record<string, string | number | boolean | null>;
 // The query tree as the evaluator reads it from a request body. Deliberately
 // NOT the frontend's QueryNode (src/query/types.ts): the body is untrusted
 // JSON, and these types list only what evaluation reads. The tree also
-// carries ids, `facetId` and `collapsed`, which the evaluator ignores.
+// carries ids and `collapsed`, which the evaluator ignores.
 export interface JsonCondition {
   kind: "condition";
+  facetId: string | null;
   fieldId: string | null;
   operatorId: string | null;
   value: unknown;
@@ -18,6 +19,13 @@ export interface JsonGroup {
   children: JsonNode[];
 }
 export type JsonNode = JsonCondition | JsonGroup;
+
+/** The key a facet's field value is stored under in a Row (mock-server/rows.ts).
+ *  A dotted key is fine here: it never leaves the mock, and the fictional data
+ *  has no dots in its labels. */
+export function rowKey(facetId: string, fieldId: string): string {
+  return `${facetId}.${fieldId}`;
+}
 
 function cmp(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
@@ -115,8 +123,8 @@ function dateMatches(c: JsonCondition, v: Row[string] | undefined): boolean | un
 }
 
 function conditionMatches(c: JsonCondition, row: Row): boolean {
-  if (!c.fieldId || !c.operatorId) return false;
-  const v = row[c.fieldId];
+  if (!c.facetId || !c.fieldId || !c.operatorId) return false;
+  const v = row[rowKey(c.facetId, c.fieldId)];
   const asDate = dateMatches(c, v);
   if (asDate !== undefined) return asDate;
   switch (c.operatorId) {

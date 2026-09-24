@@ -4,7 +4,8 @@ import { renderValueControl } from "../../src/ui/valueControl";
 
 function field(overrides: Partial<CatalogField> = {}): CatalogField {
   return {
-    label: "f",
+    facetLabel: "t",
+    fieldLabel: "f",
     name: "F",
     fieldName: "F",
     valueType: "string",

@@ -15,11 +15,11 @@ function invalid(nodeId: string, message: string): Issue {
 }
 
 function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
-  if (!c.fieldId) {
+  if (!c.facetId || !c.fieldId) {
     out.push(incomplete(c.id, "Choose a field."));
     return;
   }
-  const fieldDef = findField(catalog, c.fieldId);
+  const fieldDef = findField(catalog, c.facetId, c.fieldId);
   if (!fieldDef) {
     out.push(invalid(c.id, "Unknown field."));
     return;

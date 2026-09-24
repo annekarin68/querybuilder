@@ -52,7 +52,7 @@ function runnableQuery(n = 3): Group {
   const c = newCondition();
   return updateNode(addChild(root, root.id, c), c.id, {
     facetId: "thing",
-    fieldId: "thing.size",
+    fieldId: "size",
     operatorId: "gt",
     value: n,
   });

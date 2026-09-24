@@ -11,10 +11,15 @@ import {
 } from "../../src/query/tree";
 import type { Issue } from "../../src/query/types";
 
-const field = (label: string, valueType: CatalogField["valueType"], operatorIds: string[]) => ({
-  label,
-  name: label,
-  fieldName: label,
+const field = (
+  fieldLabel: string,
+  valueType: CatalogField["valueType"],
+  operatorIds: string[],
+): CatalogField => ({
+  facetLabel: "thing",
+  fieldLabel,
+  name: fieldLabel,
+  fieldName: fieldLabel,
   valueType,
   operatorIds,
 });
@@ -30,7 +35,7 @@ const catalog: FieldCatalog = {
 function validateOne(patch: NodePatch = {}): { issues: Issue[]; id: string } {
   const root = emptyQuery();
   const c = newCondition();
-  const tree = updateNode(addChild(root, root.id, c), c.id, patch);
+  const tree = updateNode(addChild(root, root.id, c), c.id, { facetId: "thing", ...patch });
   return { issues: validateQuery(tree, catalog), id: c.id };
 }
 
@@ -75,6 +80,18 @@ describe("validateQuery", () => {
 
   it("a field that is not in the catalog is invalid", () => {
     expectIssue({ fieldId: "nope", operatorId: "eq", value: "x" }, "Unknown field.", "invalid");
+  });
+
+  it("a field of another facet is unknown", () => {
+    expectIssue(
+      { facetId: "other", fieldId: "color", operatorId: "eq", value: "x" },
+      "Unknown field.",
+      "invalid",
+    );
+  });
+
+  it("a condition without a facet is incomplete", () => {
+    expectIssue({ facetId: null, fieldId: "color" }, "Choose a field.", "incomplete");
   });
 
   it("an operator the field does not offer is invalid", () => {

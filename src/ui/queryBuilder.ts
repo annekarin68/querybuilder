@@ -1,7 +1,13 @@
 import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { Facet } from "../api/types";
-import { findField, findOperator, OPERATORS, type FieldCatalog } from "../query/fieldCatalog";
+import {
+  fieldsOfFacet,
+  findField,
+  findOperator,
+  OPERATORS,
+  type FieldCatalog,
+} from "../query/fieldCatalog";
 import {
   addChild,
   countConditions,
@@ -61,20 +67,17 @@ function facetDropdown(facets: Facet[] | null, c: Condition): string {
 }
 
 function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
-  const prefix = c.facetId ? `${c.facetId}.` : null;
-  const opts = prefix
-    ? optionsHtml(
-        catalog.fields.filter((f) => f.label.startsWith(prefix)),
-        (f) => f.label,
-        (f) => f.fieldName,
-        (f) => f.label === c.fieldId,
-      )
-    : "";
-  return `<select class="ui selection dropdown" data-part="field" aria-label="Field"${prefix ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
+  const opts = optionsHtml(
+    fieldsOfFacet(catalog, c.facetId),
+    (f) => f.fieldLabel,
+    (f) => f.fieldName,
+    (f) => f.fieldLabel === c.fieldId,
+  );
+  return `<select class="ui selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
 }
 
 function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
-  const field = findField(catalog, c.fieldId);
+  const field = findField(catalog, c.facetId, c.fieldId);
   const ops = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.label)) : [];
   const opts = optionsHtml(
     ops,
@@ -86,7 +89,7 @@ function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
 }
 
 function conditionHtml(ctx: BuilderCtx, c: Condition): string {
-  const field = findField(ctx.catalog, c.fieldId);
+  const field = findField(ctx.catalog, c.facetId, c.fieldId);
   const operator = findOperator(c.operatorId);
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-grid">
