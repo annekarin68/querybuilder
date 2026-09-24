@@ -15,19 +15,22 @@ const field = (
   fieldLabel: string,
   valueType: CatalogField["valueType"],
   operatorIds: string[],
+  options?: string[],
 ): CatalogField => ({
   facetLabel: "thing",
   fieldLabel,
   name: fieldLabel,
   fieldName: fieldLabel,
   valueType,
+  options,
   operatorIds,
 });
 const catalog: FieldCatalog = {
   fields: [
-    field("color", "string", ["eq", "in", "isEmpty"]),
-    field("count", "number", ["eq", "between", "isEmpty"]),
+    field("color", "string", ["eq", "in", "isEmpty"], ["red", "blue"]),
+    field("count", "number", ["eq", "between", "in", "isEmpty"]),
     field("seenAt", "date", ["eq", "between"]),
+    field("active", "boolean", ["eq"]),
   ],
 };
 
@@ -148,6 +151,85 @@ describe("validateQuery", () => {
         "Enter a value.",
         "incomplete",
       );
+    });
+  });
+
+  describe("value types", () => {
+    it.each([
+      [
+        "a number field holding text",
+        { fieldId: "count", operatorId: "eq", value: "12abc" },
+        "Enter a number.",
+      ],
+      [
+        "a number field holding a list",
+        { fieldId: "count", operatorId: "eq", value: [3] },
+        "Enter a number.",
+      ],
+      [
+        "a number range holding text",
+        { fieldId: "count", operatorId: "between", value: [1, "x"] },
+        "Enter a number.",
+      ],
+      [
+        "a number list holding text",
+        { fieldId: "count", operatorId: "in", value: [1, "x"] },
+        "Enter a number.",
+      ],
+      [
+        "a boolean field holding text",
+        { fieldId: "active", operatorId: "eq", value: "true" },
+        "Choose true or false.",
+      ],
+      [
+        "a string field holding a number",
+        { fieldId: "color", operatorId: "eq", value: 3 },
+        "Enter text.",
+      ],
+      [
+        "a string list holding a number",
+        { fieldId: "color", operatorId: "in", value: ["red", 3] },
+        "Enter text.",
+      ],
+    ])("%s is invalid", (_label, patch, message) => {
+      expectIssue(patch, message, "invalid");
+    });
+
+    it("accepts values of the field's type", () => {
+      for (const patch of [
+        { fieldId: "count", operatorId: "eq", value: 12 },
+        { fieldId: "count", operatorId: "in", value: [1, 2] },
+        { fieldId: "active", operatorId: "eq", value: false },
+        { fieldId: "color", operatorId: "eq", value: "red" },
+      ]) {
+        expect(validateOne(patch).issues).toEqual([]);
+      }
+    });
+
+    it("accepts a value that isn't on the pick-list — the list may be out of date", () => {
+      expect(validateOne({ fieldId: "color", operatorId: "eq", value: "violet" }).issues).toEqual(
+        [],
+      );
+      const list = { fieldId: "color", operatorId: "in", value: ["red", "violet"] };
+      expect(validateOne(list).issues).toEqual([]);
+    });
+  });
+
+  describe("ranges", () => {
+    it("a number range may not run backwards", () => {
+      const patch = { fieldId: "count", operatorId: "between", value: [10, 5] };
+      expectIssue(patch, "From must not be greater than To.", "invalid");
+    });
+
+    it("a number range may start and end on the same value", () => {
+      expect(
+        validateOne({ fieldId: "count", operatorId: "between", value: [5, 5] }).issues,
+      ).toEqual([]);
+    });
+
+    it("a date range's order is left to the backend", () => {
+      const patch = { fieldId: "seenAt", operatorId: "between", value: ["2025", "2024"] };
+      expect(validateOne(patch).issues).toEqual([]);
     });
   });
 });

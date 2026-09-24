@@ -557,7 +557,12 @@ real backend should do the same.
   request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
   `incomplete` (not filled in yet, shown as a quiet grey hint) or `invalid`
-  (can't work, shown in red). **Any issue blocks running.**
+  (can't work, shown in red). Besides a field, an operator and a value of the
+  right shape, it checks every value against the field's type (a number,
+  `true`/`false`, text, a partial UTC timestamp) and that a number range
+  doesn't run backwards. A value that isn't on the field's pick-list is fine.
+  These checks also cover a query restored after a redirect. **Any issue
+  blocks running.**
 - **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet
   clears field, operator and value; a new field clears operator and value; an
   operator change that alters the arity resets the value instead of reading

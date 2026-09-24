@@ -1,5 +1,11 @@
 import type { Condition, Issue, QueryNode } from "./types";
-import { findField, findOperator, type FieldCatalog } from "./fieldCatalog";
+import {
+  findField,
+  findOperator,
+  type Arity,
+  type FieldCatalog,
+  type ValueType,
+} from "./fieldCatalog";
 import { isUtcTimestamp } from "./dates";
 
 function isEmptyScalar(v: unknown): boolean {
@@ -12,6 +18,41 @@ function incomplete(nodeId: string, message: string): Issue {
 
 function invalid(nodeId: string, message: string): Issue {
   return { nodeId, message, kind: "invalid" };
+}
+
+/** What the user still has to fill in for the operator's arity, or null. */
+function shapeProblem(arity: Arity, v: unknown): string | null {
+  switch (arity) {
+    case "none":
+      return null;
+    case "one":
+      return isEmptyScalar(v) ? "Enter a value." : null;
+    case "two":
+      return Array.isArray(v) && v.length === 2 && !v.some(isEmptyScalar)
+        ? null
+        : "Enter both values.";
+    case "many":
+      return Array.isArray(v) && v.length > 0 ? null : "Choose at least one value.";
+  }
+}
+
+/**
+ * Why a single value isn't of the field's type, or null. Values off a field's
+ * pick-list are fine: the list can be out of date.
+ */
+function typeProblem(valueType: ValueType, v: unknown): string | null {
+  switch (valueType) {
+    case "number":
+      return typeof v === "number" && Number.isFinite(v) ? null : "Enter a number.";
+    case "boolean":
+      return typeof v === "boolean" ? null : "Choose true or false.";
+    case "string":
+      return typeof v === "string" ? null : "Enter text.";
+    case "date":
+      return isUtcTimestamp(v)
+        ? null
+        : "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.";
+  }
 }
 
 function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
@@ -37,26 +78,23 @@ function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void
     out.push(invalid(c.id, "That operator isn't available for this field."));
     return;
   }
-  if (op.arity === "one" && isEmptyScalar(c.value)) {
-    out.push(incomplete(c.id, "Enter a value."));
+  const shape = shapeProblem(op.arity, c.value);
+  if (shape) {
+    out.push(incomplete(c.id, shape));
+    return;
   }
-  if (op.arity === "two") {
-    const v = c.value;
-    if (!Array.isArray(v) || v.length !== 2 || v.some(isEmptyScalar)) {
-      out.push(incomplete(c.id, "Enter both values."));
-    }
+  // Each single value: the value itself, each end of a range, each list item.
+  const values = op.arity === "none" ? [] : op.arity === "one" ? [c.value] : (c.value as unknown[]);
+  const wrongType = values.map((v) => typeProblem(fieldDef.valueType, v)).find(Boolean);
+  if (wrongType) {
+    out.push(invalid(c.id, wrongType));
+    return;
   }
-  if (fieldDef.valueType === "date" && (op.arity === "one" || op.arity === "two")) {
-    const values = Array.isArray(c.value) ? c.value : [c.value];
-    if (values.some((v) => !isEmptyScalar(v) && !isUtcTimestamp(v))) {
-      out.push(invalid(c.id, "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z."));
-    }
-  }
-  if (op.arity === "many") {
-    const v = c.value;
-    if (!Array.isArray(v) || v.length === 0) {
-      out.push(incomplete(c.id, "Choose at least one value."));
-    }
+  // A backwards number range matches nothing. A date range's order is the
+  // backend's call: with partial timestamps, "in order" is its interpretation.
+  if (op.arity === "two" && fieldDef.valueType === "number") {
+    const [from, to] = c.value as [number, number];
+    if (from > to) out.push(invalid(c.id, "From must not be greater than To."));
   }
 }
 
