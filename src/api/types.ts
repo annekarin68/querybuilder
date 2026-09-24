@@ -4,6 +4,11 @@
  * src/api/ may import this file (ESLint enforces it). The rest of the app uses
  * its own model (src/model.ts); src/api/response.ts and src/api/request.ts
  * translate between the two.
+ *
+ * TypeScript can't check what the server really sends, so response.ts reads
+ * every response through src/api/contract.ts, which checks each value against
+ * these types as it is read. A `?` here means the backend may leave the key
+ * out: read it with an `optional…` read there.
  */
 
 /** Who's logged in, returned by GET /api/auth/me. */

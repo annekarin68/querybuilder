@@ -56,36 +56,29 @@ function iconButton(action: string, label: string, icon: string, extra = ""): st
   return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
 }
 
-export function facetDropdown(facets: Facet[] | null, c: Condition): string {
-  const opts = optionsHtml(
-    facets ?? [],
-    (facet) => facet.id,
-    (facet) => facet.name,
-    (facet) => facet.id === c.facetId,
-  );
-  return `<select class="ui search selection dropdown" data-part="facet" aria-label="Facet"><option value="">Facet…</option>${opts}</select>`;
-}
+/** The three dropdowns of a condition row, in order, and their labels. */
+const ROW_DROPDOWNS = { facet: "Facet", field: "Field", operator: "Operator" };
 
-export function fieldDropdown(catalog: FieldCatalog, c: Condition): string {
+/**
+ * One of a condition row's dropdowns: `part` is "facet", "field" or
+ * "operator". Every one is a search dropdown — there can be many facets and
+ * fields, so typing filters the list — and is disabled until the dropdown
+ * before it has a choice.
+ */
+export function rowDropdown(
+  part: keyof typeof ROW_DROPDOWNS,
+  choices: { id: string; name: string }[],
+  selectedId: string | null,
+  enabled: boolean,
+): string {
+  const label = ROW_DROPDOWNS[part];
   const opts = optionsHtml(
-    fieldsOfFacet(catalog, c.facetId),
-    (f) => f.fieldId,
-    (f) => f.fieldName,
-    (f) => f.fieldId === c.fieldId,
+    choices,
+    (c) => c.id,
+    (c) => c.name,
+    (c) => c.id === selectedId,
   );
-  return `<select class="ui search selection dropdown" data-part="field" aria-label="Field"${c.facetId ? "" : " disabled"}><option value="">Field…</option>${opts}</select>`;
-}
-
-export function operatorDropdown(catalog: FieldCatalog, c: Condition): string {
-  const field = findField(catalog, c.facetId, c.fieldId);
-  const ops = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.id)) : [];
-  const opts = optionsHtml(
-    ops,
-    (o) => o.id,
-    (o) => o.name,
-    (o) => o.id === c.operatorId,
-  );
-  return `<select class="ui search selection dropdown" data-part="operator" aria-label="Operator"${field ? "" : " disabled"}><option value="">Operator…</option>${opts}</select>`;
+  return `<select class="ui search selection dropdown" data-part="${part}" aria-label="${label}"${enabled ? "" : " disabled"}><option value="">${label}…</option>${opts}</select>`;
 }
 
 /** Where the cursor goes after a choice in a condition row's dropdown, so a
@@ -114,11 +107,16 @@ function focusPart(container: HTMLElement, nodeId: string, part: string): void {
 function conditionHtml(ctx: BuilderCtx, c: Condition): string {
   const field = findField(ctx.catalog, c.facetId, c.fieldId);
   const operator = findOperator(c.operatorId);
+  const fields = fieldsOfFacet(ctx.catalog, c.facetId).map((f) => ({
+    id: f.fieldId,
+    name: f.fieldName,
+  }));
+  const operators = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.id)) : [];
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-grid">
-      ${facetDropdown(ctx.facets, c)}
-      ${fieldDropdown(ctx.catalog, c)}
-      ${operatorDropdown(ctx.catalog, c)}
+      ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
+      ${rowDropdown("field", fields, c.fieldId, Boolean(c.facetId))}
+      ${rowDropdown("operator", operators, c.operatorId, field !== undefined)}
       <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
       ${iconButton("remove-node", "Remove condition", "times")}
     </div>

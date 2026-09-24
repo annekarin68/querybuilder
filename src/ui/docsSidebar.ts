@@ -1,8 +1,8 @@
 import type { AppState } from "../state";
 import type { Database, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
-import { compact, countLabel, displayLabel, fieldTitle, matchRatio } from "./format";
-import { groupByTag, matchDocs, tagsOf, UNTAGGED } from "./docsFilter";
+import { compact, countLabel, displayLabel, exact, fieldTitle, matchRatio } from "./format";
+import { groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
 
 /** Total events across every loaded database — the denominator for a
  * facet's percentage. The backend sends no percentage: a Facet only carries
@@ -12,9 +12,8 @@ function totalEvents(databases: Database[] | null): number {
 }
 
 function facetHtml(facet: Facet, total: number): string {
-  const tagList = tagsOf(facet).filter((t) => t !== UNTAGGED);
-  const tags = tagList.length
-    ? `<div class="qb-doc-tags">${tagList.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
+  const tags = facet.tags.length
+    ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
     : "";
   const { group, description, comment } = facet;
   const fields = facet.fields
@@ -29,7 +28,7 @@ function facetHtml(facet: Facet, total: number): string {
       ${group ? `<p class="qb-doc-source" title="Third-party group">Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
       ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
       ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
-      <p class="qb-doc-count" title="${escapeHtml(facet.eventCount.toLocaleString())} of ${total.toLocaleString()} events">
+      <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">
         In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})
       </p>
       <div class="qb-doc-fields">${fields}</div>

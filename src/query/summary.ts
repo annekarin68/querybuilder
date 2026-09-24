@@ -1,11 +1,12 @@
 import type { Condition, QueryNode } from "./types";
 import { findField, findOperator, type Arity, type FieldCatalog } from "./fieldCatalog";
+import { isBlankValue } from "./validate";
 
 /** Stands in for a value the user hasn't entered yet, like "(field?)" below. */
 const MISSING = "(value?)";
 
 function valueText(v: unknown): string {
-  return v === null || v === undefined || v === "" ? MISSING : String(v);
+  return isBlankValue(v) ? MISSING : String(v);
 }
 
 function formatValue(c: Condition, arity: Arity): string {

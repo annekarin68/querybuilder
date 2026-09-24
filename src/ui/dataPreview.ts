@@ -1,7 +1,7 @@
 import { runBlocker, type AppState, type RunBlocker } from "../state";
 import type { EventRecord, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
-import { countLabel, displayLabel, formatWhen } from "./format";
+import { countLabel, displayLabel, exact, formatWhen } from "./format";
 import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
 
 /** How many tag / group badges to show inline before collapsing the rest into "+N". */
@@ -105,13 +105,26 @@ function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: Row
 
 function card(body: string, count?: number): string {
   const n =
-    count === undefined ? "" : ` <span class="qb-card-count">· ${count.toLocaleString()}</span>`;
+    count === undefined ? "" : ` <span class="qb-card-count">· ${escapeHtml(exact(count))}</span>`;
   return `<div class="qb-card qb-preview"><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
 }
 
-/** The Run control — the only one in the app. Its enabled state is decided by
- *  the same checks renderDataPreview makes before calling it. */
-function runBlock(message: string, enabled: boolean, note = "", label = "Run query"): string {
+/**
+ * The Run control — the only one in the app: an optional `message` above the
+ * button, an optional `note` below it. Its enabled state is decided by the same
+ * checks renderDataPreview makes before calling it.
+ */
+function runBlock({
+  message = "",
+  enabled,
+  note = "",
+  label = "Run query",
+}: {
+  message?: string;
+  enabled: boolean;
+  note?: string;
+  label?: string;
+}): string {
   return `<div class="qb-run">
     ${message ? `<p class="qb-run-msg">${escapeHtml(message)}</p>` : ""}
     <button type="button" class="ui primary button" data-action="run"${enabled ? "" : " disabled"}><i class="play icon"></i>${escapeHtml(label)}</button>
@@ -149,7 +162,7 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
     return;
   }
   if (blocker) {
-    paint(el, card(runBlock(BLOCKED_MESSAGES[blocker], false)));
+    paint(el, card(runBlock({ message: BLOCKED_MESSAGES[blocker], enabled: false })));
     return;
   }
   // app.ts resets preview to "idle" (changeScope) in the same
@@ -157,7 +170,13 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
   if (p.status === "idle") {
     paint(
       el,
-      card(runBlock("Fetch a sample of the events this query matches.", true, runNote(state))),
+      card(
+        runBlock({
+          message: "Fetch a sample of the events this query matches.",
+          enabled: true,
+          note: runNote(state),
+        }),
+      ),
     );
     return;
   }
@@ -175,7 +194,7 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
       el,
       card(
         `<div class="ui small negative message"><div class="header">Could not load events</div><p>${escapeHtml(p.error)}</p></div>
-         ${runBlock("", true, "", "Try again")}`,
+         ${runBlock({ enabled: true, label: "Try again" })}`,
       ),
     );
     return;
