@@ -45,8 +45,9 @@ Other scripts:
 ## Must-know rules for maintainers
 
 1. **Offline only.** The app must run on the LAN with no internet. Never add a CDN
-   link, web font, analytics snippet, or any `fetch`/`<script>` to a non-`/api`
-   host. `npm run check:offline` is the backstop and runs inside `npm run build`.
+   link, web font, analytics snippet, or any `fetch`/`<script>` outside the API
+   prefix (`VITE_API_BASE`). `npm run check:offline` is the backstop and runs
+   inside `npm run build`.
 2. **jQuery airlock.** `import $ from "jquery"` appears in only two files:
    `src/ui/fomantic.ts` (all real jQuery use — the Fomantic plugin activate/destroy
    airlock) and `src/setup-jquery.ts`, which does nothing but the

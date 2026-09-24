@@ -75,10 +75,17 @@ describe("validateQuery", () => {
     expectIssue(patch, "Choose at least one value.", "incomplete");
   });
 
-  it("arity 'none' ignores the value", () => {
+  it("arity 'none' takes a null value", () => {
     expect(validateOne({ fieldId: "color", operatorId: "isEmpty", value: null }).issues).toEqual(
       [],
     );
+  });
+
+  it("arity 'none' with any other value (a tampered saved query) is invalid", () => {
+    for (const value of [{}, "", "red", 0, false, [], undefined]) {
+      const patch = { fieldId: "color", operatorId: "isEmpty", value };
+      expectIssue(patch, "This operator takes no value.", "invalid");
+    }
   });
 
   it("a field that is not in the catalog is invalid", () => {

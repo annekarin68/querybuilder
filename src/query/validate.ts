@@ -23,7 +23,7 @@ function invalid(nodeId: string, message: string): Issue {
 /** What the user still has to fill in for the operator's arity, or null. */
 function shapeProblem(arity: Arity, v: unknown): string | null {
   switch (arity) {
-    case "none":
+    case "none": // checked before this, in checkCondition
       return null;
     case "one":
       return isEmptyScalar(v) ? "Enter a value." : null;
@@ -78,13 +78,20 @@ function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void
     out.push(invalid(c.id, "That operator isn't available for this field."));
     return;
   }
+  // A no-value operator's value goes out as `null`, see
+  // docs/ARCHITECTURE.md, "Wire format of the query". The UI always sets
+  // that; anything else came from a tampered saved query and can't be sent.
+  if (op.arity === "none") {
+    if (c.value !== null) out.push(invalid(c.id, "This operator takes no value."));
+    return;
+  }
   const shape = shapeProblem(op.arity, c.value);
   if (shape) {
     out.push(incomplete(c.id, shape));
     return;
   }
   // Each single value: the value itself, each end of a range, each list item.
-  const values = op.arity === "none" ? [] : op.arity === "one" ? [c.value] : (c.value as unknown[]);
+  const values = op.arity === "one" ? [c.value] : (c.value as unknown[]);
   const wrongType = values.map((v) => typeProblem(fieldDef.valueType, v)).find(Boolean);
   if (wrongType) {
     out.push(invalid(c.id, wrongType));
