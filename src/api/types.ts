@@ -69,12 +69,13 @@ export interface FacetField {
    *  distinct from `description`. */
   comment: string;
   /** Distinct values for this field across all databases, as of right now.
-   *  Can be 0 to several billion. Informational only — NEVER branch on this
-   *  to decide whether a field is enum-like; check `values.length` instead. */
+   *  Can be 0 to several billion. Informational only — the frontend never
+   *  branches on it. */
   cardinality: number;
-  /** The field's actual distinct values, when the backend chooses to supply
-   *  them. Empty when not supplied — that emptiness, not `cardinality`, is
-   *  what determines whether a field is treated as an enum. */
+  /** The field's known distinct values, when the backend chooses to supply
+   *  them; empty otherwise. A static list built ahead of time, so it can be
+   *  out of date: the frontend only suggests these (a pick-list), always lets
+   *  the user enter other values, and never takes the field's type from them. */
   values: string[];
   /** A third-party type hint, used only when `type` is empty. */
   format: string;

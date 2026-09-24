@@ -25,7 +25,7 @@ const field = (
 });
 const catalog: FieldCatalog = {
   fields: [
-    field("color", "enum", ["eq", "in", "isEmpty"]),
+    field("color", "string", ["eq", "in", "isEmpty"]),
     field("count", "number", ["eq", "between", "isEmpty"]),
     field("seenAt", "date", ["eq", "between"]),
   ],

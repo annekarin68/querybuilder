@@ -1,6 +1,6 @@
 import type { Facet } from "../api/types";
 
-export type ValueType = "string" | "number" | "boolean" | "date" | "enum";
+export type ValueType = "string" | "number" | "boolean" | "date";
 export type Arity = "none" | "one" | "two" | "many";
 
 /** One queryable field: a (facet, field) pair from GET /api/individuals. */
@@ -17,7 +17,9 @@ export interface CatalogField {
    *  the Field dropdown, where the facet is already chosen. */
   fieldName: string;
   valueType: ValueType;
-  /** The allowed values of an enum field. */
+  /** Known values to suggest, from the backend's `values` (see `pickListFor`).
+   *  Only string and number fields have one. Suggestions only: the list can be
+   *  out of date, so the user may always enter another value. */
   options?: string[];
   operatorIds: string[];
 }
@@ -78,14 +80,13 @@ export function findOperator(label: string | null): CatalogOperator | undefined 
 
 /**
  * Which operators apply to a field, keyed only by its valueType — never by
- * which specific field it is.
+ * which specific field it is, nor by whether it has a pick-list.
  */
 const OPERATOR_PROFILE: Record<ValueType, string[]> = {
-  string: ["eq", "neq", "contains", "isEmpty", "isNotEmpty"],
-  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "isEmpty", "isNotEmpty"],
+  string: ["eq", "neq", "contains", "in", "isEmpty", "isNotEmpty"],
+  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "isEmpty", "isNotEmpty"],
   boolean: ["eq", "neq"],
   date: ["eq", "neq", "before", "after", "between", "isEmpty", "isNotEmpty"],
-  enum: ["eq", "neq", "in", "isEmpty", "isNotEmpty"],
 };
 
 /**
@@ -131,22 +132,46 @@ export function valueTypeFor(field: { type: string; format: string }): ValueType
   return TYPE_NAMES[declared] ?? "string";
 }
 
+/** Whether `text` is a number as entered: not blank, and finite. */
+export function isNumberText(text: string): boolean {
+  return text.trim() !== "" && Number.isFinite(Number(text));
+}
+
+/**
+ * The pick-list for a field of `valueType`, from the backend's `values`: every
+ * value for a string field; for a number field, the values that are numbers,
+ * written the way JavaScript writes them ("3.0" → "3") and without repeats.
+ * None for boolean and date fields — a toggle and a typed (partial) timestamp
+ * serve those better — nor when no value is left.
+ *
+ * `values` is a static list built ahead of time and can be out of date, so it
+ * only ever suggests: it never decides a field's type or which values are allowed.
+ */
+export function pickListFor(valueType: ValueType, values: string[]): string[] | undefined {
+  const list =
+    valueType === "string"
+      ? [...values]
+      : valueType === "number"
+        ? [...new Set(values.filter(isNumberText).map((v) => String(Number(v))))]
+        : [];
+  return list.length > 0 ? list : undefined;
+}
+
 /**
  * One queryable field per (facet, field) pair, derived purely from
  * already-fetched Facet[] data — the real API has no schema endpoint.
  * Each field is named by the pair (`facetLabel`, `fieldLabel`), matching how
  * an event nests its values.
  *
- * Enum detection is `values.length > 0` — deliberately NEVER `cardinality`.
- * The backend's own rule for when it populates `values` is an implementation
- * detail that can change at any time.
+ * A field's type always comes from its declared `type`/`format`; its `values`
+ * only feed the pick-list (`pickListFor`). `cardinality` decides nothing —
+ * when the backend fills `values` is its own implementation detail.
  */
 export function buildFieldCatalog(facets: Facet[]): FieldCatalog {
   const fields: CatalogField[] = [];
   for (const facet of facets) {
     for (const f of facet.fields) {
-      const isEnum = f.values.length > 0;
-      const valueType = isEnum ? "enum" : valueTypeFor(f);
+      const valueType = valueTypeFor(f);
       const fieldName = fieldDisplayName(f);
       fields.push({
         facetLabel: facet.label,
@@ -154,7 +179,7 @@ export function buildFieldCatalog(facets: Facet[]): FieldCatalog {
         name: `${facet.name}: ${fieldName}`,
         fieldName,
         valueType,
-        options: isEnum ? [...f.values] : undefined,
+        options: pickListFor(valueType, f.values),
         operatorIds: OPERATOR_PROFILE[valueType],
       });
     }

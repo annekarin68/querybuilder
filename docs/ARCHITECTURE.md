@@ -224,8 +224,8 @@ src/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, sameSemantics, …).
     request.ts         toQueryRequest(query, databases) — the body sent to /stats and /query.
-    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE, TYPE_NAMES, findField /
-                       fieldsOfFacet / findOperator, fieldDisplayName.
+    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE, TYPE_NAMES, pickListFor,
+                       findField / fieldsOfFacet / findOperator, fieldDisplayName.
     conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row.
     validate.ts        validateQuery(tree, catalog) -> Issue[].
     summary.ts         queryToText — the query in plain English (display only).
@@ -241,7 +241,7 @@ src/
                        onMenu.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
                        displayLabel, text, databaseTitle, fieldTitle, countLabel, formatWhen.
-    valueControl.ts    The value input(s) of a condition row, by operator arity × field valueType.
+    valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
     databasePicker.ts  Database scope pills (render + wiring).
     queryBuilder.ts    The query builder (wiring; returns its render function).
     docsFilter.ts      tagsOf / groupByTag / matchDocs — the data dictionary's sections and search (pure).
@@ -386,16 +386,26 @@ The query builder's fields are derived **client-side** by `buildFieldCatalog`
 from the facets already loaded: one `CatalogField` per (facet, field), named
 by the pair `facetLabel` / `fieldLabel`. The operators are the fixed
 `OPERATORS` list; which ones a field offers depends only on its value type
-(`OPERATOR_PROFILE`).
+(`OPERATOR_PROFILE`):
+
+| Value type | Operators |
+|---|---|
+| string | `eq`, `neq`, `contains`, `in`, `isEmpty`, `isNotEmpty` |
+| number | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `isEmpty`, `isNotEmpty` |
+| boolean | `eq`, `neq` |
+| date | `eq`, `neq`, `before`, `after`, `between`, `isEmpty`, `isNotEmpty` |
 
 - **Value type** comes from `FacetField.type` (else `format`) via
   `valueTypeFor` and `TYPE_NAMES`: case-insensitive, ignoring size parameters,
   covering the common SQL spellings. An unrecognised type becomes `"string"`
   and silently loses the comparison operators — when the real backend's type
   list is known, check it against `TYPE_NAMES`.
-- **A field is an enum when `values.length > 0` — never by `cardinality`.**
-  `cardinality` is informational; when the backend fills `values` is its own
-  implementation detail, and the frontend must not depend on it.
+- **`values` is a pick-list, never a type.** `FacetField.values` is a static
+  list built ahead of time and can be out of date, so `pickListFor` turns it
+  into suggestions (`CatalogField.options`) and nothing more: every value for a
+  string field, the numeric ones for a number field (`"3.0"` → `"3"`), none for
+  boolean and date fields. The user may always enter a value that isn't on the
+  list. `cardinality` is informational; the frontend never branches on it.
 - **Decision: no `GET /api/schema`.** The real backend has none, and adding
   one to the mock would repeat an earlier mistake (a guessed contract the
   frontend then depended on). The catalog is small and stable, the operators
@@ -516,6 +526,16 @@ run, so it never meets an unfinished condition (it throws if it does).
 | `two` (`between`) | `[from, to]` |
 | `many` (`in`) | a non-empty list |
 
+Each value has the field's type (the value control converts what the user
+picks or types, `parseEntry`):
+
+| Field type | Each value is |
+|---|---|
+| string | a JSON string |
+| number | a JSON number |
+| boolean | `true` or `false` |
+| date | a partial ISO 8601 UTC string ("Dates") |
+
 The mock answers a body that isn't a well-formed `QueryRequest` with `400`
 and a message naming the first problem (`mock-server/requestBody.ts`). The
 real backend should do the same.
@@ -583,11 +603,17 @@ Group**, ✕ (not on the root). A collapsed group folds to its `queryToText`
 summary and "N conditions". A condition row is three cascading Fomantic
 dropdowns — **Facet**, **Field** (that facet's fields, `fieldsOfFacet`, by
 `fieldDisplayName`), **Operator** (the field's `operatorIds`) — then the value
-control from `valueControl.ts`: nothing, one input / enum dropdown / boolean
-toggle / timestamp text box, a from–to pair (numbers and dates), or a
-multi-select (enums). Every control has an accessible name. Issues show under
-their row or group. The footer shows the whole query in plain English once it
-is complete, otherwise how many parts still need attention.
+control from `valueControl.ts`: nothing; for **Equals** /
+**Not equals** on a field with a pick-list, a free-entry dropdown (its known
+values, plus anything typed); otherwise one input, a boolean toggle or a
+timestamp text box; a from–to pair (numbers and dates); or, for **Is any
+of**, a free-entry multi-select. Free-entry dropdowns are Fomantic `search`
+dropdowns with `allowAdditions` (`data-free-entry`, activated in
+`fomantic.ts`). A picked or typed entry becomes the field's type
+(`parseEntry`: `"3"` → `3` on a number field; anything else stays as typed,
+for validation to report). Every control has an accessible name. Issues show
+under their row or group. The footer shows the whole query in plain English
+once it is complete, otherwise how many parts still need attention.
 
 Wiring: two delegated listeners (`click` for `data-action` buttons, `change`
 for plain `<input>`s) read the current tree through `getState()` when an event

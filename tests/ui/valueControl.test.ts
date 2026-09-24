@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CatalogField, CatalogOperator } from "../../src/query/fieldCatalog";
-import { renderValueControl } from "../../src/ui/valueControl";
+import { parseEntry, renderValueControl } from "../../src/ui/valueControl";
 
 function field(overrides: Partial<CatalogField> = {}): CatalogField {
   return {
@@ -14,11 +14,12 @@ function field(overrides: Partial<CatalogField> = {}): CatalogField {
   };
 }
 
-function op(arity: CatalogOperator["arity"]): CatalogOperator {
-  return { label: "o", name: "O", arity };
+function op(arity: CatalogOperator["arity"], label = "o"): CatalogOperator {
+  return { label, name: "O", arity };
 }
 
-const enumField = field({ valueType: "enum", options: ["Apple", "Banana"] });
+const withPickList = field({ options: ["Apple", "Banana"] });
+const FREE_ENTRY = "data-free-entry";
 
 describe("renderValueControl", () => {
   it('arity "none" renders nothing', () => {
@@ -26,30 +27,66 @@ describe("renderValueControl", () => {
   });
 
   it('arity "one" + boolean renders a toggle checkbox', () => {
-    const html = renderValueControl(field({ valueType: "boolean" }), op("one"), true);
+    const html = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), true);
     expect(html).toContain("ui toggle checkbox");
   });
 
-  it('arity "one" + enum renders an <option> per label', () => {
-    const html = renderValueControl(enumField, op("one"), "Apple");
-    expect(html).toContain("<option");
-    expect(html).toContain("Apple");
-    expect(html).toContain("Banana");
+  it("Equals on a field with a pick-list is a free-entry dropdown of its values", () => {
+    const html = renderValueControl(withPickList, op("one", "eq"), "Apple");
+    expect(html).toContain(FREE_ENTRY);
+    expect(html).toContain('class="ui search selection dropdown"');
+    expect(html).toContain('<option value="Apple" selected>Apple</option>');
+    expect(html).toContain('<option value="Banana">Banana</option>');
+  });
+
+  it("Not equals gets the same dropdown", () => {
+    expect(renderValueControl(withPickList, op("one", "neq"), "")).toContain(FREE_ENTRY);
+  });
+
+  it("a value that isn't on the pick-list gets its own selected option", () => {
+    const html = renderValueControl(withPickList, op("one", "eq"), "Cherry");
+    expect(html).toContain('<option value="Cherry" selected>Cherry</option>');
+  });
+
+  it("a number field's pick-list marks the current number as chosen", () => {
+    const numbers = field({ valueType: "number", options: ["1", "2"] });
+    const html = renderValueControl(numbers, op("one", "eq"), 2);
+    expect(html).toContain('<option value="2" selected>2</option>');
+  });
+
+  it("other operators on a field with a pick-list get a plain input", () => {
+    const text = renderValueControl(withPickList, op("one", "contains"), "App");
+    expect(text).toContain('<input type="text"');
+    expect(text).not.toContain(FREE_ENTRY);
+    const numbers = field({ valueType: "number", options: ["1", "2"] });
+    expect(renderValueControl(numbers, op("one", "gt"), 1)).toContain('<input type="number"');
+  });
+
+  it("Equals on a field without a pick-list is a plain input", () => {
+    const html = renderValueControl(field(), op("one", "eq"), "x");
+    expect(html).toContain('<input type="text"');
+    expect(html).not.toContain(FREE_ENTRY);
+  });
+
+  it('arity "many" is a free-entry multiple dropdown, with a pick-list…', () => {
+    const html = renderValueControl(withPickList, op("many", "in"), ["Apple"]);
+    expect(html).toContain('class="ui multiple search selection dropdown"');
+    expect(html).toContain(" multiple");
+    expect(html).toContain(FREE_ENTRY);
+    expect(html.match(/<option /g) ?? []).toHaveLength(2);
+  });
+
+  it("…or without one, showing the values entered so far", () => {
+    const html = renderValueControl(field({ valueType: "number" }), op("many", "in"), [3, 7]);
+    expect(html).toContain(FREE_ENTRY);
+    expect(html).toContain('<option value="3" selected>3</option>');
+    expect(html).toContain('<option value="7" selected>7</option>');
   });
 
   it('arity "two" renders from/to ranges', () => {
     const html = renderValueControl(field({ valueType: "number" }), op("two"), [1, 2]);
     expect(html).toContain('data-range="from"');
     expect(html).toContain('data-range="to"');
-  });
-
-  it('arity "many" + enum renders a multiple select with an option per value', () => {
-    const html = renderValueControl(enumField, op("many"), ["Apple"]);
-    expect(html).toContain('class="ui multiple selection dropdown"');
-    expect(html).toContain(" multiple");
-    expect(html.match(/<option /g) ?? []).toHaveLength(2);
-    expect(html).toContain("Apple");
-    expect(html).toContain("Banana");
   });
 
   it("uses classes, not inline styles, for the range layout", () => {
@@ -63,10 +100,10 @@ describe("renderValueControl", () => {
 describe("renderValueControl accessible names", () => {
   it("labels single inputs, dropdowns and toggles as the value", () => {
     for (const html of [
-      renderValueControl(field(), op("one"), "x"),
-      renderValueControl(enumField, op("one"), "Apple"),
-      renderValueControl(enumField, op("many"), []),
-      renderValueControl(field({ valueType: "boolean" }), op("one"), false),
+      renderValueControl(field(), op("one", "eq"), "x"),
+      renderValueControl(withPickList, op("one", "eq"), "Apple"),
+      renderValueControl(withPickList, op("many", "in"), []),
+      renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), false),
     ]) {
       expect(html).toContain('aria-label="Value"');
     }
@@ -79,10 +116,24 @@ describe("renderValueControl accessible names", () => {
   });
 
   it("a date field gets a text box for a (partial) UTC timestamp, not a date picker", () => {
-    const html = renderValueControl(field({ valueType: "date" }), op("one"), "2024-11");
+    const html = renderValueControl(field({ valueType: "date" }), op("one", "eq"), "2024-11");
     expect(html).toContain('type="text"');
     expect(html).not.toContain('type="date"');
     expect(html).toContain('placeholder="YYYY-MM-DDTHH:mm:ssZ"');
     expect(html).toContain('value="2024-11"');
+  });
+});
+
+describe("parseEntry", () => {
+  it("turns a number field's numeric entry into a number", () => {
+    expect(parseEntry("3", "number")).toBe(3);
+    expect(parseEntry("-1.5", "number")).toBe(-1.5);
+  });
+
+  it("keeps any other entry as the text entered, for validation to report", () => {
+    expect(parseEntry("3x", "number")).toBe("3x");
+    expect(parseEntry("", "number")).toBe("");
+    expect(parseEntry("3", "string")).toBe("3");
+    expect(parseEntry("2024-11", "date")).toBe("2024-11");
   });
 });

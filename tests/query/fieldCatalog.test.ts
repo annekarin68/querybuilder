@@ -5,7 +5,9 @@ import {
   fieldsOfFacet,
   findField,
   findOperator,
+  isNumberText,
   OPERATORS,
+  pickListFor,
   valueTypeFor,
 } from "../../src/query/fieldCatalog";
 import type { Facet } from "../../src/api/types";
@@ -159,8 +161,29 @@ describe("buildFieldCatalog", () => {
       expect(f.operatorIds.length).toBeGreaterThan(0);
       for (const label of f.operatorIds) expect(opLabels.has(label)).toBe(true);
     }
-    expect(pick("engine_rpm", "is_over_rev")?.operatorIds).toEqual(["eq", "neq"]);
-    expect(pick("engine_rpm", "value_rpm")?.operatorIds).toEqual([
+  });
+
+  /** The one field of a facet whose only field has this declared type and these values. */
+  const only = (type: string, values: string[]) =>
+    buildFieldCatalog([
+      {
+        ...facets[1]!,
+        fields: [
+          { label: "f", type, description: "", comment: "", cardinality: 500, values, format: "" },
+        ],
+      },
+    ]).fields[0]!;
+
+  it("offers operators by value type only", () => {
+    expect(only("VARCHAR", []).operatorIds).toEqual([
+      "eq",
+      "neq",
+      "contains",
+      "in",
+      "isEmpty",
+      "isNotEmpty",
+    ]);
+    expect(only("BIGINT", []).operatorIds).toEqual([
       "eq",
       "neq",
       "gt",
@@ -168,54 +191,59 @@ describe("buildFieldCatalog", () => {
       "lt",
       "lte",
       "between",
+      "in",
+      "isEmpty",
+      "isNotEmpty",
+    ]);
+    expect(only("BOOLEAN", []).operatorIds).toEqual(["eq", "neq"]);
+    expect(only("TIMESTAMP", []).operatorIds).toEqual([
+      "eq",
+      "neq",
+      "before",
+      "after",
+      "between",
       "isEmpty",
       "isNotEmpty",
     ]);
   });
 
-  it("a field with non-empty values becomes an enum field with matching options, regardless of cardinality", () => {
-    const withValues: Facet[] = [
-      {
-        ...facets[1]!,
-        fields: [
-          {
-            label: "vehicle_type",
-            type: "VARCHAR",
-            description: "",
-            comment: "",
-            cardinality: 500, // deliberately high — must be ignored
-            values: ["sedan", "van"],
-            format: "",
-          },
-        ],
-      },
-    ];
-    const { fields } = buildFieldCatalog(withValues);
-    const field = fields[0];
-    expect(field?.valueType).toBe("enum");
-    expect(field?.options).toEqual(["sedan", "van"]);
-    expect(field?.operatorIds).toEqual(["eq", "neq", "in", "isEmpty", "isNotEmpty"]);
-  });
+  describe("values: a pick-list, never a type", () => {
+    it("a string field suggests all its values and keeps its type and operators", () => {
+      const f = only("VARCHAR", ["sedan", "van"]);
+      expect(f.valueType).toBe("string");
+      expect(f.options).toEqual(["sedan", "van"]);
+      expect(f.operatorIds).toContain("contains");
+    });
 
-  it("a field with empty values is never valueType enum, no matter its cardinality", () => {
-    const lowCardinalityNoValues: Facet[] = [
-      {
-        ...facets[1]!,
-        fields: [
-          {
-            label: "vehicle_type",
-            type: "VARCHAR",
-            description: "",
-            comment: "",
-            cardinality: 3, // deliberately low — must still be ignored
-            values: [],
-            format: "",
-          },
-        ],
-      },
-    ];
-    const { fields } = buildFieldCatalog(lowCardinalityNoValues);
-    expect(fields.every((f) => f.valueType !== "enum")).toBe(true);
+    it("a number field with values stays a number field", () => {
+      const f = only("BIGINT", ["1", "2", "3"]);
+      expect(f.valueType).toBe("number");
+      expect(f.options).toEqual(["1", "2", "3"]);
+      expect(f.operatorIds).toContain("gt");
+    });
+
+    it("a number field suggests only its numeric values, written the JavaScript way", () => {
+      expect(only("DECIMAL(4,1)", ["3.0", "3", "N/A", "", "-1.5"]).options).toEqual(["3", "-1.5"]);
+      expect(only("BIGINT", ["N/A"]).options).toBeUndefined();
+    });
+
+    it("boolean and date fields never get a pick-list", () => {
+      const b = only("BOOLEAN", ["false", "true"]);
+      expect(b.valueType).toBe("boolean");
+      expect(b.options).toBeUndefined();
+      const d = only("TIMESTAMP", ["2024-11-06T14:32:00Z"]);
+      expect(d.valueType).toBe("date");
+      expect(d.options).toBeUndefined();
+    });
+
+    it("no values, no pick-list — whatever the cardinality", () => {
+      expect(only("VARCHAR", []).options).toBeUndefined();
+    });
+
+    it("pickListFor copies, never shares, the backend's list", () => {
+      const values = ["a"];
+      expect(pickListFor("string", values)).not.toBe(values);
+    });
   });
 });
 
@@ -296,5 +324,15 @@ describe("fieldDisplayName", () => {
     expect(fieldDisplayName({ label: "rpm", name: "Revolutions" })).toBe("Revolutions");
     expect(fieldDisplayName({ label: "rpm", name: "" })).toBe("rpm");
     expect(fieldDisplayName({ label: "rpm" })).toBe("rpm");
+  });
+});
+
+describe("isNumberText", () => {
+  it.each(["3", "-1.5", "1e3", " 7 "])("%j is a number", (t) => {
+    expect(isNumberText(t)).toBe(true);
+  });
+
+  it.each(["", "  ", "3x", "N/A", "Infinity", "NaN"])("%j is not", (t) => {
+    expect(isNumberText(t)).toBe(false);
   });
 });

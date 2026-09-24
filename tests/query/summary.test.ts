@@ -8,7 +8,7 @@ const field = (fieldLabel: string, name: string, options?: string[]): CatalogFie
   fieldLabel,
   name,
   fieldName: name,
-  valueType: options ? "enum" : "string",
+  valueType: "string",
   options,
   operatorIds: [],
 });

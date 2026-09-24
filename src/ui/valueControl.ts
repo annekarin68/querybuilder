@@ -1,30 +1,49 @@
-import type { CatalogField, CatalogOperator } from "../query/fieldCatalog";
+import {
+  isNumberText,
+  type CatalogField,
+  type CatalogOperator,
+  type ValueType,
+} from "../query/fieldCatalog";
 import { UTC_TIMESTAMP_HINT } from "../query/dates";
 import { escapeHtml, optionsHtml } from "./panel";
 
 /**
- * The value control(s) for a condition row, chosen by the operator's arity ×
- * the field's valueType. Only the combinations OPERATOR_PROFILE can produce are
- * handled (fieldCatalog.ts): `many` ("Is any of") exists only for enums, and
- * `two` ("Between") only for numbers and dates.
+ * The value control(s) for a condition row, chosen by the operator × the
+ * field's valueType. Only the combinations OPERATOR_PROFILE can produce are
+ * handled (fieldCatalog.ts): `many` ("Is any of") exists only for strings and
+ * numbers, and `two` ("Between") only for numbers and dates.
  */
 
-function enumDropdown(field: CatalogField, current: unknown, multiple: boolean): string {
-  const selected = multiple
-    ? Array.isArray(current)
-      ? current.map(String)
-      : []
-    : [String(current ?? "")];
+/** Operators that compare with one exact value, where suggesting a field's
+ *  known values helps. The rest (gt, contains, …) take a plain input. */
+const PICK_OPERATORS = new Set(["eq", "neq"]);
+
+/** The value(s) a control currently holds, as the strings its <option>s use. */
+function chosenValues(current: unknown, multiple: boolean): string[] {
+  if (multiple) return Array.isArray(current) ? current.map(String) : [];
+  return current === null || current === undefined || current === "" ? [] : [String(current)];
+}
+
+/**
+ * A free-entry dropdown: it lists the field's pick-list, if any, and accepts
+ * any typed value too (`data-free-entry`, activated with allowAdditions in
+ * fomantic.ts), because the pick-list is a static list that can be out of
+ * date. A current value that isn't on the list gets its own selected option,
+ * so it survives a repaint.
+ */
+function freeEntryDropdown(field: CatalogField, current: unknown, multiple: boolean): string {
+  const chosen = chosenValues(current, multiple);
+  const known = field.options ?? [];
   const opts = optionsHtml(
-    field.options ?? [],
+    [...known, ...chosen.filter((v) => !known.includes(v))],
     (o) => o,
     (o) => o,
-    (o) => selected.includes(o),
+    (o) => chosen.includes(o),
   );
-  return `<select class="ui ${multiple ? "multiple " : ""}selection dropdown" data-part="value" aria-label="Value"${
+  return `<select class="ui ${multiple ? "multiple " : ""}search selection dropdown" data-part="value" data-free-entry aria-label="Value"${
     multiple ? " multiple" : ""
   }>
-    ${multiple ? "" : `<option value="">Choose…</option>`}${opts}
+    ${multiple ? "" : `<option value="">Choose or type…</option>`}${opts}
   </select>`;
 }
 
@@ -44,7 +63,7 @@ export function renderValueControl(
   value: unknown,
 ): string {
   if (!field || !operator || operator.arity === "none") return "";
-  if (operator.arity === "many") return enumDropdown(field, value, true);
+  if (operator.arity === "many") return freeEntryDropdown(field, value, true);
   if (operator.arity === "two") {
     const [from, to] = Array.isArray(value) ? value : ["", ""];
     return `<div class="qb-range">${scalarInput(field, from, 'data-range="from" aria-label="From"')}<span class="qb-range-to">to</span>${scalarInput(field, to, 'data-range="to" aria-label="To"')}</div>`;
@@ -55,8 +74,19 @@ export function renderValueControl(
       <input type="checkbox" aria-label="Value"${value === true ? " checked" : ""} /><label>true</label>
     </div>`;
   }
-  if (field.valueType === "enum") return enumDropdown(field, value, false);
+  if (field.options && PICK_OPERATORS.has(operator.label)) {
+    return freeEntryDropdown(field, value, false);
+  }
   return scalarInput(field, value, 'aria-label="Value"');
+}
+
+/**
+ * A picked or typed entry as the field's type: a number field's entry that is
+ * a number becomes a `number` ("3" → 3). Anything else stays the text entered,
+ * so validation can point at it instead of the value vanishing.
+ */
+export function parseEntry(text: string, valueType: ValueType): string | number {
+  return valueType === "number" && isNumberText(text) ? Number(text) : text;
 }
 
 /** Reads back what `renderValueControl` rendered inside `row`. */
@@ -74,17 +104,16 @@ export function readValueControl(
   }
   if (arity === "many") {
     const sel = row.querySelector<HTMLSelectElement>('select[data-part="value"]');
-    return sel ? Array.from(sel.selectedOptions).map((o) => o.value) : [];
+    return sel ? Array.from(sel.selectedOptions).map((o) => parseEntry(o.value, valueType)) : [];
   }
   const control = row.querySelector<HTMLElement>('[data-part="value"]');
   if (!control) return null;
-  if (control instanceof HTMLSelectElement) return control.value;
+  if (control instanceof HTMLSelectElement) return parseEntry(control.value, valueType);
   if (control instanceof HTMLInputElement) return readInput(control, valueType);
   // The boolean toggle: a .ui.checkbox wrapper around the real checkbox.
   return control.querySelector<HTMLInputElement>("input")?.checked ?? false;
 }
 
 function readInput(el: HTMLInputElement | null, valueType: CatalogField["valueType"]): unknown {
-  if (!el) return null;
-  return valueType === "number" && el.value !== "" ? Number(el.value) : el.value;
+  return el ? parseEntry(el.value, valueType) : null;
 }
