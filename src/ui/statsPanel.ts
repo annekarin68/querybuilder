@@ -1,64 +1,63 @@
 import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../state";
-import type { DatabasesResponse, StatsResponse } from "../api/types";
+import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
-/** GET /api/databases is loaded once into AppState.databases; a stats line only
- * carries a `label`, so its display name and totalEntrysets are looked up here
- * rather than resent on every line. */
-function databaseFor(
-  databases: DatabasesResponse[] | null,
-  label: string,
-): DatabasesResponse | undefined {
-  return databases?.find((d) => d.label === label);
+/** The databases are loaded once into AppState.databases; a result only
+ * carries a `databaseId`, so its name and event count are looked up here
+ * rather than resent with every result. */
+function databaseFor(databases: Database[] | null, id: string): Database | undefined {
+  return databases?.find((d) => d.id === id);
 }
 
 function bar(match: number, total: number): string {
   return `<span class="qb-bar"><i style="width:${barWidth(match, total)}"></i></span>`;
 }
 
-function messagesHtml(list: string[] | undefined, cls: string): string {
-  return list?.length ? `<span class="${cls}">${list.map(escapeHtml).join(" · ")}</span>` : "";
+function messagesHtml(list: string[], cls: string): string {
+  return list.length ? `<span class="${cls}">${list.map(escapeHtml).join(" · ")}</span>` : "";
 }
 
-function successRowHtml(line: StatsResponse, db: DatabasesResponse | undefined): string {
-  const name = db?.name ?? line.label;
-  const total = db?.totalEntrysets ?? 0;
-  const matchCount = line.matchCount ?? 0;
+type Ok = Extract<DatabaseResult, { status: "ok" }>;
+type Failed = Extract<DatabaseResult, { status: "failed" }>;
+
+function successRowHtml(result: Ok, db: Database | undefined): string {
+  const name = db?.name ?? result.databaseId;
+  const total = db?.eventCount ?? 0;
+  const { matchCount } = result;
   return `<div class="qb-db-row" title="${escapeHtml(name)}: ${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
     <span class="qb-db-name">${escapeHtml(name)}</span>
     ${bar(matchCount, total)}
     <span class="qb-db-ratio">${escapeHtml(matchRatio(matchCount, total))}</span>
-    ${messagesHtml(line.infoMessages, "qb-db-msg")}
+    ${messagesHtml(result.notes, "qb-db-msg")}
   </div>`;
 }
 
-function failureRowHtml(line: StatsResponse, db: DatabasesResponse | undefined): string {
-  const name = db?.name ?? line.label;
-  const errors = line.errorMessages?.length
-    ? messagesHtml(line.errorMessages, "qb-db-msg qb-db-error")
+function failureRowHtml(result: Failed, db: Database | undefined): string {
+  const name = db?.name ?? result.databaseId;
+  const errors = result.errors.length
+    ? messagesHtml(result.errors, "qb-db-msg qb-db-error")
     : `<span class="qb-db-msg qb-db-error">Failed.</span>`;
   return `<div class="qb-db-row is-failed">
     <span class="qb-db-name">${escapeHtml(name)}</span>
     ${errors}
-    ${messagesHtml(line.infoMessages, "qb-db-msg")}
+    ${messagesHtml(result.notes, "qb-db-msg")}
   </div>`;
 }
 
-/** Statistics that have (some) lines: everything but the error state. */
-type StatsWithLines = Exclude<StatsState, { status: "error" }>;
+/** Statistics that have (some) results: everything but the error state. */
+type StatsWithResults = Exclude<StatsState, { status: "error" }>;
 
 /** One row per database that has reported so far — success (ratio + bar),
- * failure (errorMessages in red, infoMessages beneath) — as each streamed line
- * arrives. */
-function perDatabaseHtml(lines: StatsResponse[], databases: DatabasesResponse[] | null): string {
-  if (!lines.length) return "";
+ * failure (errors in red, notes beneath) — as each streamed result arrives. */
+function perDatabaseHtml(results: DatabaseResult[], databases: Database[] | null): string {
+  if (!results.length) return "";
   return `<h3 class="qb-stat-subtitle">By database</h3>
     <div class="qb-stat-perdb">
-      ${lines
-        .map((line) => {
-          const db = databaseFor(databases, line.label);
-          return line.success ? successRowHtml(line, db) : failureRowHtml(line, db);
+      ${results
+        .map((result) => {
+          const db = databaseFor(databases, result.databaseId);
+          return result.status === "ok" ? successRowHtml(result, db) : failureRowHtml(result, db);
         })
         .join("")}
     </div>`;
@@ -66,17 +65,17 @@ function perDatabaseHtml(lines: StatsResponse[], databases: DatabasesResponse[] 
 
 /**
  * The combined headline sums only the databases that succeeded. A failed
- * database has no count at all (StatsResponse.matchCount is deliberately
- * optional), so the headline must never present failures as "0 matched": with
- * no successes yet it shows no number, and when some failed it says the total
- * excludes them.
+ * database has no count at all (only an "ok" DatabaseResult has a
+ * `matchCount`), so the headline must never present failures as "0 matched":
+ * with no successes yet it shows no number, and when some failed it says the
+ * total excludes them.
  */
 export function headlineHtml(
-  { status, lines }: StatsWithLines,
-  databases: DatabasesResponse[] | null,
+  { status, results }: StatsWithResults,
+  databases: Database[] | null,
 ): string {
-  const succeeded = lines.filter((l) => l.success);
-  const failed = lines.length - succeeded.length;
+  const succeeded = results.filter((r): r is Ok => r.status === "ok");
+  const failed = results.length - succeeded.length;
   const failedNote =
     failed > 0
       ? `<div class="qb-stat-failed">Excludes ${failed} database${failed === 1 ? "" : "s"} that failed (see below).</div>`
@@ -86,9 +85,9 @@ export function headlineHtml(
       status === "loading" ? "No results yet." : "No database returned a result for this query.";
     return `<div class="qb-stat-headline"><p class="qb-stat-sub">${text}</p></div>`;
   }
-  const matchCount = succeeded.reduce((s, l) => s + (l.matchCount ?? 0), 0);
+  const matchCount = succeeded.reduce((s, r) => s + r.matchCount, 0);
   const total = succeeded.reduce(
-    (s, l) => s + (databaseFor(databases, l.label)?.totalEntrysets ?? 0),
+    (s, r) => s + (databaseFor(databases, r.databaseId)?.eventCount ?? 0),
     0,
   );
   return `<div class="qb-stat-headline" title="${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
@@ -101,9 +100,9 @@ export function headlineHtml(
 }
 
 /** While loading, how many selected databases haven't reported a line yet. */
-function pendingHtml(stats: StatsWithLines, selectedCount: number): string {
+function pendingHtml(stats: StatsWithResults, selectedCount: number): string {
   if (stats.status !== "loading") return "";
-  const remaining = selectedCount - stats.lines.length;
+  const remaining = selectedCount - stats.results.length;
   if (remaining <= 0) return "";
   return `<div class="qb-stat-pending"><span class="ui active mini inline loader"></span>Waiting on ${countLabel(remaining, "more database", "more databases")}…</div>`;
 }
@@ -147,7 +146,7 @@ export function renderStatsPanel(el: HTMLElement, state: AppState): void {
     return;
   }
   // "idle" with a complete query = the debounce before the fetch starts.
-  if (stats.status === "idle" || (stats.status === "loading" && stats.lines.length === 0)) {
+  if (stats.status === "idle" || (stats.status === "loading" && stats.results.length === 0)) {
     paint(el, card(state, placeholder("Counting matches…")));
     return;
   }
@@ -158,7 +157,7 @@ export function renderStatsPanel(el: HTMLElement, state: AppState): void {
     card(
       state,
       headlineHtml(stats, state.databases) +
-        perDatabaseHtml(stats.lines, state.databases) +
+        perDatabaseHtml(stats.results, state.databases) +
         pendingHtml(stats, state.selectedDatabaseIds.length),
     ),
   );

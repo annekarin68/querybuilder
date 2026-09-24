@@ -1,15 +1,6 @@
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "./api/client";
-import type {
-  AuthUser,
-  ComplianceStatus,
-  DatabasesResponse,
-  EventsResponse,
-  Facet,
-  QueryRequest,
-  StatsResponse,
-} from "./api/types";
+import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
-import { toQueryRequest } from "./query/request";
 import { addChild, countConditions, newCondition, sameSemantics } from "./query/tree";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
@@ -26,18 +17,21 @@ import { requestSlot } from "./util/requestSlot";
  * main.ts wires it to the page.
  */
 
-/** The API functions the app calls — src/api/client.ts in the browser. */
+/** The API functions the app calls — src/api/client.ts in the browser. They
+ *  take and return the frontend's own model (src/model.ts), never the
+ *  backend's types. */
 export interface AppApi {
-  getDatabases(): Promise<DatabasesResponse[]>;
+  getDatabases(): Promise<Database[]>;
   getFacets(): Promise<Facet[]>;
-  getMe(): Promise<AuthUser | null>;
-  getComplianceStatus(): Promise<ComplianceStatus>;
+  getMe(): Promise<User | null>;
+  getComplianceStatus(): Promise<Compliance>;
   getStats(
-    body: QueryRequest,
-    onLine: (line: StatsResponse) => void,
+    query: Group,
+    databaseIds: string[],
+    onResult: (result: DatabaseResult) => void,
     signal?: AbortSignal,
   ): Promise<void>;
-  runQuery(body: QueryRequest, signal?: AbortSignal): Promise<EventsResponse>;
+  runQuery(query: Group, databaseIds: string[], signal?: AbortSignal): Promise<EventRecord[]>;
   logout(): Promise<void>;
   invalidateCompliance(): Promise<void>;
 }
@@ -97,15 +91,14 @@ export function createApp({ store, api, navigate }: AppDeps) {
   function runPreview(): void {
     const state = store.getState();
     if (runBlocker(state)) return;
-    const body = toQueryRequest(state.query, state.selectedDatabaseIds);
     const req = previewSlot.start();
     const showError = (err: unknown) =>
       store.setState({ preview: { status: "error", error: errorMessage(err) } });
     store.setState({ preview: { status: "loading" } });
     api
-      .runQuery(body, req.signal)
-      .then((data) => {
-        if (!req.isStale()) store.setState({ preview: { status: "ok", data } });
+      .runQuery(state.query, state.selectedDatabaseIds, req.signal)
+      .then((events) => {
+        if (!req.isStale()) store.setState({ preview: { status: "ok", events } });
       })
       .catch(async (err) => {
         if (req.isStale()) return;
@@ -123,22 +116,22 @@ export function createApp({ store, api, navigate }: AppDeps) {
   const refreshStats = debounce(() => {
     const state = store.getState();
     if (runBlocker(state)) return;
-    const body = toQueryRequest(state.query, state.selectedDatabaseIds);
     const req = statsSlot.start();
-    const lines: StatsResponse[] = [];
-    store.setState({ stats: { status: "loading", lines: [] } });
+    const results: DatabaseResult[] = [];
+    store.setState({ stats: { status: "loading", results: [] } });
     api
       .getStats(
-        body,
-        (line) => {
+        state.query,
+        state.selectedDatabaseIds,
+        (result) => {
           if (req.isStale()) return;
-          lines.push(line);
-          store.setState({ stats: { status: "loading", lines: [...lines] } });
+          results.push(result);
+          store.setState({ stats: { status: "loading", results: [...results] } });
         },
         req.signal,
       )
       .then(() => {
-        if (!req.isStale()) store.setState({ stats: { status: "ok", lines } });
+        if (!req.isStale()) store.setState({ stats: { status: "ok", results } });
       })
       .catch((err) => {
         if (!req.isStale()) {
@@ -195,7 +188,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
     previewSlot.cancel();
     store.setState({
       ...patch,
-      stats: { status: "idle", lines: [] },
+      stats: { status: "idle", results: [] },
       preview: { status: "idle" },
     });
     refreshStats();
@@ -243,7 +236,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
     const saved = takePendingQuery();
     const pending = resumed ? saved : null;
 
-    const [databases, facets, user, complianceStatus] = await Promise.all([
+    const [databases, facets, user, compliance] = await Promise.all([
       api.getDatabases(),
       api.getFacets(),
       // Login and compliance state are display-only and most of the app works
@@ -254,7 +247,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
         console.error("Could not determine login state:", errorMessage(err));
         return null;
       }),
-      api.getComplianceStatus().catch((err): ComplianceStatus => {
+      api.getComplianceStatus().catch((err): Compliance => {
         console.error("Could not determine compliance status:", errorMessage(err));
         return { status: "required" };
       }),
@@ -272,21 +265,14 @@ export function createApp({ store, api, navigate }: AppDeps) {
       // outlive a backend change) — keep only ones this load actually knows.
       // Otherwise every database is selected by default.
       selectedDatabaseIds: pending
-        ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.label === id))
-        : databases.map((d) => d.label),
+        ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.id === id))
+        : databases.map((d) => d.id),
       query,
       // The seed bypasses onQueryChange, so validate here — otherwise Run
       // would be enabled on the empty seeded condition.
       issues: validateQuery(query, catalog),
       auth: user ? { status: "authenticated", user } : { status: "anonymous" },
-      compliance:
-        complianceStatus.status === "acknowledged"
-          ? {
-              status: "acknowledged",
-              reason: complianceStatus.reason ?? "",
-              ackedAt: complianceStatus.ackedAt ?? null,
-            }
-          : { status: "required" },
+      compliance,
     });
     // A restored query is already complete, so fetch its statistics now, as
     // any in-app edit would. The empty seed has nothing runnable yet.

@@ -1,3 +1,11 @@
+/**
+ * The backend's request and response types: the API contract, spelled exactly
+ * as the backend spells it (docs/ARCHITECTURE.md, "API contract"). Only
+ * src/api/ may import this file (ESLint enforces it). The rest of the app uses
+ * its own model (src/model.ts); src/api/response.ts and src/api/request.ts
+ * translate between the two.
+ */
+
 /** Who's logged in, returned by GET /api/auth/me. */
 export interface AuthUser {
   name: string;
@@ -55,8 +63,8 @@ export interface DatabasesResponse {
   label: string;
 }
 
-/** One field a facet can report a value for (GET /api/individuals). */
-export interface FacetField {
+/** One field an individual can report a value for (GET /api/individuals). */
+export interface IndividualFieldResponse {
   /** This field's locally unique, API-friendly "ID" within this facet. */
   label: string;
   /** The field's actual type, defined by the backend (e.g. VARCHAR, BIGINT,
@@ -85,11 +93,12 @@ export interface FacetField {
 }
 
 /**
- * One facet in the backend's data model — something an event may hold a
- * value for. The frontend knows no facet by name: everything it shows about
- * facets comes from this response (or from src/config.ts).
+ * One individual (a facet, in the frontend's words) — something an entryset
+ * may hold a value for (GET /api/individuals). The frontend knows no facet by
+ * name: everything it shows about facets comes from this response (or from
+ * src/config.ts).
  */
-export interface Facet {
+export interface IndividualResponse {
   /** Unique "ID" for API requests — a permutation of `name` with special
    *  characters removed. */
   label: string;
@@ -107,18 +116,18 @@ export interface Facet {
   comment: string;
   /** How many times this facet appears across ALL databases. No
    *  percentage is supplied — the frontend derives one from
-   *  DatabasesResponse[].totalEntrysets (see docsSidebar.ts). */
+   *  DatabasesResponse[].totalEntrysets. */
   totalCount: number;
-  fields: FacetField[];
+  fields: IndividualFieldResponse[];
 }
 
 /**
- * An event: one record, holding actual values
- * for a subset of the facets returned by GET /api/individuals. `items` (the
- * backend's key name) is keyed by a Facet's `label`; each facet's value object is keyed by one of
- * that facet's field labels (docs/ARCHITECTURE.md, "Naming").
+ * An entryset (an event, in the frontend's words): one record, holding values
+ * for a subset of the individuals returned by GET /api/individuals. `items` is
+ * keyed by an individual's `label`; each value object is keyed by one of that
+ * individual's field labels.
  */
-export interface EventRecord {
+export interface EntrysetResponse {
   id: number;
   items: Record<string, Record<string, string | number | boolean>>;
 }
@@ -128,8 +137,7 @@ export interface EventRecord {
  * databases, capped at 25. No pagination.
  */
 export interface EventsResponse {
-  /** The backend's key name for the events. */
-  entrysets: EventRecord[];
+  entrysets: EntrysetResponse[];
 }
 
 // ---- the body of POST …/stats and POST …/query ------------------------------
@@ -137,7 +145,7 @@ export interface EventsResponse {
 /**
  * The query and where to run it — the body of POST {prefix}/stats and POST
  * {prefix}/query (docs/ARCHITECTURE.md, "Wire format of the query"). Built by
- * `toQueryRequest` (src/query/request.ts) from the query on screen.
+ * `toQueryRequest` (src/api/request.ts) from the query on screen.
  */
 export interface QueryRequest {
   /** `DatabasesResponse.label` of each database to run against. Never empty. */
@@ -161,9 +169,9 @@ export interface RequestGroup {
 export interface RequestCondition {
   kind: "condition";
   id: string;
-  /** `Facet.label`. */
+  /** `IndividualResponse.label`. */
   facetId: string;
-  /** `FacetField.label`, within that facet. */
+  /** `IndividualFieldResponse.label`, within that individual. */
   fieldId: string;
   /** An operator label, e.g. "gt". */
   operatorId: string;

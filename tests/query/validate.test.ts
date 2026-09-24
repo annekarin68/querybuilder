@@ -12,15 +12,15 @@ import {
 import type { Issue } from "../../src/query/types";
 
 const field = (
-  fieldLabel: string,
+  fieldId: string,
   valueType: CatalogField["valueType"],
   operatorIds: string[],
   options?: string[],
 ): CatalogField => ({
-  facetLabel: "thing",
-  fieldLabel,
-  name: fieldLabel,
-  fieldName: fieldLabel,
+  facetId: "thing",
+  fieldId,
+  name: fieldId,
+  fieldName: fieldId,
   valueType,
   options,
   operatorIds,

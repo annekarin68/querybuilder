@@ -3,9 +3,9 @@ import { queryToText } from "../../src/query/summary";
 import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
 import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../src/query/tree";
 
-const field = (fieldLabel: string, name: string, options?: string[]): CatalogField => ({
-  facetLabel: "thing",
-  fieldLabel,
+const field = (fieldId: string, name: string, options?: string[]): CatalogField => ({
+  facetId: "thing",
+  fieldId,
   name,
   fieldName: name,
   valueType: "string",

@@ -1,12 +1,6 @@
 import type { Group, Issue } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
-import type {
-  AuthUser,
-  DatabasesResponse,
-  EventsResponse,
-  Facet,
-  StatsResponse,
-} from "./api/types";
+import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
@@ -17,24 +11,21 @@ export type ActiveView = "filter" | "review" | "approval" | "done";
 
 /** Who's logged in. */
 export type AuthState =
-  { status: "loading" } | { status: "anonymous" } | { status: "authenticated"; user: AuthUser };
+  { status: "loading" } | { status: "anonymous" } | { status: "authenticated"; user: User };
 
 /** The session's compliance acknowledgment. */
-export type ComplianceState =
-  | { status: "loading" }
-  | { status: "required" }
-  | { status: "acknowledged"; reason: string; ackedAt: string | null };
+export type ComplianceState = { status: "loading" } | Compliance;
 
-/** The live statistics. `lines` fills in as each database answers. */
+/** The live statistics. `results` fills in as each database answers. */
 export type StatsState =
-  | { status: "idle" | "loading" | "ok"; lines: StatsResponse[] }
+  | { status: "idle" | "loading" | "ok"; results: DatabaseResult[] }
   | { status: "error"; error: string };
 
-/** The Matching events request. Only "ok" carries data, only "error" a message. */
+/** The Matching events request. Only "ok" carries events, only "error" a message. */
 export type PreviewState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ok"; data: EventsResponse }
+  | { status: "ok"; events: EventRecord[] }
   | { status: "error"; error: string };
 
 export interface AppState {
@@ -42,7 +33,7 @@ export interface AppState {
    *  no schema endpoint — see src/query/fieldCatalog.ts). */
   catalog: FieldCatalog | null;
   /** The databases the query can be scoped to (loaded once). */
-  databases: DatabasesResponse[] | null;
+  databases: Database[] | null;
   /** The data model backing the docs sidebar (loaded once). */
   facets: Facet[] | null;
   /** Who's logged in, if anyone — loaded once at startup via GET /api/auth/me. */
@@ -51,8 +42,8 @@ export interface AppState {
    *  GET /api/compliance/status. Display-only, same as `auth`: it drives the
    *  account menu and an advisory hint, never gating logic. */
   compliance: ComplianceState;
-  /** The `label`s (DatabasesResponse.label) of the databases the query runs
-   *  against. Empty = nothing runs. */
+  /** The `Database.id`s of the databases the query runs against. Empty =
+   *  nothing runs. */
   selectedDatabaseIds: string[];
   activeView: ActiveView;
 
@@ -76,7 +67,7 @@ export const initialState: AppState = {
   activeView: "filter",
   query: emptyQuery(),
   issues: [],
-  stats: { status: "idle", lines: [] },
+  stats: { status: "idle", results: [] },
   preview: { status: "idle" },
   // The docs start folded into their rail so the query builder gets the width.
   sidebarCollapsed: true,

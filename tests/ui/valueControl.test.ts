@@ -9,8 +9,8 @@ import {
 
 function field(overrides: Partial<CatalogField> = {}): CatalogField {
   return {
-    facetLabel: "t",
-    fieldLabel: "f",
+    facetId: "t",
+    fieldId: "f",
     name: "F",
     fieldName: "F",
     valueType: "string",
@@ -19,8 +19,8 @@ function field(overrides: Partial<CatalogField> = {}): CatalogField {
   };
 }
 
-function op(arity: CatalogOperator["arity"], label = "o"): CatalogOperator {
-  return { label, name: "O", arity };
+function op(arity: CatalogOperator["arity"], id = "o"): CatalogOperator {
+  return { id, name: "O", arity };
 }
 
 const withPickList = field({ options: ["Apple", "Banana"] });

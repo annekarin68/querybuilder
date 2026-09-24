@@ -5,8 +5,8 @@ import type {
   RequestNode,
   RequestScalar,
   RequestValue,
-} from "../api/types";
-import type { Condition, Group, QueryNode } from "./types";
+} from "./types";
+import type { Condition, Group, QueryNode } from "../query/types";
 
 /**
  * The body of POST …/stats and POST …/query, built from the query on screen

@@ -3,10 +3,17 @@ import type {
   ComplianceStatus,
   DatabasesResponse,
   EventsResponse,
-  Facet,
-  QueryRequest,
+  IndividualResponse,
   StatsResponse,
 } from "./types";
+import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "../model";
+import type { Group } from "../query/types";
+import { toQueryRequest } from "./request";
+import { toCompliance, toDatabase, toDatabaseResult, toEvent, toFacet, toUser } from "./response";
+
+// Every function below speaks the frontend's model (src/model.ts): responses
+// are translated by src/api/response.ts, request bodies built by
+// src/api/request.ts. The backend's own types never leave src/api/.
 
 /** The API prefix from .env (docs/ARCHITECTURE.md, "API contract"). No
  *  fallback here: vite.config.ts refuses to run without it. */
@@ -114,12 +121,12 @@ function requestNoContent(path: string, init?: RequestInit): Promise<void> {
   });
 }
 
-export function getDatabases(): Promise<DatabasesResponse[]> {
-  return request<DatabasesResponse[]>("/databases");
+export async function getDatabases(): Promise<Database[]> {
+  return (await request<DatabasesResponse[]>("/databases")).map(toDatabase);
 }
 
-export function getFacets(): Promise<Facet[]> {
-  return request<Facet[]>("/individuals");
+export async function getFacets(): Promise<Facet[]> {
+  return (await request<IndividualResponse[]>("/individuals")).map(toFacet);
 }
 
 function postJson(body: unknown, signal?: AbortSignal): RequestInit {
@@ -132,19 +139,24 @@ function postJson(body: unknown, signal?: AbortSignal): RequestInit {
 }
 
 /**
- * POST …/stats (body: a QueryRequest) streams newline-delimited JSON: one
- * StatsResponse per selected database, as soon as that database's result is
- * ready. `onLine` is called once per line, in arrival order; the returned
- * promise resolves when the stream ends, or rejects (before any line is read)
- * on a non-2xx response. Aborting `signal` stops reading and rejects with the
- * abort reason — callers use it to drop a stream whose query is no longer on
- * screen.
+ * POST …/stats streams newline-delimited JSON: one line per database in
+ * `databaseIds`, as soon as that database's result is ready. `onResult` is
+ * called once per line, in arrival order; the returned promise resolves when
+ * the stream ends, or rejects (before any line is read) on a non-2xx response.
+ * Aborting `signal` stops reading and rejects with the abort reason — callers
+ * use it to drop a stream whose query is no longer on screen.
+ *
+ * `query` must be able to run (`runBlocker` in src/state.ts): an unfinished
+ * one rejects without sending anything.
  */
-export function getStats(
-  body: QueryRequest,
-  onLine: (line: StatsResponse) => void,
+export async function getStats(
+  query: Group,
+  databaseIds: string[],
+  onResult: (result: DatabaseResult) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  const body = toQueryRequest(query, databaseIds);
+  const onLine = (line: string) => onResult(toDatabaseResult(JSON.parse(line) as StatsResponse));
   return send("/stats", postJson(body, signal), async (res, touch) => {
     if (!res.ok) throw await errorFromResponse(res);
     if (!res.body) throw new ApiError(res.status, "The server sent an empty statistics response.");
@@ -161,16 +173,23 @@ export function getStats(
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop()!; // the last piece may be an incomplete line
-      for (const line of lines) if (line.trim()) onLine(JSON.parse(line) as StatsResponse);
+      for (const line of lines) if (line.trim()) onLine(line);
     }
     buffer += decoder.decode(); // flush a trailing partial multi-byte sequence, if any
-    if (buffer.trim()) onLine(JSON.parse(buffer) as StatsResponse);
+    if (buffer.trim()) onLine(buffer);
   });
 }
 
-/** POST …/query: the events matching `body` (capped by the backend). */
-export function runQuery(body: QueryRequest, signal?: AbortSignal): Promise<EventsResponse> {
-  return request<EventsResponse>("/query", postJson(body, signal));
+/** POST …/query: the events matching `query` in `databaseIds` (capped by the
+ *  backend). Like getStats, an unfinished query rejects without sending. */
+export async function runQuery(
+  query: Group,
+  databaseIds: string[],
+  signal?: AbortSignal,
+): Promise<EventRecord[]> {
+  const body = toQueryRequest(query, databaseIds);
+  const res = await request<EventsResponse>("/query", postJson(body, signal));
+  return res.entrysets.map(toEvent);
 }
 
 /**
@@ -179,11 +198,11 @@ export function runQuery(body: QueryRequest, signal?: AbortSignal): Promise<Even
  * getDatabases()/getFacets() in app.ts's startup Promise.all without
  * an anonymous visitor tripping their fatal-load-failure path.
  */
-export function getMe(): Promise<AuthUser | null> {
+export function getMe(): Promise<User | null> {
   return send("/auth/me", undefined, async (res) => {
     if (res.status === 401) return null;
     if (!res.ok) throw await errorFromResponse(res);
-    return (await res.json()) as AuthUser;
+    return toUser((await res.json()) as AuthUser);
   });
 }
 
@@ -191,8 +210,8 @@ export function logout(): Promise<void> {
   return requestNoContent("/auth/logout", { method: "POST" });
 }
 
-export function getComplianceStatus(): Promise<ComplianceStatus> {
-  return request<ComplianceStatus>("/compliance/status");
+export async function getComplianceStatus(): Promise<Compliance> {
+  return toCompliance(await request<ComplianceStatus>("/compliance/status"));
 }
 
 export function invalidateCompliance(): Promise<void> {

@@ -14,26 +14,27 @@ import {
   runQuery,
   TimeoutError,
 } from "../../src/api/client";
-import type { QueryRequest } from "../../src/api/types";
+import { toQueryRequest } from "../../src/api/request";
+import type { Group } from "../../src/query/types";
 
-const body: QueryRequest = {
-  databases: ["alpha", "beta"],
-  query: {
-    kind: "group",
-    id: "g1",
-    operator: "AND",
-    children: [
-      {
-        kind: "condition",
-        id: "c1",
-        facetId: "thing",
-        fieldId: "size",
-        operatorId: "gt",
-        value: 3,
-      },
-    ],
-  },
+const query: Group = {
+  kind: "group",
+  id: "g1",
+  operator: "AND",
+  children: [
+    {
+      kind: "condition",
+      id: "c1",
+      facetId: "thing",
+      fieldId: "size",
+      operatorId: "gt",
+      value: 3,
+    },
+  ],
 };
+const databaseIds = ["alpha", "beta"];
+/** What the client should send for `query` in `databaseIds`. */
+const body = toQueryRequest(query, databaseIds);
 
 function mockFetchOnce(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -77,7 +78,7 @@ afterEach(() => {
 });
 
 describe("api client", () => {
-  it("getDatabases GETs /api/databases and returns the parsed bare array", async () => {
+  it("getDatabases GETs /api/databases and returns the databases in the frontend's model", async () => {
     const f = mockFetchOnce(200, [
       {
         label: "alpha",
@@ -91,19 +92,12 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     const out = await getDatabases();
     expect(out).toEqual([
-      {
-        label: "alpha",
-        name: "ALPHA",
-        description: "",
-        owner: "",
-        totalEntrysets: 1,
-        percentageOfTotal: 100,
-      },
+      { id: "alpha", name: "ALPHA", description: "", owner: "", eventCount: 1 },
     ]);
     expect(f).toHaveBeenCalledWith("/api/v1/databases", { signal: expect.any(AbortSignal) });
   });
 
-  it("getFacets GETs /api/individuals and returns the parsed bare array", async () => {
+  it("getFacets GETs /api/individuals and returns the facets in the frontend's model", async () => {
     const f = mockFetchOnce(200, [
       {
         label: "engine_rpm",
@@ -121,21 +115,21 @@ describe("api client", () => {
     const out = await getFacets();
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);
-    expect(out[0]?.label).toBe("engine_rpm");
+    expect(out[0]?.id).toBe("engine_rpm");
     expect(f).toHaveBeenCalledWith("/api/v1/individuals", { signal: expect.any(AbortSignal) });
   });
 
   it("getStats POSTs the request body as JSON", async () => {
     const f = mockStreamFetch(200, [""]);
     vi.stubGlobal("fetch", f);
-    await getStats(body, () => {});
+    await getStats(query, databaseIds, () => {});
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe("/api/v1/stats");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual(body);
   });
 
-  it("getStats streams NDJSON lines, calling onLine once per line, even split across chunks", async () => {
+  it("getStats streams NDJSON lines, calling onResult once per line, even split across chunks", async () => {
     const lines = [
       { label: "alpha", success: true, matchCount: 1 },
       { label: "beta", success: false, errorMessages: ["bad query"] },
@@ -145,25 +139,54 @@ describe("api client", () => {
     const f = mockStreamFetch(200, [ndjson.slice(0, splitAt), ndjson.slice(splitAt)]);
     vi.stubGlobal("fetch", f);
     const received: unknown[] = [];
-    await getStats(body, (line) => received.push(line));
-    expect(received).toEqual(lines);
+    await getStats(query, databaseIds, (result) => received.push(result));
+    expect(received).toEqual([
+      { databaseId: "alpha", status: "ok", matchCount: 1, notes: [] },
+      { databaseId: "beta", status: "failed", errors: ["bad query"], notes: [] },
+    ]);
   });
 
-  it("getStats throws the server's error message on non-2xx and never calls onLine", async () => {
+  it("getStats throws the server's error message on non-2xx and never calls onResult", async () => {
     const f = mockFetchOnce(400, { error: "bad query tree" });
     vi.stubGlobal("fetch", f);
-    const onLine = vi.fn();
-    await expect(getStats(body, onLine)).rejects.toThrow("bad query tree");
-    expect(onLine).not.toHaveBeenCalled();
+    const onResult = vi.fn();
+    await expect(getStats(query, databaseIds, onResult)).rejects.toThrow("bad query tree");
+    expect(onResult).not.toHaveBeenCalled();
   });
 
   it("runQuery POSTs the request body as JSON", async () => {
     const f = mockFetchOnce(200, { entrysets: [] });
     vi.stubGlobal("fetch", f);
-    await runQuery(body);
+    await runQuery(query, databaseIds);
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe("/api/v1/query");
     expect(JSON.parse(init.body)).toEqual(body);
+  });
+
+  it("runQuery returns the events in the frontend's model", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, { entrysets: [{ id: 4, items: { a: { b: 1 } } }] }));
+    expect(await runQuery(query, databaseIds)).toEqual([{ id: 4, values: { a: { b: 1 } } }]);
+  });
+
+  it("an unfinished query rejects without sending anything", async () => {
+    const f = mockFetchOnce(200, { entrysets: [] });
+    vi.stubGlobal("fetch", f);
+    const unfinished: Group = {
+      ...query,
+      children: [
+        {
+          kind: "condition",
+          id: "c1",
+          facetId: null,
+          fieldId: null,
+          operatorId: null,
+          value: null,
+        },
+      ],
+    };
+    await expect(runQuery(unfinished, databaseIds)).rejects.toThrow("unfinished");
+    await expect(getStats(unfinished, databaseIds, () => {})).rejects.toThrow("unfinished");
+    expect(f).not.toHaveBeenCalled();
   });
 
   it("falls back to status text when there is no error field", async () => {
@@ -209,7 +232,7 @@ describe("api client", () => {
     await expect(logout()).rejects.toThrow("boom");
   });
 
-  it("getComplianceStatus GETs /api/compliance/status and returns the parsed body", async () => {
+  it("getComplianceStatus GETs /api/compliance/status and returns the frontend's model", async () => {
     const f = mockFetchOnce(200, { status: "required" });
     vi.stubGlobal("fetch", f);
     const out = await getComplianceStatus();
@@ -249,7 +272,7 @@ describe("api client", () => {
   it("runQuery rejects with the caller's abort reason when its signal aborts", async () => {
     vi.stubGlobal("fetch", hangingFetch());
     const ctrl = new AbortController();
-    const pending = runQuery(body, ctrl.signal);
+    const pending = runQuery(query, databaseIds, ctrl.signal);
     ctrl.abort(new Error("superseded"));
     await expect(pending).rejects.toThrow("superseded");
   });
@@ -257,7 +280,7 @@ describe("api client", () => {
   it("getStats passes an abortable signal and rejects when it is aborted", async () => {
     vi.stubGlobal("fetch", hangingFetch());
     const ctrl = new AbortController();
-    const pending = getStats(body, () => {}, ctrl.signal);
+    const pending = getStats(query, databaseIds, () => {}, ctrl.signal);
     ctrl.abort(new Error("superseded"));
     await expect(pending).rejects.toThrow("superseded");
   });
@@ -267,6 +290,8 @@ describe("api client", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, status: 204, statusText: "", body: null }),
     );
-    await expect(getStats(body, () => {})).rejects.toThrow("empty statistics response");
+    await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
+      "empty statistics response",
+    );
   });
 });

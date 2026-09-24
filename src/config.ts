@@ -20,8 +20,8 @@ export const HIDDEN_ROW_BADGES: { tags: string[]; groups: string[] } = {
 };
 
 /** One extra column on each Matching events row: the value an event
- *  holds for `facet.field` (a Facet's `label` and one of its fields'
- *  `label`). */
+ *  holds for `facet.field` (a `Facet.id` and one of its fields' `Field.id` —
+ *  the backend's labels for them). */
 export interface RowColumn {
   /** Shown when hovering the cell ("Recorded: …"). */
   heading: string;

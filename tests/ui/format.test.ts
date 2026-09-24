@@ -9,7 +9,6 @@ import {
   fieldTitle,
   formatWhen,
   matchRatio,
-  text,
 } from "../../src/ui/format";
 
 const L = "en-US"; // pin locale so assertions are deterministic
@@ -100,15 +99,6 @@ describe("formatWhen", () => {
   });
 });
 
-describe("text", () => {
-  it("trims, and treats whitespace-only or missing as empty", () => {
-    expect(text("  hi ")).toBe("hi");
-    expect(text("   ")).toBe("");
-    expect(text("")).toBe("");
-    expect(text(undefined)).toBe("");
-  });
-});
-
 describe("databaseTitle", () => {
   it("joins owner and description", () => {
     expect(databaseTitle({ owner: "Acme", description: "Trucks." })).toBe("Acme: Trucks.");
@@ -116,7 +106,7 @@ describe("databaseTitle", () => {
 
   it("falls back to whichever is non-blank", () => {
     expect(databaseTitle({ owner: "", description: "Trucks." })).toBe("Trucks.");
-    expect(databaseTitle({ owner: "Acme", description: " " })).toBe("Acme");
+    expect(databaseTitle({ owner: "Acme", description: "" })).toBe("Acme");
   });
 
   it("is empty when both are blank", () => {
@@ -133,7 +123,7 @@ describe("fieldTitle", () => {
 
   it("shows whichever is non-blank", () => {
     expect(fieldTitle({ comment: "Ours.", description: "" })).toBe("Ours.");
-    expect(fieldTitle({ comment: "  ", description: "Theirs." })).toBe("Third-party: Theirs.");
+    expect(fieldTitle({ comment: "", description: "Theirs." })).toBe("Third-party: Theirs.");
   });
 
   it("is empty when both are blank", () => {

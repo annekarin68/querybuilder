@@ -1,45 +1,43 @@
 import { runBlocker, type AppState, type RunBlocker } from "../state";
-import type { EventRecord, Facet } from "../api/types";
+import type { EventRecord, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
-import { countLabel, displayLabel, formatWhen, text } from "./format";
-import { tagsOf, UNTAGGED } from "./docsFilter";
+import { countLabel, displayLabel, formatWhen } from "./format";
 import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
 
 /** How many tag / group badges to show inline before collapsing the rest into "+N". */
 const MAX_TAG_BADGES = 3;
 const MAX_GROUP_BADGES = 2;
 
-function facetsByLabel(state: AppState): Map<string, Facet> {
+function facetsById(state: AppState): Map<string, Facet> {
   const map = new Map<string, Facet>();
-  for (const facet of state.facets ?? []) map.set(facet.label, facet);
+  for (const facet of state.facets ?? []) map.set(facet.id, facet);
   return map;
 }
 
 /**
  * The distinct tags and third-party groups of an event's facets, each
  * ordered by how many of its facets carry it (most first, then alphabetical),
- * so the inline badges show what this event is mostly about. Blank values
- * and those listed in `hidden` (default: `HIDDEN_ROW_BADGES` in config.ts,
- * matched ignoring case) are dropped.
+ * so the inline badges show what this event is mostly about. Values listed in
+ * `hidden` (default: `HIDDEN_ROW_BADGES` in config.ts, matched ignoring case
+ * and surrounding whitespace) are dropped.
  */
 export function eventBadges(
   event: EventRecord,
-  byLabel: Map<string, Facet>,
+  byId: Map<string, Facet>,
   hidden: { tags: string[]; groups: string[] } = HIDDEN_ROW_BADGES,
 ): { tags: string[]; groups: string[] } {
-  const norm = (s: string) => text(s).toLowerCase();
+  const norm = (s: string) => s.trim().toLowerCase();
   const hiddenTags = new Set(hidden.tags.map(norm));
   const hiddenGroups = new Set(hidden.groups.map(norm));
   const tags = new Map<string, number>();
   const groups = new Map<string, number>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-  for (const label of Object.keys(event.items)) {
-    const facet = byLabel.get(label);
+  for (const id of Object.keys(event.values)) {
+    const facet = byId.get(id);
     if (!facet) continue;
-    const group = text(facet.group);
-    if (group && !hiddenGroups.has(norm(group))) bump(groups, group);
-    for (const tag of tagsOf(facet)) {
-      if (tag !== UNTAGGED && !hiddenTags.has(norm(tag))) bump(tags, tag);
+    if (facet.group && !hiddenGroups.has(norm(facet.group))) bump(groups, facet.group);
+    for (const tag of facet.tags) {
+      if (!hiddenTags.has(norm(tag))) bump(tags, tag);
     }
   }
   const ranked = (m: Map<string, number>) =>
@@ -62,8 +60,8 @@ function badgesHtml(values: string[], max: number, cls: string, kind: string): s
 }
 
 /** Tags first (our own, filled chips), then third-party groups (outlined). */
-function tagsAndGroupsHtml(event: EventRecord, byLabel: Map<string, Facet>): string {
-  const { tags, groups } = eventBadges(event, byLabel);
+function tagsAndGroupsHtml(event: EventRecord, byId: Map<string, Facet>): string {
+  const { tags, groups } = eventBadges(event, byId);
   return (
     badgesHtml(tags, MAX_TAG_BADGES, "qb-tag", "Tag") +
     badgesHtml(groups, MAX_GROUP_BADGES, "qb-group-badge", "Group")
@@ -72,7 +70,7 @@ function tagsAndGroupsHtml(event: EventRecord, byLabel: Map<string, Facet>): str
 
 /** The text of one configured column for one event ("—" when absent). */
 export function rowCell(event: EventRecord, col: RowColumn): string {
-  const v = event.items[col.facet]?.[col.field];
+  const v = event.values[col.facet]?.[col.field];
   if (v === undefined || v === null || v === "") return "—";
   return col.format === "datetime" ? formatWhen(String(v)) : String(v);
 }
@@ -86,11 +84,7 @@ export function rowGrid(columns: RowColumn[]): string {
   return ["3rem", ...cols, "minmax(0, 1fr)", "auto"].join(" ");
 }
 
-function eventRowHtml(
-  event: EventRecord,
-  byLabel: Map<string, Facet>,
-  columns: RowColumn[],
-): string {
+function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: RowColumn[]): string {
   const cells = columns
     .map((col) => {
       const value = rowCell(event, col);
@@ -102,8 +96,8 @@ function eventRowHtml(
       <summary>
         <span class="qb-er-id">#${escapeHtml(event.id)}</span>
         ${cells}
-        <span class="qb-er-groups">${tagsAndGroupsHtml(event, byLabel)}</span>
-        <span class="qb-er-count">${countLabel(Object.keys(event.items).length, "facet")}</span>
+        <span class="qb-er-groups">${tagsAndGroupsHtml(event, byId)}</span>
+        <span class="qb-er-count">${countLabel(Object.keys(event.values).length, "facet")}</span>
       </summary>
       <pre class="qb-er-json">${escapeHtml(JSON.stringify(event, null, 2))}</pre>
     </details>`;
@@ -186,17 +180,17 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
     );
     return;
   }
-  const { entrysets: events } = p.data;
+  const { events } = p;
   if (events.length === 0) {
     paint(el, card(`<p class="qb-placeholder">No events match this query.</p>`, 0));
     return;
   }
-  const byLabel = facetsByLabel(state);
+  const byId = facetsById(state);
   paint(
     el,
     card(
       `<p class="qb-preview-note qb-muted">Showing ${countLabel(events.length, "event")} — click a row to see its full JSON.</p>
-       <div class="qb-event-list" style="--qb-er-grid: ${rowGrid(ROW_COLUMNS)}">${events.map((e) => eventRowHtml(e, byLabel, ROW_COLUMNS)).join("")}</div>`,
+       <div class="qb-event-list" style="--qb-er-grid: ${rowGrid(ROW_COLUMNS)}">${events.map((e) => eventRowHtml(e, byId, ROW_COLUMNS)).join("")}</div>`,
       events.length,
     ),
   );

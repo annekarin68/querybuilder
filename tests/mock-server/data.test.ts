@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { dbIndexForEntrysetId } from "../../mock-server/databases";
 import { ENTRYSETS, INDIVIDUALS } from "../../mock-server/vehicleData";
-import type { FacetField } from "../../src/api/types";
+import type { IndividualFieldResponse } from "../../src/api/types";
 
 // The mock's sample data files (mock-server/data/*.json), as loaded by
 // vehicleData.ts: individual.json (the facets) and entrysets.json (the events).
@@ -11,7 +11,7 @@ const individualsByLabel = new Map(INDIVIDUALS.map((ind) => [ind.label, ind]));
 const entrysets = Object.values(ENTRYSETS);
 
 /** The JavaScript type a value of this field must have, by the field's declared type. */
-function expectedJsType(field: FacetField): string {
+function expectedJsType(field: IndividualFieldResponse): string {
   const declared = field.type || field.format;
   switch (declared) {
     case "VARCHAR":

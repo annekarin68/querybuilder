@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toQueryRequest } from "../../src/query/request";
+import { toQueryRequest } from "../../src/api/request";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
 import type { NodePatch } from "../../src/query/tree";
 import type { RequestCondition } from "../../src/api/types";

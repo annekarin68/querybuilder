@@ -1,3 +1,5 @@
+import type { Database, Field } from "../model";
+
 /**
  * Display formatting shared by the panels: numbers and proportions for the
  * statistics (a real backend can return counts from a handful to billions and
@@ -63,26 +65,22 @@ export function displayLabel(s: string): string {
   return s.replace(/_/g, " ");
 }
 
-/** The backend sends "" (never null) for a missing text value; treat
- *  whitespace-only the same. Returns the trimmed text, or "" when blank. */
-export function text(s: string | undefined): string {
-  return (s ?? "").trim();
-}
-
 /** A database pill's hover text: "Owner: description", or whichever of the
  *  two is non-blank, or "" when both are. */
-export function databaseTitle(d: { owner: string; description: string }): string {
-  const owner = text(d.owner);
-  const description = text(d.description);
+export function databaseTitle({
+  owner,
+  description,
+}: Pick<Database, "owner" | "description">): string {
   return owner && description ? `${owner}: ${description}` : owner || description;
 }
 
 /** A field's hover text: the backend's always-correct `comment` first, then
  *  the third-party `description`, labelled so the two stay distinct. Either
  *  may be blank; "" when both are. */
-export function fieldTitle(f: { comment: string; description: string }): string {
-  const comment = text(f.comment);
-  const description = text(f.description);
+export function fieldTitle({
+  comment,
+  description,
+}: Pick<Field, "comment" | "description">): string {
   return [comment, description && `Third-party: ${description}`].filter(Boolean).join("\n");
 }
 
