@@ -41,12 +41,23 @@ export interface StatsResponse {
    *  when `success` is true — optional rather than a fabricated 0, so a
    *  failed database can never be misread as "zero rows matched." */
   matchCount?: number;
-  /** Errors from the query itself — malformed dates, too-large numbers,
-   *  too-long strings, etc. */
-  errorMessages?: string[];
+  /** Problems with the query itself — an operator this database no longer
+   *  supports, a value it can't accept (a malformed date, a too-long text, …). */
+  errorMessages?: StatsErrorMessage[];
   /** Other information or error messages — a database timeout, an internal
    *  server error, or a non-blocking notice. */
   infoMessages?: string[];
+}
+
+/** One problem with the query, found by the backend in one database. */
+export interface StatsErrorMessage {
+  /** The `id` of the group or condition from the request (RequestGroup.id,
+   *  RequestCondition.id) that the problem is in. Left out when the problem
+   *  is not in one place. */
+  nodeId?: string;
+  message: string;
+  /** "incomplete": something is missing. "invalid": something can't work. */
+  kind: "incomplete" | "invalid";
 }
 
 /** The databases the query can be scoped to (GET /api/databases). Returns
@@ -164,7 +175,8 @@ export type RequestNode = RequestGroup | RequestCondition;
 export interface RequestGroup {
   kind: "group";
   /** The frontend's id for this node: opaque, unique within the request.
-   *  Reserved so a later error response can point at a node. */
+   *  Quoted back as `StatsErrorMessage.nodeId` when a database finds a problem
+   *  in this node. */
   id: string;
   operator: "AND" | "OR";
   /** Never empty. */

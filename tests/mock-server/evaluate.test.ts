@@ -3,7 +3,9 @@ import {
   buildStatsLine,
   filterByDatabases,
   matches,
+  MAX_TEXT_LENGTH,
   perDatabaseCounts,
+  queryErrors,
   rowKey,
   scaleCount,
   utcSpan,
@@ -255,14 +257,48 @@ describe("buildStatsLine", () => {
     const line = buildStatsLine({
       label: "beta",
       matchCount: 999, // must be ignored/dropped
-      fail: { errorMessages: ["bad field"], infoMessages: [] },
+      fail: {
+        errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
+        infoMessages: [],
+      },
     });
     expect(line).toEqual({
       label: "beta",
       success: false,
-      errorMessages: ["bad field"],
+      errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
       infoMessages: [],
     });
     expect(line).not.toHaveProperty("matchCount");
+  });
+});
+
+describe("queryErrors", () => {
+  const tooLong = "x".repeat(MAX_TEXT_LENGTH + 1);
+  const problem = (nodeId: string) => ({
+    nodeId,
+    kind: "invalid",
+    message: "Text is too long (at most 100 characters).",
+  });
+
+  it("points at each condition with a too-long text, inside groups too", () => {
+    const query = group(
+      "AND",
+      { ...cond("note", "eq", tooLong), id: "c1" },
+      {
+        ...group("OR", { ...cond("note", "in", ["ok", tooLong]), id: "c2" }),
+        id: "g2",
+      },
+    );
+    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2")]);
+  });
+
+  it("accepts text up to the limit, and values that aren't text", () => {
+    const query = group(
+      "AND",
+      cond("note", "eq", "x".repeat(MAX_TEXT_LENGTH)),
+      cond("count", "gt", 5),
+      cond("spare", "isEmpty", null),
+    );
+    expect(queryErrors(query)).toEqual([]);
   });
 });

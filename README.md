@@ -44,6 +44,7 @@ Other scripts:
 |---|---|
 | `npm run dev:app` | The app alone, without the mock (for a real backend at `DEV_BACKEND_URL`). |
 | `npm run build` | Type-check, bundle to `dist/`, then fail if any off-origin URL leaked in. |
+| `npm run build:app` | The same build, but type-checking only the app (`src/`, `tsconfig.app.json`), so a mock server or tests that have drifted from `src/api/types.ts` can't stop it. `build` is `typecheck` + `build:app`; CI uses `build`. |
 | `npm run preview` | Serve the built `dist/`. |
 | `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client and its contract checks (also against the mock server), the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
 | `npm run typecheck` | `tsc --noEmit`. |

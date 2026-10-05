@@ -71,6 +71,16 @@ export interface EventRecord {
   values: Record<string, Record<string, Scalar>>;
 }
 
+/** One problem a database found in the query. */
+export interface DatabaseError {
+  message: string;
+  /** "incomplete": something is missing. "invalid": something can't work. */
+  kind: "incomplete" | "invalid";
+  /** The `id` of the query node (group or condition) it is in, or null when
+   *  it is not in one place. */
+  nodeId: string | null;
+}
+
 /**
  * One database's answer to the statistics request. A database that failed
  * has no count at all, so it can never be shown as "0 matched".
@@ -88,7 +98,7 @@ export type DatabaseResult =
       databaseId: string;
       status: "failed";
       /** Problems with the query itself (a malformed value, …). May be empty. */
-      errors: string[];
+      errors: DatabaseError[];
       /** Other messages (a timeout, an internal error, …). */
       notes: string[];
     };

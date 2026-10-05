@@ -5,12 +5,14 @@ import {
   buildStatsLine,
   filterByDatabases,
   perDatabaseCounts,
+  queryErrors,
   scaleCount,
+  type DatabaseOutcome,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { ROWS } from "./rows";
 import { queryProblem } from "./requestBody";
-import type { QueryRequest } from "../src/api/types";
+import type { QueryRequest, StatsErrorMessage } from "../src/api/types";
 import {
   startLogin,
   issueFakeCode,
@@ -180,6 +182,35 @@ function delay(ms: number): Promise<void> {
 // ---- data and queries -----------------------------------------------------
 
 /**
+ * One database's outcome for /api/stats. A query with problems (queryErrors)
+ * fails in every database, with the problems. Otherwise, dev-only: now and
+ * then (failRate) simulate a database that can't answer, so the UI's
+ * per-database failure path gets exercised.
+ */
+function statsOutcome(
+  c: { label: string; matchCount: number; totalCount: number },
+  errorMessages: StatsErrorMessage[],
+  failRate: number,
+): DatabaseOutcome {
+  if (errorMessages.length > 0) {
+    return { label: c.label, fail: { errorMessages, infoMessages: [] } };
+  }
+  if (Math.random() < failRate) {
+    return {
+      label: c.label,
+      fail: {
+        errorMessages: [],
+        infoMessages: ["This database could not be reached. Try again shortly."],
+      },
+    };
+  }
+  const totalEntrysets = DATABASES.find((d) => d.label === c.label)?.totalEntrysets ?? 0;
+  // The sample drives match RATES; DATABASES[].totalEntrysets drives the
+  // MAGNITUDE the API reports, so the UI sees realistic numbers.
+  return { label: c.label, matchCount: scaleCount(c.matchCount, c.totalCount, totalEntrysets) };
+}
+
+/**
  * POST /api/stats: newline-delimited JSON, one StatsResponse line per selected
  * database, written one at a time with a short pause so the streaming is
  * visible in dev.
@@ -191,27 +222,10 @@ async function streamStats(req: IncomingMessage, res: ServerResponse, config: Mo
   // computation ever threw, the server's catch block must still be able to
   // send a normal JSON error response — which requires no header sent yet.
   const counts = perDatabaseCounts(body.query, ROWS, body.databases);
+  const errorMessages = queryErrors(body.query);
   res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8" });
   for (const c of counts) {
-    const totalEntrysets = DATABASES.find((d) => d.label === c.label)?.totalEntrysets ?? 0;
-    // Dev-only: now and then (config.failRate) simulate a database that can't
-    // answer, so the UI's per-database failure path gets exercised.
-    const line = buildStatsLine(
-      Math.random() < config.failRate
-        ? {
-            label: c.label,
-            fail: {
-              errorMessages: [],
-              infoMessages: ["This database could not be reached. Try again shortly."],
-            },
-          }
-        : {
-            label: c.label,
-            // The sample drives match RATES; DATABASES[].totalEntrysets drives
-            // the MAGNITUDE the API reports, so the UI sees realistic numbers.
-            matchCount: scaleCount(c.matchCount, c.totalCount, totalEntrysets),
-          },
-    );
+    const line = buildStatsLine(statsOutcome(c, errorMessages, config.failRate));
     res.write(JSON.stringify(line) + "\n");
     await delay(config.lineDelayMs());
   }

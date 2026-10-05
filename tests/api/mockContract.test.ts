@@ -3,8 +3,9 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import * as client from "../../src/api/client";
 import type { DatabaseResult } from "../../src/model";
-import type { Group } from "../../src/query/types";
+import type { Condition, Group } from "../../src/query/types";
 import { createMockServer } from "../../mock-server/server";
+import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -109,6 +110,22 @@ describe("the client reads every mock response", () => {
     await client.getStats(await everyEventQuery(), ids, (r) => results.push(r));
     expect(results.map((r) => r.databaseId)).toEqual(ids);
     expect(results.every((r) => r.status === "ok")).toBe(true);
+  });
+
+  it("statistics for a query every database rejects", async () => {
+    const ids = (await client.getDatabases()).map((d) => d.id);
+    const query = await everyEventQuery();
+    const condition = query.children[0] as Condition;
+    const tooLong: Group = {
+      ...query,
+      children: [{ ...condition, operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) }],
+    };
+    const results: DatabaseResult[] = [];
+    await client.getStats(tooLong, ids, (r) => results.push(r));
+    expect(results).toHaveLength(ids.length);
+    for (const r of results) {
+      expect(r).toMatchObject({ status: "failed", errors: [{ nodeId: "c1", kind: "invalid" }] });
+    }
   });
 
   it("matching events", async () => {
