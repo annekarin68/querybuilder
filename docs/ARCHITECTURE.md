@@ -929,9 +929,18 @@ file it tests, in the same place under `tests/`. The ones to know about:
   `color`, `count`, `size`, `active`; databases `alpha` and `beta`.
 
 Scripts: `npm run dev` (mock + Vite), `dev:app` (Vite alone, for a real
-backend), `mock`, `build` (typecheck + bundle + `check:offline`), `preview`, `test`, `test:watch`, `typecheck`, `lint`
+backend), `mock`, `build` (typecheck + bundle + `check:offline`), `build:app`
+(the same, type-checking only the app), `preview`, `test`, `test:watch`, `typecheck`, `lint`
 (ESLint + Prettier), `check:offline`. CI (`.github/workflows/ci.yml`) runs
 typecheck, test, lint and build on every pull request and push to `main`.
+
+The mock server is a dev stand-in, so it can never stop the app from running
+or building. `dev:app` is Vite alone, which doesn't type-check and loads no
+`mock-server/` code. `build:app` is `build` with a type-check of only what
+ends up in `dist/` (`tsconfig.app.json`: `src/` and `vite.config.ts`), for
+when the mock or the tests have drifted from `src/api/types.ts`; `build` and
+`typecheck` still check everything. `tests/appScripts.test.ts` keeps both
+that way.
 
 `tsconfig.json` is `strict` with `noUncheckedIndexedAccess`. ESLint is
 `eslint:recommended` + `typescript-eslint` recommended, plus the import

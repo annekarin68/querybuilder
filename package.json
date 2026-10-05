@@ -11,6 +11,7 @@
     "dev:app": "vite",
     "mock": "tsx watch mock-server/index.ts",
     "build": "tsc --noEmit && vite build && npm run check:offline",
+    "build:app": "tsc --noEmit -p tsconfig.app.json && vite build && npm run check:offline",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
