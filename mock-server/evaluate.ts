@@ -193,6 +193,29 @@ export function scaleCount(part: number, whole: number, target: number): number 
   return whole ? Math.round((part / whole) * target) : 0;
 }
 
+/** The longest text value the mock's databases accept. */
+export const MAX_TEXT_LENGTH = 100;
+
+/**
+ * The problems the mock's databases find in a query: each condition with a
+ * text value (or a text item in a list) longer than MAX_TEXT_LENGTH, pointed
+ * at by its `id` — the way a real backend reports a value only it can check.
+ * Empty when there are none.
+ */
+export function queryErrors(node: RequestNode): StatsErrorMessage[] {
+  if (node.kind === "group") return node.children.flatMap(queryErrors);
+  const values = Array.isArray(node.value) ? node.value : [node.value];
+  const tooLong = values.some((v) => typeof v === "string" && v.length > MAX_TEXT_LENGTH);
+  if (!tooLong) return [];
+  return [
+    {
+      nodeId: node.id,
+      kind: "invalid",
+      message: `Text is too long (at most ${MAX_TEXT_LENGTH} characters).`,
+    },
+  ];
+}
+
 export interface DatabaseOutcome {
   label: string;
   /** Present only on success. */
