@@ -31,7 +31,7 @@ const WIRE_TYPES_AIRLOCK = {
 };
 
 export default tseslint.config(
-  { ignores: ["dist/", "coverage/", ".superpowers/"] },
+  { ignores: ["dist/", "coverage/"] },
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
