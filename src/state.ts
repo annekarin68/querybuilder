@@ -1,6 +1,5 @@
 import type { Group, Issue } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
-import { serverIssues } from "./query/issues";
 import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
 
@@ -51,6 +50,11 @@ export interface AppState {
   /** The query tree. Its root is always a group. */
   query: Group;
   issues: Issue[];
+  /** The problems the backend found in the query on screen: the errors in
+   *  `stats` that point at a node (src/query/issues.ts, serverIssues). Set by
+   *  app.ts together with `stats`, but only when they change, so the panels
+   *  that show them don't repaint for every streamed stats line. */
+  serverIssues: Issue[];
 
   stats: StatsState;
   preview: PreviewState;
@@ -68,6 +72,7 @@ export const initialState: AppState = {
   activeView: "filter",
   query: emptyQuery(),
   issues: [],
+  serverIssues: [],
   stats: { status: "idle", results: [] },
   preview: { status: "idle" },
   // The docs start folded into their rail so the query builder gets the width.
@@ -77,7 +82,10 @@ export const initialState: AppState = {
 /** Why the current query/scope can't run yet, or null when it can. */
 export type RunBlocker = "loading" | "no-database" | "no-condition" | "unfinished" | "rejected";
 
-type RunInputs = Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds" | "stats">;
+export type RunInputs = Pick<
+  AppState,
+  "catalog" | "issues" | "serverIssues" | "query" | "selectedDatabaseIds"
+>;
 
 /**
  * The single source of truth for "can this query run?" (docs/ARCHITECTURE.md,
@@ -91,10 +99,10 @@ export function runBlocker(state: RunInputs): RunBlocker | null {
   if (state.selectedDatabaseIds.length === 0) return "no-database";
   if (countConditions(state.query) === 0) return "no-condition";
   if (state.issues.length > 0) return "unfinished";
-  // A database found a problem in a part of the query (src/query/issues.ts).
-  // Only Run is blocked: the statistics that report it stay on screen, and a
-  // query or database change resets them before the next fetch.
-  if (serverIssues(state.stats).length > 0) return "rejected";
+  // A database found a problem in a part of the query. Only Run is blocked:
+  // the statistics that report it stay on screen, and a query or database
+  // change resets both before the next fetch.
+  if (state.serverIssues.length > 0) return "rejected";
   return null;
 }
 

@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import type { Database, DatabaseError, DatabaseResult } from "../../src/model";
+import type { Database, DatabaseResult } from "../../src/model";
 import { headlineHtml, statsPanelHtml } from "../../src/ui/statsPanel";
 import { initialState, type AppState } from "../../src/state";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
+import { dbError, failed, ok } from "../statsFixtures";
 
 const db = (id: string, eventCount: number): Database => ({
   id,
@@ -17,19 +18,6 @@ const databases = [db("a", 1000), db("b", 1000)];
 
 const headline = (status: "loading" | "ok", results: DatabaseResult[]) =>
   headlineHtml({ status, results }, databases);
-
-const ok = (databaseId: string, matchCount: number): DatabaseResult => ({
-  databaseId,
-  status: "ok",
-  matchCount,
-  notes: [],
-});
-const failed = (databaseId: string, errors: DatabaseError[] = []): DatabaseResult => ({
-  databaseId,
-  status: "failed",
-  errors,
-  notes: [],
-});
 
 describe("headlineHtml", () => {
   it("sums matches and totals over successful databases only", () => {
@@ -51,10 +39,7 @@ describe("headlineHtml", () => {
   });
 
   it("notes how many databases the total excludes when some failed", () => {
-    const html = headline("ok", [
-      ok("a", 5),
-      failed("b", [{ message: "timeout", kind: "invalid", nodeId: null }]),
-    ]);
+    const html = headline("ok", [ok("a", 5), failed("b", dbError(null, "timeout"))]);
     expect(html).toContain('<span class="qb-stat-big">5</span>');
     expect(html).toContain("of 1,000");
     expect(html).toContain("Excludes 1 database that failed");
@@ -82,11 +67,9 @@ describe("statsPanelHtml", () => {
       ...ready,
       stats: {
         status: "ok",
-        results: [
-          ok("a", 5),
-          failed("b", [{ nodeId: condition.id, message: "Too long.", kind: "invalid" }]),
-        ],
+        results: [ok("a", 5), failed("b", dbError(condition.id, "Too long."))],
       },
+      serverIssues: [{ nodeId: condition.id, message: "Too long.", kind: "invalid" }],
     });
     expect(html).toContain("Too long.");
     expect(html).toContain("Excludes 1 database that failed");

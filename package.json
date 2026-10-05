@@ -10,7 +10,7 @@
     "dev": "concurrently -k -n mock,app -c blue,green \"npm:mock\" \"npm:dev:app\"",
     "dev:app": "vite",
     "mock": "tsx watch mock-server/index.ts",
-    "build": "tsc --noEmit && vite build && npm run check:offline",
+    "build": "npm run typecheck && npm run build:app",
     "build:app": "tsc --noEmit -p tsconfig.app.json && vite build && npm run check:offline",
     "preview": "vite preview",
     "test": "vitest run",

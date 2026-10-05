@@ -11,6 +11,7 @@ import {
   startLogin,
 } from "../../mock-server/auth";
 import { auditLogSnapshot } from "../../mock-server/audit";
+import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
 
 // The mock server over real HTTP, on a free port. Deterministic: no simulated
 // failures and no streaming delay.
@@ -111,7 +112,9 @@ describe("POST /api/stats", () => {
   it("fails every database, pointing at the condition, when a text is too long", async () => {
     const tooLong = {
       ...everyEvent,
-      children: [{ ...everyEvent.children[0], operatorId: "eq", value: "x".repeat(101) }],
+      children: [
+        { ...everyEvent.children[0], operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
+      ],
     };
     const res = await post(`${API}/stats`, body(["alpha", "beta"], tooLong));
     expect(res.status).toBe(200);

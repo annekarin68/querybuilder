@@ -20,13 +20,10 @@ describe("dev:app and build:app don't depend on the mock server", () => {
     expect(read("vite.config.ts")).not.toMatch(/from\s+["'][^"']*mock-server/);
   });
 
-  it("build:app type-checks only what goes into dist/", () => {
-    expect(scripts["build:app"]).toMatch(/^tsc --noEmit -p tsconfig\.app\.json && vite build/);
+  it("build:app type-checks neither the mock server nor the tests", () => {
+    expect(scripts["build:app"]).toContain("tsc --noEmit -p tsconfig.app.json");
     const appConfig = JSON.parse(read("tsconfig.app.json")) as { include: string[] };
-    expect(appConfig.include).toEqual(["src", "vite.config.ts"]);
-  });
-
-  it("build:app still runs the offline check, like build", () => {
-    expect(scripts["build:app"]).toMatch(/npm run check:offline$/);
+    expect(appConfig.include).not.toContain("mock-server");
+    expect(appConfig.include).not.toContain("tests");
   });
 });

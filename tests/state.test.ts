@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createStore, initialState, runBlocker } from "../src/state";
+import { createStore, initialState, runBlocker, type RunInputs } from "../src/state";
 import { addChild, emptyQuery, newCondition } from "../src/query/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
@@ -43,12 +43,12 @@ describe("store", () => {
 describe("runBlocker", () => {
   const catalog = buildFieldCatalog([]);
   const root = emptyQuery();
-  const ready: Parameters<typeof runBlocker>[0] = {
+  const ready: RunInputs = {
     catalog,
     issues: [],
+    serverIssues: [],
     query: addChild(root, root.id, newCondition()),
     selectedDatabaseIds: ["alpha"],
-    stats: { status: "ok", results: [] },
   };
 
   it("is null when the query can run", () => {
@@ -69,26 +69,9 @@ describe("runBlocker", () => {
     ).toBe("unfinished");
   });
 
-  it("is 'rejected', after every other reason, when a database points at a node", () => {
-    const rejecting = (nodeId: string | null): Parameters<typeof runBlocker>[0] => ({
-      ...ready,
-      stats: {
-        status: "loading",
-        results: [
-          {
-            databaseId: "alpha",
-            status: "failed",
-            errors: [{ nodeId, message: "m", kind: "invalid" }],
-            notes: [],
-          },
-        ],
-      },
-    });
-    expect(runBlocker(rejecting("x"))).toBe("rejected");
-    expect(
-      runBlocker({ ...rejecting("x"), issues: [{ nodeId: "x", message: "m", kind: "invalid" }] }),
-    ).toBe("unfinished");
-    // An error that points at nothing is the database's own business.
-    expect(runBlocker(rejecting(null))).toBeNull();
+  it("is 'rejected', after every other reason, when a database found a problem", () => {
+    const issue = { nodeId: "x", message: "m", kind: "invalid" as const };
+    expect(runBlocker({ ...ready, serverIssues: [issue] })).toBe("rejected");
+    expect(runBlocker({ ...ready, serverIssues: [issue], issues: [issue] })).toBe("unfinished");
   });
 });

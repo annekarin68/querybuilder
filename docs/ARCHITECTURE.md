@@ -236,7 +236,7 @@ src/
                        findField / fieldsOfFacet / findOperator.
     conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row.
     validate.ts        validateQuery(tree, catalog) -> Issue[].
-    issues.ts          serverIssues / placeIssues / shownIssues — the backend's issues, and where every issue is shown.
+    issues.ts          serverIssues / placeIssues — the backend's issues, and where every issue is shown.
     summary.ts         queryToText — the query in plain English (display only).
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
   util/
@@ -246,7 +246,6 @@ src/
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown.
     panel.ts           paint(), escapeHtml(), optionsHtml().
-    issueRepaint.ts    issueAwareRender(render) — repaints on a stats change only when the backend's issues change.
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed,
                        onMenu.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
@@ -296,9 +295,7 @@ means something (only an `"authenticated"` auth has a `user`).
 
 `main.ts` has one table, `panelRenderers`: for each panel, the `AppState`
 keys it reads and how to render it. One subscriber runs a panel's render
-function when any of its keys changed (the exception: the query builder and
-Matching events repaint on a `stats` change only when the backend's issues
-change; see `issueAwareRender`, `src/ui/issueRepaint.ts`). **When a render
+function when any of its keys changed. **When a render
 function starts reading a new key, add the key to its row** — otherwise the
 panel won't repaint.
 
@@ -313,8 +310,8 @@ binding its Fomantic dropdowns must always happen together.
 | Trigger | Effect |
 |---|---|
 | App starts | Every panel paints its loader. `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
-| User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
-| A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → normally only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also shows those as issues in the builder and blocks Run (see "Statistics lines"). The query builder and Matching events repaint only when the backend's issues change (`issueAwareRender`, `src/ui/issueRepaint.ts`), not for every line: a repaint closes an open dropdown and drops a value being typed. |
+| User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
+| A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | Docs rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
@@ -490,9 +487,9 @@ like an `Issue` (any other kind reads as `"invalid"`). The items decide
 whether Run is allowed, so a plain-text item is a contract error; a blank
 `message` reads as "The server found a problem in the query." The panel shows
 every error's `message` in the database's row. An error with a `nodeId` is
-also an issue in the query builder (`serverIssues`, `src/query/issues.ts`),
-shown once however many databases report it, and blocks Run (`runBlocker` →
-`"rejected"`). A line that says `success` but has no `matchCount`
+also an issue in the query builder: `app.ts` keeps them in
+`AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`), once however
+many databases report them, and they block Run (`runBlocker` → `"rejected"`). A line that says `success` but has no `matchCount`
 counts as failed rather than as a made-up 0. Both carry `notes` (from
 `infoMessages`). The headline sums the successful databases only and says how
 many it excludes.
@@ -688,9 +685,10 @@ real backend should do the same.
   blocks running.**
 - **`issues.ts`** — the backend's issues and where issues are shown.
   `serverIssues` turns each stats error that points at a node into an
-  `Issue`, once. `placeIssues` moves an issue to a node that is drawn: the
-  outermost collapsed group around a hidden node, or the root group for an
-  id the query doesn't have. `shownIssues` does both for the builder.
+  `Issue`, once; `app.ts` stores the result in `AppState.serverIssues`.
+  `placeIssues` moves an issue to a node that is drawn: the outermost
+  collapsed group around a hidden node, or the root group for an id the query
+  doesn't have. Issues that end up the same on one node are kept once.
 - **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet
   clears field, operator and value; a new field clears operator and value; an
   operator change that alters the arity resets the value instead of reading
@@ -751,7 +749,7 @@ an entity itself, such as `&lt;`, reads back as `<`: Fomantic stores both
 alike.) A picked or typed entry becomes the field's type
 (`parseEntry`: `"3"` → `3` on a number field; anything else stays as typed,
 for validation to report). Every control has an accessible name. Issues — the
-local ones and the backend's — show under their row or group (`shownIssues`):
+local ones and the backend's — show under their row or group (`placeIssues`):
 an issue inside a collapsed group shows on that group, and one whose node is
 unknown on the root group, so none is lost. The footer shows the whole query
 in plain English once nothing needs attention, otherwise how many parts do.
@@ -929,17 +927,17 @@ file it tests, in the same place under `tests/`. The ones to know about:
   `color`, `count`, `size`, `active`; databases `alpha` and `beta`.
 
 Scripts: `npm run dev` (mock + Vite), `dev:app` (Vite alone, for a real
-backend), `mock`, `build` (typecheck + bundle + `check:offline`), `build:app`
-(the same, type-checking only the app), `preview`, `test`, `test:watch`, `typecheck`, `lint`
+backend), `mock`, `build` (`typecheck`, then `build:app`), `build:app`
+(type-check the app only + bundle + `check:offline`), `preview`, `test`, `test:watch`, `typecheck`, `lint`
 (ESLint + Prettier), `check:offline`. CI (`.github/workflows/ci.yml`) runs
 typecheck, test, lint and build on every pull request and push to `main`.
 
 The mock server is a dev stand-in, so it can never stop the app from running
 or building. `dev:app` is Vite alone, which doesn't type-check and loads no
-`mock-server/` code. `build:app` is `build` with a type-check of only what
-ends up in `dist/` (`tsconfig.app.json`: `src/` and `vite.config.ts`), for
-when the mock or the tests have drifted from `src/api/types.ts`; `build` and
-`typecheck` still check everything. `tests/appScripts.test.ts` keeps both
+`mock-server/` code. `build:app` type-checks only what ends up in `dist/`
+(`tsconfig.app.json`: `src/` and `vite.config.ts`), so it still works when the
+mock or the tests have drifted from `src/api/types.ts`. `build` is the full
+`typecheck` followed by `build:app`, so it still checks everything. `tests/appScripts.test.ts` keeps both
 that way.
 
 `tsconfig.json` is `strict` with `noUncheckedIndexedAccess`. ESLint is

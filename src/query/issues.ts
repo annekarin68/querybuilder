@@ -1,32 +1,37 @@
-import type { AppState, StatsState } from "../state";
+import type { StatsState } from "../state";
 import type { Group, Issue, QueryNode } from "./types";
 
+/** `issues` without repeats: the same kind and message on the same node is
+ *  kept once. */
+function withoutRepeats(issues: Issue[]): Issue[] {
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    const key = JSON.stringify([issue.nodeId, issue.kind, issue.message]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /**
- * The problems the backend found in the query on screen: every error a
- * database's stats line points at a node with (`DatabaseError.nodeId`), as an
- * `Issue`. Derived from `stats` on every render, never stored: any edit or
- * database change resets `stats` (app.ts, changeScope), so these disappear
- * exactly when they stop being true.
+ * The problems the backend found in the query: every error a database's stats
+ * line points at a node with (`DatabaseError.nodeId`), as an `Issue`. app.ts
+ * keeps the result in `AppState.serverIssues`.
  *
- * Several databases often report the same problem; it is shown once. The
+ * Several databases often report the same problem; it is kept once. The
  * statistics panel says which databases reported it. Errors that point at no
  * node are shown there only.
  */
 export function serverIssues(stats: StatsState): Issue[] {
   if (stats.status === "error") return [];
-  const seen = new Set<string>();
   const issues: Issue[] = [];
   for (const result of stats.results) {
     if (result.status !== "failed") continue;
     for (const { nodeId, message, kind } of result.errors) {
-      if (nodeId === null) continue;
-      const key = JSON.stringify([nodeId, kind, message]);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      issues.push({ nodeId, message, kind });
+      if (nodeId !== null) issues.push({ nodeId, message, kind });
     }
   }
-  return issues;
+  return withoutRepeats(issues);
 }
 
 /**
@@ -51,14 +56,12 @@ function drawnNodeIds(query: Group): Map<string, string> {
  * issue inside a collapsed group goes to the outermost collapsed group around
  * it, and an issue whose node isn't in `query` goes to the root group. (Only a
  * backend bug sends an unknown id: results for an older query are dropped.)
+ * Issues that end up the same on one node — say, two hidden conditions both
+ * missing a field — are kept once.
  */
 export function placeIssues(query: Group, issues: Issue[]): Issue[] {
   const drawn = drawnNodeIds(query);
-  return issues.map((issue) => ({ ...issue, nodeId: drawn.get(issue.nodeId) ?? query.id }));
-}
-
-/** Every issue the query builder shows — the local ones (validate.ts) and the
- *  backend's — each on the node it is shown on. */
-export function shownIssues(state: Pick<AppState, "query" | "issues" | "stats">): Issue[] {
-  return placeIssues(state.query, [...state.issues, ...serverIssues(state.stats)]);
+  return withoutRepeats(
+    issues.map((issue) => ({ ...issue, nodeId: drawn.get(issue.nodeId) ?? query.id })),
+  );
 }

@@ -18,12 +18,12 @@ import {
   updateNode,
 } from "../query/tree";
 import { nextCondition } from "../query/conditionEdit";
+import { placeIssues } from "../query/issues";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel } from "./format";
 import { readValueControl, renderValueControl } from "./valueControl";
-import { shownIssues } from "../query/issues";
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
 interface BuilderCtx {
@@ -39,10 +39,10 @@ interface BuilderCtx {
  */
 function issuesHtml(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
-  // A collapsed group can carry the same message for several hidden children.
   const text = (kind: Issue["kind"]) =>
-    [...new Set(mine.filter((i) => i.kind === kind).map((i) => i.message))]
-      .map(escapeHtml)
+    mine
+      .filter((i) => i.kind === kind)
+      .map((i) => escapeHtml(i.message))
       .join(" ");
   const incomplete = text("incomplete");
   const invalid = text("invalid");
@@ -184,8 +184,8 @@ function nodeHtml(ctx: BuilderCtx, node: QueryNode, isRoot: boolean): string {
 }
 
 /** The query card's footer: the whole query in plain English once nothing
- *  needs attention, otherwise how many parts do. `issues` are the shown ones
- *  (shownIssues), so the count matches what is on screen. */
+ *  needs attention, otherwise how many parts do. `issues` are placed
+ *  (placeIssues), so the count matches what is on screen. */
 export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog): string {
   if (countConditions(query) === 0) {
     return `<span class="qb-muted">Add a condition to start building the query.</span>`;
@@ -208,7 +208,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
     return;
   }
   // Local issues (validate.ts) and the backend's, each on a node that is drawn.
-  const issues = shownIssues(state);
+  const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
   const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
   paint(
     el,

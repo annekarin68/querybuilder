@@ -5,6 +5,7 @@ import * as client from "../../src/api/client";
 import type { DatabaseResult } from "../../src/model";
 import type { Condition, Group } from "../../src/query/types";
 import { createMockServer } from "../../mock-server/server";
+import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -117,7 +118,7 @@ describe("the client reads every mock response", () => {
     const condition = query.children[0] as Condition;
     const tooLong: Group = {
       ...query,
-      children: [{ ...condition, operatorId: "eq", value: "x".repeat(101) }],
+      children: [{ ...condition, operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) }],
     };
     const results: DatabaseResult[] = [];
     await client.getStats(tooLong, ids, (r) => results.push(r));

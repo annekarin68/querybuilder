@@ -2,6 +2,14 @@
 
 Status: approved in chat on 2026-10-05, ready for implementation planning.
 
+**Changed after implementation (simplification review, 2026-10-05):** D4 and
+§5–6 are superseded on one point. The backend's issues are stored, in
+`AppState.serverIssues`: `app.ts` sets them together with `stats`, but only
+when they change, and every query or database change clears them with
+`stats`. `runBlocker` and the query builder read that key, and `shownIssues`
+is gone. This replaces a render-time derivation that needed its own repaint
+wrapper. `docs/ARCHITECTURE.md` describes the code as it is.
+
 ## 1. Problem
 
 Some problems with a query can only be found by the backend: an operator a

@@ -8,6 +8,7 @@ import type { Group } from "../src/query/types";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
 import { savePendingQuery, takePendingQuery } from "../src/util/pendingQuery";
+import { dbError, failed, ok } from "./statsFixtures";
 
 // ---- fixtures -------------------------------------------------------------
 
@@ -61,12 +62,6 @@ function ready(query = runnableQuery()): Partial<AppState> {
 }
 
 const events: EventRecord[] = [{ id: 1, values: {} }];
-const line = (databaseId: string, matchCount: number): DatabaseResult => ({
-  databaseId,
-  status: "ok",
-  matchCount,
-  notes: [],
-});
 
 function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
   return {
@@ -284,19 +279,43 @@ describe("statistics", () => {
     );
     expect(store.getState().stats).toMatchObject({ status: "loading", results: [] });
 
-    calls[0]!.onLine(line("alpha", 7));
+    calls[0]!.onLine(ok("alpha", 7));
     expect(store.getState().stats).toMatchObject({
       status: "loading",
-      results: [line("alpha", 7)],
+      results: [ok("alpha", 7)],
     });
 
-    calls[0]!.onLine(line("beta", 2));
+    calls[0]!.onLine(ok("beta", 2));
     calls[0]!.done.resolve();
     await flushPromises();
     expect(store.getState().stats).toMatchObject({
       status: "ok",
-      results: [line("alpha", 7), line("beta", 2)],
+      results: [ok("alpha", 7), ok("beta", 2)],
     });
+  });
+
+  it("keeps the problems the lines point at, set only when they change", async () => {
+    vi.useFakeTimers();
+    const { api, calls } = streamingApi();
+    const { app, store } = setup(ready(), api);
+    app.onQueryChange(runnableQuery(5));
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    const setState = vi.spyOn(store, "setState");
+
+    calls[0]!.onLine(failed("alpha", dbError("c1", "Too long.")));
+    calls[0]!.onLine(failed("beta", dbError("c1", "Too long.")));
+    expect(store.getState().serverIssues).toEqual([
+      { nodeId: "c1", message: "Too long.", kind: "invalid" },
+    ]);
+    // The second line reports the same problem: only `stats` is written, so
+    // the query builder doesn't repaint.
+    expect(setState.mock.calls.map(([patch]) => Object.keys(patch))).toEqual([
+      ["stats", "serverIssues"],
+      ["stats"],
+    ]);
+
+    app.onQueryChange(runnableQuery(6));
+    expect(store.getState().serverIssues).toEqual([]);
   });
 
   it("drops lines from a request the user has moved on from, and aborts it", async () => {
@@ -308,7 +327,7 @@ describe("statistics", () => {
 
     app.onQueryChange(runnableQuery(6));
     expect(calls[0]!.signal?.aborted).toBe(true);
-    calls[0]!.onLine(line("alpha", 7));
+    calls[0]!.onLine(ok("alpha", 7));
     calls[0]!.done.resolve();
     await flushPromises();
     expect(store.getState().stats).toMatchObject({ status: "idle", results: [] });

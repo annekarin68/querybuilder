@@ -2,10 +2,11 @@ import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "./api/client";
 import type * as client from "./api/client";
 import type { Compliance, DatabaseResult } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
+import { serverIssues } from "./query/issues";
 import { addChild, countConditions, newCondition, sameSemantics } from "./query/tree";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
-import { runBlocker, type AppState, type Store } from "./state";
+import { runBlocker, type AppState, type StatsState, type Store } from "./state";
 import { debounce } from "./util/debounce";
 import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
 import { requestSlot } from "./util/requestSlot";
@@ -113,13 +114,25 @@ export function createApp({ store, api, navigate }: AppDeps) {
       });
   }
 
+  /**
+   * Write `stats`, and the problems its lines point at (`serverIssues`) — but
+   * those only when they changed. Stats lines stream in one by one; the query
+   * builder repaints whenever `serverIssues` is set, and a repaint closes an
+   * open dropdown and drops a value the user is typing.
+   */
+  function setStats(stats: StatsState): void {
+    const issues = serverIssues(stats);
+    const same = JSON.stringify(issues) === JSON.stringify(store.getState().serverIssues);
+    store.setState(same ? { stats } : { stats, serverIssues: issues });
+  }
+
   /** Statistics, streamed one line per database and refetched live (debounced). */
   const refreshStats = debounce(() => {
     const state = store.getState();
     if (runBlocker(state)) return;
     const req = statsSlot.start();
     const results: DatabaseResult[] = [];
-    store.setState({ stats: { status: "loading", results: [] } });
+    setStats({ status: "loading", results: [] });
     api
       .getStats(
         state.query,
@@ -127,17 +140,17 @@ export function createApp({ store, api, navigate }: AppDeps) {
         (result) => {
           if (req.isStale()) return;
           results.push(result);
-          store.setState({ stats: { status: "loading", results: [...results] } });
+          setStats({ status: "loading", results: [...results] });
         },
         req.signal,
       )
       .then(() => {
-        if (!req.isStale()) store.setState({ stats: { status: "ok", results } });
+        if (!req.isStale()) setStats({ status: "ok", results });
       })
       .catch((err) => {
         if (req.isStale()) return;
         console.error("Statistics failed:", err);
-        store.setState({ stats: { status: "error", error: errorMessage(err) } });
+        setStats({ status: "error", error: errorMessage(err) });
       });
   }, STATS_DEBOUNCE_MS);
 
@@ -180,9 +193,9 @@ export function createApp({ store, api, navigate }: AppDeps) {
   }
 
   /**
-   * A query edit or a database-scope change: clear stats & preview in the SAME
-   * setState and abandon every request still in flight, then schedule fresh
-   * statistics.
+   * A query edit or a database-scope change: clear stats (with their
+   * serverIssues) & preview in the SAME setState and abandon every request
+   * still in flight, then schedule fresh statistics.
    */
   function changeScope(patch: Partial<AppState>): void {
     statsSlot.cancel();
@@ -190,6 +203,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
     store.setState({
       ...patch,
       stats: { status: "idle", results: [] },
+      serverIssues: [],
       preview: { status: "idle" },
     });
     refreshStats();
