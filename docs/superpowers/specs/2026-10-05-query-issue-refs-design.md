@@ -66,8 +66,8 @@ than being silently dropped.
 
 Within an item:
 - `message` is read with `text` (display-only, trimmed, blank with a warning).
-  A blank message becomes "The server rejected this part of the query.", so
-  an issue never shows up empty.
+  A blank message becomes "The server found a problem in the query.", so an
+  error never shows up empty (in the builder or in the statistics panel).
 - `nodeId` is read with `optionalText`; blank or missing becomes `null`.
 - `kind` is read with `text`; anything but `"incomplete"` is `"invalid"`
   (the safe default, as in `toCompliance`).
@@ -183,8 +183,9 @@ builder, by the issue's colour. The headline's note is unchanged.
 - "Mock server": the too-long rule.
 - The directory layout: `src/query/issues.ts`.
 
-Also a `docs/CHANGELOG.md` entry, and the earlier spec's "Per-condition error
-responses" out-of-scope note is now done (no edit to that historical spec).
+`docs/CHANGELOG.md` is archived and not updated. The earlier spec's
+"Per-condition error responses" out-of-scope note is now done; that historical
+spec is not edited.
 
 ## 11. Out of scope
 
