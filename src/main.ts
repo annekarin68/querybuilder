@@ -22,6 +22,7 @@ import { wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
+import { issueAwareRender } from "./ui/issueRepaint";
 
 // This file only sets up the page: it renders the frame, wires each panel to
 // `app` (src/app.ts, where everything the app DOES lives) and repaints panels
@@ -60,6 +61,11 @@ wireAccountMenu(panels.account, {
 });
 const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange);
 
+// The query builder and Matching events read `stats` only for the backend's
+// issues: on a stats change they repaint only when those change.
+const queryBuilderPanel = issueAwareRender(renderQueryBuilder);
+const previewPanel = issueAwareRender((s) => renderDataPreview(panels.preview, s));
+
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
  * (re)render it. Add a key here whenever a render function starts reading it.
@@ -72,7 +78,8 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     keys: ["databases", "selectedDatabaseIds"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
-  { keys: ["catalog", "query", "issues", "facets"], run: renderQueryBuilder },
+  { keys: ["catalog", "query", "issues", "facets"], run: queryBuilderPanel.paint },
+  { keys: ["stats"], run: queryBuilderPanel.paintIfIssuesChanged },
   {
     keys: ["catalog", "query", "issues", "stats", "selectedDatabaseIds", "databases"],
     run: (s) => renderStatsPanel(panels.stats, s),
@@ -88,8 +95,9 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "auth",
       "compliance",
     ],
-    run: (s) => renderDataPreview(panels.preview, s),
+    run: previewPanel.paint,
   },
+  { keys: ["stats"], run: previewPanel.paintIfIssuesChanged },
   { keys: ["auth", "compliance"], run: (s) => renderAccountMenu(panels.account, s) },
 ];
 
