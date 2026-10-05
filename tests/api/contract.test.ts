@@ -15,6 +15,7 @@ interface Thing {
   extras?: string[];
   count?: number;
   parts: Thing[];
+  extraParts?: Thing[];
 }
 
 const thing = (body: unknown) => new ResponseValue(body, "GET /api/v1/things").object<Thing>();
@@ -110,6 +111,28 @@ describe("required reads", () => {
   it("a long text is shortened in the message", () => {
     expect(() => thing({ size: "x".repeat(100) }).number("size")).toThrow(
       `it is the text "${"x".repeat(40)}…".`,
+    );
+  });
+});
+
+describe("optionalList", () => {
+  it("is [] when the key is missing or null, without a warning", () => {
+    expect(thing({}).optionalList<Thing>("extraParts")).toEqual([]);
+    expect(thing({ extraParts: null }).optionalList<Thing>("extraParts")).toEqual([]);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it("reads a list of objects like `list`", () => {
+    const parts = thing({ extraParts: [{ label: "a" }] }).optionalList<Thing>("extraParts");
+    expect(parts.map((p) => p.id("label"))).toEqual(["a"]);
+  });
+
+  it("throws when the value is there but isn't a list of objects", () => {
+    expect(() => thing({ extraParts: "a" }).optionalList<Thing>("extraParts")).toThrow(
+      '"extraParts" should be a list, but it is the text "a".',
+    );
+    expect(() => thing({ extraParts: ["a"] }).optionalList<Thing>("extraParts")).toThrow(
+      '"extraParts[0]" should be an object, but it is the text "a".',
     );
   });
 });

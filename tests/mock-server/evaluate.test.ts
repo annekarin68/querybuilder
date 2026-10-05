@@ -255,12 +255,15 @@ describe("buildStatsLine", () => {
     const line = buildStatsLine({
       label: "beta",
       matchCount: 999, // must be ignored/dropped
-      fail: { errorMessages: ["bad field"], infoMessages: [] },
+      fail: {
+        errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
+        infoMessages: [],
+      },
     });
     expect(line).toEqual({
       label: "beta",
       success: false,
-      errorMessages: ["bad field"],
+      errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
       infoMessages: [],
     });
     expect(line).not.toHaveProperty("matchCount");

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { Database, DatabaseResult } from "../../src/model";
+import type { Database, DatabaseError, DatabaseResult } from "../../src/model";
 import { headlineHtml } from "../../src/ui/statsPanel";
 
 const db = (id: string, eventCount: number): Database => ({
@@ -21,7 +21,7 @@ const ok = (databaseId: string, matchCount: number): DatabaseResult => ({
   matchCount,
   notes: [],
 });
-const failed = (databaseId: string, errors: string[] = []): DatabaseResult => ({
+const failed = (databaseId: string, errors: DatabaseError[] = []): DatabaseResult => ({
   databaseId,
   status: "failed",
   errors,
@@ -48,7 +48,10 @@ describe("headlineHtml", () => {
   });
 
   it("notes how many databases the total excludes when some failed", () => {
-    const html = headline("ok", [ok("a", 5), failed("b", ["timeout"])]);
+    const html = headline("ok", [
+      ok("a", 5),
+      failed("b", [{ message: "timeout", kind: "invalid", nodeId: null }]),
+    ]);
     expect(html).toContain('<span class="qb-stat-big">5</span>');
     expect(html).toContain("of 1,000");
     expect(html).toContain("Excludes 1 database that failed");

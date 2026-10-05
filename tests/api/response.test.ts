@@ -203,17 +203,28 @@ describe("toDatabaseResult", () => {
     ).toMatchObject({ status: "ok", matchCount: 0 });
   });
 
-  it("a failed line carries its messages, never a count", () => {
+  it("a failed line carries its errors and notes, never a count", () => {
     expect(
       toDatabaseResult(
         read<StatsResponse>({
           label: "beta",
           success: false,
-          errorMessages: ["bad date"],
+          errorMessages: [
+            { nodeId: "c1", message: "Operator no longer supported.", kind: "invalid" },
+            { message: "Query too complex.", kind: "incomplete" },
+          ],
           infoMessages: ["timeout"],
         }),
       ),
-    ).toEqual({ databaseId: "beta", status: "failed", errors: ["bad date"], notes: ["timeout"] });
+    ).toEqual({
+      databaseId: "beta",
+      status: "failed",
+      errors: [
+        { nodeId: "c1", message: "Operator no longer supported.", kind: "invalid" },
+        { nodeId: null, message: "Query too complex.", kind: "incomplete" },
+      ],
+      notes: ["timeout"],
+    });
     expect(toDatabaseResult(read<StatsResponse>({ label: "beta", success: false }))).toEqual({
       databaseId: "beta",
       status: "failed",
@@ -224,10 +235,35 @@ describe("toDatabaseResult", () => {
     expect(console.warn).not.toHaveBeenCalled();
   });
 
+  it("an error of an unknown kind is invalid; a blank message gets a stand-in", () => {
+    const result = toDatabaseResult(
+      readBroken<StatsResponse>({
+        label: "beta",
+        success: false,
+        errorMessages: [{ nodeId: "c1", message: " ", kind: "fatal" }],
+      }),
+    );
+    expect(result).toMatchObject({
+      errors: [
+        { nodeId: "c1", message: "The server found a problem in the query.", kind: "invalid" },
+      ],
+    });
+  });
+
+  it("a plain-text error (the old contract) throws a ContractError", () => {
+    expect(() =>
+      toDatabaseResult(
+        readBroken<StatsResponse>({ label: "beta", success: false, errorMessages: ["bad date"] }),
+      ),
+    ).toThrow('"errorMessages[0]" should be an object, but it is the text "bad date".');
+  });
+
   it("a success without a count is a failure, not a made-up 0", () => {
     expect(toDatabaseResult(read<StatsResponse>({ label: "alpha", success: true }))).toMatchObject({
       status: "failed",
-      errors: ["The server sent no count for this database."],
+      errors: [
+        { message: "The server sent no count for this database.", kind: "invalid", nodeId: null },
+      ],
     });
   });
 

@@ -36,7 +36,10 @@ function successRowHtml(result: Ok, db: Database | undefined): string {
 function failureRowHtml(result: Failed, db: Database | undefined): string {
   const name = db?.name ?? result.databaseId;
   const errors = result.errors.length
-    ? messagesHtml(result.errors, "qb-db-msg qb-db-error")
+    ? messagesHtml(
+        result.errors.map((e) => e.message),
+        "qb-db-msg qb-db-error",
+      )
     : `<span class="qb-db-msg qb-db-error">Failed.</span>`;
   return `<div class="qb-db-row is-failed">
     <span class="qb-db-name">${escapeHtml(name)}</span>

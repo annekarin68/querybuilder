@@ -1,4 +1,9 @@
-import type { RequestCondition, RequestNode, StatsResponse } from "../src/api/types";
+import type {
+  RequestCondition,
+  RequestNode,
+  StatsErrorMessage,
+  StatsResponse,
+} from "../src/api/types";
 
 export type Row = Record<string, string | number | boolean | null>;
 
@@ -193,7 +198,7 @@ export interface DatabaseOutcome {
   /** Present only on success. */
   matchCount?: number;
   /** When set, this database's line reports failure instead of a count. */
-  fail?: { errorMessages: string[]; infoMessages: string[] };
+  fail?: { errorMessages: StatsErrorMessage[]; infoMessages: string[] };
 }
 
 /** Turns one database's raw outcome into the StatsResponse line /api/stats streams for it. */
