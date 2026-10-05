@@ -29,10 +29,10 @@ the statistics panel, but:
 | D3 | `kind` is the `Issue` kind: `"incomplete"` or `"invalid"`. An unknown kind reads as `"invalid"`. |
 | D4 | The builder's server issues are **derived** from `stats.results` at render time, never stored. Any edit or database change already resets `stats`, so they disappear exactly when they stop being true. |
 | D5 | Only errors with a `nodeId` become builder issues. Errors without one stay in the statistics panel only, as today. |
-| D6 | The same `(nodeId, kind, message)` from several databases is shown once in the builder, without database names. The statistics panel says which databases rejected the query. |
+| D6 | The same `(nodeId, kind, message)` from several databases is shown once in the builder, without database names. The statistics panel shows each database's messages under its name, as today. |
 | D7 | An issue is shown on the node it names if that node is visible; on the outermost collapsed group around it if it is hidden; on the root group if the id is unknown. This applies to local and server issues alike. |
 | D8 | A server issue from **any** database blocks Run, until the query or the database selection changes. |
-| D9 | A database row with at least one error that has a `nodeId` is labelled "Rejected the query". |
+| D9 | The statistics panel adds no text of its own: a database's errors show as its messages, as today. |
 
 ## 3. Contract (D1–D3)
 
@@ -136,13 +136,11 @@ builder" can't disagree.
 
 ## 7. Statistics panel (D9)
 
-`failureRowHtml`:
-- If any error has a `nodeId`: a "Rejected the query" label, then every
-  error's `message`.
-- Otherwise, as today: the messages, or "Failed." when there are none.
-
-Notes are shown beneath in both cases. The headline's note becomes "Excludes N
-database(s) that failed or rejected the query (see below)."
+No new text. `failureRowHtml` shows each error's `message` exactly as it shows
+the plain-text errors today (or "Failed." when there are none), with the notes
+beneath. The row sits under the database's name, so it already says which
+databases failed; whether a problem is incomplete or invalid is shown in the
+builder, by the issue's colour. The headline's note is unchanged.
 
 ## 8. Mock server
 
@@ -168,8 +166,8 @@ database(s) that failed or rejected the query (see below)."
   for errors with a `nodeId`.
 - `tests/ui/queryBuilder.test.ts`: a server issue shows on its node and on
   the root for an unknown id. The footer counts it.
-- `tests/ui/statsPanel.test.ts`: the "Rejected the query" row and the headline
-  note. The panel keeps showing results while `"rejected"`.
+- `tests/ui/statsPanel.test.ts`: a failed row shows its errors' messages. The
+  panel keeps showing results while `"rejected"`.
 - `tests/mock-server/evaluate.test.ts` / `server.test.ts`: the too-long rule
   and the new line shape. `tests/api/mockContract.test.ts` still passes.
 
@@ -177,7 +175,7 @@ database(s) that failed or rejected the query (see below)."
 
 `docs/ARCHITECTURE.md`:
 - "Wire format of the query": node ids are now quoted in `errorMessages`.
-- "Statistics lines": the item shape, and "Rejected the query".
+- "Statistics lines": the item shape.
 - "Correctness invariant" and "Error and loading model": the `"rejected"`
   blocker.
 - Section 8 ("The query model") and "Centre — `queryBuilder.ts`": server
