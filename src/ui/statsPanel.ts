@@ -121,47 +121,42 @@ function card(state: AppState, body: string): string {
 const placeholder = (text: string) => `<p class="qb-placeholder">${escapeHtml(text)}</p>`;
 
 /** Why the statistics column is empty (see `runBlocker`). */
-const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
+const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading" | "rejected">, string> = {
   "no-database": "Select at least one database to see statistics.",
   "no-condition": "Add a condition to see statistics.",
   unfinished: "Finish the query to see statistics.",
 };
 
-export function renderStatsPanel(el: HTMLElement, state: AppState): void {
+/** The statistics column for `state`: "" while the app is still loading. */
+export function statsPanelHtml(state: AppState): string {
   const blocker = runBlocker(state);
-  if (blocker === "loading") {
-    paint(el, "");
-    return;
-  }
-  if (blocker) {
-    paint(el, card(state, placeholder(BLOCKED_MESSAGES[blocker])));
-    return;
+  if (blocker === "loading") return "";
+  // "rejected" is explained BY the results (each database's errors), so they
+  // stay on screen; every other blocker means there are no results to show.
+  if (blocker && blocker !== "rejected") {
+    return card(state, placeholder(BLOCKED_MESSAGES[blocker]));
   }
   const stats = state.stats;
   if (stats.status === "error") {
-    paint(
-      el,
-      card(
-        state,
-        `<div class="ui small negative message"><div class="header">Statistics failed</div><p>${escapeHtml(stats.error)}</p></div>`,
-      ),
+    return card(
+      state,
+      `<div class="ui small negative message"><div class="header">Statistics failed</div><p>${escapeHtml(stats.error)}</p></div>`,
     );
-    return;
   }
   // "idle" with a complete query = the debounce before the fetch starts.
   if (stats.status === "idle" || (stats.status === "loading" && stats.results.length === 0)) {
-    paint(el, card(state, placeholder("Counting matches…")));
-    return;
+    return card(state, placeholder("Counting matches…"));
   }
   // The headline stays on top; the per-database list follows. The whole
   // column is sticky and scrolls internally (styles.css .qb-col-stats).
-  paint(
-    el,
-    card(
-      state,
-      headlineHtml(stats, state.databases) +
-        perDatabaseHtml(stats.results, state.databases) +
-        pendingHtml(stats, state.selectedDatabaseIds.length),
-    ),
+  return card(
+    state,
+    headlineHtml(stats, state.databases) +
+      perDatabaseHtml(stats.results, state.databases) +
+      pendingHtml(stats, state.selectedDatabaseIds.length),
   );
+}
+
+export function renderStatsPanel(el: HTMLElement, state: AppState): void {
+  paint(el, statsPanelHtml(state));
 }

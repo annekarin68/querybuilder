@@ -1,5 +1,6 @@
 import type { Group, Issue } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
+import { serverIssues } from "./query/issues";
 import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
 
@@ -74,9 +75,9 @@ export const initialState: AppState = {
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */
-export type RunBlocker = "loading" | "no-database" | "no-condition" | "unfinished";
+export type RunBlocker = "loading" | "no-database" | "no-condition" | "unfinished" | "rejected";
 
-type RunInputs = Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds">;
+type RunInputs = Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds" | "stats">;
 
 /**
  * The single source of truth for "can this query run?" (docs/ARCHITECTURE.md,
@@ -90,6 +91,10 @@ export function runBlocker(state: RunInputs): RunBlocker | null {
   if (state.selectedDatabaseIds.length === 0) return "no-database";
   if (countConditions(state.query) === 0) return "no-condition";
   if (state.issues.length > 0) return "unfinished";
+  // A database found a problem in a part of the query (src/query/issues.ts).
+  // Only Run is blocked: the statistics that report it stay on screen, and a
+  // query or database change resets them before the next fetch.
+  if (serverIssues(state.stats).length > 0) return "rejected";
   return null;
 }
 

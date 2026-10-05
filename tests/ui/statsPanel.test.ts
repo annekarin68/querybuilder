@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import type { Database, DatabaseError, DatabaseResult } from "../../src/model";
-import { headlineHtml } from "../../src/ui/statsPanel";
+import { headlineHtml, statsPanelHtml } from "../../src/ui/statsPanel";
+import { initialState, type AppState } from "../../src/state";
+import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
+import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 
 const db = (id: string, eventCount: number): Database => ({
   id,
@@ -60,5 +63,39 @@ describe("headlineHtml", () => {
   it("labels the headline number", () => {
     const html = headline("ok", [ok("a", 10)]);
     expect(html).toContain("matching events");
+  });
+});
+
+describe("statsPanelHtml", () => {
+  const root = emptyQuery();
+  const condition = newCondition();
+  const ready: AppState = {
+    ...initialState,
+    catalog: buildFieldCatalog([]),
+    databases,
+    selectedDatabaseIds: ["a", "b"],
+    query: addChild(root, root.id, condition),
+  };
+
+  it("keeps showing each database's errors while they block Run", () => {
+    const html = statsPanelHtml({
+      ...ready,
+      stats: {
+        status: "ok",
+        results: [
+          ok("a", 5),
+          failed("b", [{ nodeId: condition.id, message: "Too long.", kind: "invalid" }]),
+        ],
+      },
+    });
+    expect(html).toContain("Too long.");
+    expect(html).toContain("Excludes 1 database that failed");
+    expect(html).not.toContain("qb-placeholder");
+  });
+
+  it("explains every other blocker instead of showing results", () => {
+    expect(statsPanelHtml({ ...ready, selectedDatabaseIds: [] })).toContain(
+      "Select at least one database to see statistics.",
+    );
   });
 });
