@@ -236,6 +236,7 @@ src/
                        findField / fieldsOfFacet / findOperator.
     conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row.
     validate.ts        validateQuery(tree, catalog) -> Issue[].
+    issues.ts          serverIssues / placeIssues / shownIssues — the backend's issues, and where every issue is shown.
     summary.ts         queryToText — the query in plain English (display only).
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
   util/
@@ -245,6 +246,7 @@ src/
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown.
     panel.ts           paint(), escapeHtml(), optionsHtml().
+    issueRepaint.ts    issueAwareRender(render) — repaints on a stats change only when the backend's issues change.
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed,
                        onMenu.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
@@ -309,7 +311,7 @@ binding its Fomantic dropdowns must always happen together.
 |---|---|
 | App starts | Every panel paints its loader. `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
-| A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. |
+| A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also shows those as issues in the builder and blocks Run (see "Statistics lines"). The query builder and Matching events repaint only when the backend's issues change (`issueAwareRender`, `src/ui/issueRepaint.ts`), not for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | Docs rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
@@ -327,8 +329,15 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
   (`changeScope` in `app.ts`). Old numbers disappear the instant the scope
   changes, before any new request goes out.
 - **If the query can't run yet** (`runBlocker`: still loading, no database,
-  no condition, or any validation issue), no request fires, **Run** is
+  no condition, any validation issue, or — for Run only — a database that
+  reported a problem in a part of the query), no request fires, **Run** is
   disabled, and both panels say why.
+- **A rejected query keeps its statistics.** When a database's stats line
+  points at a node (`"rejected"`), only Run is blocked; the statistics stay
+  on screen because they are what explains the block. The next query or
+  database change resets them, and with them the block. A rejection that
+  arrives after Run was clicked replaces the Matching events panel's content
+  with the blocked Run message, like every other blocker.
 - **Stale-response guard — one rule.** `app.ts` keeps one `requestSlot()` per
   kind (stats, preview). Every query or scope change cancels both; starting a
   request replaces the previous one. A response, a streamed line, an error —
@@ -418,7 +427,7 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **A field's type** comes from `type`, or from `format` when `type` is empty,
   into `Field.typeName` (see "The field catalog").
 - **A statistics line** becomes a `DatabaseResult` that is either `"ok"`
-  (with a `matchCount`) or `"failed"` (with `errors`): see below.
+  (with a `matchCount`) or `"failed"` (with `errors`, each a `DatabaseError`: `message`, `kind`, and the `nodeId` it points at or `null`): see below.
 
 - **A missing name.** A database or facet with a blank `name` shows its id.
 
@@ -470,7 +479,16 @@ A stats line has no name and no total: the frontend looks the database up in
 denominator. `toDatabaseResult` turns each line into a `DatabaseResult`: an
 `"ok"` one has a `matchCount`; a `"failed"` one has none, so a failed database
 can never be shown as "0 matched", and carries `errors` (from
-`errorMessages`) instead. A line that says `success` but has no `matchCount`
+`errorMessages`) instead. Each `errorMessages` item is an object
+`{ nodeId?, message, kind }` (`StatsErrorMessage`). `nodeId` is the `id` of a
+group or condition from the request; `kind` is `"incomplete"` or `"invalid"`,
+like an `Issue` (any other kind reads as `"invalid"`). The items decide
+whether Run is allowed, so a plain-text item is a contract error; a blank
+`message` reads as "The server found a problem in the query." The panel shows
+every error's `message` in the database's row. An error with a `nodeId` is
+also an issue in the query builder (`serverIssues`, `src/query/issues.ts`),
+shown once however many databases report it, and blocks Run (`runBlocker` →
+`"rejected"`). A line that says `success` but has no `matchCount`
 counts as failed rather than as a made-up 0. Both carry `notes` (from
 `infoMessages`). The headline sums the successful databases only and says how
 many it excludes.
@@ -604,8 +622,9 @@ Both `/stats` and `/query` take a `QueryRequest` (`src/api/types.ts`):
 `Database.id`s), and
 `query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
 and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`). Every
-node carries the frontend's `id` for it. The backend treats it as opaque; it is
-reserved so a later error response can point at a condition.
+node carries the frontend's `id` for it. The backend treats it as opaque, and quotes it back as `nodeId` in a stats
+line's `errorMessages` to point at the node a problem is in ("Statistics
+lines").
 
 `toQueryRequest` (`src/api/request.ts`) builds the body from the query on
 screen; `getStats` and `runQuery` in `client.ts` call it, so `app.ts` passes
@@ -663,6 +682,11 @@ real backend should do the same.
   doesn't run backwards. A value that isn't on the field's pick-list is fine.
   These checks also cover a query restored after a redirect. **Any issue
   blocks running.**
+- **`issues.ts`** — the backend's issues and where issues are shown.
+  `serverIssues` turns each stats error that points at a node into an
+  `Issue`, once. `placeIssues` moves an issue to a node that is drawn: the
+  outermost collapsed group around a hidden node, or the root group for an
+  id the query doesn't have. `shownIssues` does both for the builder.
 - **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet
   clears field, operator and value; a new field clears operator and value; an
   operator change that alters the arity resets the value instead of reading
@@ -722,9 +746,11 @@ typed entry in the `<option>` it creates for it (`a"b` → `a&quot;b`);
 an entity itself, such as `&lt;`, reads back as `<`: Fomantic stores both
 alike.) A picked or typed entry becomes the field's type
 (`parseEntry`: `"3"` → `3` on a number field; anything else stays as typed,
-for validation to report). Every control has an accessible name. Issues show
-under their row or group. The footer shows the whole query in plain English
-once it is complete, otherwise how many parts still need attention.
+for validation to report). Every control has an accessible name. Issues — the
+local ones and the backend's — show under their row or group (`shownIssues`):
+an issue inside a collapsed group shows on that group, and one whose node is
+unknown on the root group, so none is lost. The footer shows the whole query
+in plain English once nothing needs attention, otherwise how many parts do.
 
 Finding and picking in the dropdowns (settings in `fomantic.ts`, cursor
 movement in `queryBuilder.ts`):
@@ -819,7 +845,10 @@ to a named handler function — add a route there, and a test in
 - **`/api/stats`** projects the 21-event sample's match rate onto each
   database's real size (`scaleCount`) and streams one line per database with a
   pause between lines; now and then it simulates a database that can't be
-  reached.
+  reached. A text value (or a text item in a list) longer than 100
+  characters fails in every database, with an `errorMessages` item pointing
+  at its condition (`queryErrors`), so the builder's backend issues can be
+  tried in dev.
 - **`/api/query`** returns the matching events themselves, at most
   `QUERY_RESULT_CAP` (25).
 - **Request bodies** are checked against `QueryRequest` before anything reads
@@ -857,6 +886,10 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   with the text; no old data is kept ("Correctness invariant"). The error
   itself, with its stack, is logged to the console. Errors of requests
   aborted because they were superseded never reach a panel.
+- A database that finds a problem in the query reports it in its stats
+  line, not as an HTTP error: the statistics panel shows it in that
+  database's row, and an error that points at a query node is also shown in
+  the builder and blocks Run ("Statistics lines").
 - Failing to load databases or facets at startup is fatal: `#app` is replaced
   by an error and a **Reload** button (the message escaped like every
   server-supplied string; no inline `onclick`, so a strict
