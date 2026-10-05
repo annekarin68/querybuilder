@@ -296,8 +296,11 @@ means something (only an `"authenticated"` auth has a `user`).
 
 `main.ts` has one table, `panelRenderers`: for each panel, the `AppState`
 keys it reads and how to render it. One subscriber runs a panel's render
-function when any of its keys changed. **When a render function starts reading
-a new key, add the key to its row** — otherwise the panel won't repaint.
+function when any of its keys changed (the exception: the query builder and
+Matching events repaint on a `stats` change only when the backend's issues
+change; see `issueAwareRender`, `src/ui/issueRepaint.ts`). **When a render
+function starts reading a new key, add the key to its row** — otherwise the
+panel won't repaint.
 
 `renderShell` returns the page's panel containers (`shell.panels`); every
 render function takes its container as the first argument
@@ -311,7 +314,7 @@ binding its Fomantic dropdowns must always happen together.
 |---|---|
 | App starts | Every panel paints its loader. `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
-| A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also shows those as issues in the builder and blocks Run (see "Statistics lines"). The query builder and Matching events repaint only when the backend's issues change (`issueAwareRender`, `src/ui/issueRepaint.ts`), not for every line: a repaint closes an open dropdown and drops a value being typed. |
+| A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → normally only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also shows those as issues in the builder and blocks Run (see "Statistics lines"). The query builder and Matching events repaint only when the backend's issues change (`issueAwareRender`, `src/ui/issueRepaint.ts`), not for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | Docs rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
@@ -427,7 +430,8 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **A field's type** comes from `type`, or from `format` when `type` is empty,
   into `Field.typeName` (see "The field catalog").
 - **A statistics line** becomes a `DatabaseResult` that is either `"ok"`
-  (with a `matchCount`) or `"failed"` (with `errors`, each a `DatabaseError`: `message`, `kind`, and the `nodeId` it points at or `null`): see below.
+  (with a `matchCount`) or `"failed"` (with `errors`, each a `DatabaseError`:
+  `message`, `kind`, and the `nodeId` it points at or `null`): see below.
 
 - **A missing name.** A database or facet with a blank `name` shows its id.
 
@@ -622,9 +626,9 @@ Both `/stats` and `/query` take a `QueryRequest` (`src/api/types.ts`):
 `Database.id`s), and
 `query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
 and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`). Every
-node carries the frontend's `id` for it. The backend treats it as opaque, and quotes it back as `nodeId` in a stats
-line's `errorMessages` to point at the node a problem is in ("Statistics
-lines").
+node carries the frontend's `id` for it. The backend treats it as opaque, and
+quotes it back as `nodeId` in a stats line's `errorMessages` to point at the
+node a problem is in ("Statistics lines").
 
 `toQueryRequest` (`src/api/request.ts`) builds the body from the query on
 screen; `getStats` and `runQuery` in `client.ts` call it, so `app.ts` passes

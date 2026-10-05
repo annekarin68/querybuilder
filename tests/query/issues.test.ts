@@ -41,7 +41,11 @@ describe("serverIssues", () => {
 
   it("keeps the same message with another kind or node apart", () => {
     const results = [failed("a", err("c1"), err("c1", "Bad.", "incomplete"), err("c2"))];
-    expect(serverIssues({ status: "ok", results })).toHaveLength(3);
+    expect(serverIssues({ status: "ok", results })).toEqual([
+      issue("c1"),
+      { nodeId: "c1", message: "Bad.", kind: "incomplete" },
+      issue("c2"),
+    ]);
   });
 
   it("ignores errors without a node and databases that succeeded", () => {

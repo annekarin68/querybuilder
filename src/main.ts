@@ -63,6 +63,10 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
 
 // The query builder and Matching events read `stats` only for the backend's
 // issues: on a stats change they repaint only when those change.
+// In `panelRenderers`, each panel's `stats` entry must stay AFTER its main
+// entry: when one setState changes both (a query edit resets stats), the main
+// entry paints first and records the issues, so the stats entry then doesn't
+// paint a second time.
 const queryBuilderPanel = issueAwareRender(renderQueryBuilder);
 const previewPanel = issueAwareRender((s) => renderDataPreview(panels.preview, s));
 

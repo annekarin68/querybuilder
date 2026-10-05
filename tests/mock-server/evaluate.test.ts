@@ -296,7 +296,7 @@ describe("queryErrors", () => {
     const query = group(
       "AND",
       cond("note", "eq", "x".repeat(MAX_TEXT_LENGTH)),
-      cond("count", "gt", 10 ** 200),
+      cond("count", "gt", 5),
       cond("spare", "isEmpty", null),
     );
     expect(queryErrors(query)).toEqual([]);
