@@ -85,3 +85,38 @@ export function sameSemantics(a: QueryNode, b: QueryNode): boolean {
     key === "collapsed" ? undefined : value;
   return JSON.stringify(a, withoutCollapsed) === JSON.stringify(b, withoutCollapsed);
 }
+
+/**
+ * Put `nodes` where a drop on `targetId` lands: at the end of the target if it
+ * is a group, otherwise just before the target in its parent. An unknown
+ * target changes nothing.
+ */
+export function insertNodes(tree: Group, targetId: string, nodes: QueryNode[]): Group {
+  const target = findNode(tree, targetId);
+  if (!target) return tree;
+  if (target.kind === "group") {
+    return mapTree(tree, (n) =>
+      n.kind === "group" && n.id === targetId ? { ...n, children: [...n.children, ...nodes] } : n,
+    ) as Group;
+  }
+  return mapTree(tree, (n) => {
+    if (n.kind !== "group") return n;
+    const at = n.children.findIndex((c) => c.id === targetId);
+    if (at === -1) return n;
+    const children = [...n.children];
+    children.splice(at, 0, ...nodes);
+    return { ...n, children };
+  }) as Group;
+}
+
+/**
+ * Move `nodeId` to where a drop on `targetId` lands (see `insertNodes`).
+ * Returns null when the move is impossible: an unknown id, the root, or a
+ * group moved into itself or something inside it.
+ */
+export function moveNode(tree: Group, nodeId: string, targetId: string): Group | null {
+  const node = findNode(tree, nodeId);
+  if (!node || nodeId === tree.id || !findNode(tree, targetId)) return null;
+  if (findNode(node, targetId)) return null; // target is the node itself or inside it
+  return insertNodes(removeNode(tree, nodeId), targetId, [node]);
+}

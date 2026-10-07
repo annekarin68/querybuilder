@@ -9,6 +9,8 @@ import {
   findNode,
   countConditions,
   sameSemantics,
+  insertNodes,
+  moveNode,
 } from "../../src/query/tree";
 import type { Condition, Group } from "../../src/query/types";
 
@@ -130,5 +132,68 @@ describe("sameSemantics", () => {
     const folded = { ...root, collapsed: true };
     sameSemantics(root, folded);
     expect(folded.collapsed).toBe(true);
+  });
+});
+
+describe("insertNodes", () => {
+  it("appends to a group", () => {
+    const root = emptyQuery();
+    const a = newCondition();
+    const b = newCondition();
+    const t = insertNodes(addChild(root, root.id, a), root.id, [b]);
+    expect((t.children as { id: string }[]).map((c) => c.id)).toEqual([a.id, b.id]);
+  });
+  it("inserts before a condition", () => {
+    const root = emptyQuery();
+    const a = newCondition();
+    const b = newCondition();
+    const c = newCondition();
+    const t = insertNodes(addChild(addChild(root, root.id, a), root.id, b), b.id, [c]);
+    expect(t.children.map((n) => n.id)).toEqual([a.id, c.id, b.id]);
+  });
+  it("does nothing for an unknown target", () => {
+    const root = emptyQuery();
+    expect(insertNodes(root, "nope", [newCondition()])).toEqual(root);
+  });
+});
+
+describe("moveNode", () => {
+  it("moves a condition into another group", () => {
+    const root = emptyQuery();
+    const g = { ...newGroup(), children: [] };
+    const c = newCondition();
+    let t = addChild(root, root.id, c);
+    t = addChild(t, root.id, g);
+    const moved = moveNode(t, c.id, g.id)!;
+    expect(moved.children.map((n) => n.id)).toEqual([g.id]);
+    const inner = findNode(moved, g.id);
+    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
+  });
+  it("reorders before a sibling and keeps the node's data", () => {
+    const root = emptyQuery();
+    const a = { ...newCondition(), facetId: "x" };
+    const b = newCondition();
+    const t = addChild(addChild(root, root.id, a), root.id, b);
+    const moved = moveNode(t, b.id, a.id)!;
+    expect(moved.children.map((n) => n.id)).toEqual([b.id, a.id]);
+    expect(findNode(moved, a.id)).toMatchObject({ facetId: "x" });
+  });
+  it("refuses to move a group into itself or a descendant", () => {
+    const root = emptyQuery();
+    const outer = { ...newGroup(), children: [] };
+    const inner = { ...newGroup(), children: [] };
+    let t = addChild(root, root.id, outer);
+    t = addChild(t, outer.id, inner);
+    expect(moveNode(t, outer.id, outer.id)).toBeNull();
+    expect(moveNode(t, outer.id, inner.id)).toBeNull();
+  });
+  it("refuses to move the root", () => {
+    const root = emptyQuery();
+    const g = { ...newGroup(), children: [] };
+    expect(moveNode(addChild(root, root.id, g), root.id, g.id)).toBeNull();
+  });
+  it("returns null for unknown ids", () => {
+    const root = emptyQuery();
+    expect(moveNode(root, "a", "b")).toBeNull();
   });
 });
