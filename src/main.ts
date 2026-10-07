@@ -77,6 +77,7 @@ wireAccountMenu(panels.account, {
 const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange, {
   onDrop: app.onDropItem,
   onDismissNotice: app.dismissDropNotice,
+  announce: shell.announce,
 });
 
 /**

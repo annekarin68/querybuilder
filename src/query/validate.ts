@@ -70,21 +70,34 @@ function checkFacetCondition(c: Condition, catalog: FieldCatalog, out: Issue[]):
     return;
   }
   if (!FACET_OPERATOR_IDS.includes(op.id)) {
-    out.push(invalid(c.id, "That operator isn't available for a whole facet."));
+    out.push(
+      invalid(
+        c.id,
+        "That operator isn't available for a whole facet. Pick Is present or Is absent.",
+      ),
+    );
     return;
   }
-  if (c.value !== null) out.push(invalid(c.id, "This operator takes no value."));
+  if (c.value !== null) {
+    // The row has no Value slot to clear; picking the test again rewrites the row.
+    out.push(invalid(c.id, "This operator takes no value. Pick Is present or Is absent again."));
+  }
 }
 
 function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
   if (!c.facetId) {
-    out.push(incomplete(c.id, "Choose a field."));
+    // The Field dropdown is disabled until a facet is chosen, so point at the
+    // Facet dropdown, the one the user can actually use.
+    out.push(incomplete(c.id, "Choose a facet."));
     return;
   }
   if (c.fieldId === null) {
     // No field: either nothing chosen yet, or a deliberate facet-only condition.
-    if (c.operatorId === null) out.push(incomplete(c.id, "Choose a field."));
-    else checkFacetCondition(c, catalog, out);
+    // A facet with no fields still offers "Is present" / "Is absent", so
+    // "Choose a field." alone would be wrong.
+    if (c.operatorId === null) {
+      out.push(incomplete(c.id, "Choose a field, or whether the facet is present."));
+    } else checkFacetCondition(c, catalog, out);
     return;
   }
   const fieldDef = findField(catalog, c.facetId, c.fieldId);

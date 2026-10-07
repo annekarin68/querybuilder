@@ -685,25 +685,54 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The "no field" choice must never look like a real field (a field could
-   literally be named "Any field"): muted italics, a dashed outline and its own
-   glyph, in the shown text and in the menu. Scoped to the Field dropdown
-   (.qb-field-select): a facet or operator with the id "none" is left alone. */
-.qb-cond-grid .ui.selection.dropdown.qb-field-select.qb-no-field {
-  border-style: dashed;
+/* A whole-facet condition ("Is present") has no Operator or Value slot, so its
+   row has its own, shorter template: the facet NAME takes the spare room (a
+   long one was cut off beside a wide, mostly empty "Is present" box), the
+   Field dropdown keeps just enough for "Is present" / "Is absent" to be read
+   whole, and the ✕ is in the last column, at the row's end like the ✕ of the
+   rows above it. Wide and narrow rows alike: the narrow rule above would put
+   the ✕ on a second line, and this rule (more specific) wins over it. */
+.qb-cond-grid.is-facet-level {
+  grid-template-columns: minmax(0, 18rem) minmax(9rem, 9.5rem) 1fr;
 }
-.qb-cond-grid .ui.selection.dropdown.qb-field-select.qb-no-field > .text,
-.qb-cond-grid .ui.dropdown.qb-field-select .menu > .item[data-value="none"] {
-  font-style: italic;
-  color: var(--qb-muted);
+.qb-cond-grid.is-facet-level > .ui.dropdown.qb-field-select {
+  grid-column: 2;
+  grid-row: 1;
 }
-.qb-cond-grid .ui.selection.dropdown.qb-field-select.qb-no-field > .text::before,
-.qb-cond-grid .ui.dropdown.qb-field-select .menu > .item[data-value="none"]::before {
-  content: "\2205\00a0"; /* the empty-set sign: an inline character, nothing to fetch */
-  font-style: normal;
+.qb-cond-grid.is-facet-level > .qb-icon-btn {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
 }
-.qb-cond-grid .ui.dropdown.qb-field-select .menu > .item[data-value="none"] {
-  border-bottom: 1px dashed var(--qb-border-strong);
+/* The Field dropdown's menu. Fomantic makes a menu only as wide as its
+   dropdown, which on a narrow row (about 80px) left room for one word of the
+   section headers ("About the whole facet"). Give it a readable width, a
+   height that shows both sections, and let the headers wrap. Scoped to the
+   condition row's Field dropdown: the other dropdowns have no headers. */
+.qb-cond-grid .ui.dropdown.qb-field-select .menu {
+  min-width: max(100%, 15rem);
+  max-height: min(22rem, 60vh);
+}
+/* On a narrow row the dropdown sits in the middle, so a 15rem menu opened to
+   the right would run off the screen: open it to the left instead. */
+@container (max-width: 640px) {
+  .qb-cond-grid .ui.dropdown.qb-field-select .menu {
+    left: auto;
+    right: 0;
+  }
+}
+/* A section header stays at the top of the scrolling menu, so a facet with many
+   fields never loses the "About a field" label. It needs its own opaque
+   background (items scroll behind it) and padding instead of Fomantic's
+   margins, which would leave a gap where items show through. */
+.qb-cond-grid .ui.dropdown.qb-field-select .menu > .header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0.7rem 1.14rem 0.4rem;
+  background: inherit; /* the menu's own */
+  white-space: normal;
 }
 .qb-value {
   min-width: 0;
@@ -749,11 +778,11 @@ body {
   background: var(--qb-surface-2);
   font-size: 0.85rem;
 }
+/* The whole sentence is the point of the footer: wrap it, never cut it off
+   (a long word, such as a name, breaks rather than widening the card). */
 .qb-summary {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-style: italic;
 }
 

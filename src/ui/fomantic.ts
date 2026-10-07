@@ -13,8 +13,13 @@ import $ from "jquery";
  * picks. Fomantic's default selects on every arrow press, which fires
  * onChange, and the repaint that follows replaces the open dropdown with a
  * closed one — so the first ↓ picked the next item and closed the menu.
+ *
+ * `hideDividers: "empty"`: the Field dropdown's <optgroup>s become a header and
+ * a divider in the menu, and Fomantic leaves them showing while the search
+ * filters. This hides each one that has no matching item under it, so typing
+ * never leaves a heading over nothing.
  */
-const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false };
+const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false, hideDividers: "empty" };
 
 /**
  * A free-entry dropdown (`data-free-entry`, set by valueControl.ts) also
@@ -28,11 +33,36 @@ const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false };
  */
 const FREE_ENTRY_DROPDOWN = { ...DROPDOWN, allowAdditions: true, delimiter: "\u0000" };
 
+/**
+ * Two things Fomantic does not do for a dropdown it builds from a <select>:
+ * - Its typing box (`input.search`) is what has the keyboard focus, and it has
+ *   no accessible name, so a screen reader says only "edit text". Give it the
+ *   <select>'s aria-label.
+ * - The shown choice is cut off with "…" when it is longer than the dropdown.
+ *   Put its full text in a `title` so hovering reads it.
+ */
+function describeDropdown(node: HTMLElement): void {
+  // `node` was the <select> carrying the `ui dropdown` classes; Fomantic wraps
+  // it in a <div class="ui dropdown"> and moves the classes there.
+  const dropdown = node.closest<HTMLElement>(".ui.dropdown") ?? node;
+  const label = dropdown.querySelector("select")?.getAttribute("aria-label");
+  if (label) dropdown.querySelector("input.search")?.setAttribute("aria-label", label);
+  showFullChoice(dropdown);
+}
+
+/** (Re)write the title of the dropdown's shown text. Called on activation and
+ *  after every change, so the title follows the selected choice. */
+function showFullChoice(node: HTMLElement): void {
+  const shown = node.querySelector<HTMLElement>(":scope > .text");
+  if (shown) shown.title = shown.textContent ?? "";
+}
+
 export function activate(container: HTMLElement): void {
   $(container)
     .find(".ui.dropdown")
     .each((_i, node) => {
       $(node).dropdown(node.hasAttribute("data-free-entry") ? FREE_ENTRY_DROPDOWN : DROPDOWN);
+      describeDropdown(node);
     });
   $(container).find(".ui.checkbox").checkbox();
 }
@@ -62,7 +92,10 @@ export function onDropdownChange(container: HTMLElement, handler: (el: HTMLEleme
   $(container)
     .find(".ui.dropdown")
     .each((_i, node) => {
-      $(node).dropdown("setting", "onChange", () => handler(node as HTMLElement));
+      $(node).dropdown("setting", "onChange", () => {
+        showFullChoice(node);
+        handler(node);
+      });
     });
 }
 

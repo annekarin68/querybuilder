@@ -229,6 +229,11 @@ state. The hazard is contained in one file and one helper:
   `destroy(container)` tears them down, `onDropdownChange` binds a
   dropdown's `onChange` (Fomantic dropdowns don't emit a usable native
   `change`), and `openDropdown` focuses a dropdown and opens its menu.
+  `activate` also finishes what Fomantic leaves out: it copies the `<select>`'s
+  `aria-label` onto the dropdown's typing box (`input.search`), which is what
+  has the keyboard focus and otherwise has no accessible name, and it puts the
+  shown choice's full text in a `title`, so a name cut off with "…" can be read
+  on hover (kept in step on every change).
 - **`src/ui/panel.ts`** — `paint(container, html)`: `destroy`, swap
   `innerHTML`, `activate`. The only way a panel updates its DOM.
 
@@ -294,10 +299,13 @@ src/
                        sameSemantics, …).
     drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
                        docs item creates, and what it couldn't), `dropNotice` — pure.
-    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS, OPERATOR_PROFILE, TYPE_NAMES,
-                       pickListFor, findFacet / findField / fieldsOfFacet / findOperator, isFacetLevel.
+    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
+                       TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator,
+                       isFacetLevel, isFacetTest (a well-formed whole-facet test).
     conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row,
-                       including the no-field choice.
+                       including the whole-facet tests of the Field dropdown; cursorAfterChange — where
+                       the cursor goes after a row change; announcementAfterChange — what a screen
+                       reader is told after one.
     validate.ts        validateQuery(tree, catalog) -> Issue[].
     issues.ts          serverIssues / placeIssues — the backend's issues, and where every issue is shown.
     summary.ts         queryToText — the query in plain English (display only).
@@ -582,7 +590,8 @@ by the pair `facetId` / `fieldId`. The operators are the fixed
 `present` / `absent` are the one operator pair for both a whole facet and a
 single field. Labels: field-level "Has any value" / "Has no value", facet-level
 "Is present" / "Is absent" (`operatorName(op, facetLevel)`). A condition with no
-field offers only these two (`FACET_OPERATOR_IDS`). The catalog also lists
+field offers only these two (`FACET_OPERATOR_IDS`; `FACET_OPERATORS` is the
+same pair as operators, computed once). The catalog also lists
 every facet (`catalog.facets`), including facets with no fields, so a facet
 can be chosen and tested for presence even when it has nothing to compare.
 
@@ -759,8 +768,9 @@ real backend should do the same.
 A condition can also be about a **whole facet**: `facetId` and `operatorId`
 set, `fieldId` `null` (`isFacetLevel`). Only `present` / `absent` apply, and
 the value is `null`. A facet with nothing else chosen is not facet-level, just
-unfinished: the row's explicit "no field" choice is what sets the operator to
-`present` ("Centre — `queryBuilder.ts`"), so the two states can be told apart.
+unfinished: the row's explicit whole-facet test, picked in the Field dropdown,
+is what sets the operator ("Centre — `queryBuilder.ts`"), so the two states can
+be told apart.
 Dropping a facet or a tag on the builder creates such conditions.
 
 - **`tree.ts`** — pure and immutable: every edit is "read `state.query`, call
@@ -775,7 +785,10 @@ Dropping a facet or a tag on the builder creates such conditions.
   `true`/`false`, text, a partial UTC timestamp) and that a number range
   doesn't run backwards. A value that isn't on the field's pick-list is fine.
   A facet-level condition must name a known facet, use `present` or `absent`
-  and hold no value. These checks also cover a query restored after a
+  and hold no value; the two messages for a facet-level operator or value that
+  isn't allowed end with "Pick Is present or Is absent." because the row has no
+  Operator or Value slot to fix, only the Field dropdown ("The Field dropdown's
+  two kinds of choice"). These checks also cover a query restored after a
   redirect. **Any issue blocks running.**
 - **`issues.ts`** — the backend's issues and where issues are shown.
   `serverIssues` turns each stats error that points at a node into an
@@ -786,8 +799,10 @@ Dropping a facet or a tag on the builder creates such conditions.
 - **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet
   clears field, operator and value; a new field clears operator and value; an
   operator change that alters the arity resets the value instead of reading
-  the old control. Choosing the no-field option clears the field and sets
-  `present`.
+  the old control. Choosing a whole-facet test in the Field dropdown ("Is present" /
+  "Is absent") clears the field and sets that operator. `cursorAfterChange` and
+  `announcementAfterChange` decide, on the committed condition, where the cursor
+  goes and what a screen reader hears.
 - **`summary.ts`** — `queryToText`, e.g. `Thing: size Greater than 3000 AND
   (…)`, or `Thing is present` for a facet-level condition. Display only;
   unfinished values show as `(value?)`.
@@ -945,9 +960,10 @@ whole line is the click target for unfolding it (`data-action="toggle-collapse"`
 on the header, a pointer cursor, a hover background and the tooltip "Click to
 expand"), except when the click ends a text selection; the grip inside it does
 not toggle, because a click there belongs to dragging. A condition row is three cascading Fomantic
-dropdowns — **Facet**, **Field** (that facet's fields, `fieldsOfFacet`, by
-`Field.name`), **Operator** (the field's `operatorIds`) — then the value
-control from `valueControl.ts`: nothing; for **Equals** /
+dropdowns — **Facet**, **Field** (a whole-facet test, then that facet's fields,
+`fieldsOfFacet`, by `Field.name`: "The Field dropdown's two kinds of choice"),
+**Operator** (the field's `operatorIds`; absent on a whole-facet condition) —
+then the value control from `valueControl.ts`: nothing; for **Equals** /
 **Not equals** on a field with a pick-list, a free-entry dropdown (its known
 values, plus anything typed); otherwise one input, a boolean toggle or a
 timestamp text box; a from–to pair (numbers and dates); or, for **Is any
@@ -965,20 +981,66 @@ for validation to report). Every control has an accessible name. Issues — the
 local ones and the backend's — show under their row or group (`placeIssues`):
 an issue inside a collapsed group shows on that group, and one whose node is
 unknown on the root group, so none is lost. The footer shows the whole query
-in plain English once nothing needs attention, otherwise how many parts do.
+in plain English (wrapped, never cut off with "…") once nothing needs attention,
+otherwise how many parts do.
 
-**The Field dropdown's no-field choice.** Besides the facet's fields, the
-Field dropdown offers "— no field (facet only) —", which makes the condition
-about the whole facet: its Operator list becomes "Is present" / "Is absent" and
-there is no value. The `<select>` values are encoded so nothing can collide:
-`""` is nothing chosen, `NO_FIELD` (`"none"`) is the no-field choice, and a
+**The Field dropdown's two kinds of choice.** The second dropdown answers
+"what do I want to say about this facet?", so its menu has two sections:
+"About the whole facet" ("Is present", "Is absent") and "About a field" (the
+facet's fields; left out for a facet that has none). Picking a whole-facet test
+makes the condition about the facet itself (`fieldId: null`, operator
+`present` / `absent`, no value) and the row draws **no Operator or Value
+slot**: the test already is the whole sentence (`Thing · Is present`), and an
+Operator dropdown beside it would only repeat the choice. The ✕ stays in the
+grid's last column (`.is-facet-level`). Picking a field works as before.
+**Decided 2026-10-07:** this replaced a "— no field (facet only) —" choice,
+which made rows read "No field is present" (a negative placeholder in the slot
+where a noun is expected). We rejected an "(any field)" pseudo-field with "Has
+any value" / "Has no value": "Any field has no value" reads as "some field is
+blank", while a facet-level `absent` means no field holds a value. **Only
+`present` and `absent` exist at facet level.** That is why the test can live in
+the Field dropdown and the Operator slot can go; a facet-level operator that
+takes a value or has more than two options would need the Operator slot back.
+
+The `<select>` values are encoded so nothing can collide: `""` is nothing
+chosen, a whole-facet test is `FACET_TEST_PREFIX` (`"op:"`) + the operator, a
 real field is `FIELD_PREFIX` (`"f:"`) + its id, so a field literally called
-"none" is still just a field (`decodeFieldValue` reads it back). The row draws
-the choice with a ∅ glyph (a CSS `content` character, so nothing is fetched),
-italics, muted text and a dashed outline, in the shown text and in the menu,
-so it can never be mistaken for a field. The styling is limited to the Field
-dropdown (`qb-field-select`; Fomantic copies the select's classes onto the
-dropdown it builds), so a facet or operator whose id is "none" is left alone.
+"present" is still just a field (`decodeFieldValue` reads it back, and treats
+an `op:` value a facet can't take as nothing chosen, since the value comes from
+the page). The sections are `<optgroup>`s, which Fomantic turns into menu
+headers. The select carries `qb-field-select`, which Fomantic copies onto the
+dropdown, so `styles.css` can style this one dropdown without touching the
+others:
+
+- **The menu** is at least `15rem` wide (Fomantic makes it only as wide as the
+  dropdown, about 80px on a narrow row, which cut "About the whole facet" down
+  to a word), at most `22rem` / 60% of the screen high, and on a row narrower
+  than 640px it opens to the left (right-aligned to its dropdown), so it never
+  runs off the right edge. Its section headers wrap and stay at the top of the
+  scrolling menu (`position: sticky`, with the menu's own background), so
+  "About a field" is still in view among many fields.
+- **A whole-facet row** (`.is-facet-level`) has its own three-column grid:
+  facet name (up to `18rem`, so the name gets the spare room), the Field
+  dropdown (just wide enough for "Is present" / "Is absent" to read whole), and
+  the ✕ at the row's end.
+
+The dropdown's accessible name is "Field, or presence of the facet", its
+placeholder "Choose…" and the hint under an unfinished row "Choose a field, or
+whether the facet is present.". After a whole-facet pick the cursor stays on the
+(closed) Field dropdown, since nothing follows it; after a field pick it goes on
+to the Operator as before. The Operator and Value slots vanish without a sound
+for a screen-reader user, so the same pick is announced
+(`announcementAfterChange`: "Thing is present. Condition complete.", built with
+`queryToText`) through the page's one live region, which `main.ts` hands to
+`wireQueryBuilder` as `announce` (see "Announcements" below).
+
+A whole-facet row the UI cannot produce but a hand-edited or restored query can
+(a foreign operator such as "Equals", or a value next to "Is present") is drawn
+the same way, without Operator or Value slots, so the Field dropdown is the
+only place to fix it. It shows "Choose…" instead of a test (`isFacetTest` is
+true only for a presence operator with no value), so picking "Is present" is a
+real change and `nextCondition` rewrites the row (operator set, value `null`);
+the issue's message tells the user to do exactly that.
 
 **Drag and drop** (`wireQueryBuilder`, with `drop.ts` and `app.ts`):
 
@@ -1016,7 +1078,10 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
   moved node too, judged after the node is taken out: dragging the last other
   row onto a group's blank row (or into a new group) leaves just that row.
 - **Announcements.** The query card repaints on every change, so a screen-reader
-  user hears nothing when "+" adds a row or a drop lands. After a drop or move
+  user hears nothing when "+" adds a row or a drop lands (or, in a condition row,
+  when a whole-facet test removes the Operator and Value slots: `main.ts` also
+  gives `wireQueryBuilder` `announce`, see "The Field dropdown's two kinds of
+  choice"). After a drop or move
   that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
   the query.", "Moved the group.", the words in `drop.ts`). `announce` is a
   dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
@@ -1048,15 +1113,26 @@ movement in `queryBuilder.ts`):
   the typed text, ignoring case (`fullTextSearch: "exact"`, for every
   dropdown). `true` would also match the letters spread out in order, which
   with many facets buried the real matches.
+- **Headers follow the filter** (`hideDividers: "empty"`). The Field
+  dropdown's `<optgroup>` headers (and their divider lines) are hidden while no
+  item under them matches the typed text; Fomantic's default leaves them
+  showing over nothing. No other dropdown has headers, so the setting is
+  global.
 - **Arrow keys move, Enter picks** (`selectOnKeydown: false`). Fomantic's
   default picks on every arrow press; that fires `onChange`, and the repaint
   replaced the open dropdown with a closed one.
 - **The cursor moves on.** A choice in Facet, Field or Operator puts the
-  cursor in the next part of the row (`NEXT_PART`, `focusPart`), so a whole
-  condition can be built from the keyboard: the next dropdown opens
-  (`openDropdown`), or the cursor goes to the first value box. Without this
-  the repaint would lose the cursor. Operator is a search dropdown partly for
-  this: a click on a search dropdown whose menu is already open keeps it open,
+  cursor in the next part of the row (`cursorAfterChange` in
+  `conditionEdit.ts`, then `focusPart`), so a whole condition can be built from
+  the keyboard: the next dropdown opens (`openDropdown`), or the cursor goes to
+  the first value box. Without this the repaint would lose the cursor. **One
+  exception:** a whole-facet test ("Is present" / "Is absent") finishes the row
+  — no Operator or Value follows — so the cursor stays on the closed Field
+  dropdown (`focusFieldDropdown`); see "The Field dropdown's two kinds of
+  choice". `cursorAfterChange` judges by the condition that was just committed,
+  not by the row's dropdowns: after a new Facet the Field dropdown still shows
+  the old facet's choice until the repaint, and that stale choice must not
+  count. Operator is a search dropdown partly for this: a click on a search dropdown whose menu is already open keeps it open,
   where a plain one would close it.
 
 Wiring: two delegated listeners (`click` for `data-action` buttons, `change`
