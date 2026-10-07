@@ -1,4 +1,6 @@
 import type { ActiveView } from "../state";
+import { MASCOT } from "../config";
+import type { MascotState } from "./mascot";
 
 const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "filter", label: "Filter" },
@@ -22,6 +24,10 @@ export interface Shell {
   setActiveView(v: ActiveView): void;
   /** The sidebar's drag handle; wire it with wireDocsResize. */
   docsResizeHandle: HTMLElement;
+  /** The pickle in the top bar. */
+  logo: HTMLImageElement;
+  /** Show the pickle with the face for `state`. */
+  setMascot(state: MascotState): void;
   /** Fold the data dictionary into its rail, or open it. */
   setSidebarCollapsed(collapsed: boolean): void;
   /** Listen for clicks on the workflow steps and the docs toggles. Call once. */
@@ -37,7 +43,7 @@ export interface Shell {
 export function renderShell(root: HTMLElement): Shell {
   root.innerHTML = `
     <header class="qb-topbar">
-      <span class="qb-brand">Query Builder</span>
+      <span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" />Query Builder</span>
       <nav class="qb-steps" data-menu="views" aria-label="Workflow">
         ${VIEWS.map(
           (v, i) =>
@@ -69,6 +75,11 @@ export function renderShell(root: HTMLElement): Shell {
   const body = find(".qb-body");
   const rail = find<HTMLButtonElement>(".qb-docs-rail");
   const steps = find('[data-menu="views"]');
+  const logo = find<HTMLImageElement>(".qb-logo");
+  logo.addEventListener("error", () => {
+    // A missing loading.svg falls back to the normal face; never loop.
+    if (logo.getAttribute("src") !== MASCOT.neutral) logo.src = MASCOT.neutral;
+  });
 
   return {
     panels: {
@@ -81,6 +92,14 @@ export function renderShell(root: HTMLElement): Shell {
     },
 
     docsResizeHandle: find(".qb-docs-resize"),
+
+    logo,
+
+    setMascot(state) {
+      logo.dataset.state = state;
+      // Panels repaint often; only touch the image when the face changes.
+      if (logo.getAttribute("src") !== MASCOT[state]) logo.src = MASCOT[state];
+    },
 
     setActiveView(v) {
       steps.querySelectorAll<HTMLElement>("[data-view]").forEach((a) => {

@@ -15,6 +15,7 @@ import * as api from "./api/client";
 import { createApp, errorMessage } from "./app";
 import { store, type AppState } from "./state";
 import { renderShell } from "./ui/layout";
+import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
@@ -71,6 +72,7 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
+  { keys: ["issues", "stats", "preview"], run: (s) => shell.setMascot(mascotFor(s)) },
   { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {

@@ -5,47 +5,47 @@
  * them here, not in individual rules.
  */
 :root {
-  --qb-bg: #f3f5f8;
-  --qb-surface: #ffffff;
-  --qb-surface-2: #f7f9fb;
-  --qb-border: #dde2e8;
-  --qb-border-strong: #c8d0d9;
-  --qb-text: #1f2933;
-  --qb-muted: #5f6b7a;
-  --qb-subtle: #8792a0;
+  --qb-bg: #f4f1e3;
+  --qb-surface: #fffdf5;
+  --qb-surface-2: #f8f5e6;
+  --qb-border: #dcd8bf;
+  --qb-border-strong: #c4bf9f;
+  --qb-text: #23301f;
+  --qb-muted: #4f5c49;
+  --qb-subtle: #5f6c58;
 
   --qb-text-on-fill: #ffffff; /* text on the top bar and on filled buttons/badges */
-  --qb-hover: rgba(0, 0, 0, 0.06);
-  --qb-chip: #eef1f4;
-  --qb-track: #e3e8ee; /* the empty part of a statistics bar */
-  --qb-selected-bg: #eaf4fc;
-  --qb-selected-text: #1f5f8f;
-  --qb-open-row: #eef4fa;
-  --qb-shadow: 0 8px 24px rgba(15, 30, 45, 0.18);
+  --qb-hover: rgba(35, 48, 31, 0.07);
+  --qb-chip: #ece8d2;
+  --qb-track: #e5e1c8; /* the empty part of a statistics bar */
+  --qb-selected-bg: #e3eecb;
+  --qb-selected-text: #2b5319;
+  --qb-open-row: #f0efd9;
+  --qb-shadow: 0 8px 24px rgba(35, 48, 31, 0.2);
 
-  --qb-topbar: #1b2a3a;
-  --qb-topbar-2: #2d4257;
-  --qb-topbar-text: #dbe6f0;
-  --qb-topbar-muted: #9fb0c2;
-  --qb-topbar-ok-bg: rgba(33, 186, 69, 0.2);
-  --qb-topbar-ok-text: #a7f0b8;
-  --qb-topbar-warn-bg: rgba(224, 138, 0, 0.25);
-  --qb-topbar-warn-text: #ffd08a;
+  --qb-topbar: #2c4a26;
+  --qb-topbar-2: #44683a;
+  --qb-topbar-text: #eef3dc;
+  --qb-topbar-muted: #b9cba0;
+  --qb-topbar-ok-bg: rgba(168, 220, 120, 0.25);
+  --qb-topbar-ok-text: #d6f2b0;
+  --qb-topbar-warn-bg: rgba(240, 196, 60, 0.25);
+  --qb-topbar-warn-text: #ffe9a0;
 
-  /* ALL / AND */
-  --qb-and: #2185d0;
-  --qb-and-soft: #9cc5e8;
-  --qb-and-tint: rgba(33, 133, 208, 0.05);
-  --qb-and-tint-strong: rgba(33, 133, 208, 0.11);
-  /* ANY / OR */
-  --qb-or: #e08a00;
-  --qb-or-text: #a86400;
-  --qb-or-soft: #f0c47a;
-  --qb-or-tint: rgba(224, 138, 0, 0.07);
-  --qb-or-tint-strong: rgba(224, 138, 0, 0.14);
+  /* ALL / AND: pickle green */
+  --qb-and: #3f7a2c;
+  --qb-and-soft: #a9cf8e;
+  --qb-and-tint: rgba(63, 122, 44, 0.06);
+  --qb-and-tint-strong: rgba(63, 122, 44, 0.12);
+  /* ANY / OR: mustard seed */
+  --qb-or: #d9a00a;
+  --qb-or-text: #7d5800;
+  --qb-or-soft: #ecd48a;
+  --qb-or-tint: rgba(217, 160, 10, 0.09);
+  --qb-or-tint-strong: rgba(217, 160, 10, 0.17);
 
-  --qb-danger: #c0392b;
-  --qb-warn: #a86400;
+  --qb-danger: #b03a1e;
+  --qb-warn: #7d5800;
 
   --qb-radius: 6px;
   --qb-gap: 1rem;
@@ -86,6 +86,9 @@ body {
   color: var(--qb-text-on-fill);
 }
 .qb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 700;
   font-size: 1.05rem;
   white-space: nowrap;
@@ -1138,4 +1141,65 @@ body {
 }
 .qb-notice {
   position: relative;
+}
+
+/* ---- Pickle mascot (src/ui/layout.ts, src/ui/mascot.ts) ---- */
+.qb-logo {
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  transform-origin: 50% 90%;
+}
+.qb-logo[data-state="loading"] {
+  animation: qb-wobble 1s ease-in-out infinite;
+}
+@keyframes qb-wobble {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qb-logo[data-state="loading"] {
+    animation: none;
+  }
+}
+
+/* ---- Fomantic's own blue, recoloured to the pickle palette ---- */
+.ui.primary.button,
+.ui.primary.buttons .button {
+  background-color: var(--qb-and);
+  color: var(--qb-text-on-fill);
+}
+.ui.primary.button:hover {
+  background-color: var(--qb-topbar-2);
+}
+a {
+  color: var(--qb-and);
+}
+.ui.selection.active.dropdown,
+.ui.selection.active.dropdown:hover,
+.ui.input.focus > input,
+.ui.input > input:focus,
+.ui.selection.dropdown:focus {
+  border-color: var(--qb-and);
+}
+.ui.dropdown .menu > .item.selected,
+.ui.dropdown .menu .active.item {
+  background: var(--qb-selected-bg);
+  color: var(--qb-selected-text);
+}
+.ui.toggle.checkbox input:checked ~ label::before,
+.ui.toggle.checkbox input:focus:checked ~ label::before {
+  background-color: var(--qb-and);
+}
+.ui.checkbox input:focus ~ label::before,
+.ui.checkbox input:checked:focus ~ label::before {
+  border-color: var(--qb-and);
+}
+.ui.selection.active.dropdown .menu {
+  border-color: var(--qb-and);
 }
