@@ -2,9 +2,12 @@ import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { Facet } from "../model";
 import {
+  FACET_OPERATOR_IDS,
   fieldsOfFacet,
   findField,
   findOperator,
+  isFacetLevel,
+  operatorName,
   OPERATORS,
   type FieldCatalog,
 } from "../query/fieldCatalog";
@@ -81,6 +84,31 @@ export function rowDropdown(
   return `<select class="ui search selection dropdown" data-part="${part}" aria-label="${label}"${enabled ? "" : " disabled"}><option value="">${label}…</option>${opts}</select>`;
 }
 
+/** The Field dropdown's value for "no field — about the facet itself". "" means
+ *  nothing chosen yet; real fields are `FIELD_PREFIX` + id, so no field can
+ *  ever collide with this value (or with a field literally named "Any field"). */
+export const NO_FIELD = "none";
+export const FIELD_PREFIX = "f:";
+
+/** The row's Field dropdown: nothing chosen, the no-field choice, then the fields. */
+export function fieldDropdown(
+  fields: { id: string; name: string }[],
+  selectedId: string | null,
+  facetOnly: boolean,
+  enabled: boolean,
+): string {
+  const opts = optionsHtml(
+    fields,
+    (f) => FIELD_PREFIX + f.id,
+    (f) => f.name,
+    (f) => f.id === selectedId,
+  );
+  const noField = `<option value="${NO_FIELD}"${facetOnly ? " selected" : ""}>— no field (facet only) —</option>`;
+  // Fomantic copies the <select>'s classes onto the dropdown it builds, so
+  // `qb-no-field` lets the CSS style the shown text and the menu item.
+  return `<select class="ui search selection dropdown${facetOnly ? " qb-no-field" : ""}" data-part="field" aria-label="Field"${enabled ? "" : " disabled"}><option value="">Field…</option>${noField}${opts}</select>`;
+}
+
 /** Where the cursor goes after a choice in a condition row's dropdown, so a
  *  whole condition can be built from the keyboard. */
 const NEXT_PART: Record<string, string> = { facet: "field", field: "operator", operator: "value" };
@@ -111,12 +139,18 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
     id: f.fieldId,
     name: f.fieldName,
   }));
-  const operators = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.id)) : [];
+  const facetLevel = isFacetLevel(c);
+  const operators = facetLevel
+    ? OPERATORS.filter((o) => FACET_OPERATOR_IDS.includes(o.id))
+    : field
+      ? OPERATORS.filter((o) => field.operatorIds.includes(o.id))
+      : [];
+  const operatorChoices = operators.map((o) => ({ id: o.id, name: operatorName(o, facetLevel) }));
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-grid">
       ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
-      ${rowDropdown("field", fields, c.fieldId, Boolean(c.facetId))}
-      ${rowDropdown("operator", operators, c.operatorId, field !== undefined)}
+      ${fieldDropdown(fields, c.fieldId, facetLevel, Boolean(c.facetId))}
+      ${rowDropdown("operator", operatorChoices, c.operatorId, field !== undefined || facetLevel)}
       <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
       ${iconButton("remove-node", "Remove condition", "times")}
     </div>
@@ -237,13 +271,20 @@ export function wireQueryBuilder(
     if (!catalog || !cond || cond.kind !== "condition") return;
     const picked = (part: string) =>
       row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
+    // The field select holds encoded values (see NO_FIELD / FIELD_PREFIX).
+    const fieldValue = picked("field");
+    const facetOnly = fieldValue === NO_FIELD;
+    const fieldId = fieldValue?.startsWith(FIELD_PREFIX)
+      ? fieldValue.slice(FIELD_PREFIX.length)
+      : null;
     const nextPart = changedPart && picked(changedPart) ? NEXT_PART[changedPart] : undefined;
     const patch = nextCondition(
       cond,
       {
         facetId: picked("facet"),
-        fieldId: picked("field"),
+        fieldId,
         operatorId: picked("operator"),
+        facetOnly,
       },
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),

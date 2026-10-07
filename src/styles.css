@@ -630,6 +630,20 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The "no field" choice must never look like a real field (a field could
+   literally be named "Any field"): muted italics and a dashed outline, both in
+   the shown text and in the menu. */
+.qb-cond-grid .ui.selection.dropdown.qb-no-field {
+  border-style: dashed;
+}
+.qb-cond-grid .ui.selection.dropdown.qb-no-field > .text,
+.qb-cond-grid .ui.dropdown .menu > .item[data-value="none"] {
+  font-style: italic;
+  color: var(--qb-muted);
+}
+.qb-cond-grid .ui.dropdown .menu > .item[data-value="none"] {
+  border-bottom: 1px dashed var(--qb-border-strong);
+}
 .qb-value {
   min-width: 0;
 }

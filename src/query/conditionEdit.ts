@@ -1,6 +1,7 @@
 import {
   findField,
   findOperator,
+  isFacetLevel,
   type Arity,
   type CatalogField,
   type CatalogOperator,
@@ -14,6 +15,8 @@ export interface RowPicks {
   facetId: string | null;
   fieldId: string | null;
   operatorId: string | null;
+  /** true when the Field dropdown shows the no-field choice */
+  facetOnly: boolean;
 }
 
 /**
@@ -32,7 +35,8 @@ export function defaultValueFor(
 /**
  * The condition after the user changed something in its row. The dropdowns
  * cascade: a new Facet clears Field, Operator and value; a new Field clears
- * Operator and value.
+ * Operator and value. Choosing "no field" (a facet-level condition) sets the
+ * operator to "present".
  *
  * `readValue` reads the row's on-screen value control. It is only called when
  * that control still has the right shape — if the operator's arity changed
@@ -47,9 +51,14 @@ export function nextCondition(
 ): Pick<Condition, "facetId" | "fieldId" | "operatorId" | "value"> {
   const facetId = picks.facetId;
   const facetChanged = facetId !== cond.facetId;
-  const fieldId = facetChanged ? null : picks.fieldId;
-  const fieldChanged = facetChanged || fieldId !== cond.fieldId;
-  const operatorId = fieldChanged ? null : picks.operatorId;
+  // A new facet starts over: neither a field nor "no field" carries across.
+  const facetOnly = !facetChanged && picks.facetOnly;
+  const fieldId = facetChanged || facetOnly ? null : picks.fieldId;
+  const wasFacetOnly = isFacetLevel(cond);
+  const fieldChanged = facetChanged || fieldId !== cond.fieldId || facetOnly !== wasFacetOnly;
+  // Choosing "no field" picks "present" straight away, so the condition is
+  // already complete and can be told apart from "nothing chosen yet".
+  const operatorId = fieldChanged ? (facetOnly ? "present" : null) : picks.operatorId;
 
   const field = findField(catalog, facetId, fieldId);
   const operator = findOperator(operatorId);

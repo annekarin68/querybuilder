@@ -31,7 +31,7 @@ const onScreen = (value: unknown) => () => value;
 
 describe("nextCondition", () => {
   it("keeps what the user typed when only the value changed", () => {
-    const picks = { facetId: "thing", fieldId: "size", operatorId: "gt" };
+    const picks = { facetId: "thing", fieldId: "size", operatorId: "gt", facetOnly: false };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toMatchObject({
       fieldId: "size",
       operatorId: "gt",
@@ -40,7 +40,7 @@ describe("nextCondition", () => {
   });
 
   it("changing the facet resets field, operator and value", () => {
-    const picks = { facetId: "other", fieldId: "size", operatorId: "gt" };
+    const picks = { facetId: "other", fieldId: "size", operatorId: "gt", facetOnly: false };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toEqual({
       facetId: "other",
       fieldId: null,
@@ -50,7 +50,7 @@ describe("nextCondition", () => {
   });
 
   it("changing the field resets operator and value", () => {
-    const picks = { facetId: "thing", fieldId: "name", operatorId: "gt" };
+    const picks = { facetId: "thing", fieldId: "name", operatorId: "gt", facetOnly: false };
     expect(nextCondition(cond(), picks, catalog, onScreen(70))).toMatchObject({
       fieldId: "name",
       operatorId: null,
@@ -59,12 +59,12 @@ describe("nextCondition", () => {
   });
 
   it("keeps the value when the operator changes to one of the same arity", () => {
-    const picks = { facetId: "thing", fieldId: "size", operatorId: "gte" };
+    const picks = { facetId: "thing", fieldId: "size", operatorId: "gte", facetOnly: false };
     expect(nextCondition(cond(), picks, catalog, onScreen(50)).value).toBe(50);
   });
 
   it("does not read the stale control when the operator's arity changes", () => {
-    const picks = { facetId: "thing", fieldId: "size", operatorId: "between" };
+    const picks = { facetId: "thing", fieldId: "size", operatorId: "between", facetOnly: false };
     const read = () => {
       throw new Error("must not read the old control");
     };
@@ -72,7 +72,7 @@ describe("nextCondition", () => {
   });
 
   it("a boolean field defaults to false, since a toggle cannot show 'unset'", () => {
-    const picks = { facetId: "thing", fieldId: "active", operatorId: null };
+    const picks = { facetId: "thing", fieldId: "active", operatorId: null, facetOnly: false };
     const next = nextCondition(cond({ fieldId: "size" }), picks, catalog, onScreen(1));
     expect(next.value).toBeNull();
     const withOp = nextCondition(
@@ -82,6 +82,58 @@ describe("nextCondition", () => {
       onScreen(undefined),
     );
     expect(withOp.value).toBe(false);
+  });
+});
+
+describe("nextCondition with the no-field choice", () => {
+  const none = { facetId: "thing", fieldId: null, operatorId: null, facetOnly: true };
+
+  it("choosing no field sets 'present' and a null value", () => {
+    const start = cond({ fieldId: null, operatorId: null, value: null });
+    expect(nextCondition(start, none, catalog, onScreen(null))).toEqual({
+      facetId: "thing",
+      fieldId: null,
+      operatorId: "present",
+      value: null,
+    });
+  });
+
+  it("keeps the operator the user switched to (absent)", () => {
+    const start = cond({ fieldId: null, operatorId: "present", value: null });
+    const picks = { ...none, operatorId: "absent" };
+    expect(nextCondition(start, picks, catalog, onScreen(null))).toMatchObject({
+      fieldId: null,
+      operatorId: "absent",
+    });
+  });
+
+  it("switching from no field to a real field clears the operator", () => {
+    const start = cond({ fieldId: null, operatorId: "absent", value: null });
+    const picks = { facetId: "thing", fieldId: "size", operatorId: "absent", facetOnly: false };
+    expect(nextCondition(start, picks, catalog, onScreen(null))).toMatchObject({
+      fieldId: "size",
+      operatorId: null,
+    });
+  });
+
+  it("clearing the field choice clears the operator", () => {
+    const start = cond({ fieldId: null, operatorId: "present", value: null });
+    const picks = { facetId: "thing", fieldId: null, operatorId: "present", facetOnly: false };
+    expect(nextCondition(start, picks, catalog, onScreen(null))).toMatchObject({
+      fieldId: null,
+      operatorId: null,
+    });
+  });
+
+  it("changing the facet resets everything, even from no field", () => {
+    const start = cond({ fieldId: null, operatorId: "present", value: null });
+    const picks = { facetId: "other", fieldId: null, operatorId: "present", facetOnly: true };
+    expect(nextCondition(start, picks, catalog, onScreen(null))).toEqual({
+      facetId: "other",
+      fieldId: null,
+      operatorId: null,
+      value: null,
+    });
   });
 });
 
