@@ -267,7 +267,8 @@ database checkboxes and All / None, the buttons inside a group or condition
 Matching events card). A few things are deliberately **not** restored:
 
 - **Anything inside a Fomantic dropdown, and text or number boxes.** The query
-  builder puts the cursor back there itself (`focusPart`, `focusFieldDropdown`),
+  builder puts the cursor back there itself (`focusPart`, `focusFieldDropdown`,
+  `restoreCursorSpot`),
   judging by what the user just did, and the data dictionary's search box is
   never repainted. A second, generic rule would fight them.
 - **A mouse click.** Only an element that matched `:focus-visible` is restored,
@@ -352,6 +353,7 @@ src/
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
   util/
     debounce.ts        debounce(fn, ms) (the live-stats trigger).
+    afterPointer.ts    When a typed value may be committed: not while the mouse button is down (see "Centre — `queryBuilder.ts`", Wiring).
     requestSlot.ts     At most one request per kind in flight; the whole stale-response guard.
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
   ui/
@@ -1207,6 +1209,30 @@ The `change` listener skips everything inside a `.ui.dropdown`: a search
 dropdown's typing box fires `change` when it loses focus on the mousedown
 before a menu click, and repainting then would remove the item under the
 pointer before the click lands.
+
+The plain `<input>`s that remain commit **later than their `change`**
+(`src/util/afterPointer.ts`), for two reasons that share one cause: `change`
+fires while the box loses focus, before whatever the user did next has
+finished, and the commit repaints the whole builder. (1) With the mouse,
+`change` fires on mousedown, the repaint replaces the button under the pointer
+and the first click on **+ Condition**, ANY, ✕ or **Run query** is lost. So a
+`change` that arrives while the primary button is down (`pointerdown` /
+`pointerup` / `pointercancel` on `document`) is held until the pointer is
+released and then applied in a `setTimeout(0)`, which runs after the click. (2)
+With the keyboard, Tab or Enter out of a box also repaints before the focus has
+moved, destroying the control it moves to. So even with the pointer up the
+commit waits one `setTimeout(0)`, by which time the focus is already on its
+destination. The patch is read at `change` time (the row still exists) but
+applied to the latest query by node id (`commitTypedValue`), because the click in
+between may have changed the tree; if the node is gone by then the edit is
+dropped. After the repaint `restoreCursorSpot` puts the cursor back on a
+dropdown or text/number box, which `paint()` deliberately does not restore: the
+other box of a Between pair, or the Operator dropdown after Shift+Tab. A button
+the focus moved to is restored by `paint()` itself. Known limit: **Run query**
+reads the query when it is clicked, so a value typed and mouse-clicked straight
+onto Run is not yet committed (it runs the previous value, and the commit that
+follows discards that run), and Run, if it was disabled until that value
+completed the query, ignores the press.
 
 ### Right — `statsPanel.ts`
 

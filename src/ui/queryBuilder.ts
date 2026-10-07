@@ -22,11 +22,13 @@ import {
   removeNode,
   updateNode,
   type Direction,
+  type NodePatch,
 } from "../query/tree";
 import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { placeIssues } from "../query/issues";
 import { queryToText } from "../query/summary";
+import { createAfterPointer } from "../util/afterPointer";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel } from "./format";
@@ -224,6 +226,42 @@ function focusFieldDropdown(container: HTMLElement, nodeId: string): void {
   dropdownOf(nodeOf(container, nodeId), "field")
     ?.querySelector<HTMLElement>("input.search")
     ?.focus();
+}
+
+/** Where the cursor stood inside a condition row, in terms that survive a
+ *  repaint (the element itself does not). `range` is "from" or "to" in a
+ *  Between pair. */
+interface CursorSpot {
+  nodeId: string;
+  part: string;
+  range: string | null;
+}
+
+/**
+ * The cursor's place if it is on a dropdown or a text or number box of a
+ * condition row, else null (a button needs no help: `paint` restores it).
+ */
+function cursorSpot(container: HTMLElement): CursorSpot | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !container.contains(active)) return null;
+  const nodeId = active.closest<HTMLElement>(".qb-condition[data-node-id]")?.dataset.nodeId;
+  // The dropdown's typing box (the focused element) has no data-part; its
+  // <select> beside it has.
+  const dropdownPart = active.closest(".ui.dropdown")?.querySelector("select")?.dataset.part;
+  const part = dropdownPart ?? active.dataset.part;
+  return nodeId && part ? { nodeId, part, range: active.dataset.range ?? null } : null;
+}
+
+/** Put the cursor back where `cursorSpot` found it, in the repainted row. */
+function restoreCursorSpot(container: HTMLElement, spot: CursorSpot): void {
+  if (spot.range) {
+    // focusPart would choose the first box, not the "to" one.
+    nodeOf(container, spot.nodeId)
+      ?.querySelector<HTMLElement>(`input[data-range="${spot.range}"]`)
+      ?.focus();
+  } else {
+    focusPart(container, spot.nodeId, spot.part);
+  }
 }
 
 function conditionHtml(ctx: BuilderCtx, c: Condition, position: Position): string {
@@ -439,11 +477,13 @@ export function wireQueryBuilder(
     announce(message: string): void;
   },
 ): (state: AppState) => void {
-  /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
-  function handleRowChange(row: HTMLElement, changedPart?: string): void {
+  /** What a change in `row` amounts to: the condition as it is on screen now
+   *  and the patch to apply. `changedPart`: the dropdown just used ("facet",
+   *  "field", …), if any. Null when the row is not a condition we know. */
+  function readRowEdit(row: HTMLElement, changedPart?: string) {
     const { query, catalog } = getState();
     const cond = findNode(query, row.dataset.nodeId!);
-    if (!catalog || !cond || cond.kind !== "condition") return;
+    if (!catalog || !cond || cond.kind !== "condition") return null;
     const picked = (part: string) =>
       row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
     const { facetOperatorId, fieldId } = decodeFieldValue(picked("field"));
@@ -458,9 +498,16 @@ export function wireQueryBuilder(
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
-    // Read the changed dropdown now: onChange repaints at once and replaces
+    // Read the changed dropdown now: the caller repaints at once and replaces
     // this row, so it must not be read afterwards.
     const hasChoice = Boolean(changedPart && picked(changedPart));
+    return { query, catalog, cond, patch, hasChoice };
+  }
+
+  function handleRowChange(row: HTMLElement, changedPart?: string): void {
+    const edit = readRowEdit(row, changedPart);
+    if (!edit) return;
+    const { query, catalog, cond, patch, hasChoice } = edit;
     onChange(updateNode(query, cond.id, patch));
     // The repaint also lost the cursor: put it back where cursorAfterChange
     // says, judging by the committed patch (the row's dropdowns may still show
@@ -470,6 +517,47 @@ export function wireQueryBuilder(
     else if (target) focusPart(container, cond.id, target);
     const spoken = announcementAfterChange(changedPart, hasChoice, { ...cond, ...patch }, catalog);
     if (spoken) hooks.announce(spoken);
+  }
+
+  // A typed value is committed later than the `change` that announced it; see
+  // the "Wiring" paragraph in docs/ARCHITECTURE.md for why. Document-wide, so
+  // a press on any button in the page counts, not only one in this panel.
+  let pointerIsDown = false;
+  const afterPointer = createAfterPointer({
+    isPointerDown: () => pointerIsDown,
+    schedule: (task) => setTimeout(task, 0),
+  });
+  const pointerEnded = () => {
+    pointerIsDown = false;
+    afterPointer.pointerReleased();
+  };
+  const listenOptions = { capture: true, passive: true };
+  // Only the primary button: a right-click opens a menu and may never send the
+  // matching pointerup, which would hold every later commit for ever.
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.button === 0) pointerIsDown = true;
+    },
+    listenOptions,
+  );
+  document.addEventListener("pointerup", pointerEnded, listenOptions);
+  document.addEventListener("pointercancel", pointerEnded, listenOptions);
+
+  /**
+   * Commit a typed value. The patch was read when `change` fired (the row was
+   * still on screen), but it is applied to the LATEST query by node id: a click
+   * that happened in between may have changed the tree. A node removed in the
+   * meantime drops the edit silently.
+   */
+  function commitTypedValue(nodeId: string, patch: NodePatch): void {
+    const { query } = getState();
+    if (!findNode(query, nodeId)) return;
+    // By now the browser has moved the focus to where the user was going; the
+    // repaint destroys that control unless it is put back.
+    const spot = cursorSpot(container);
+    onChange(updateNode(query, nodeId, patch));
+    if (spot) restoreCursorSpot(container, spot);
   }
 
   /** Dismiss the warning. The repaint removes the ✕ the user was on, which
@@ -610,10 +698,12 @@ export function wireQueryBuilder(
     // it loses focus on the mousedown before a menu click; repainting then would
     // remove the item under the pointer before the click lands. So anything
     // inside a .ui.dropdown is skipped, and this listener handles only the plain
-    // <input>s (text/number, the range pair and the boolean toggle's checkbox).
+    // <input>s (text/number, the range pair and the boolean toggle's checkbox),
+    // and those commit through afterPointer, not at once.
     if (target instanceof HTMLSelectElement || target.closest(".ui.dropdown")) return;
     const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
-    if (row) handleRowChange(row);
+    const edit = row && readRowEdit(row);
+    if (edit) afterPointer.run(() => commitTypedValue(edit.cond.id, edit.patch));
   });
 
   return (state) => {
