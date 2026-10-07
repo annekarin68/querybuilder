@@ -69,9 +69,13 @@ export function noticeHtml(notice: string | null): string {
 
 /** A node's drag handle: carries `{type: "node", nodeId}`. The id is kept in
  *  `data-node-item` and the drag payload is built from it in the dragstart
- *  handler, so no JSON lives in the DOM. */
-function nodeGrip(nodeId: string): string {
-  return `<span class="qb-grip" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move"><i class="grip vertical icon"></i></span>`;
+ *  handler, so no JSON lives in the DOM. A group's grip looks different from a
+ *  condition's (`qb-grip-group`, drawn in the group's colour) and its tooltip
+ *  says what it moves: the two sit at the same left edge, so otherwise a user
+ *  cannot tell which one carries the whole group. */
+function nodeGrip(nodeId: string, kind: "group" | "condition"): string {
+  const cls = kind === "group" ? "qb-grip qb-grip-group" : "qb-grip";
+  return `<span class="${cls}" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move this ${kind}"><i class="grip vertical icon"></i></span>`;
 }
 
 function iconButton(action: string, label: string, icon: string, extra = ""): string {
@@ -180,7 +184,7 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
   const operatorChoices = operators.map((o) => ({ id: o.id, name: operatorName(o, facetLevel) }));
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-row">
-      ${nodeGrip(c.id)}
+      ${nodeGrip(c.id, "condition")}
       <div class="qb-cond-grid">
         ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
         ${fieldDropdown(fields, c.fieldId, facetLevel, Boolean(c.facetId))}
@@ -228,7 +232,7 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
     const text = queryToText(g, ctx.catalog);
     return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
       <div class="qb-group-head" data-action="toggle-collapse" title="Click to expand">
-        ${isRoot ? "" : nodeGrip(g.id)}
+        ${isRoot ? "" : nodeGrip(g.id, "group")}
         ${collapseButton(true)}
         <span class="qb-op-badge">${matchWord}</span>
         <span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>
@@ -242,7 +246,7 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head">
-      ${isRoot ? "" : nodeGrip(g.id)}
+      ${isRoot ? "" : nodeGrip(g.id, "group")}
       ${collapseButton(false)}
       <span class="qb-group-label">Match</span>
       <span class="qb-logic" role="group" aria-label="Combine conditions with">

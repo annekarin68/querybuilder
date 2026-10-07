@@ -166,3 +166,31 @@ describe("group collapse controls", () => {
     expect(head).toContain('class="qb-icon-btn qb-collapse-btn" data-action="toggle-collapse"');
   });
 });
+
+describe("node grips", () => {
+  const catalog = buildFieldCatalog([]);
+  const ctx = { catalog, facets: null, issues: [] };
+  const condition = newCondition();
+  const group = { ...emptyQuery(), id: "g-inner", children: [condition] };
+  const GROUP_GRIP = 'qb-grip qb-grip-group" draggable="true" data-node-item="g-inner"';
+
+  it("a group's grip says it moves the whole group, in its own style", () => {
+    const html = groupHtml(ctx, group, false);
+    expect(html).toContain(GROUP_GRIP);
+    expect(html).toContain('title="Drag to move this group"');
+  });
+
+  it("a folded group keeps its grip", () => {
+    expect(groupHtml(ctx, { ...group, collapsed: true }, false)).toContain(GROUP_GRIP);
+  });
+
+  it("a condition's grip stays plain and says it moves one condition", () => {
+    const html = groupHtml(ctx, group, false);
+    expect(html).toContain(`class="qb-grip" draggable="true" data-node-item="${condition.id}"`);
+    expect(html).toContain('title="Drag to move this condition"');
+  });
+
+  it("the root group has no grip: it can't be moved", () => {
+    expect(groupHtml(ctx, { ...group, children: [] }, true)).not.toContain("qb-grip");
+  });
+});

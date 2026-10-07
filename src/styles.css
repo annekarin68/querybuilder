@@ -1263,6 +1263,18 @@ details[open] > summary > .qb-chevron {
 .qb-group-head .qb-grip {
   margin-right: 0.2rem;
 }
+/* A group's grip: bigger and in the group's own colour (green for ALL, mustard
+   for ANY; --qb-c-text is the readable shade), so it is not mistaken for the
+   small grey grip of the condition below it. */
+.qb-grip.qb-grip-group {
+  padding: 0.2rem 0.1rem;
+  border-radius: var(--qb-radius);
+  color: var(--qb-c-text);
+  font-size: 1.2rem;
+}
+.qb-grip.qb-grip-group:hover {
+  background: var(--qb-tint-strong);
+}
 .qb-condition.is-drop-before {
   box-shadow: 0 -2px 0 0 var(--qb-and);
 }
