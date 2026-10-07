@@ -230,7 +230,8 @@ body {
   font-size: 1.2rem;
   color: var(--qb-muted);
 }
-/* Below the supported range (1024 px+) the stats drop under the main column. */
+/* Below the minimum supported window width (1024 px, desktop browsers only) the
+   stats drop under the main column, so a squeezed window stays usable. */
 @media (max-width: 900px) {
   .qb-body {
     flex-wrap: wrap;
@@ -1267,7 +1268,7 @@ details[open] > summary > .qb-chevron {
   }
 }
 @media (max-width: 1100px) {
-  /* Narrow screens: the docs float over the page instead of squeezing the builder. */
+  /* Narrow desktop windows: the docs float over the page instead of squeezing the builder. */
   .qb-body:not(.qb-docs-collapsed) .qb-col-docs {
     position: fixed;
     left: var(--qb-rail-w);

@@ -69,6 +69,16 @@ the backend's vocabulary):
 | a database's `eventCount` | `DatabasesResponse.totalEntrysets` | same |
 | one database's statistics, `DatabaseResult` | `StatsResponse` | same |
 
+### Supported screens
+
+The app is a **desktop-browser tool**. **Phones and tablets are not supported
+and never will be** (decided 2026-10-07): there are no touch-sized targets, no
+touch drag-and-drop, and no layouts for narrow portrait screens. Do not design,
+test or ask about them. The minimum is a desktop browser window **1024 px
+wide**. Desktop windows can be narrow, so below 1100 px the open dictionary
+floats over the page (see "Screen layout"); that is for narrow desktop windows,
+not for tablets.
+
 ### Screen layout
 
 ```
@@ -95,8 +105,8 @@ the backend's vocabulary):
   (`docsToggle` in `layout.ts`), and the header's **Hide dictionary** is a solid green
   button, so neither has to be guessed. Folded, the rail is a solid green bar
   (a faint strip would be easy to miss, and it is the only way back to the
-  dictionary). Under 1100 px wide the open dictionary floats over the page instead of
-  squeezing the builder. Searchable by facet and field name.
+  dictionary). In a window under 1100 px wide (see "Supported screens": desktop windows only) the
+  open dictionary floats over the page instead of squeezing the builder. Searchable by facet and field name.
   **Naming (decided 2026-10-07):** users see one name, **dictionary** ("data
   dictionary" in the title, "Hide / Show dictionary" on the controls), because
   the users will understand it. An earlier version also said "docs", which
@@ -173,7 +183,10 @@ reduced motion, nothing falls: the same five clicks show a short toast instead
 | **Small mock server** | `npm run dev` gives a working app end to end. Dev-only. |
 | **Vitest, unit tests without a DOM** | The valuable logic is pure (`src/query/`) or takes its dependencies as arguments (`src/app.ts`, driven by a fake API in tests), so it is easy to test. The panels only turn state into HTML strings, so they are not DOM-tested. |
 
-**Toolchain floor: Node 20.19+** (Vite 8, Vitest 4, ESLint 9 flat config).
+**Toolchain floor: Node 22.12+** (Vite 8, Vitest 4, ESLint 9 flat config).
+Vite 8 itself accepts 20.19 or 22.12, but Node 20 reached end of life in April
+2026 and CI runs Node 22, so 22.12 is the floor we test and deploy on
+(`engines` in `package.json`, `node-version` in `.github/workflows/ci.yml`).
 `npm audit` is clean.
 
 ### The audience constraint

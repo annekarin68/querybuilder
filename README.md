@@ -15,7 +15,12 @@ runs end to end locally, on fictional vehicle-telemetry sample data.
 
 ## Run it
 
-Needs **Node 20.19 or newer**.
+Needs **Node 22.12 or newer**. CI runs Node 22, and Node 20 reached end of life
+in April 2026.
+
+It is a **desktop-browser tool**: phones and tablets are not supported and never
+will be (decided 2026-10-07). The minimum is a desktop browser window 1024 px
+wide. See `docs/ARCHITECTURE.md`, "Supported screens".
 
 ```bash
 npm ci
@@ -83,7 +88,10 @@ Other scripts:
    breaks the contract fails with a message naming the request and the field
    ("Unexpected response from GET …"). See `docs/ARCHITECTURE.md`, "Reading
    responses".
-8. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
+8. **Desktop only.** Phones and tablets are not supported and never will be
+   (decided 2026-10-07): no touch targets, no touch drag-and-drop, no layouts for
+   narrow portrait screens. Do not design, test or ask about them.
+9. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
    architectural change.
 
 The pickle mascot (favicon, top-bar logo and its two other faces) is four SVG
