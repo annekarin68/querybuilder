@@ -135,6 +135,10 @@ export function addedMessage(count: number): string {
   return `Added ${count} ${count === 1 ? "condition" : "conditions"} to the query.`;
 }
 
+/** What a screen reader hears after the query builder's own "+ Group" button
+ *  (its "+ Condition" says `addedMessage(1)`, like the dictionary's "+"). */
+export const ADDED_GROUP_MESSAGE = "Added a group to the query.";
+
 /** What a screen reader hears after an existing node was moved. */
 export function movedMessage(kind: QueryNode["kind"]): string {
   return `Moved the ${kind}.`;

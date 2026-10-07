@@ -270,10 +270,11 @@ src/
   main.ts              Page setup only: imports setup-jquery + Fomantic, renders the frame, wires every
                        panel once to `app`, the panelRenderers table, reads `?resume=1`, fatal-error page,
                        the five-click pickle rain.
-  app.ts               createApp({ store, api, navigate }) — everything the app DOES, with no DOM: startup
+  app.ts               createApp({ store, api, navigate, announce }) — everything the app DOES, with no DOM: startup
                        (+ restoring a saved query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
-                       `dismissDropNotice`). Tested with a fake API.
+                       `dismissDropNotice`), previewAnnouncement (what a screen reader hears about Run).
+                       Tested with a fake API.
   state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
@@ -316,7 +317,9 @@ src/
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
-    panel.ts           paint(), escapeHtml(), optionsHtml().
+    panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), escapeHtml(), optionsHtml().
+    focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
+                       `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed, announce,
                        setMascot, the sidebar's resize handle, onMenu.
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
@@ -389,10 +392,56 @@ binding its Fomantic dropdowns must always happen together.
 | App starts | Every panel paints its loader. `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
-| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
+| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 matching events.", "Could not load events: …"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (or, over a lone blank row, put in its place; a moved node too) and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
+
+### Keyboard focus across repaints
+
+`paint()` replaces a panel's whole markup, so the element that had the keyboard
+focus is gone and the browser drops the focus to the page: a keyboard user
+would have to Tab from the top again after every Space on a database or Enter
+on **ANY**. So `paint()` (`panel.ts`, with `focusMemory.ts`) remembers which
+control had focus before it repaints and focuses the same control afterwards.
+
+- **Only a panel that had the focus.** If the focus is elsewhere (another
+  panel, or nowhere), a repaint leaves it alone: results arriving never pull a
+  user out of the builder.
+- **"The same control"** is found by what it is, not where it is: the row or
+  group it sits in (`data-node-id`), its tag, and the first of these attributes
+  it has: `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
+  `data-range`, `data-part`, `aria-label` (`controlOf`). The label comes last
+  because it can change with the state ("Collapse group" / "Expand group"), but
+  it is the only name a Fomantic dropdown's typing box has. A new control that
+  should keep the focus needs one of these attributes. A text box keeps its
+  caret; a number box hides its caret from scripts, so its number is selected
+  instead (typing replaces it, as after Tab).
+- **When the control is gone** (a removed row, Run turned into a loader, an
+  account action that rebuilt the menu closed), the focus goes to the nearest
+  `data-focus-landing`: one in the control's own row or group, then in each
+  group around it, then one outside every row and group. The landings are a
+  group's **+ Condition** (after a row's or sub-group's ✕: the user stays in
+  that group, and not on a neighbour's ✕, where a second Enter would delete
+  something else), the query card (after the warning's ✕), the Matching
+  events card (after **Run query**, through the loader to the result), and the
+  account chip or **Log in** (after **Invalidate** or **Log out**). Cards are
+  focusable by script only (`tabindex="-1"`).
+- **Code that moves the cursor on purpose wins**: it runs after the paint
+  (`focusPart` moving on to the next dropdown, `setSidebarCollapsed`).
+- **A mouse click** focuses the button too, but the repainted one shows no
+  focus ring: the browser's `:focus-visible` follows the last input device.
+- **A value box commits on `change`, which fires as the box loses the focus,
+  before the focus reaches the next control** (Tab, or a click on "To"). A
+  repaint at that moment would remove that control, so the builder commits the
+  value one tick later (`setTimeout`), once the focus has landed, and `paint()`
+  keeps it there. **Known gap:** a button press held longer than that tick
+  (a normal mouse click) on a control that the commit repaints still loses the
+  click: typing a value and then clicking **Run query** or **+ Condition**
+  commits the value but needs a second click. It was lost before as well.
+
+The pure part (`controlOf`, `sameControl`) has Node tests; the rest needs a
+DOM and is checked in a browser.
 
 ---
 
@@ -844,6 +893,9 @@ Anonymous: a **Log in** button. Logged in: a chip with the user's name and a
 compliance badge that opens a native `<details>` menu with the reason and when
 it was given (+ **Invalidate**), or **Start compliance check**; then **Log
 out**. Outside clicks and Escape close it. Display-only (see "Auth").
+**Invalidate** and **Log out** change what the menu shows, and its repaint
+rebuilds it closed, so the keyboard focus goes to the chip, or to **Log in**
+("Keyboard focus across repaints").
 
 ### Above the builder — `databasePicker.ts`
 
@@ -907,12 +959,12 @@ the labelled buttons have a keyboard focus ring like the icon buttons.
 **Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
 user's focus to the page, so it is put back: folding the docs while focus is
 inside them moves it to the rail (`setSidebarCollapsed`), and folding or
-unfolding a group in the builder moves it to that group's collapse button, but
-only after a keyboard press (`e.detail === 0`); after a mouse click the new
-button gets no focus ring. Green buttons (`.ui.primary.button`, e.g. **Hide
-docs**, **Log in**) show a ring on `:focus-visible` (a light ring on the dark
-top bar itself, a green one inside the light account-menu panel),
-and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
+unfolding a group in the builder keeps it on that group's (repainted) collapse
+button, like every control a repaint replaces (see "Keyboard focus across
+repaints"); after a mouse click the new button gets no focus ring. Green
+buttons (`.ui.primary.button`, e.g. **Hide docs**, **Log in**) show a ring on
+`:focus-visible` (a light ring on the dark top bar itself, a green one inside
+the light account-menu panel), and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
 colour and Fomantic's blue never shows.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
@@ -1083,7 +1135,10 @@ the issue's message tells the user to do exactly that.
   gives `wireQueryBuilder` `announce`, see "The Field dropdown's two kinds of
   choice"). After a drop or move
   that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
-  the query.", "Moved the group.", the words in `drop.ts`). `announce` is a
+  the query.", "Moved the group.", the words in `drop.ts`). The builder's own
+  **+ Condition** and **+ Group** say "Added 1 condition to the query." and
+  "Added a group to the query." (`ADDED_GROUP_MESSAGE`); the focus stays on the
+  button, so pressing it again adds another. `announce` is a
   dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
   which writes to one visually hidden `role="status"` region in the page frame.
   That region is never repainted, which is what makes a screen reader speak a
@@ -1165,6 +1220,11 @@ one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default), up to 3
 tag and 2 group badges ranked by how many of the event's facets carry them
 (values in `HIDDEN_ROW_BADGES` left out), and the facet count; expanding a row
 shows the event's JSON.
+
+Pressing **Run query** from the keyboard leaves the focus on this card (the
+button is replaced by the loader, then by the result; see "Keyboard focus
+across repaints"), and `app.ts` announces the loader, the result's count or the
+error to screen readers, wherever their focus is.
 
 **Decision: a list, not a grid.** Events are heterogeneous: facets as columns
 would mean 60–100+ columns for a varied sample, and events as columns stop

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createApp, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
+import { createApp, previewAnnouncement, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
 import type { Database, DatabaseResult, EventRecord, Facet } from "../src/model";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
@@ -232,6 +232,48 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(store.getState().preview).toEqual({ status: "error", error: "boom" });
+  });
+
+  // The panel repaints out of sight of a screen-reader user, and their focus
+  // may be elsewhere: they hear that the run started and how it ended.
+  it("tells screen-reader users the run started and what came back", async () => {
+    const { app, announce } = setup(ready());
+    app.runPreview();
+    expect(announce).toHaveBeenLastCalledWith("Fetching events…");
+    await flushPromises();
+    expect(announce.mock.calls).toEqual([["Fetching events…"], ["Showing 1 matching event."]]);
+  });
+
+  it("tells screen-reader users about a failed run", async () => {
+    const api = fakeApi({ runQuery: vi.fn(async () => Promise.reject(new Error("boom"))) });
+    const { app, announce } = setup(ready(), api);
+    app.runPreview();
+    await flushPromises();
+    expect(announce).toHaveBeenLastCalledWith("Could not load events: boom");
+  });
+
+  it("says nothing about a run the query has moved on from", async () => {
+    const response = deferred<EventRecord[]>();
+    const api = fakeApi({ runQuery: vi.fn(() => response.promise) });
+    const { app, announce } = setup(ready(), api);
+    app.runPreview();
+    app.onQueryChange(runnableQuery(4));
+    response.resolve(events);
+    await flushPromises();
+    expect(announce.mock.calls).toEqual([["Fetching events…"]]);
+  });
+});
+
+describe("previewAnnouncement", () => {
+  it("says nothing while no run is shown", () => {
+    expect(previewAnnouncement({ status: "idle" })).toBeNull();
+  });
+  it("counts the events, or says there are none", () => {
+    expect(previewAnnouncement({ status: "ok", events: [] })).toBe("No events match this query.");
+    expect(previewAnnouncement({ status: "ok", events })).toBe("Showing 1 matching event.");
+    expect(previewAnnouncement({ status: "ok", events: [...events, ...events] })).toBe(
+      "Showing 2 matching events.",
+    );
   });
 });
 

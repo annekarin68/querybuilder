@@ -34,6 +34,10 @@ function complianceHtml(state: AppState): string {
     <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Invalidate</button>`;
 }
 
+/** Invalidate and Log out change what the menu shows, and the repaint
+ *  rebuilds it closed. Their buttons are gone (or hidden), so paint() moves
+ *  the keyboard focus to the chip, or to Log in: each is the panel's
+ *  `data-focus-landing` (focusMemory.ts). */
 export function renderAccountMenu(el: HTMLElement, state: AppState): void {
   const { auth } = state;
   if (auth.status === "loading") {
@@ -43,14 +47,14 @@ export function renderAccountMenu(el: HTMLElement, state: AppState): void {
   if (auth.status === "anonymous") {
     paint(
       el,
-      `<a href="${escapeHtml(LOGIN_URL)}" data-flow-link class="ui small primary button">Log in</a>`,
+      `<a href="${escapeHtml(LOGIN_URL)}" data-flow-link data-focus-landing class="ui small primary button">Log in</a>`,
     );
     return;
   }
   paint(
     el,
     `<details class="qb-account">
-       <summary class="qb-account-chip">
+       <summary class="qb-account-chip" data-focus-landing>
          <i class="user circle icon"></i>
          <span class="qb-account-name">${escapeHtml(auth.user.name)}</span>
          ${badgeHtml(state)}
