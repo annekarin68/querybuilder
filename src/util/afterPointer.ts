@@ -56,3 +56,36 @@ export function createAfterPointer(deps: {
     flush,
   };
 }
+
+/**
+ * What `shouldFlushBeforeClick` needs to know about the element a click landed
+ * on. A plain object (not an `Element`) so the Node-only tests can build one;
+ * each flag means "the element itself or one of its ancestors".
+ */
+export interface ClickTargetDescription {
+  /** A `<button>`. */
+  inButton: boolean;
+  /** An `<a href>`: the top bar's Log in link and the compliance link are links, not buttons. */
+  inLink: boolean;
+  /** An element with a `data-action` attribute (a button-like `<i>` or `<div>` too). */
+  inDataAction: boolean;
+  /** A Fomantic `.ui.dropdown`. */
+  inDropdown: boolean;
+  /** A Fomantic `.ui.checkbox`. */
+  inCheckbox: boolean;
+}
+
+/**
+ * Whether a held edit must be applied BEFORE this click is handled: true for
+ * anything that acts on the query when clicked, so it sees the typed value.
+ * That includes links, because a link that saves the query and then leaves the
+ * page (Log in) would otherwise save it without the value.
+ *
+ * False inside a Fomantic dropdown or checkbox: the repaint destroys Fomantic's
+ * handlers, so repainting before their click would make the click do nothing;
+ * they use the after-the-click timeout instead.
+ */
+export function shouldFlushBeforeClick(target: ClickTargetDescription): boolean {
+  if (target.inDropdown || target.inCheckbox) return false;
+  return target.inButton || target.inLink || target.inDataAction;
+}

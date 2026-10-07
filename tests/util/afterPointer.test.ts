@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { createAfterPointer } from "../../src/util/afterPointer";
+import {
+  createAfterPointer,
+  shouldFlushBeforeClick,
+  type ClickTargetDescription,
+} from "../../src/util/afterPointer";
 
 /** A hand-run scheduler: tasks wait in a list until `runTasks` (the "next macrotask"). */
 function setup() {
@@ -119,5 +123,43 @@ describe("createAfterPointer", () => {
     t.afterPointer.run(t.commit("a"));
     t.afterPointer.flush();
     expect(t.log).toEqual(["a"]);
+  });
+});
+
+describe("shouldFlushBeforeClick", () => {
+  /** A click target that is none of the things the rule asks about; each test sets what it is about. */
+  function clicked(overrides: Partial<ClickTargetDescription>): ClickTargetDescription {
+    return {
+      inButton: false,
+      inLink: false,
+      inDataAction: false,
+      inDropdown: false,
+      inCheckbox: false,
+      ...overrides,
+    };
+  }
+
+  it("flushes before a button is handled", () => {
+    expect(shouldFlushBeforeClick(clicked({ inButton: true }))).toBe(true);
+  });
+
+  it("flushes before a link is followed: the Log in link saves the query on click", () => {
+    expect(shouldFlushBeforeClick(clicked({ inLink: true }))).toBe(true);
+  });
+
+  it("flushes before an element with a data-action is handled", () => {
+    expect(shouldFlushBeforeClick(clicked({ inDataAction: true }))).toBe(true);
+  });
+
+  it("does not flush inside a Fomantic dropdown: a repaint would swallow the click", () => {
+    expect(shouldFlushBeforeClick(clicked({ inDropdown: true, inDataAction: true }))).toBe(false);
+  });
+
+  it("does not flush inside a Fomantic checkbox, for the same reason", () => {
+    expect(shouldFlushBeforeClick(clicked({ inCheckbox: true, inButton: true }))).toBe(false);
+  });
+
+  it("does not flush for a click on plain text", () => {
+    expect(shouldFlushBeforeClick(clicked({}))).toBe(false);
   });
 });

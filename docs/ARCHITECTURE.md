@@ -72,9 +72,11 @@ the backend's vocabulary):
 ### Supported screens
 
 The app is a **desktop-browser tool**. **Phones and tablets are not supported
-and never will be** (decided 2026-10-07): there are no touch-sized targets, no
-touch drag-and-drop, and no layouts for narrow portrait screens. Do not design,
-test or ask about them. The minimum is a desktop browser window **1024 px
+and never will be** (decided 2026-10-07): there is no touch input (no
+touch drag-and-drop, no touch-sized targets) and there are no layouts for
+narrow portrait screens. Do not design, test or ask about them. Mouse and
+keyboard users are still fully supported: their targets meet WCAG 2.2 AA (at
+least 24 px, criterion 2.5.8) and everything works from the keyboard. The minimum is a desktop browser window **1024 px
 wide**. Desktop windows can be narrow, so below 1100 px the open dictionary
 floats over the page (see "Screen layout"); that is for narrow desktop windows,
 not for tablets.
@@ -191,8 +193,9 @@ On 2026-10-07 `npm audit` reported 0 vulnerabilities for the production
 dependencies (`npm audit --omit=dev`, which is what ships to users). The full
 `npm audit` still reports 2 critical findings in `concurrently`'s pinned
 `shell-quote`, a dev-only helper for `npm run dev` that never reaches the build;
-the fix needs `concurrently` 10, a major version that requires Node 22. Re-run
-both commands when you change dependencies.
+the fix is `concurrently` 10, a major bump, which can wait until local
+development runs on Node 22 (the dev machine still has Node 20.20, below our
+`engines`). Re-run both commands when you change dependencies.
 
 ### The audience constraint
 
@@ -280,15 +283,21 @@ and, after `activate`, focuses its replacement (`preventScroll: true`). The
 pure part is `focusSelectorFor` in `panel.ts`, which turns a plain description
 of the element (`FocusDescription`) into a CSS selector, or `null`. It knows the
 database checkboxes and All / None, the buttons inside a group or condition
-(found by `data-node-id` plus `data-action`), the other buttons with a unique
-`data-action` (account menu, Clear search), and an element with an `id` (the
-Matching events card). A few things are deliberately **not** restored:
+(found by `data-node-id` plus the tag name and `data-action`), the other
+buttons with a unique `data-action` (account menu, Clear search), and an
+element with an `id` (the query card, the Matching events card). The tag name
+is part of every `data-action` selector because a different kind of element can
+carry the same action: a folded group's header is a `<div>` with the collapse
+button's `data-action`, comes first in the markup and cannot take focus. A few
+things are deliberately **not** restored:
 
-- **Anything inside a Fomantic dropdown, and text or number boxes.** The query
-  builder puts the cursor back there itself (`focusPart`, `focusFieldDropdown`,
-  `restoreCursorSpot`),
-  judging by what the user just did, and the data dictionary's search box is
-  never repainted. A second, generic rule would fight them.
+- **Anything inside a Fomantic dropdown, and every `<input>` except the
+  database checkboxes** (the value boxes, the boolean toggle's checkbox, the
+  dictionary's search box). The query builder puts the cursor back in the
+  dropdowns and value boxes itself (`focusPart`, `focusFieldDropdown`,
+  `restoreCursorSpot`), judging by what the user just did, and the data
+  dictionary's search box is never repainted. A second, generic rule would
+  fight them.
 - **A mouse click.** Only an element that matched `:focus-visible` is restored,
   so the browser draws the focus ring on the new button only when focus came
   from the keyboard. Without this, every click on **+ Condition** would leave a
@@ -1133,19 +1142,26 @@ the issue's message tells the user to do exactly that.
   on a docs item calls `onAddItem`, which drops the item on the **root group**,
   at its end. The + button is a real `<button>`, so Tab and Enter work.
   Moving an existing node has a keyboard path too: **Move up / Move down**
-  (`moveButtons`), a stacked pair of small buttons right after the node's grip
-  on every condition and every group but the root (open or folded). They swap
+  (`moveButtons`), a side-by-side pair of icon buttons right after the node's
+  grip on every condition and every group but the root (open or folded). They swap
   the node with its previous or next sibling (`moveSibling`) and never change
   which group it is in; dragging does that. The first node's Up and the last
-  node's Down are disabled (not hidden), so the pair keeps its shape and a click
-  on one does nothing. `wireQueryBuilder` calls `hooks.onMove`, wired to
+  node's Down are `aria-disabled="true"` (not hidden, and not `disabled`), so
+  the pair keeps its shape, a screen reader says why nothing happens, and the button
+  keeps keyboard focus (a click on one does nothing, ignored in the click
+  handler before its `switch`). Keeping focus costs one extra tab stop on the
+  first and the last row. `wireQueryBuilder` calls `hooks.onMove`, wired to
   `app.onMoveNode`, which announces the result ("Moved the condition up, to
   position 2 of 3.", `reorderedMessage` in `drop.ts`). The repaint replaces the
   pressed button, so after a keyboard press (`click` with `detail === 0`) focus
-  goes back to the same node's same-direction button, or to its other button if
-  the node has just reached an end (`focusMoveButton`); after a mouse click it
-  stays unfocused, like the collapse button. The pair is two 1rem buttons,
-  28px, so it adds no height to a condition row or a group header.
+  goes back to the same node's same-direction button (`focusMoveButton`), also
+  when the node has just reached an end: a `disabled` button would lose focus
+  there, and the next Enter would then move the node back the other way. After a
+  mouse click it stays unfocused, like the collapse button. Each button is a
+  normal icon button (1.75rem, 24.5px square), because the pair is the
+  single-pointer alternative to dragging and must meet the 24 px target size
+  (WCAG 2.5.8); side by side they add width, not height, to a condition row or
+  a group header.
 - **After a ✕ by keyboard, focus goes to the group's "+ Condition".** The
   removed node and its button are gone, so there is nothing to put the cursor
   back on; the remove-node handler takes the enclosing group's id before the
@@ -1242,10 +1258,13 @@ commit repaints the whole builder.
   focus has moved, destroying the control it moves to. So even with the pointer
   up the commit waits one `setTimeout(0)`, by which time the focus is already on
   its destination.
-- **A click on a button** (a `button` or an element with `data-action`: the
-  builder's buttons, **Run query**, the other panels') applies the held edit
+- **A click on a button or link** (a `button`, an `a[href]` or an element with
+  `data-action`: the builder's buttons, **Run query**, the other panels', and
+  the top bar's **Log in** and the compliance link) applies the held edit
   first, from a capture-phase `click` listener on `document`, because the
-  button's handler reads the query and must see the typed value. The delegated
+  handler reads the query and must see the typed value (the flow links save the
+  query before leaving the page). What counts is decided by the pure
+  `shouldFlushBeforeClick` in `afterPointer.ts`. The delegated
   listeners survive the repaint and the replaced button still answers
   `closest("[data-action]")`. The three ways of applying share one queue
   (`flush` in `afterPointer.ts`), so whichever comes first does the work and the

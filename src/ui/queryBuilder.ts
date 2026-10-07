@@ -28,7 +28,11 @@ import { announcementAfterChange, cursorAfterChange, nextCondition } from "../qu
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { placeIssues } from "../query/issues";
 import { queryToText } from "../query/summary";
-import { createAfterPointer } from "../util/afterPointer";
+import {
+  createAfterPointer,
+  shouldFlushBeforeClick,
+  type ClickTargetDescription,
+} from "../util/afterPointer";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel } from "./format";
@@ -95,17 +99,21 @@ interface Position {
 
 /**
  * The Move up / Move down pair: the keyboard's way to reorder a node (dragging
- * needs a mouse). A narrow vertical stack of two small buttons next to the grip.
- * The first node's Up and the last node's Down are `disabled` rather than
- * hidden, so the pair keeps its shape and a screen reader says why nothing
- * happens. `kind` ("condition" or "group") names what moves, because a page
- * has many pairs and "Move up" alone would not say which node it is for.
+ * needs a mouse). Two small buttons side by side next to the grip. The first
+ * node's Up and the last node's Down are `aria-disabled` rather than `disabled`
+ * or hidden: the pair keeps its shape, a screen reader says why nothing
+ * happens, and, above all, the button keeps keyboard focus. A `disabled`
+ * button loses focus, so pressing Enter repeatedly would move the focus to the
+ * other button and then move the node back the way it came. The click handler
+ * ignores clicks on such a button. `kind` ("condition" or "group") names what
+ * moves, because a page has many pairs and "Move up" alone would not say which
+ * node it is for.
  */
 export function moveButtons(kind: "condition" | "group", position: Position): string {
-  const button = (direction: Direction, disabled: boolean) => {
+  const button = (direction: Direction, unavailable: boolean) => {
     const label = `Move ${kind} ${direction}`;
     const title = `Move ${direction}`;
-    return `<button type="button" class="qb-icon-btn" data-action="move-${direction}" aria-label="${label}" title="${title}"${disabled ? " disabled" : ""}><i class="angle ${direction} icon"></i></button>`;
+    return `<button type="button" class="qb-icon-btn" data-action="move-${direction}" aria-label="${label}" title="${title}"${unavailable ? ' aria-disabled="true"' : ""}><i class="angle ${direction} icon"></i></button>`;
   };
   return `<span class="qb-move" role="group" aria-label="Move this ${kind}">${button("up", position.index <= 1)}${button("down", position.index >= position.count)}</span>`;
 }
@@ -239,6 +247,17 @@ interface CursorSpot {
   menuOpen: boolean;
 }
 
+/** Describe the element a click landed on for `shouldFlushBeforeClick`. */
+function describeClickTarget(el: Element): ClickTargetDescription {
+  return {
+    inButton: el.closest("button") !== null,
+    inLink: el.closest("a[href]") !== null,
+    inDataAction: el.closest("[data-action]") !== null,
+    inDropdown: el.closest(".ui.dropdown") !== null,
+    inCheckbox: el.closest(".ui.checkbox") !== null,
+  };
+}
+
 /**
  * The cursor's place if it is on a dropdown or a text or number box of a
  * condition row, else null (a button needs no help: `paint` restores it).
@@ -330,19 +349,16 @@ function focusAddConditionButton(container: HTMLElement, groupId: string): void 
 /**
  * After a keyboard press on group or condition `nodeId`'s Move up / Move down
  * button the repaint replaced it: put the cursor on the same node's button for
- * the same `direction`, so the user can press it again to keep moving. When the
- * node has reached an end that button is now disabled and can't take focus, so
- * use the other one (the user can only go back the way they came).
+ * the same `direction`, so the user can press it again to keep moving. At an
+ * end that button is `aria-disabled` but still focusable (see `moveButtons`),
+ * so the cursor stays on it and a further press does nothing.
  */
 function focusMoveButton(container: HTMLElement, nodeId: string, direction: Direction): void {
-  const pair = nodeOf(container, nodeId)?.querySelector<HTMLElement>(
-    ":scope > .qb-cond-row > .qb-move, :scope > .qb-group-head > .qb-move",
-  );
-  const same = pair?.querySelector<HTMLButtonElement>(`[data-action="move-${direction}"]`);
-  const other = pair?.querySelector<HTMLButtonElement>(
-    `[data-action="move-${direction === "up" ? "down" : "up"}"]`,
-  );
-  (same?.disabled ? other : same)?.focus();
+  nodeOf(container, nodeId)
+    ?.querySelector<HTMLElement>(
+      `:scope > .qb-cond-row > .qb-move > [data-action="move-${direction}"], :scope > .qb-group-head > .qb-move > [data-action="move-${direction}"]`,
+    )
+    ?.focus();
 }
 
 /**
@@ -455,7 +471,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
   paint(
     el,
-    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1">
+    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" id="qb-query" tabindex="-1">
        <h2 class="qb-card-title">Query</h2>
        ${nodeHtml(ctx, state.query, true, null)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
@@ -559,17 +575,15 @@ export function wireQueryBuilder(
     pointerIsDown = false;
     afterPointer.flush();
   });
-  // A button must see the typed value when it reads the query, so a click on
-  // one applies the held edit first (the panels' delegated listeners survive
-  // the repaint, and the old button still answers `closest`). Not for
-  // dropdowns and checkboxes: the repaint would destroy Fomantic's handlers
-  // before they got the click, so those wait for the timeout instead.
+  // A button or link must see the typed value when it reads the query, so a
+  // click on one applies the held edit first (the panels' delegated listeners
+  // survive the repaint, and the old button still answers `closest`). Which
+  // clicks that covers is decided by `shouldFlushBeforeClick`.
   document.addEventListener(
     "click",
     (e) => {
-      const target = e.target instanceof Element ? e.target : null;
-      if (target?.closest("button, [data-action]") && !target.closest(".ui.dropdown, .ui.checkbox"))
-        afterPointer.flush();
+      if (!(e.target instanceof Element)) return;
+      if (shouldFlushBeforeClick(describeClickTarget(e.target))) afterPointer.flush();
     },
     listenOptions,
   );
@@ -591,10 +605,11 @@ export function wireQueryBuilder(
   }
 
   /** Dismiss the warning. The repaint removes the ✕ the user was on, which
-   *  would drop their keyboard focus, so move focus to the query card. */
+   *  would drop their keyboard focus, so move focus to the query card. The card
+   *  has an id so that `paint` keeps the focus there on the next repaint too. */
   function dismissNotice(): void {
     hooks.onDismissNotice();
-    container.querySelector<HTMLElement>(".qb-query")?.focus();
+    container.querySelector<HTMLElement>("#qb-query")?.focus();
   }
 
   container.addEventListener("click", (e) => {
@@ -610,9 +625,10 @@ export function wireQueryBuilder(
     if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
-    // A disabled Move button (an end of the list) must do nothing, not even
-    // toggle the folded group whose header it sits in.
-    if (btn.hasAttribute("disabled")) return;
+    // An unavailable Move button (an end of the list) must do nothing, not even
+    // toggle the folded group whose header it sits in. It is `aria-disabled`
+    // rather than `disabled` so that it keeps keyboard focus (see moveButtons).
+    if (btn.getAttribute("aria-disabled") === "true") return;
     const q = getState().query;
     switch (btn.dataset.action) {
       case "add-condition":

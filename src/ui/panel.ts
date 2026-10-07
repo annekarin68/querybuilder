@@ -50,7 +50,11 @@ export function focusSelectorFor(focused: FocusDescription): string | null {
   if (data.dbAll !== undefined) return "[data-db-all]";
   if (data.dbNone !== undefined) return "[data-db-none]";
   if (data.action !== undefined) {
-    const action = `[data-action="${quoteForCssString(data.action)}"]`;
+    // The tag is part of the selector because an element of another kind can
+    // carry the same action: a folded group's header is a <div> with the
+    // collapse button's action, comes first in the markup and cannot take
+    // focus, so without the tag the lookup would find it and restore nothing.
+    const action = `${focused.tagName.toLowerCase()}[data-action="${quoteForCssString(data.action)}"]`;
     if (focused.nodeId !== null)
       return `[data-node-id="${quoteForCssString(focused.nodeId)}"] ${action}`;
     // The dictionary's Add buttons all share this action and even their items

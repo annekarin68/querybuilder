@@ -46,18 +46,31 @@ describe("focusSelectorFor", () => {
 
   it("finds a group's or condition's button by node and action", () => {
     const d = described({ data: { action: "add-condition" }, nodeId: "g1" });
-    expect(focusSelectorFor(d)).toBe('[data-node-id="g1"] [data-action="add-condition"]');
+    expect(focusSelectorFor(d)).toBe('[data-node-id="g1"] button[data-action="add-condition"]');
+  });
+
+  it("names the tag, so a folded group's header (a div with the same action) is not matched", () => {
+    // The header carries data-action="toggle-collapse" too but cannot take focus.
+    const d = described({ tagName: "BUTTON", data: { action: "toggle-collapse" }, nodeId: "g1" });
+    const selector = focusSelectorFor(d)!;
+    expect(selector).toBe('[data-node-id="g1"] button[data-action="toggle-collapse"]');
+    expect(selector).not.toMatch(/(^|\s)\[data-action/);
+  });
+
+  it("finds the warning's dismiss icon by its own tag", () => {
+    const d = described({ tagName: "I", data: { action: "dismiss-notice" } });
+    expect(focusSelectorFor(d)).toBe('i[data-action="dismiss-notice"]');
   });
 
   it("finds the dictionary's Clear search button", () => {
     expect(focusSelectorFor(described({ data: { action: "clear-filter" } }))).toBe(
-      '[data-action="clear-filter"]',
+      'button[data-action="clear-filter"]',
     );
   });
 
   it("finds the account menu's buttons", () => {
     expect(focusSelectorFor(described({ data: { action: "logout" } }))).toBe(
-      '[data-action="logout"]',
+      'button[data-action="logout"]',
     );
   });
 

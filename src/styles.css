@@ -1293,24 +1293,25 @@ details[open] > summary > .qb-chevron {
 .qb-group-head .qb-grip {
   margin-right: 0.2rem;
 }
-/* Move up / Move down (moveButtons in queryBuilder.ts): a narrow vertical stack
-   beside the grip. Two buttons of 1rem make 2rem, which is no taller than the
-   group header's own buttons (measured: 28px against a 28.3px header), so the
-   pair does not make a condition row or a group header grow. At 1.1rem it did. */
+/* Move up / Move down (moveButtons in queryBuilder.ts): two ordinary icon
+   buttons side by side, after the grip. They are the one-pointer alternative
+   to dragging, so each must be at least 24px square (WCAG 2.5.8); stacked
+   they were 14px tall. Side by side adds width, not height, so a condition
+   row or a group header does not grow. */
 .qb-move {
   display: inline-flex;
   flex: 0 0 auto;
-  flex-direction: column;
 }
-.qb-move > .qb-icon-btn {
-  height: 1rem;
-  font-size: 0.85rem;
-}
-.qb-move > .qb-icon-btn:disabled {
-  opacity: 0.35;
+/* An unavailable end (aria-disabled, not disabled, so it keeps keyboard focus):
+   only the icon is dimmed, because dimming the whole button (opacity) would
+   fade its focus ring too. */
+.qb-move > .qb-icon-btn[aria-disabled="true"] {
   cursor: default;
 }
-.qb-move > .qb-icon-btn:disabled:hover {
+.qb-move > .qb-icon-btn[aria-disabled="true"] .icon {
+  opacity: 0.35;
+}
+.qb-move > .qb-icon-btn[aria-disabled="true"]:hover {
   background: transparent;
   color: var(--qb-subtle);
 }
