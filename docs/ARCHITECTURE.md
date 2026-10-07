@@ -309,7 +309,7 @@ src/
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
     panel.ts           paint(), escapeHtml(), optionsHtml().
-    layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed,
+    layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed, announce,
                        setMascot, the sidebar's resize handle, onMenu.
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
     pickleRain.ts      The hidden five-click pickle rain: createClickCounter, planRain, startRain.
@@ -1008,6 +1008,15 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
   that fails (see `dropNotice`) leaves the row alone. This holds for a
   moved node too, judged after the node is taken out: dragging the last other
   row onto a group's blank row (or into a new group) leaves just that row.
+- **Announcements.** The query card repaints on every change, so a screen-reader
+  user hears nothing when "+" adds a row or a drop lands. After a drop or move
+  that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
+  the query.", "Moved the group.", the words in `drop.ts`). `announce` is a
+  dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
+  which writes to one visually hidden `role="status"` region in the page frame.
+  That region is never repainted, which is what makes a screen reader speak a
+  change. A drop that did nothing announces nothing; its `dropNotice` is the
+  message.
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
   (`noticeHtml`, `role="status"`; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully

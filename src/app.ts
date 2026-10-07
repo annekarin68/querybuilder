@@ -3,7 +3,7 @@ import type * as client from "./api/client";
 import type { Compliance, DatabaseResult } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
 import { serverIssues } from "./query/issues";
-import { dropNotice, nodesForItem, type DragItem } from "./query/drop";
+import { addedMessage, dropNotice, movedMessage, nodesForItem, type DragItem } from "./query/drop";
 import {
   addChild,
   countConditions,
@@ -49,6 +49,10 @@ export interface AppDeps {
   api: AppApi;
   /** A full-page navigation (into the login or compliance flow). */
   navigate(url: string): void;
+  /** Say something to screen-reader users without moving focus (a polite live
+   *  region). Used when an edit changes the query without any visible focus
+   *  change, such as the "+" button adding a row. */
+  announce(message: string): void;
 }
 
 /** How long the query must stay unchanged before statistics are fetched. */
@@ -60,7 +64,7 @@ export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export function createApp({ store, api, navigate }: AppDeps) {
+export function createApp({ store, api, navigate, announce }: AppDeps) {
   // One slot per request kind. Every query/scope edit cancels both
   // (docs/ARCHITECTURE.md, "Correctness invariant").
   const statsSlot = requestSlot();
@@ -260,7 +264,8 @@ export function createApp({ store, api, navigate }: AppDeps) {
     if (item.type === "node") {
       if (item.nodeId === targetNodeId) return;
       // A node that is gone (a stale drag) or the root can't be moved.
-      if (item.nodeId === query.id || !findNode(query, item.nodeId)) {
+      const node = findNode(query, item.nodeId);
+      if (item.nodeId === query.id || !node) {
         setNotice(["That item is no longer in the query."]);
         return;
       }
@@ -273,6 +278,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
       }
       setNotice([]);
       onQueryChange(openGroup(moved, targetNodeId));
+      announce(movedMessage(node.kind));
       return;
     }
     if (!facets || !catalog) {
@@ -285,6 +291,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
     // `placeNodes` puts the new nodes in place of a lone blank row (the starting
     // query, or a new "+ Group"), else at the target like any drop.
     onQueryChange(openGroup(placeNodes(query, targetNodeId, nodes), targetNodeId));
+    announce(addedMessage(nodes.length));
   }
 
   /** The keyboard path: "Add to query" puts the item in the root group (or, if

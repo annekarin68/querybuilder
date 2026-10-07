@@ -84,8 +84,9 @@ function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
 function setup(state: Partial<AppState> = {}, api: AppApi = fakeApi()) {
   const store = createStore({ ...initialState, ...state });
   const navigate = vi.fn();
-  const app = createApp({ store, api, navigate });
-  return { store, api, navigate, app };
+  const announce = vi.fn();
+  const app = createApp({ store, api, navigate, announce });
+  return { store, api, navigate, announce, app };
 }
 
 /** A promise the test settles by hand, to control when a response "arrives". */
@@ -513,6 +514,29 @@ describe("dropping docs items", () => {
     expect(q.children[0]).toMatchObject({ facetId: "thing", fieldId: null, operatorId: "present" });
     expect(store.getState().issues).toEqual([]);
     expect(store.getState().dropNotice).toBeNull();
+  });
+
+  it("announces what was added, for screen readers", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 condition to the query.");
+  });
+
+  it("announces a move", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    const g = newGroup();
+    const { app, announce } = setup({ ...ready(addChild(addChild(root, root.id, c), root.id, g)) });
+    app.onDropItem({ type: "node", nodeId: c.id }, g.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition.");
+  });
+
+  it("announces nothing when nothing was added or moved", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
+    app.onDropItem({ type: "node", nodeId: "gone" }, store.getState().query.id);
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).not.toHaveBeenCalled();
   });
 
   it("an unknown facet adds nothing and says why", () => {
