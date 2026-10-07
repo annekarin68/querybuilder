@@ -3,7 +3,7 @@ import { createApp, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
 import type { Database, DatabaseResult, EventRecord, Facet } from "../src/model";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
-import { addChild, emptyQuery, newCondition, updateNode } from "../src/query/tree";
+import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../src/query/tree";
 import type { Group } from "../src/query/types";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
@@ -501,5 +501,142 @@ describe("saveQueryBeforeRedirect (login / compliance links)", () => {
     const { app } = setup({ ...ready(), query: emptyQuery() });
     app.saveQueryBeforeRedirect();
     expect(takePendingQuery()).toBeNull();
+  });
+});
+
+describe("dropping docs items", () => {
+  it("a facet drop adds a facet-level 'present' condition and validates it", () => {
+    const { store, app } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    const q = store.getState().query;
+    expect(q.children).toHaveLength(1);
+    expect(q.children[0]).toMatchObject({ facetId: "thing", fieldId: null, operatorId: "present" });
+    expect(store.getState().issues).toEqual([]);
+    expect(store.getState().dropNotice).toBeNull();
+  });
+
+  it("an unknown facet adds nothing and says why", () => {
+    const { store, app } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
+    expect(store.getState().query.children).toHaveLength(0);
+    expect(store.getState().dropNotice).toMatch(/ghost/);
+  });
+
+  it("unreadable drag data adds nothing and says so", () => {
+    const { store, app } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem(null, store.getState().query.id);
+    expect(store.getState().query.children).toHaveLength(0);
+    expect(store.getState().dropNotice).toBe("That item can't be added to a query.");
+  });
+
+  it("a successful drop clears an earlier warning", () => {
+    const { store, app } = setup({ ...ready(emptyQuery()), dropNotice: "old" });
+    app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    expect(store.getState().dropNotice).toBeNull();
+  });
+
+  it("dismissDropNotice clears the warning", () => {
+    const { store, app } = setup({ dropNotice: "x" });
+    app.dismissDropNotice();
+    expect(store.getState().dropNotice).toBeNull();
+  });
+
+  it("moving a group into itself is refused with a warning", () => {
+    // A group dropped on a group nested inside it (dropping it on itself is a
+    // quiet no-op, see the next test).
+    const root = emptyQuery();
+    const inner = newGroup();
+    const outer = newGroup();
+    const g = addChild(outer, outer.id, inner);
+    const { store, app } = setup({ ...ready(addChild(root, root.id, g)) });
+    const before = store.getState().query;
+    app.onDropItem({ type: "node", nodeId: g.id }, inner.id);
+    expect(store.getState().dropNotice).toBe("A group can't be moved into itself.");
+    expect(store.getState().query).toBe(before);
+  });
+
+  it("a node that is no longer in the query is refused with its own warning", () => {
+    const q = runnableQuery();
+    const { store, app } = setup({ ...ready(q) });
+    app.onDropItem({ type: "node", nodeId: "gone" }, q.id);
+    expect(store.getState().dropNotice).toBe("That item is no longer in the query.");
+    expect(store.getState().query).toBe(q);
+  });
+
+  it("the root can't be moved", () => {
+    const q = runnableQuery();
+    const g = newGroup();
+    const query = addChild(q, q.id, g);
+    const { store, app } = setup({ ...ready(query) });
+    app.onDropItem({ type: "node", nodeId: query.id }, g.id);
+    expect(store.getState().dropNotice).toBe("That item is no longer in the query.");
+    expect(store.getState().query).toBe(query);
+  });
+
+  it("dropping a node on itself does nothing quietly", () => {
+    const q = runnableQuery();
+    const c = q.children[0]!;
+    const { store, app } = setup({ ...ready(q) });
+    app.onDropItem({ type: "node", nodeId: c.id }, c.id);
+    expect(store.getState().query).toBe(q);
+    expect(store.getState().dropNotice).toBeNull();
+  });
+
+  describe("a collapsed target group", () => {
+    /** A root holding a collapsed, empty group; returns the group's id too. */
+    function withCollapsedGroup() {
+      const root = emptyQuery();
+      const g = newGroup();
+      const query = updateNode(addChild(root, root.id, g), g.id, { collapsed: true });
+      return { query, groupId: g.id };
+    }
+    const groupOf = (q: Group, id: string) => q.children.find((n) => n.id === id);
+
+    it("opens to show a facet dropped into it", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const { store, app } = setup({ ...ready(query) });
+      app.onDropItem({ type: "facet", facetId: "thing" }, groupId);
+      const g = groupOf(store.getState().query, groupId);
+      expect(g).toMatchObject({ collapsed: false });
+      // (A new group starts with one empty condition; the drop adds one more.)
+      expect(g?.kind === "group" && g.children).toHaveLength(2);
+    });
+
+    it("stays collapsed when the drop fails", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const { store, app } = setup({ ...ready(query) });
+      app.onDropItem({ type: "facet", facetId: "ghost" }, groupId);
+      expect(groupOf(store.getState().query, groupId)).toMatchObject({ collapsed: true });
+    });
+
+    it("opens to show a node moved into it", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const c = newCondition();
+      const withCond = addChild(query, query.id, c);
+      const { store, app } = setup({ ...ready(withCond) });
+      app.onDropItem({ type: "node", nodeId: c.id }, groupId);
+      const g = groupOf(store.getState().query, groupId);
+      expect(g).toMatchObject({ collapsed: false });
+      expect(g?.kind === "group" && g.children.at(-1)?.id).toBe(c.id);
+    });
+
+    it("stays collapsed when a move is refused", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const { store, app } = setup({ ...ready(query) });
+      app.onDropItem({ type: "node", nodeId: "no-such-node" }, groupId);
+      expect(groupOf(store.getState().query, groupId)).toMatchObject({ collapsed: true });
+    });
+  });
+
+  it("onAddItem puts the item in the root group", () => {
+    const { store, app } = setup({ ...ready(emptyQuery()) });
+    app.onAddItem({ type: "field", facetId: "thing", fieldId: "size" });
+    expect(store.getState().query.children[0]).toMatchObject({ facetId: "thing", fieldId: "size" });
+  });
+
+  it("with no docs loaded yet, says so instead of ignoring the drop", () => {
+    const { store, app } = setup({});
+    app.onAddItem({ type: "facet", facetId: "thing" });
+    expect(store.getState().dropNotice).toBe("The docs are still loading; try again in a moment.");
   });
 });

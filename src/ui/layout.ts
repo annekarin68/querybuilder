@@ -1,4 +1,6 @@
 import type { ActiveView } from "../state";
+import { MASCOT } from "../config";
+import type { MascotState } from "./mascot";
 
 const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "filter", label: "Filter" },
@@ -20,6 +22,12 @@ export interface Shell {
   };
   /** Show the Filter view, or the "Coming soon" placeholder for the other steps. */
   setActiveView(v: ActiveView): void;
+  /** The sidebar's drag handle; wire it with wireDocsResize. */
+  docsResizeHandle: HTMLElement;
+  /** The pickle in the top bar. */
+  logo: HTMLImageElement;
+  /** Show the pickle with the face for `state`. */
+  setMascot(state: MascotState): void;
   /** Fold the data dictionary into its rail, or open it. */
   setSidebarCollapsed(collapsed: boolean): void;
   /** Listen for clicks on the workflow steps and the docs toggles. Call once. */
@@ -29,13 +37,13 @@ export interface Shell {
 /**
  * The page frame, rendered once: a top bar (app name, workflow steps, account
  * area), then a docs rail + three columns — the data dictionary (collapsible,
- * starts collapsed), the main column (databases, query, matching events)
+ * open by default, resizable), the main column (databases, query, matching events)
  * and the pinned statistics column. Panels paint into the data-panel slots.
  */
 export function renderShell(root: HTMLElement): Shell {
   root.innerHTML = `
     <header class="qb-topbar">
-      <span class="qb-brand">Query Builder</span>
+      <span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" />Query Builder</span>
       <nav class="qb-steps" data-menu="views" aria-label="Workflow">
         ${VIEWS.map(
           (v, i) =>
@@ -46,11 +54,14 @@ export function renderShell(root: HTMLElement): Shell {
         <div data-panel="account"></div>
       </div>
     </header>
-    <div class="qb-body qb-docs-collapsed">
-      <button type="button" class="qb-docs-rail" data-menu="toggle-sidebar" aria-controls="qb-docs" aria-expanded="false" title="Show the data dictionary">
+    <div class="qb-body">
+      <button type="button" class="qb-docs-rail" data-menu="toggle-sidebar" aria-controls="qb-docs" aria-expanded="true" title="Hide the data dictionary">
         <i class="book icon"></i><span>Docs</span>
       </button>
-      <aside class="qb-col-docs" id="qb-docs" data-panel="docs"></aside>
+      <aside class="qb-col-docs" id="qb-docs">
+        <div data-panel="docs"></div>
+        <div class="qb-docs-resize" role="separator" aria-orientation="vertical" aria-label="Resize the data dictionary" tabindex="0"></div>
+      </aside>
       <main class="qb-col-main">
         <section data-panel="dbpicker"></section>
         <section data-panel="center"></section>
@@ -64,6 +75,18 @@ export function renderShell(root: HTMLElement): Shell {
   const body = find(".qb-body");
   const rail = find<HTMLButtonElement>(".qb-docs-rail");
   const steps = find('[data-menu="views"]');
+  const logo = find<HTMLImageElement>(".qb-logo");
+  // Face files that failed to load: never asked for again, so a missing file is
+  // requested once, not on every repaint.
+  const failed = new Set<string>();
+  logo.addEventListener("error", () => {
+    // A missing face falls back to the normal face; never loop.
+    const src = logo.getAttribute("src");
+    if (src && src !== MASCOT.neutral) {
+      failed.add(src);
+      logo.src = MASCOT.neutral;
+    }
+  });
 
   return {
     panels: {
@@ -73,6 +96,17 @@ export function renderShell(root: HTMLElement): Shell {
       stats: find('[data-panel="stats"]'),
       preview: find('[data-panel="preview"]'),
       account: find('[data-panel="account"]'),
+    },
+
+    docsResizeHandle: find(".qb-docs-resize"),
+
+    logo,
+
+    setMascot(state) {
+      logo.dataset.state = state;
+      // Panels repaint often; only touch the image when the face changes.
+      const wanted = failed.has(MASCOT[state]) ? MASCOT.neutral : MASCOT[state];
+      if (logo.getAttribute("src") !== wanted) logo.src = wanted;
     },
 
     setActiveView(v) {
@@ -113,8 +147,8 @@ export function renderShell(root: HTMLElement): Shell {
         e.preventDefault();
         handler.view(item.dataset.view as ActiveView);
       });
-      // Delegated: the rail AND the docs panel's own close button toggle the
-      // docs, and the close button is repainted with its panel, so it can't be
+      // Delegated: the rail AND the docs panel's own Hide button toggle the
+      // docs, and the Hide button is repainted with its panel, so it can't be
       // bound once.
       root.addEventListener("click", (e) => {
         if (!(e.target as HTMLElement).closest('[data-menu="toggle-sidebar"]')) return;

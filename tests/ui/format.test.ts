@@ -6,7 +6,6 @@ import {
   databaseTitle,
   displayLabel,
   exact,
-  fieldTitle,
   formatWhen,
   matchRatio,
 } from "../../src/ui/format";
@@ -111,22 +110,5 @@ describe("databaseTitle", () => {
 
   it("is empty when both are blank", () => {
     expect(databaseTitle({ owner: "", description: "" })).toBe("");
-  });
-});
-
-describe("fieldTitle", () => {
-  it("puts the comment first and labels the third-party description", () => {
-    expect(fieldTitle({ comment: "Ours.", description: "Theirs." })).toBe(
-      "Ours.\nThird-party: Theirs.",
-    );
-  });
-
-  it("shows whichever is non-blank", () => {
-    expect(fieldTitle({ comment: "Ours.", description: "" })).toBe("Ours.");
-    expect(fieldTitle({ comment: "", description: "Theirs." })).toBe("Third-party: Theirs.");
-  });
-
-  it("is empty when both are blank", () => {
-    expect(fieldTitle({ comment: "", description: "" })).toBe("");
   });
 });

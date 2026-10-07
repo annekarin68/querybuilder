@@ -3,7 +3,17 @@ import type * as client from "./api/client";
 import type { Compliance, DatabaseResult } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
 import { serverIssues } from "./query/issues";
-import { addChild, countConditions, newCondition, sameSemantics } from "./query/tree";
+import { dropNotice, nodesForItem, type DragItem } from "./query/drop";
+import {
+  addChild,
+  countConditions,
+  findNode,
+  insertNodes,
+  moveNode,
+  newCondition,
+  sameSemantics,
+  updateNode,
+} from "./query/tree";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
 import { runBlocker, type AppState, type StatsState, type Store } from "./state";
@@ -221,6 +231,69 @@ export function createApp({ store, api, navigate }: AppDeps) {
     changeScope({ query: nextQuery, issues });
   }
 
+  /** Show a drop's problems, or clear an old warning when there are none. */
+  function setNotice(problems: string[]): void {
+    const notice = dropNotice(problems);
+    if (notice !== store.getState().dropNotice) store.setState({ dropNotice: notice });
+  }
+
+  /** `tree` with the group `nodeId` expanded, if it is a collapsed group: so
+   *  the user sees what was just dropped into it. */
+  function openGroup(tree: Group, nodeId: string): Group {
+    const node = findNode(tree, nodeId);
+    return node?.kind === "group" && node.collapsed
+      ? updateNode(tree, nodeId, { collapsed: false })
+      : tree;
+  }
+
+  /**
+   * A docs item or a query node was dropped on `targetNodeId` (a group: it goes
+   * at the end; a condition: just before it). Nothing is dropped silently: what
+   * can't be done is explained in `dropNotice`.
+   */
+  function onDropItem(item: DragItem | null, targetNodeId: string): void {
+    const { query, facets, catalog } = store.getState();
+    if (!item) {
+      setNotice(["That item can't be added to a query."]);
+      return;
+    }
+    if (item.type === "node") {
+      if (item.nodeId === targetNodeId) return;
+      // A node that is gone (a stale drag) or the root can't be moved.
+      if (item.nodeId === query.id || !findNode(query, item.nodeId)) {
+        setNotice(["That item is no longer in the query."]);
+        return;
+      }
+      const moved = moveNode(query, item.nodeId, targetNodeId);
+      if (!moved) {
+        // The node exists, so the only refusal left is a group dropped on
+        // something inside itself (or a target that is gone).
+        setNotice(["A group can't be moved into itself."]);
+        return;
+      }
+      setNotice([]);
+      onQueryChange(openGroup(moved, targetNodeId));
+      return;
+    }
+    if (!facets || !catalog) {
+      setNotice(["The docs are still loading; try again in a moment."]);
+      return;
+    }
+    const { nodes, problems } = nodesForItem(item, facets, catalog);
+    setNotice(problems);
+    if (nodes.length > 0)
+      onQueryChange(openGroup(insertNodes(query, targetNodeId, nodes), targetNodeId));
+  }
+
+  /** The keyboard path: "Add to query" puts the item in the root group. */
+  function onAddItem(item: DragItem): void {
+    onDropItem(item, store.getState().query.id);
+  }
+
+  function dismissDropNotice(): void {
+    store.setState({ dropNotice: null });
+  }
+
   function onDatabasesChange(nextIds: string[]): void {
     const cur = store.getState().selectedDatabaseIds;
     if (nextIds.length === cur.length && nextIds.every((id) => cur.includes(id))) return;
@@ -298,6 +371,9 @@ export function createApp({ store, api, navigate }: AppDeps) {
     start,
     runPreview,
     onQueryChange,
+    onDropItem,
+    onAddItem,
+    dismissDropNotice,
     onDatabasesChange,
     onLogout,
     onInvalidateCompliance,

@@ -12,16 +12,21 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import * as api from "./api/client";
+import { EASTER_EGG_TOAST, MASCOT } from "./config";
 import { createApp, errorMessage } from "./app";
 import { store, type AppState } from "./state";
+import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
+import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
+import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
+import { createClickCounter, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
 // `app` (src/app.ts, where everything the app DOES lives) and repaints panels
@@ -45,20 +50,33 @@ document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest("a[data-flow-link]")) app.saveQueryBeforeRedirect();
 });
 
+// Hidden: five quick clicks on the logo make it rain pickles (instead, a toast
+// for people who prefer reduced motion).
+const logoClicked = createClickCounter();
+shell.logo.addEventListener("click", () => {
+  if (!logoClicked()) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) showToast(EASTER_EGG_TOAST);
+  else startRain(Object.values(MASCOT));
+});
+
 // Wire every panel once. The listeners are delegated to the panel containers
 // renderShell created, so they survive every repaint.
 shell.onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
 });
-wireDocsSidebar(panels.docs, () => store.getState().facets);
+wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
+wireDocsResize(shell.docsResizeHandle);
 wireDataPreview(panels.preview, app.runPreview);
 wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
 wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onInvalidate: app.onInvalidateCompliance,
 });
-const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange);
+const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange, {
+  onDrop: app.onDropItem,
+  onDismissNotice: app.dismissDropNotice,
+});
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
@@ -66,13 +84,17 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
+  { keys: ["issues", "stats", "preview"], run: (s) => shell.setMascot(mascotFor(s)) },
   { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
-  { keys: ["facets", "databases"], run: (s) => renderDocsSidebar(panels.docs, s) },
+  { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
     keys: ["databases", "selectedDatabaseIds"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
-  { keys: ["catalog", "query", "issues", "serverIssues", "facets"], run: renderQueryBuilder },
+  {
+    keys: ["catalog", "query", "issues", "serverIssues", "facets", "dropNotice"],
+    run: renderQueryBuilder,
+  },
   {
     keys: [
       "catalog",
@@ -101,6 +123,22 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   },
   { keys: ["auth", "compliance"], run: (s) => renderAccountMenu(panels.account, s) },
 ];
+
+// Below this width the open docs float over the page (styles.css), so start
+// with them folded away instead of covering the builder on first load. Set
+// before the first paint below, so nothing flickers.
+const NARROW_SCREEN = "(max-width: 1100px)";
+if (window.matchMedia(NARROW_SCREEN).matches) store.setState({ sidebarCollapsed: true });
+
+// Escape closes the floating docs (only while focus is inside them), and
+// focus moves to the rail button so keyboard users are not left on a hidden panel.
+const docsColumn = root.querySelector<HTMLElement>("#qb-docs")!;
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !window.matchMedia(NARROW_SCREEN).matches) return;
+  if (store.getState().sidebarCollapsed || !docsColumn.contains(document.activeElement)) return;
+  store.setState({ sidebarCollapsed: true });
+  root.querySelector<HTMLElement>(".qb-docs-rail")?.focus();
+});
 
 store.subscribe((state, changed) => {
   for (const { keys, run } of panelRenderers) {

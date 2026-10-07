@@ -65,3 +65,15 @@ export function onDropdownChange(container: HTMLElement, handler: (el: HTMLEleme
       $(node).dropdown("setting", "onChange", () => handler(node as HTMLElement));
     });
 }
+
+/** A small, self-dismissing message at the top of the page. */
+export function showToast(message: string): void {
+  // preserveHTML: false shows the message as plain text, never as markup.
+  $("body").toast({
+    message,
+    class: "success",
+    displayTime: 3000,
+    showProgress: false,
+    preserveHTML: false,
+  });
+}

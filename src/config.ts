@@ -42,3 +42,17 @@ export interface RowColumn {
  *    { heading: "Source", facet: "other_facet", field: "kind" }]
  */
 export const ROW_COLUMNS: RowColumn[] = [];
+
+/**
+ * The pickle mascot's artwork. Replace the files in public/pickle/ (same
+ * names) to change it; no code change is needed. `loading` falls back to
+ * `neutral` if its file is missing.
+ */
+export const MASCOT = {
+  neutral: "/pickle/logo.svg",
+  disappointed: "/pickle/disappointed.svg",
+  loading: "/pickle/loading.svg",
+} as const;
+
+/** Shown (instead of the falling pickles) for people who prefer reduced motion. */
+export const EASTER_EGG_TOAST = "I'm Pickle Rick!";

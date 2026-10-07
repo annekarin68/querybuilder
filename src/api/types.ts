@@ -188,8 +188,10 @@ export interface RequestCondition {
   id: string;
   /** `IndividualResponse.label`. */
   facetId: string;
-  /** `IndividualFieldResponse.label`, within that individual. */
-  fieldId: string;
+  /** `IndividualFieldResponse.label`, within that individual — or `null` for a
+   *  condition about the individual (facet) itself, e.g. "is present". What a
+   *  null field means is the backend's to interpret. */
+  fieldId: string | null;
   /** An operator label, e.g. "gt". */
   operatorId: string;
   /** Shaped by the operator's arity: `null` (none), one value (one),

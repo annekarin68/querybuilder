@@ -39,6 +39,11 @@ export interface DocsMatch {
   /** Section key (a tag, or `UNTAGGED`) → how many of its facets match
    *  (sections with none are absent). */
   groups: Map<string, number>;
+  /** Facets to show open: those that matched because of a field (a facet
+   *  that matched only by its name stays closed). */
+  openFacets: Set<string>;
+  /** `Facet.id` → ids of its fields whose id or name matched. */
+  fields: Map<string, Set<string>>;
 }
 
 /**
@@ -52,11 +57,17 @@ export function matchDocs(all: Facet[], text: string): DocsMatch | null {
   const has = (s: string) => s.toLowerCase().includes(q);
   const facets = new Set<string>();
   const groups = new Map<string, number>();
+  const openFacets = new Set<string>();
+  const fields = new Map<string, Set<string>>();
   for (const facet of all) {
-    const hit = has(facet.name) || facet.fields.some((f) => has(f.id) || has(f.name));
-    if (!hit) continue;
+    const matchingFields = facet.fields.filter((f) => has(f.id) || has(f.name));
+    if (!has(facet.name) && matchingFields.length === 0) continue;
     facets.add(facet.id);
+    if (matchingFields.length > 0) {
+      openFacets.add(facet.id);
+      fields.set(facet.id, new Set(matchingFields.map((f) => f.id)));
+    }
     for (const tag of tagsOf(facet)) groups.set(tag, (groups.get(tag) ?? 0) + 1);
   }
-  return { facets, groups };
+  return { facets, groups, openFacets, fields };
 }

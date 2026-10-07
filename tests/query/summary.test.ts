@@ -13,6 +13,7 @@ const field = (fieldId: string, name: string, options?: string[]): CatalogField 
   operatorIds: [],
 });
 const catalog: FieldCatalog = {
+  facets: [{ id: "thing", name: "Thing" }],
   fields: [
     field("size", "Size (cm)"),
     field("active", "Active"),
@@ -68,10 +69,10 @@ describe("queryToText", () => {
     t = updateNode(t, c.id, {
       facetId: "thing",
       fieldId: "color",
-      operatorId: "isEmpty",
+      operatorId: "absent",
       value: null,
     });
-    expect(queryToText(t, catalog)).toBe("Color Is empty");
+    expect(queryToText(t, catalog)).toBe("Color Has no value");
   });
 });
 
@@ -108,5 +109,22 @@ describe("queryToText with a value not entered yet", () => {
   it("still prints false and 0", () => {
     expect(withValue("active", "eq", false)).toBe("Active Equals false");
     expect(withValue("size", "eq", 0)).toBe("Size (cm) Equals 0");
+  });
+});
+
+describe("facet-level conditions", () => {
+  it("a facet-level condition reads 'Facet is present'", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    let t = addChild(root, root.id, c);
+    t = updateNode(t, c.id, {
+      facetId: "thing",
+      fieldId: null,
+      operatorId: "present",
+      value: null,
+    });
+    expect(queryToText(t, catalog)).toBe("Thing is present");
+    t = updateNode(t, c.id, { operatorId: "absent" });
+    expect(queryToText(t, catalog)).toBe("Thing is absent");
   });
 });

@@ -88,7 +88,7 @@ describe("toQueryRequest", () => {
     t = updateNode(t, c2.id, {
       facetId: "thing",
       fieldId: "note",
-      operatorId: "isEmpty",
+      operatorId: "absent",
       value: null,
     });
     t = updateNode(t, c3.id, {
@@ -100,14 +100,13 @@ describe("toQueryRequest", () => {
     const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
     expect(sent.map((c) => [c.operatorId, c.value])).toEqual([
       ["eq", "2024-11"],
-      ["isEmpty", null],
+      ["absent", null],
       ["eq", false],
     ]);
   });
 
   it.each([
     ["no facet", { facetId: null, fieldId: "size", operatorId: "gt", value: 3 }],
-    ["no field", { facetId: "thing", fieldId: null, operatorId: "gt", value: 3 }],
     ["no operator", { facetId: "thing", fieldId: "size", operatorId: null, value: 3 }],
   ])("throws on an unfinished condition (%s)", (_label, patch) => {
     expect(() => toQueryRequest(oneCondition(patch), ["alpha"])).toThrow(/unfinished/);
@@ -120,5 +119,26 @@ describe("toQueryRequest", () => {
   ])("throws on a value that is %s", (_label, value) => {
     const patch = { facetId: "thing", fieldId: "size", operatorId: "gt", value };
     expect(() => toQueryRequest(oneCondition(patch), ["alpha"])).toThrow(/cannot be sent/);
+  });
+
+  it("sends a facet-level condition with fieldId null", () => {
+    const t = oneCondition({
+      facetId: "thing",
+      fieldId: null,
+      operatorId: "present",
+      value: null,
+    });
+    const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
+    expect(sent[0]).toMatchObject({
+      facetId: "thing",
+      fieldId: null,
+      operatorId: "present",
+      value: null,
+    });
+  });
+
+  it("still rejects a condition with no facet", () => {
+    const t = oneCondition({ operatorId: "present", value: null });
+    expect(() => toQueryRequest(t, ["alpha"])).toThrow(/unfinished/);
   });
 });

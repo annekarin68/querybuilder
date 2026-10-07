@@ -86,6 +86,10 @@ Other scripts:
 8. The full design lives in `docs/ARCHITECTURE.md`. Keep it updated with any
    architectural change.
 
+The pickle mascot (favicon, top-bar logo and its two other faces) is four SVG
+files in `public/pickle/`; replace a file, keeping its name, to change the
+artwork (`docs/ARCHITECTURE.md`, "Pickle theme and mascot"). Replacement SVGs must be self-contained plain SVG: export them as plain or optimised SVG with no namespaces other than `http://www.w3.org/2000/svg` (typical Inkscape or Illustrator exports add `xmlns:xlink`, `xmlns:inkscape`, `sodipodi` and `rdf` URLs, which make `npm run build`'s `check:offline` fail; nothing checks a file swapped in on an already-deployed build).
+
 ## Layout of the code
 
 See `docs/ARCHITECTURE.md`, "Directory layout". Its last section, "How do I…",

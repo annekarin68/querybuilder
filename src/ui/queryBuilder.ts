@@ -2,9 +2,12 @@ import type { AppState } from "../state";
 import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { Facet } from "../model";
 import {
+  FACET_OPERATOR_IDS,
   fieldsOfFacet,
   findField,
   findOperator,
+  isFacetLevel,
+  operatorName,
   OPERATORS,
   type FieldCatalog,
 } from "../query/fieldCatalog";
@@ -18,6 +21,7 @@ import {
   updateNode,
 } from "../query/tree";
 import { nextCondition } from "../query/conditionEdit";
+import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { placeIssues } from "../query/issues";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
@@ -54,6 +58,22 @@ function issuesHtml(nodeId: string, issues: Issue[]): string {
   );
 }
 
+/** The dismissible warning for a drop that couldn't be done in full. */
+export function noticeHtml(notice: string | null): string {
+  if (!notice) return "";
+  return `<div class="ui warning message qb-notice" role="status">
+      <i class="close icon" data-action="dismiss-notice" role="button" tabindex="0" aria-label="Dismiss"></i>
+      <p>${escapeHtml(notice)}</p>
+    </div>`;
+}
+
+/** A node's drag handle: carries `{type: "node", nodeId}`. The id is kept in
+ *  `data-node-item` and the drag payload is built from it in the dragstart
+ *  handler, so no JSON lives in the DOM. */
+function nodeGrip(nodeId: string): string {
+  return `<span class="qb-grip" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move"><i class="grip vertical icon"></i></span>`;
+}
+
 function iconButton(action: string, label: string, icon: string, extra = ""): string {
   return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
 }
@@ -81,6 +101,44 @@ export function rowDropdown(
     (c) => c.id === selectedId,
   );
   return `<select class="ui search selection dropdown" data-part="${part}" aria-label="${label}"${enabled ? "" : " disabled"}><option value="">${label}…</option>${opts}</select>`;
+}
+
+/** The Field dropdown's value for "no field — about the facet itself". "" means
+ *  nothing chosen yet; real fields are `FIELD_PREFIX` + id, so no field can
+ *  ever collide with this value (or with a field literally named "Any field"). */
+export const NO_FIELD = "none";
+export const FIELD_PREFIX = "f:";
+
+/** The row's Field dropdown: nothing chosen, the no-field choice, then the fields. */
+export function fieldDropdown(
+  fields: { id: string; name: string }[],
+  selectedId: string | null,
+  facetOnly: boolean,
+  enabled: boolean,
+): string {
+  const opts = optionsHtml(
+    fields,
+    (f) => FIELD_PREFIX + f.id,
+    (f) => f.name,
+    (f) => f.id === selectedId,
+  );
+  const noField = `<option value="${NO_FIELD}"${facetOnly ? " selected" : ""}>— no field (facet only) —</option>`;
+  // Fomantic copies the <select>'s classes onto the dropdown it builds, so
+  // `qb-field-select` limits the "no field" styling to this dropdown (a facet
+  // or operator whose id is "none" is left alone) and `qb-no-field` styles the
+  // shown text when that choice is selected.
+  return `<select class="ui search selection dropdown qb-field-select${facetOnly ? " qb-no-field" : ""}" data-part="field" aria-label="Field"${enabled ? "" : " disabled"}><option value="">Field…</option>${noField}${opts}</select>`;
+}
+
+/** Read the Field dropdown's value (see NO_FIELD / FIELD_PREFIX): the no-field
+ *  choice, a real field's id, or nothing chosen yet. */
+export function decodeFieldValue(value: string | null): {
+  facetOnly: boolean;
+  fieldId: string | null;
+} {
+  if (value === NO_FIELD) return { facetOnly: true, fieldId: null };
+  const fieldId = value?.startsWith(FIELD_PREFIX) ? value.slice(FIELD_PREFIX.length) : "";
+  return { facetOnly: false, fieldId: fieldId || null };
 }
 
 /** Where the cursor goes after a choice in a condition row's dropdown, so a
@@ -113,14 +171,23 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
     id: f.fieldId,
     name: f.fieldName,
   }));
-  const operators = field ? OPERATORS.filter((o) => field.operatorIds.includes(o.id)) : [];
+  const facetLevel = isFacetLevel(c);
+  const operators = facetLevel
+    ? OPERATORS.filter((o) => FACET_OPERATOR_IDS.includes(o.id))
+    : field
+      ? OPERATORS.filter((o) => field.operatorIds.includes(o.id))
+      : [];
+  const operatorChoices = operators.map((o) => ({ id: o.id, name: operatorName(o, facetLevel) }));
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
-    <div class="qb-cond-grid">
-      ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
-      ${rowDropdown("field", fields, c.fieldId, Boolean(c.facetId))}
-      ${rowDropdown("operator", operators, c.operatorId, field !== undefined)}
-      <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
-      ${iconButton("remove-node", "Remove condition", "times")}
+    <div class="qb-cond-row">
+      ${nodeGrip(c.id)}
+      <div class="qb-cond-grid">
+        ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
+        ${fieldDropdown(fields, c.fieldId, facetLevel, Boolean(c.facetId))}
+        ${rowDropdown("operator", operatorChoices, c.operatorId, field !== undefined || facetLevel)}
+        <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
+        ${iconButton("remove-node", "Remove condition", "times")}
+      </div>
     </div>
     ${issuesHtml(c.id, ctx.issues)}
   </div>`;
@@ -149,6 +216,7 @@ function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
     const text = queryToText(g, ctx.catalog);
     return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
       <div class="qb-group-head">
+        ${isRoot ? "" : nodeGrip(g.id)}
         ${collapseButton(true)}
         <span class="qb-op-badge">${matchWord}</span>
         <span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>
@@ -162,6 +230,7 @@ function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head">
+      ${isRoot ? "" : nodeGrip(g.id)}
       ${collapseButton(false)}
       <span class="qb-group-label">Match</span>
       <span class="qb-logic" role="group" aria-label="Combine conditions with">
@@ -212,7 +281,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
   paint(
     el,
-    `<div class="qb-card qb-query">
+    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1">
        <h2 class="qb-card-title">Query</h2>
        ${nodeHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
@@ -234,6 +303,7 @@ export function wireQueryBuilder(
   container: HTMLElement,
   getState: () => AppState,
   onChange: (next: Group) => void,
+  drops: { onDrop(item: DragItem | null, targetNodeId: string): void; onDismissNotice(): void },
 ): (state: AppState) => void {
   /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
   function handleRowChange(row: HTMLElement, changedPart?: string): void {
@@ -242,13 +312,15 @@ export function wireQueryBuilder(
     if (!catalog || !cond || cond.kind !== "condition") return;
     const picked = (part: string) =>
       row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
+    const { facetOnly, fieldId } = decodeFieldValue(picked("field"));
     const nextPart = changedPart && picked(changedPart) ? NEXT_PART[changedPart] : undefined;
     const patch = nextCondition(
       cond,
       {
         facetId: picked("facet"),
-        fieldId: picked("field"),
+        fieldId,
         operatorId: picked("operator"),
+        facetOnly,
       },
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
@@ -259,7 +331,17 @@ export function wireQueryBuilder(
     if (nextPart) focusPart(container, cond.id, nextPart);
   }
 
+  /** Dismiss the warning. The repaint removes the ✕ the user was on, which
+   *  would drop their keyboard focus, so move focus to the query card. */
+  function dismissNotice(): void {
+    drops.onDismissNotice();
+    container.querySelector<HTMLElement>(".qb-query")?.focus();
+  }
+
   container.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
+      return dismissNotice();
+    }
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
@@ -283,6 +365,70 @@ export function wireQueryBuilder(
       }
     }
   });
+
+  // The warning's ✕ is an icon, not a <button>, so Enter/Space need wiring.
+  container.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (!(e.target as HTMLElement).closest("[data-action='dismiss-notice']")) return;
+    e.preventDefault();
+    dismissNotice();
+  });
+
+  /** Whether the drag in progress is one of ours (seen via the data type). */
+  const isOurs = (e: DragEvent) => e.dataTransfer?.types.includes(DRAG_MIME) ?? false;
+  let marked: HTMLElement | null = null;
+  const unmark = () => {
+    marked?.classList.remove("is-drop-target", "is-drop-before");
+    marked = null;
+  };
+  /** Where a drop at `el` lands: the nearest group or condition. */
+  const targetOf = (el: EventTarget | null) =>
+    el instanceof Element ? el.closest<HTMLElement>("[data-node-id]") : null;
+
+  container.addEventListener("dragstart", (e) => {
+    if (!(e.target instanceof Element)) return; // e.g. a Text node
+    const grip = e.target.closest<HTMLElement>("[data-node-item]");
+    if (!grip || !e.dataTransfer) return;
+    const nodeId = grip.dataset.nodeItem!;
+    e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type: "node", nodeId }));
+    e.dataTransfer.effectAllowed = "move";
+    const card = grip.closest<HTMLElement>("[data-node-id]");
+    if (card) e.dataTransfer.setDragImage(card, 12, 12);
+  });
+
+  container.addEventListener("dragover", (e) => {
+    if (!isOurs(e)) return; // not ours: no drop target, the browser shows "not allowed"
+    const target = targetOf(e.target);
+    if (!target) {
+      unmark(); // no longer over a node: clear a stale highlight
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = e.dataTransfer!.effectAllowed === "move" ? "move" : "copy";
+    if (target !== marked) {
+      unmark();
+      marked = target;
+      target.classList.add(
+        target.classList.contains("qb-condition") ? "is-drop-before" : "is-drop-target",
+      );
+    }
+  });
+
+  container.addEventListener("dragleave", (e) => {
+    if (!container.contains(e.relatedTarget as Node | null)) unmark();
+  });
+
+  container.addEventListener("drop", (e) => {
+    if (!isOurs(e)) return;
+    e.preventDefault();
+    unmark();
+    const target = targetOf(e.target);
+    if (!target) return;
+    // An unreadable payload arrives as null; the app explains it to the user.
+    drops.onDrop(parseDragItem(e.dataTransfer!.getData(DRAG_MIME)), target.dataset.nodeId!);
+  });
+
+  container.addEventListener("dragend", unmark);
 
   container.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;

@@ -26,9 +26,10 @@ const field = (
   operatorIds,
 });
 const catalog: FieldCatalog = {
+  facets: [{ id: "thing", name: "Thing" }],
   fields: [
-    field("color", "string", ["eq", "in", "isEmpty"], ["red", "blue"]),
-    field("count", "number", ["eq", "between", "in", "isEmpty"]),
+    field("color", "string", ["eq", "in", "absent"], ["red", "blue"]),
+    field("count", "number", ["eq", "between", "in", "absent"]),
     field("seenAt", "date", ["eq", "between"]),
     field("active", "boolean", ["eq"]),
   ],
@@ -76,14 +77,12 @@ describe("validateQuery", () => {
   });
 
   it("arity 'none' takes a null value", () => {
-    expect(validateOne({ fieldId: "color", operatorId: "isEmpty", value: null }).issues).toEqual(
-      [],
-    );
+    expect(validateOne({ fieldId: "color", operatorId: "absent", value: null }).issues).toEqual([]);
   });
 
   it("arity 'none' with any other value (a tampered saved query) is invalid", () => {
     for (const value of [{}, "", "red", 0, false, [], undefined]) {
-      const patch = { fieldId: "color", operatorId: "isEmpty", value };
+      const patch = { fieldId: "color", operatorId: "absent", value };
       expectIssue(patch, "This operator takes no value.", "invalid");
     }
   });
@@ -238,5 +237,38 @@ describe("validateQuery", () => {
       const patch = { fieldId: "seenAt", operatorId: "between", value: ["2025", "2024"] };
       expect(validateOne(patch).issues).toEqual([]);
     });
+  });
+});
+
+describe("facet-level conditions (no field)", () => {
+  it("present with no value is complete", () => {
+    expect(validateOne({ fieldId: null, operatorId: "present", value: null }).issues).toEqual([]);
+  });
+  it("absent is complete too", () => {
+    expect(validateOne({ fieldId: null, operatorId: "absent", value: null }).issues).toEqual([]);
+  });
+  it("a facet alone, with no operator, still says Choose a field.", () => {
+    expectIssue({ fieldId: null, operatorId: null }, "Choose a field.", "incomplete");
+  });
+  it("an unknown facet is invalid", () => {
+    expectIssue(
+      { facetId: "nope", fieldId: null, operatorId: "present", value: null },
+      "Unknown facet.",
+      "invalid",
+    );
+  });
+  it("an operator that needs a field is invalid", () => {
+    expectIssue(
+      { fieldId: null, operatorId: "eq", value: "x" },
+      "That operator isn't available for a whole facet.",
+      "invalid",
+    );
+  });
+  it("a value on a facet-level condition is invalid", () => {
+    expectIssue(
+      { fieldId: null, operatorId: "present", value: "x" },
+      "This operator takes no value.",
+      "invalid",
+    );
   });
 });

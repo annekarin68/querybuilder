@@ -1,5 +1,13 @@
 import type { Condition, QueryNode } from "./types";
-import { findField, findOperator, type Arity, type FieldCatalog } from "./fieldCatalog";
+import {
+  findFacet,
+  findField,
+  findOperator,
+  isFacetLevel,
+  operatorName,
+  type Arity,
+  type FieldCatalog,
+} from "./fieldCatalog";
 import { isBlankValue } from "./validate";
 
 /** Stands in for a value the user hasn't entered yet, like "(field?)" below. */
@@ -22,9 +30,14 @@ function formatValue(c: Condition, arity: Arity): string {
 }
 
 function conditionText(catalog: FieldCatalog, c: Condition): string {
+  if (isFacetLevel(c)) {
+    const facet = findFacet(catalog, c.facetId)?.name ?? "(facet?)";
+    const op = findOperator(c.operatorId);
+    return `${facet} ${op ? operatorName(op, true).toLowerCase() : "(operator?)"}`;
+  }
   const field = findField(catalog, c.facetId, c.fieldId);
   const op = findOperator(c.operatorId);
-  const parts = [field?.name ?? "(field?)", op?.name ?? "(operator?)"];
+  const parts = [field?.name ?? "(field?)", op ? operatorName(op, false) : "(operator?)"];
   const val = op ? formatValue(c, op.arity) : "";
   if (val) parts.push(val);
   return parts.join(" ");

@@ -42,7 +42,7 @@ describe("queryProblem: is this a well-formed RequestNode?", () => {
     [
       "a child's problem, with its path",
       group(condition, { ...condition, fieldId: "" }),
-      "query.children[1].fieldId must be a non-empty string.",
+      "query.children[1].fieldId must be a non-empty string or null.",
     ],
     [
       "no facet",
@@ -66,5 +66,24 @@ describe("queryProblem: is this a well-formed RequestNode?", () => {
     ],
   ])("reports %s", (_label, node, problem) => {
     expect(queryProblem(node)).toBe(problem);
+  });
+});
+
+describe("queryProblem: a condition about a whole facet", () => {
+  it("accepts a null fieldId", () => {
+    const node = {
+      kind: "condition",
+      id: "c",
+      facetId: "f",
+      fieldId: null,
+      operatorId: "present",
+      value: null,
+    };
+    expect(queryProblem(node)).toBeNull();
+  });
+  it("still rejects an empty-string or numeric fieldId", () => {
+    const base = { kind: "condition", id: "c", facetId: "f", operatorId: "present", value: null };
+    expect(queryProblem({ ...base, fieldId: "" })).toMatch(/fieldId/);
+    expect(queryProblem({ ...base, fieldId: 3 })).toMatch(/fieldId/);
   });
 });
