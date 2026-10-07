@@ -130,7 +130,7 @@ describe("POST /api/stats", () => {
     [
       "condition without a field",
       body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], fieldId: "" }] }),
-      "Malformed query: query.children[0].fieldId must be a non-empty string.",
+      "Malformed query: query.children[0].fieldId must be a non-empty string or null.",
     ],
     ["no databases", body([]), "Select at least one database."],
   ])("answers 400 for a %s", async (_label, payload, error) => {

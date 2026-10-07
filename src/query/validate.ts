@@ -1,5 +1,7 @@
 import type { Condition, Issue, QueryNode } from "./types";
 import {
+  FACET_OPERATOR_IDS,
+  findFacet,
   findField,
   findOperator,
   type Arity,
@@ -56,9 +58,33 @@ function typeProblem(valueType: ValueType, v: unknown): string | null {
   }
 }
 
+/** A condition about a whole facet: no field, so only presence operators. */
+function checkFacetCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
+  if (!findFacet(catalog, c.facetId)) {
+    out.push(invalid(c.id, "Unknown facet."));
+    return;
+  }
+  const op = findOperator(c.operatorId);
+  if (!op) {
+    out.push(invalid(c.id, "Unknown operator."));
+    return;
+  }
+  if (!FACET_OPERATOR_IDS.includes(op.id)) {
+    out.push(invalid(c.id, "That operator isn't available for a whole facet."));
+    return;
+  }
+  if (c.value !== null) out.push(invalid(c.id, "This operator takes no value."));
+}
+
 function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
-  if (!c.facetId || !c.fieldId) {
+  if (!c.facetId) {
     out.push(incomplete(c.id, "Choose a field."));
+    return;
+  }
+  if (c.fieldId === null) {
+    // No field: either nothing chosen yet, or a deliberate facet-only condition.
+    if (c.operatorId === null) out.push(incomplete(c.id, "Choose a field."));
+    else checkFacetCondition(c, catalog, out);
     return;
   }
   const fieldDef = findField(catalog, c.facetId, c.fieldId);

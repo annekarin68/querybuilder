@@ -239,3 +239,36 @@ describe("validateQuery", () => {
     });
   });
 });
+
+describe("facet-level conditions (no field)", () => {
+  it("present with no value is complete", () => {
+    expect(validateOne({ fieldId: null, operatorId: "present", value: null }).issues).toEqual([]);
+  });
+  it("absent is complete too", () => {
+    expect(validateOne({ fieldId: null, operatorId: "absent", value: null }).issues).toEqual([]);
+  });
+  it("a facet alone, with no operator, still says Choose a field.", () => {
+    expectIssue({ fieldId: null, operatorId: null }, "Choose a field.", "incomplete");
+  });
+  it("an unknown facet is invalid", () => {
+    expectIssue(
+      { facetId: "nope", fieldId: null, operatorId: "present", value: null },
+      "Unknown facet.",
+      "invalid",
+    );
+  });
+  it("an operator that needs a field is invalid", () => {
+    expectIssue(
+      { fieldId: null, operatorId: "eq", value: "x" },
+      "That operator isn't available for a whole facet.",
+      "invalid",
+    );
+  });
+  it("a value on a facet-level condition is invalid", () => {
+    expectIssue(
+      { fieldId: null, operatorId: "present", value: "x" },
+      "This operator takes no value.",
+      "invalid",
+    );
+  });
+});

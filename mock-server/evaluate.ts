@@ -107,7 +107,23 @@ function dateMatches(c: RequestCondition, v: Row[string] | undefined): boolean |
   }
 }
 
+function isBlank(v: unknown): boolean {
+  return v === null || v === undefined || v === "";
+}
+
+/** Whether the event holds any value at all for the facet (see `rowKey`). */
+function rowHasFacet(row: Row, facetId: string): boolean {
+  const prefix = `${facetId}.`;
+  return Object.keys(row).some((k) => k.startsWith(prefix));
+}
+
 function conditionMatches(c: RequestCondition, row: Row): boolean {
+  if (c.fieldId === null) {
+    // A condition about the facet itself: only presence makes sense.
+    if (c.operatorId === "present") return rowHasFacet(row, c.facetId);
+    if (c.operatorId === "absent") return !rowHasFacet(row, c.facetId);
+    return false;
+  }
   const v = row[rowKey(c.facetId, c.fieldId)];
   const asDate = dateMatches(c, v);
   if (asDate !== undefined) return asDate;
@@ -137,9 +153,9 @@ function conditionMatches(c: RequestCondition, row: Row): boolean {
     case "in":
       return Array.isArray(c.value) && c.value.includes(v as never);
     case "absent":
-      return v === null || v === undefined || v === "";
+      return isBlank(v);
     case "present":
-      return !(v === null || v === undefined || v === "");
+      return !isBlank(v);
     default:
       return false;
   }

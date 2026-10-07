@@ -30,6 +30,14 @@ const cond = (fieldId: string, operatorId: string, value: RequestValue) => ({
   operatorId,
   value,
 });
+const facetCond = (facetId: string, operatorId: string) => ({
+  kind: "condition" as const,
+  id: "x",
+  facetId,
+  fieldId: null,
+  operatorId,
+  value: null,
+});
 const group = (operator: "AND" | "OR", ...children: RequestNode[]) => ({
   kind: "group" as const,
   id: "g",
@@ -69,6 +77,17 @@ describe("matches", () => {
   it("absent / present", () => {
     expect(matches(cond("spare", "absent", null), row)).toBe(true);
     expect(matches(cond("color", "present", null), row)).toBe(true);
+  });
+  it("facet-level present / absent look at whether the event holds any value for the facet", () => {
+    const r: Row = { id: 1, __db: "a", [rowKey("engine", "rpm")]: 3000 };
+    expect(matches(facetCond("engine", "present"), r)).toBe(true);
+    expect(matches(facetCond("engine", "absent"), r)).toBe(false);
+    expect(matches(facetCond("brakes", "present"), r)).toBe(false);
+    expect(matches(facetCond("brakes", "absent"), r)).toBe(true);
+  });
+  it("a facet whose name starts with another facet's name is not confused with it", () => {
+    const r: Row = { id: 1, __db: "a", [rowKey("engine_oil", "level")]: 1 };
+    expect(matches(facetCond("engine", "present"), r)).toBe(false);
   });
   it("AND / OR groups", () => {
     expect(matches(group("AND", cond("color", "eq", "red"), cond("count", "gte", 12)), row)).toBe(

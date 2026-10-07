@@ -31,7 +31,7 @@ function groupOf(g: Group): RequestGroup {
 }
 
 function conditionOf(c: Condition): RequestCondition {
-  if (c.facetId === null || c.fieldId === null || c.operatorId === null) {
+  if (c.facetId === null || c.operatorId === null) {
     throw new Error(`Condition ${c.id} is unfinished and cannot be sent.`);
   }
   return {

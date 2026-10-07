@@ -1,7 +1,9 @@
 import type { Condition, QueryNode } from "./types";
 import {
+  findFacet,
   findField,
   findOperator,
+  isFacetLevel,
   operatorName,
   type Arity,
   type FieldCatalog,
@@ -28,6 +30,11 @@ function formatValue(c: Condition, arity: Arity): string {
 }
 
 function conditionText(catalog: FieldCatalog, c: Condition): string {
+  if (isFacetLevel(c)) {
+    const facet = findFacet(catalog, c.facetId)?.name ?? "(facet?)";
+    const op = findOperator(c.operatorId);
+    return `${facet} ${op ? operatorName(op, true).toLowerCase() : "(operator?)"}`;
+  }
   const field = findField(catalog, c.facetId, c.fieldId);
   const op = findOperator(c.operatorId);
   const parts = [field?.name ?? "(field?)", op ? operatorName(op, false) : "(operator?)"];

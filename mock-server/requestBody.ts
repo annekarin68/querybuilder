@@ -31,8 +31,11 @@ export function queryProblem(node: unknown, at = "query"): string | null {
     }
     return null;
   }
-  for (const key of ["facetId", "fieldId", "operatorId"] as const) {
+  for (const key of ["facetId", "operatorId"] as const) {
     if (!isNonEmptyString(node[key])) return `${at}.${key} must be a non-empty string.`;
+  }
+  if (node.fieldId !== null && !isNonEmptyString(node.fieldId)) {
+    return `${at}.fieldId must be a non-empty string or null.`;
   }
   const v = node.value;
   if (v === null || isScalar(v) || (Array.isArray(v) && v.every(isScalar))) return null;

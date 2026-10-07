@@ -603,7 +603,9 @@ Both `/stats` and `/query` take a `QueryRequest` (`src/api/types.ts`):
 `{ databases, query }`. `databases` holds the databases' `label`s (the model's
 `Database.id`s), and
 `query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
-and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`). Every
+and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`). A
+condition about a whole facet ("present" / "absent") sends `fieldId: null`; what
+that means is the backend's to interpret. Every
 node carries the frontend's `id` for it. The backend treats it as opaque; it is
 reserved so a later error response can point at a condition.
 
@@ -825,7 +827,7 @@ to a named handler function — add a route there, and a test in
 - **Request bodies** are checked against `QueryRequest` before anything reads
   them (`requestBody.ts`, `queryProblem`): a malformed one gets a `400` naming
   the first problem, e.g. `Malformed query: query.children[0].fieldId must be a
-  non-empty string.`
+  non-empty string or null.`
 - **Login and compliance** are simulated in-process (`auth.ts`): stand-in IdP
   and compliance pages, fake codes and tokens, in-memory sessions. CSRF
   `state` values are single-use, bound to the browser by a short-lived cookie
