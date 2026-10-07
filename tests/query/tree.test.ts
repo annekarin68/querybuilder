@@ -328,4 +328,38 @@ describe("moveNode", () => {
     const root = emptyQuery();
     expect(moveNode(root, "a", "b")).toBeNull();
   });
+  it("returns null for an unknown target, even when the node exists", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    expect(moveNode(addChild(root, root.id, c), c.id, "nowhere")).toBeNull();
+  });
+  it("appends at the end of a group that already has children", () => {
+    const root = emptyQuery();
+    const moving = { ...newCondition(), facetId: "x" };
+    const first = { ...newCondition(), facetId: "y" };
+    const second = { ...newCondition(), facetId: "z" };
+    const g = { ...newGroup(), children: [first, second] };
+    const t = addChild(addChild(root, root.id, moving), root.id, g);
+    const inner = findNode(moveNode(t, moving.id, g.id)!, g.id);
+    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([
+      first.id,
+      second.id,
+      moving.id,
+    ]);
+  });
+  it("leaves the input tree unchanged", () => {
+    const root = emptyQuery();
+    const c = { ...newCondition(), facetId: "x" };
+    const g = { ...newGroup(), children: [] };
+    const t = addChild(addChild(root, root.id, c), root.id, g);
+    const before = structuredClone(t);
+    moveNode(t, c.id, g.id);
+    expect(t).toEqual(before);
+  });
+  it("refuses to move a group onto a condition inside it", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    const g = { ...newGroup(), children: [c] };
+    expect(moveNode(addChild(root, root.id, g), g.id, c.id)).toBeNull();
+  });
 });

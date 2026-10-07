@@ -73,7 +73,14 @@ describe("validateQuery", () => {
 
   it("arity 'many' needs at least one value", () => {
     const patch = { fieldId: "color", operatorId: "in", value: [] };
-    expectIssue(patch, "Choose at least one value.", "incomplete");
+    expectIssue(patch, "Choose at least one value, and remove empty ones.", "incomplete");
+  });
+
+  it("arity 'many' rejects a blank item (a tampered or restored saved query)", () => {
+    for (const value of [[""], ["a", ""], [null]]) {
+      const patch = { fieldId: "color", operatorId: "in", value };
+      expectIssue(patch, "Choose at least one value, and remove empty ones.", "incomplete");
+    }
   });
 
   it("arity 'none' takes a null value", () => {

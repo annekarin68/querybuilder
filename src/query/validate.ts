@@ -35,7 +35,11 @@ function shapeProblem(arity: Arity, v: unknown): string | null {
         ? null
         : "Enter both values.";
     case "many":
-      return Array.isArray(v) && v.length > 0 ? null : "Choose at least one value.";
+      // One message for both causes: an empty list (nothing chosen yet) and a
+      // blank item in it (only a restored or tampered saved query has one).
+      return Array.isArray(v) && v.length > 0 && !v.some(isBlankValue)
+        ? null
+        : "Choose at least one value, and remove empty ones.";
   }
 }
 

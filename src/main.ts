@@ -164,9 +164,24 @@ document.addEventListener("click", (e) => {
   store.setState({ sidebarCollapsed: true });
 });
 
+/**
+ * Repaint one panel. A renderer that throws (say, on data it did not expect)
+ * is logged and skipped, so the panels after it still repaint: otherwise the
+ * Matching events panel could keep showing the previous query's rows next to
+ * new statistics, and the error would reach whoever called `setState`
+ * (app.ts), which may report it as an unrelated failure.
+ */
+function repaintPanel(run: (state: AppState) => void, state: AppState): void {
+  try {
+    run(state);
+  } catch (err) {
+    console.error("Could not repaint a panel:", err);
+  }
+}
+
 store.subscribe((state, changed) => {
   for (const { keys, run } of panelRenderers) {
-    if (keys.some((k) => changed.has(k))) run(state);
+    if (keys.some((k) => changed.has(k))) repaintPanel(run, state);
   }
 });
 
@@ -208,5 +223,5 @@ function showFatalError(err: unknown): void {
 
 const resumed = consumeResumeParam();
 // First paint: loaders/placeholders until the startup requests finish.
-for (const { run } of panelRenderers) run(store.getState());
+for (const { run } of panelRenderers) repaintPanel(run, store.getState());
 app.start(resumed).catch(showFatalError);

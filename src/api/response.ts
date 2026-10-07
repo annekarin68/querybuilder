@@ -96,7 +96,7 @@ export function toEvent(e: ResponseObject<EntrysetResponse>): EventRecord {
  * allowed (src/state.ts), so the item must be an object; within it, a kind
  * this app doesn't know is "invalid" (the safe choice, as in toCompliance).
  */
-export function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
+function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
   return {
     message: e.text("message") || "The server found a problem in the query.",
     kind: e.text("kind") === "incomplete" ? "incomplete" : "invalid",

@@ -393,7 +393,9 @@ means something (only an `"authenticated"` auth has a `user`).
 keys it reads and how to render it. One subscriber runs a panel's render
 function when any of its keys changed. **When a render
 function starts reading a new key, add the key to its row** — otherwise the
-panel won't repaint.
+panel won't repaint. A render function that throws is logged
+(`console.error`) and skipped, so the other panels still repaint: one broken
+panel must not leave another showing the previous query's data.
 
 `renderShell` returns the page's panel containers (`shell.panels`); every
 render function takes its container as the first argument
@@ -599,7 +601,7 @@ the value it reads. There are two kinds:
 
 | Read | For | When the value is missing or wrong |
 |---|---|---|
-| `id`, `number`, `boolean`, `list`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest | throws a `ContractError` |
+| `id`, `number`, `boolean`, `list`, `optionalList`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest. `optionalList` is `list` for a key marked `?` in `types.ts` (a stats line's `errorMessages`) | throws a `ContractError`; only `optionalList` accepts a missing (or `null`) value, which becomes `[]` |
 | `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
 | `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` in `types.ts` | becomes `""`, `[]` or `undefined`; a warning only if the value is there but of the wrong kind |
 
@@ -669,10 +671,11 @@ can be chosen and tested for presence even when it has nothing to compare.
 
 - **Value type** comes from `Field.typeName` (the backend's `type`, else its
   `format`) via `valueTypeFor` and `TYPE_NAMES`: case-insensitive, ignoring
-  size parameters,
-  covering the common SQL spellings. An unrecognised type becomes `"string"`
-  and silently loses the comparison operators — when the real backend's type
-  list is known, check it against `TYPE_NAMES`.
+  size parameters and the words `UNSIGNED`, `SIGNED` and `ZEROFILL`
+  (`INT UNSIGNED` is a number), covering the common SQL spellings. Vendor
+  aliases (`INT4`, `FLOAT8`, …) are deliberately not guessed. An unrecognised
+  type becomes `"string"` and silently loses the comparison operators — when
+  the real backend's type list is known, check it against `TYPE_NAMES`.
 - **`values` is a pick-list, never a type.** `Field.values` is a static
   list built ahead of time and can be out of date, so `pickListFor` turns it
   into suggestions (`CatalogField.options`) and nothing more: every value for a
@@ -807,7 +810,7 @@ does).
 | `none` (`present`, `absent`) | `null` |
 | `one` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `before`, `after`, `contains`) | one value |
 | `two` (`between`) | `[from, to]` |
-| `many` (`in`) | a non-empty list |
+| `many` (`in`) | a non-empty list with no blank item |
 
 Each value has the field's type (the value control converts what the user
 picks or types, `parseEntry`):
@@ -897,8 +900,9 @@ Dropping a facet or a tag on the builder creates such conditions.
   drop calls: it first tries `replaceLoneBlankCondition`, then falls back to
   `insertNodes`. `moveNode` moves an existing node the same way (through
   `placeNodes`, after taking the node out) and returns `null` for a move that
-  is impossible (unknown id, the root, a group into itself or something inside
-  it).
+  is impossible (unknown id, an unknown target, the root, a group into itself
+  or something inside it). `insertNodes` with an unknown target returns the
+  tree unchanged.
   `replaceLoneBlankCondition` is how a blank row gives way: when the group a
   drop lands in (the target group, or the parent of the target row) holds
   exactly one condition with nothing chosen (the starting query's seed from
