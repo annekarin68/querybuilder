@@ -81,14 +81,17 @@ the backend's vocabulary):
 │S │ matching events (the Run query button lives here)      │  per database)   │
 │› │                                                        │                  │
 └──┴────────────────────────────────────────────────────────┴──────────────────┘
- ↑ docs rail: opens the data dictionary as a 20rem column (collapsed by default)
+ ↑ docs rail: shows or hides the data dictionary (open by default, resizable, 26rem to start)
 ```
 
 - **Top bar** — app name, the workflow steps, and the account menu (login +
   compliance acknowledgment).
 - **Docs rail / data dictionary** — generated from `GET /api/individuals`.
-  Collapsed to a 28 px rail by default; opens as a 20rem column; searchable by
-  facet and field name.
+  Open by default, because dragging from it is the main way to build a query.
+  It is 26rem wide to start, the user can drag its right edge to anything from
+  20rem to 40rem (remembered), and the rail or the **Hide docs** button folds
+  it to a 28 px rail. Under 1100 px wide it floats over the page instead of
+  squeezing the builder. Searchable by facet and field name.
 - **Main column** — database scope, the query builder (nested ALL/ANY groups,
   any depth, collapsible), and **Matching events**: a sample of matching
   events, fetched only when the user presses **Run query** in that card.
@@ -98,6 +101,44 @@ the backend's vocabulary):
 - **Workflow steps** — `Filter | Review | Approval | Done`. Only **Filter** is
   a real view; the others show a "Coming soon" placeholder (signed off for the
   first release, issue #19).
+
+### Pickle theme and mascot
+
+The look is a pickle-green palette with mustard accents. It lives in one
+place: the `:root` tokens at the top of `src/styles.css` (page and card
+colours, text, the top bar, the ALL/AND green and ANY/OR mustard of the group
+brackets, danger and warning). Change a colour there, never in a rule.
+`tests/themeContrast.test.ts` reads those tokens from the CSS and fails if a
+text/background pair we use (body text, muted text, text on the top bar and on
+the green fill, the selected row, the ANY/OR text, danger, warning) drops below
+WCAG AA (4.5:1), so a new palette cannot quietly become unreadable. Add a pair
+to its `PAIRS` list when you add a token that carries text.
+
+The pickle is four small SVG files in `public/pickle/`, served as-is and named
+by `MASCOT` in `src/config.ts`. They are meant to be replaced: overwrite a file
+with the same name and nothing else changes.
+
+| File | Where it shows |
+|---|---|
+| `favicon.svg` | The browser tab (`<link rel="icon">` in `index.html`). |
+| `logo.svg` | The top bar, normal face. Also the face everything falls back to. |
+| `disappointed.svg` | The top bar while the query has an `invalid` issue (a red message). A merely unfinished query is not a mistake and keeps the normal face. |
+| `loading.svg` | The top bar while statistics or Matching events are loading. It wobbles (not under reduced motion). |
+
+`mascotFor(state)` (`src/ui/mascot.ts`) picks the face from `issues`, `stats`
+and `preview`; `main.ts` repaints it when those change, and `layout.ts` only
+swaps the image when the face changes. If a face file is missing or broken, the
+logo falls back to `logo.svg` and does not ask for the bad file again.
+
+**Hidden: five clicks on the logo within 3 seconds make it rain pickles**
+(`createClickCounter`, `startRain` in `src/ui/pickleRain.ts`): 30 images of
+the logo, disappointed and loading files fall from the top of the screen for a
+few seconds, as a CSS animation (`.qb-rain-drop`) on an overlay that ignores
+the mouse and is hidden from screen readers. Only files that actually load are
+used (each gets 2 seconds), so a replaced or removed file cannot leave
+broken-image icons falling; if none loads, nothing falls. For people who prefer
+reduced motion, nothing falls: the same five clicks show a short toast instead
+(`EASTER_EGG_TOAST` in `src/config.ts`, shown by `showToast` in `fomantic.ts`).
 
 ### Non-goals (for now)
 
@@ -158,6 +199,8 @@ nothing else* — no internet. So:
    The machine that builds `dist/` needs internet once; the one that serves it
    never does.
 
+The mascot SVGs live in `public/pickle/` and are self-contained; `check:offline` scans them.
+
 Check any new dependency or asset against these rules before it lands.
 
 ---
@@ -208,18 +251,22 @@ may import jQuery.
 ```
 src/
   main.ts              Page setup only: imports setup-jquery + Fomantic, renders the frame, wires every
-                       panel once to `app`, the panelRenderers table, reads `?resume=1`, fatal-error page.
+                       panel once to `app`, the panelRenderers table, reads `?resume=1`, fatal-error page,
+                       the five-click pickle rain.
   app.ts               createApp({ store, api, navigate }) — everything the app DOES, with no DOM: startup
                        (+ restoring a saved query), live stats, Run query and its 401/403 redirects, logout,
-                       query/scope changes. Tested with a fake API.
-  state.ts             AppState (auth, compliance, stats and preview are unions on `status`), the store
-                       (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
+                       query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
+                       `dismissDropNotice`). Tested with a fake API.
+  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`), the
+                       store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
                        User, Compliance ("Data model").
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data. Empty by
-                       default: HIDDEN_ROW_BADGES, ROW_COLUMNS.
+                       default: HIDDEN_ROW_BADGES, ROW_COLUMNS. Also MASCOT (the pickle files) and the
+                       reduced-motion toast text.
   setup-jquery.ts      Publishes window.jQuery before Fomantic's JS evaluates ("The bootstrap wrinkle").
-  styles.css           Theme and layout on top of Fomantic; colours and sizes are tokens at the top.
+  styles.css           Theme and layout on top of Fomantic; colours and sizes are tokens at the top
+                       ("Pickle theme and mascot").
   vendor.d.ts          Types for the Fomantic plugins we call, and VITE_API_BASE.
   api/                 The only place that knows the backend's names ("Data model").
     client.ts          The ONLY file that calls fetch(). One function per endpoint; timeouts; ApiError.
@@ -231,10 +278,14 @@ src/
     request.ts         toQueryRequest(query, databaseIds) — the body sent to /stats and /query.
   query/
     types.ts           Condition, Group, QueryNode, Issue.
-    tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, sameSemantics, …).
-    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE, TYPE_NAMES, pickListFor,
-                       findField / fieldsOfFacet / findOperator.
-    conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row.
+    tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
+                       sameSemantics, …).
+    drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
+                       docs item creates, and what it couldn't), `dropNotice` — pure.
+    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS, OPERATOR_PROFILE, TYPE_NAMES,
+                       pickListFor, findFacet / findField / fieldsOfFacet / findOperator, isFacetLevel.
+    conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row,
+                       including the no-field choice.
     validate.ts        validateQuery(tree, catalog) -> Issue[].
     summary.ts         queryToText — the query in plain English (display only).
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
@@ -246,14 +297,17 @@ src/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown.
     panel.ts           paint(), escapeHtml(), optionsHtml().
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed,
-                       onMenu.
+                       setMascot, the sidebar's resize handle, onMenu.
+    mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
+    pickleRain.ts      The hidden five-click pickle rain: createClickCounter, planRain, startRain.
+    docsResize.ts      wireDocsResize — drag/keyboard resizing of the data dictionary, width kept in localStorage.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
-                       displayLabel, databaseTitle, fieldTitle, countLabel, formatWhen.
+                       displayLabel, databaseTitle, countLabel, formatWhen.
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
     databasePicker.ts  Database scope pills (render + wiring).
-    queryBuilder.ts    The query builder (wiring; returns its render function).
+    queryBuilder.ts    The query builder (wiring, drop targets, node grips; returns its render function).
     docsFilter.ts      tagsOf / groupByTag / matchDocs — the data dictionary's sections and search (pure).
-    docsSidebar.ts     The data dictionary (render + search-box wiring).
+    docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
     statsPanel.ts      The statistics column (render).
     dataPreview.ts     Matching events and the Run button (render + wiring).
     accountMenu.ts     The top-bar account menu (render + wiring).
@@ -265,9 +319,11 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
                        The 7 mock databases, the flattened rows, the query evaluator, the request-body check, the data loader.
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
+public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.svg, loading.svg — replaceable
+                       files named in `MASCOT` ("Pickle theme and mascot"). Served as-is, scanned by `check:offline`.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
-                       src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases and
-                       noBackendDataInSrc.
+                       src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases,
+                       themeContrast and noBackendDataInSrc.
 scripts/check-offline.mjs  The offline guard ("Offline-first").
 vite.config.ts         Dev proxy of the API prefix to DEV_BACKEND_URL, the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE or DEV_BACKEND_URL is missing.
 .env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract");
@@ -312,6 +368,7 @@ binding its Fomantic dropdowns must always happen together.
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
+| User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
 | Docs rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
 
 ---
@@ -485,10 +542,17 @@ by the pair `facetId` / `fieldId`. The operators are the fixed
 
 | Value type | Operators |
 |---|---|
-| string | `eq`, `neq`, `contains`, `in`, `isEmpty`, `isNotEmpty` |
-| number | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `isEmpty`, `isNotEmpty` |
+| string | `eq`, `neq`, `contains`, `in`, `present`, `absent` |
+| number | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `present`, `absent` |
 | boolean | `eq`, `neq` |
-| date | `eq`, `neq`, `before`, `after`, `between`, `isEmpty`, `isNotEmpty` |
+| date | `eq`, `neq`, `before`, `after`, `between`, `present`, `absent` |
+
+`present` / `absent` are the one operator pair for both a whole facet and a
+single field. Labels: field-level "Has any value" / "Has no value", facet-level
+"Is present" / "Is absent" (`operatorName(op, facetLevel)`). A condition with no
+field offers only these two (`FACET_OPERATOR_IDS`). The catalog also lists
+every facet (`catalog.facets`), including facets with no fields, so a facet
+can be chosen and tested for presence even when it has nothing to compare.
 
 - **Value type** comes from `Field.typeName` (the backend's `type`, else its
   `format`) via `valueTypeFor` and `TYPE_NAMES`: case-insensitive, ignoring
@@ -603,9 +667,12 @@ Both `/stats` and `/query` take a `QueryRequest` (`src/api/types.ts`):
 `{ databases, query }`. `databases` holds the databases' `label`s (the model's
 `Database.id`s), and
 `query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
-and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`). A
-condition about a whole facet ("present" / "absent") sends `fieldId: null`; what
-that means is the backend's to interpret. Every
+and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`).
+`fieldId` is `string | null`: `null` means the condition is about the facet
+itself, and what that means is the backend's to interpret. A facet-level
+`present` matches an event holding any value for the facet, `absent` the
+opposite; a field-level `present` matches an event holding a non-blank value
+for the field, `absent` one that doesn't. Every
 node carries the frontend's `id` for it. The backend treats it as opaque; it is
 reserved so a later error response can point at a condition.
 
@@ -623,7 +690,7 @@ does).
 
 | Arity (operators) | `value` |
 |---|---|
-| `none` (`isEmpty`, `isNotEmpty`) | `null` |
+| `none` (`present`, `absent`) | `null` |
 | `one` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `before`, `after`, `contains`) | one value |
 | `two` (`between`) | `[from, to]` |
 | `many` (`in`) | a non-empty list |
@@ -642,6 +709,10 @@ The mock answers a body that isn't a well-formed `QueryRequest` with `400`
 and a message naming the first problem (`mock-server/requestBody.ts`). The
 real backend should do the same.
 
+**Backend hand-off:** the real backend must accept `fieldId: null`, implement
+`present`/`absent` at both levels, and no longer receive `isEmpty`/`isNotEmpty`
+(the old names of the same operators; the frontend no longer sends them).
+
 ---
 
 ## 8. The query model
@@ -651,6 +722,13 @@ real backend should do the same.
 `fieldId`, `operatorId`, `value`, all `null` until chosen). The shape of
 `value` depends on the operator's arity: `none` (no value), `one`, `two` (a
 `[from, to]` pair) or `many` (a list).
+
+A condition can also be about a **whole facet**: `facetId` and `operatorId`
+set, `fieldId` `null` (`isFacetLevel`). Only `present` / `absent` apply, and
+the value is `null`. A facet with nothing else chosen is not facet-level, just
+unfinished: the row's explicit "no field" choice is what sets the operator to
+`present` ("Centre — `queryBuilder.ts`"), so the two states can be told apart.
+Dropping a facet or a tag on the builder creates such conditions.
 
 - **`tree.ts`** — pure and immutable: every edit is "read `state.query`, call
   one `tree.ts` function, write the new tree back". `sameSemantics` tells a
@@ -663,14 +741,29 @@ real backend should do the same.
   right shape, it checks every value against the field's type (a number,
   `true`/`false`, text, a partial UTC timestamp) and that a number range
   doesn't run backwards. A value that isn't on the field's pick-list is fine.
-  These checks also cover a query restored after a redirect. **Any issue
-  blocks running.**
+  A facet-level condition must name a known facet, use `present` or `absent`
+  and hold no value. These checks also cover a query restored after a
+  redirect. **Any issue blocks running.**
 - **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet
   clears field, operator and value; a new field clears operator and value; an
   operator change that alters the arity resets the value instead of reading
-  the old control.
+  the old control. Choosing the no-field option clears the field and sets
+  `present`.
 - **`summary.ts`** — `queryToText`, e.g. `Thing: size Greater than 3000 AND
-  (…)`. Display only; unfinished values show as `(value?)`.
+  (…)`, or `Thing is present` for a facet-level condition. Display only;
+  unfinished values show as `(value?)`.
+- **`drop.ts`** — the pure half of drag-to-build: the drag payload
+  (`DragItem`: facet, field, value, tag or node; `parseDragItem` treats the
+  data as untrusted and returns `null` for anything else) and `nodesForItem`,
+  which says what a dropped docs item creates. A facet becomes a facet-level
+  `present`; a field becomes a condition with that field chosen and nothing
+  else; a value becomes `field eq value` (a number field's value goes out as a
+  number); a tag becomes one facet-level `present` per facet carrying it. What
+  can't be created comes back as `problems`, in words for the user.
+- **`tree.ts`, placement** — `insertNodes` puts new nodes at the end of a
+  target group, or just before a target condition; `moveNode` does the same
+  for an existing node and returns `null` for a move that is impossible
+  (unknown id, the root, a group into itself or something inside it).
 
 ---
 
@@ -692,15 +785,53 @@ empty.
 
 ### Left — `docsSidebar.ts` (data dictionary)
 
-Built from `state.facets`. Sections are our own `tags` (`groupByTag`,
-`docsFilter.ts`), alphabetical, a facet listed under each of its tags,
-untagged facets last. Each facet shows its name, tags, the third-party group
-(if not blank), `description`, `comment`, "In N events (x%)" and its fields
-(hover: `fieldTitle`). Blank texts are `""` in the model ("Data model"), and
-blank parts are left out. The search box
-(`matchDocs`: facet name, field id or name) hides what doesn't match and
-opens the sections that do, directly on the painted DOM (the one exception to
-"always repaint", see "The Fomantic discipline").
+Built from `state.facets` and `state.catalog`. It is a stack of native
+`<details>` (no Fomantic plugin), four levels deep:
+
+1. **Tag sections** — our own `tags` (`groupByTag`, `docsFilter.ts`),
+   alphabetical, a facet listed under each of its tags, untagged facets last in
+   a section that cannot be dragged.
+2. **Facet cards** — name and field count in the header; opened, the tags, the
+   third-party group (if not blank), `comment`, `description` and "In N events
+   (x%)", then the fields.
+3. **Field rows** — name, type and a one-line blurb (`comment`, else
+   `description`) in plain sight, not hidden in a hover; opened, the full
+   texts and the field's known values.
+4. **Value chips** — the field's pick-list (`CatalogField.options`, at most 30
+   shown, the rest counted).
+
+Blank texts are `""` in the model ("Data model"), and blank parts are left
+out. The panel header has a **Hide docs** button, a one-line hint and the
+search box (`matchDocs`: facet name, field id or name), which hides what
+doesn't match and opens the sections that do, directly on the painted DOM (the
+one exception to "always repaint", see "The Fomantic discipline").
+
+**Everything you can add has two ways in.** A **grip** (a `draggable` handle
+on the tag section, facet card, field row and value chip) starts a drag, and a
+**+ button** ("Add to query") adds the same item without a mouse drag. Both read
+the item from the nearest element's `data-item` (JSON of a `DragItem`, built
+by `dragData`), so the two cannot disagree. Dragging sets the payload under
+`DRAG_MIME` and nothing as plain text; `wireDocsSidebar` is delegated and
+installed once, and calls `app.onAddItem` for the buttons. The grip and the
+button sit inside a `<summary>`, so their clicks call `preventDefault()` to
+keep from also opening or closing the card.
+
+**Width.** The panel is open by default (`sidebarCollapsed: false`). Its right
+edge is a separator (`role="separator"`, focusable) wired by `docsResize.ts`:
+drag it, or press Left / Right (1rem a step). The width is kept in the
+`--qb-docs-w` CSS variable, limited to 20–40rem (26rem to start) and
+remembered in `localStorage` (`qb:docs-width`; if storage is unavailable it
+just isn't remembered). Under 1100 px the open panel floats over the page.
+Nothing needed to read the dictionary is behind a hover: names, types and
+blurbs are visible text, and a `title` only labels a button or repeats a number.
+
+**Known limitation, not tested in Firefox.** The tag section's grip sits inside
+its `<summary>`. Chromium starts the drag from it; Firefox is known to treat a
+draggable inside a `<summary>` differently, and Firefox was not installed while
+this was built, so that grip (and the facet and field grips, which are in
+summaries too) was **not verified in Firefox**. If a grip fails there, the
++ button for the same item still works. Check this in Firefox before relying on
+drag in a Firefox-only deployment.
 
 ### Centre — `queryBuilder.ts`
 
@@ -727,6 +858,53 @@ alike.) A picked or typed entry becomes the field's type
 for validation to report). Every control has an accessible name. Issues show
 under their row or group. The footer shows the whole query in plain English
 once it is complete, otherwise how many parts still need attention.
+
+**The Field dropdown's no-field choice.** Besides the facet's fields, the
+Field dropdown offers "— no field (facet only) —", which makes the condition
+about the whole facet: its Operator list becomes "Is present" / "Is absent" and
+there is no value. The `<select>` values are encoded so nothing can collide:
+`""` is nothing chosen, `NO_FIELD` (`"none"`) is the no-field choice, and a
+real field is `FIELD_PREFIX` (`"f:"`) + its id, so a field literally called
+"none" is still just a field (`decodeFieldValue` reads it back). The row draws
+the choice with a ∅ glyph (a CSS `content` character, so nothing is fetched),
+italics, muted text and a dashed outline, in the shown text and in the menu,
+so it can never be mistaken for a field. The styling is limited to the Field
+dropdown (`qb-field-select`; Fomantic copies the select's classes onto the
+dropdown it builds), so a facet or operator whose id is "none" is left alone.
+
+**Drag and drop** (`wireQueryBuilder`, with `drop.ts` and `app.ts`):
+
+- **Targets.** Every group and every condition (`[data-node-id]`) is a drop
+  target, shown while a drag is over it: a group gets a dashed outline (the
+  item goes at its end), a condition a bar above it (the item goes just before
+  it). Only our own drags are accepted: the builder offers itself as a target
+  only when the drag carries `DRAG_MIME`, so files or text dragged in from
+  elsewhere get the browser's "not allowed".
+- **Moving nodes.** Every condition and every group but the root has a grip
+  (`qb-grip`, `data-node-item`) that drags a `{type: "node"}` payload; dropping
+  it on a group or condition moves it there (`moveNode`). Dropping a node on
+  itself does nothing.
+- **Expanding.** A drop into a *collapsed* group expands it (`openGroup` in
+  `app.ts`), so the user sees what arrived. Collapsing stays display-only.
+- **Keyboard and the "+" buttons.** Every drag has a non-mouse path: the + button
+  on a docs item calls `onAddItem`, which drops the item on the **root group**,
+  at its end. The + button is a real `<button>`, so Tab and Enter work. (Moving an
+  existing node is mouse-only; use the row's own dropdowns and ✕ to rebuild
+  without a mouse.)
+- **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
+  `AppState.dropNotice`, drawn above the query card as a dismissible warning
+  (`noticeHtml`; the ✕ works by click, Enter and Space). A drop that fully
+  succeeds clears an older warning; a drop that partly succeeds still inserts
+  what it can. The messages:
+
+| Drop | Result | Warning |
+|---|---|---|
+| Facet, field or value whose facet or field isn't in the loaded docs | nothing added | "Couldn't add “…”: it is not in the loaded docs. The docs may be out of date; reload the page." |
+| Value that isn't on its field's known values | nothing added | "Couldn't add “…”: it is not one of <field>'s known values." |
+| Tag with no facets | nothing added | "The tag “…” has no facets." |
+| Data that isn't ours or can't be read | nothing added | "That item can't be added to a query." |
+| A group onto itself or something inside it (or a stale node id) | nothing moved | "A group can't be moved into itself." |
+| Anything before facets and catalog have loaded | nothing added | "The docs are still loading; try again in a moment." |
 
 Finding and picking in the dropdowns (settings in `fomantic.ts`, cursor
 movement in `queryBuilder.ts`):
@@ -824,8 +1002,15 @@ to a named handler function — add a route there, and a test in
   reached.
 - **`/api/query`** returns the matching events themselves, at most
   `QUERY_RESULT_CAP` (25).
+- **`present` / `absent`** work at both levels (`conditionMatches` in
+  `evaluate.ts`). On a field, `present` matches a non-blank value (not `null`,
+  missing or `""`) and `absent` a blank one. With `fieldId: null`, `present`
+  matches an event holding any non-null value for any key of that facet
+  (`rowHasFacet`) and `absent` the opposite; any other operator on a facet
+  matches nothing. This is the mock's reading; the real backend owns the rule.
 - **Request bodies** are checked against `QueryRequest` before anything reads
-  them (`requestBody.ts`, `queryProblem`): a malformed one gets a `400` naming
+  them (`requestBody.ts`, `queryProblem`); `fieldId: null` is accepted (a
+  facet-level condition), an empty string is not: a malformed one gets a `400` naming
   the first problem, e.g. `Malformed query: query.children[0].fieldId must be a
   non-empty string or null.`
 - **Login and compliance** are simulated in-process (`auth.ts`): stand-in IdP
@@ -864,6 +1049,9 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   server-supplied string; no inline `onclick`, so a strict
   Content-Security-Policy allows it). Login and compliance status failures are
   not fatal.
+- Drops never fail silently: whatever a drop or "Add to query" can't do is
+  explained in `AppState.dropNotice`, a dismissible warning above the query
+  ("Centre — `queryBuilder.ts`" has the list).
 - No retries, no error-boundary machinery — just visible messages.
 
 ---
@@ -876,8 +1064,12 @@ file it tests, in the same place under `tests/`. The ones to know about:
 - `tests/app.test.ts` — `createApp` with a fake API: Run and its 401/403
   redirects, stale responses, streamed statistics, logout, startup and
   restoring a saved query. The most important behaviour lives here.
-- `tests/query/` — tree, validation, summary, field catalog, the row cascade,
-  dates.
+- `tests/query/` — tree (including `insertNodes` / `moveNode`), validation,
+  summary, field catalog, the row cascade, dates, and `drop.test.ts` (drag
+  payloads, what a drop creates, the warnings).
+- `tests/themeContrast.test.ts` — reads the `:root` colour tokens from
+  `src/styles.css` and fails if a text/background pair falls below WCAG AA
+  (4.5:1) ("Pickle theme and mascot").
 - `tests/api/` — the client over a stubbed `fetch`, the contract checks
   (`contract.test.ts`), and the translation both ways: `response.test.ts`
   (backend → model) and `request.test.ts` (query → request body).
@@ -885,6 +1077,9 @@ file it tests, in the same place under `tests/`. The ones to know about:
 - `tests/mock-server/server.test.ts` — every mock route over real HTTP.
 - `tests/dateCases.ts` — date values shared by the frontend's and the mock's
   date tests, so their two copies of the timestamp pattern can't drift.
+- `tests/ui/` — the pure parts of the panels: docs filter and sidebar HTML,
+  sidebar resizing, query builder HTML, the mascot face, the rain's planning
+  and click counter, values, formatting, the data preview and statistics.
 - `tests/lintRules.test.ts` — the ESLint import airlocks still fire.
 - `tests/docReferences.test.ts` — every section of this file cited in code
   (`docs/ARCHITECTURE.md, "…"`) still exists.
