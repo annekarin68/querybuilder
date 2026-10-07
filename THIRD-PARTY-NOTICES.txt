@@ -48,8 +48,8 @@ MIT), with the copyright holders listed underneath:
 
 The following build/test-only tooling is also MIT-licensed and is not shipped
 in dist/: eslint, @eslint/js, typescript-eslint, globals, prettier, vitest,
-tsx, concurrently, @types/node, @types/jquery. (Their upstream copyright notices ship with each package under
-node_modules/<name>/.)
+tsx, concurrently, @types/node, @types/jquery. (Their upstream copyright
+notices ship with each package under node_modules/<name>/.)
 
 MIT License terms (applies to every component in this section):
 
