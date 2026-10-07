@@ -114,15 +114,16 @@ the green fill, the selected row, the ANY/OR text, danger, warning) drops below
 WCAG AA (4.5:1), so a new palette cannot quietly become unreadable. Add a pair
 to its `PAIRS` list when you add a token that carries text.
 
-The pickle is four small SVG files in `public/pickle/`, served as-is and named
-by `MASCOT` in `src/config.ts`. They are meant to be replaced: overwrite a file
-with the same name and nothing else changes.
+The pickle is four small SVG files in `public/pickle/`, served as-is. Three of
+them are named by `MASCOT` in `src/config.ts` (`logo.svg`, `disappointed.svg`,
+`loading.svg`); the favicon is referenced from `index.html`. They are meant to
+be replaced: overwrite a file with the same name and nothing else changes.
 
 | File | Where it shows |
 |---|---|
 | `favicon.svg` | The browser tab (`<link rel="icon">` in `index.html`). |
 | `logo.svg` | The top bar, normal face. Also the face everything falls back to. |
-| `disappointed.svg` | The top bar while the query has an `invalid` issue (a red message). A merely unfinished query is not a mistake and keeps the normal face. |
+| `disappointed.svg` | The top bar while the query has an `invalid` issue (a red message), unless statistics or Matching events are loading: loading wins when both apply. A merely unfinished query is not a mistake and keeps the normal face. |
 | `loading.svg` | The top bar while statistics or Matching events are loading. It wobbles (not under reduced motion). |
 
 `mascotFor(state)` (`src/ui/mascot.ts`) picks the face from `issues`, `stats`
@@ -320,7 +321,8 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
 public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.svg, loading.svg — replaceable
-                       files named in `MASCOT` ("Pickle theme and mascot"). Served as-is, scanned by `check:offline`.
+                       files, three named in `MASCOT`, the favicon in `index.html` ("Pickle theme and
+                       mascot"). Served as-is, scanned by `check:offline`.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
                        src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases,
                        themeContrast and noBackendDataInSrc.
@@ -780,7 +782,7 @@ out**. Outside clicks and Escape close it. Display-only (see "Auth").
 
 One pill per database (a native checkbox in a styled label; hover shows
 "owner: description"), "N of M selected", **All** / **None**. Zero selected →
-an amber "Select at least one database." and the other cards say why they are
+a warning-coloured "Select at least one database." and the other cards say why they are
 empty.
 
 ### Left — `docsSidebar.ts` (data dictionary)
@@ -835,7 +837,7 @@ drag in a Firefox-only deployment.
 
 ### Centre — `queryBuilder.ts`
 
-A group is a coloured bracket (blue = ALL/AND, amber = ANY/OR) with a header:
+A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
 collapse caret, "Match [ALL | ANY] of the following", **+ Condition**, **+
 Group**, ✕ (not on the root). A collapsed group folds to its `queryToText`
 summary and "N conditions". A condition row is three cascading Fomantic
