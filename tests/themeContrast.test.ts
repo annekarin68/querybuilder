@@ -38,10 +38,27 @@ const PAIRS: [string, string][] = [
   ["qb-or-text", "qb-surface"],
   ["qb-danger", "qb-surface"],
   ["qb-warn", "qb-surface"],
+  // The compliance badges inside the account chip. Their backgrounds must be
+  // opaque tokens: a see-through tint was once 3.5:1 on the green chip.
+  ["qb-topbar-ok-text", "qb-topbar-ok-bg"],
+  ["qb-topbar-warn-text", "qb-topbar-warn-bg"],
+];
+
+// Not text: a colour that marks keyboard focus must stand out (WCAG 1.4.11, 3:1)
+// from what is on both sides of it.
+const FOCUS_INDICATORS: [string, string][] = [
+  ["qb-and", "qb-bg"], // the dictionary resize handle (.qb-docs-resize:focus-visible)
+  ["qb-and", "qb-surface"],
 ];
 
 describe("pickle palette", () => {
   it.each(PAIRS)("%s on %s meets WCAG AA (4.5:1)", (fg, bg) => {
     expect(ratio(token(fg), token(bg))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("keyboard focus indicators", () => {
+  it.each(FOCUS_INDICATORS)("%s against %s meets WCAG 1.4.11 (3:1)", (indicator, neighbour) => {
+    expect(ratio(token(indicator), token(neighbour))).toBeGreaterThanOrEqual(3);
   });
 });

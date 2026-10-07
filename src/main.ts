@@ -128,7 +128,8 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
 
 // Below this width the open docs float over the page (styles.css), so start
 // with them folded away instead of covering the builder on first load. Set
-// before the first paint below, so nothing flickers.
+// before the first paint below, so nothing flickers. Keep the number in step
+// with the `@media (max-width: 1100px)` rule in styles.css (CSS cannot import it).
 const NARROW_SCREEN = "(max-width: 1100px)";
 if (window.matchMedia(NARROW_SCREEN).matches) store.setState({ sidebarCollapsed: true });
 

@@ -27,9 +27,12 @@
   --qb-topbar-2: #44683a;
   --qb-topbar-text: #eef3dc;
   --qb-topbar-muted: #b9cba0;
-  --qb-topbar-ok-bg: rgba(168, 220, 120, 0.25);
+  /* Compliance badges inside the account chip. Opaque #rrggbb on purpose:
+     a see-through tint over --qb-topbar-2 left the text at about 3.5:1, and
+     themeContrast.test.ts can only check opaque colours. */
+  --qb-topbar-ok-bg: #1f3a1a;
   --qb-topbar-ok-text: #d6f2b0;
-  --qb-topbar-warn-bg: rgba(240, 196, 60, 0.25);
+  --qb-topbar-warn-bg: #4a3a0c;
   --qb-topbar-warn-text: #ffe9a0;
 
   /* ALL / AND: pickle green */
@@ -619,9 +622,6 @@ body {
   font-style: italic;
   color: var(--qb-muted);
 }
-.is-collapsed > .qb-group-head {
-  flex-wrap: nowrap;
-}
 .qb-collapse-btn {
   border: 1px solid var(--qb-border-strong);
   background: var(--qb-surface);
@@ -633,6 +633,7 @@ body {
 }
 /* A folded group opens when you click anywhere on its line. */
 .is-collapsed > .qb-group-head {
+  flex-wrap: nowrap;
   cursor: pointer;
   border-radius: var(--qb-radius);
   padding: 0.15rem 0.35rem;
@@ -937,6 +938,7 @@ body {
 .qb-er-count {
   color: var(--qb-muted);
   white-space: nowrap;
+  text-align: right;
 }
 .qb-er-cell {
   overflow: hidden;
@@ -967,9 +969,6 @@ body {
 .qb-er-more {
   font-size: 0.8rem;
   color: var(--qb-subtle);
-}
-.qb-er-count {
-  text-align: right;
 }
 .qb-er-json {
   max-height: 24rem;
@@ -1051,9 +1050,9 @@ body {
   font-size: 0.8rem;
   color: var(--qb-muted);
 }
-.qb-muted {
+/* "and N more" after a field's known values: smaller than the chips beside it. */
+.qb-doc-more {
   font-size: 0.78rem;
-  color: var(--qb-muted);
 }
 .qb-docs-resize {
   position: absolute;
@@ -1064,9 +1063,13 @@ body {
   cursor: col-resize;
   touch-action: none;
 }
-.qb-docs-resize:hover,
-.qb-docs-resize:focus-visible {
+.qb-docs-resize:hover {
   background: var(--qb-border-strong);
+}
+/* Keyboard focus needs 3:1 against both neighbours (WCAG 1.4.11);
+   --qb-border-strong gives only about 1.7:1, so use the green. */
+.qb-docs-resize:focus-visible {
+  background: var(--qb-and);
   outline: none;
 }
 .qb-doc-facets {
@@ -1266,6 +1269,9 @@ details[open] > summary > .qb-chevron {
     margin-right: 0;
   }
 }
+/* Keep this 1100px in step with NARROW_SCREEN in src/main.ts: the script
+   decides from the same width when Escape and an outside click close the
+   floating docs, and CSS cannot share a constant with it. */
 @media (max-width: 1100px) {
   /* Narrow screens: the docs float over the page instead of squeezing the builder. */
   .qb-body:not(.qb-docs-collapsed) .qb-col-docs {

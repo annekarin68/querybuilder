@@ -61,7 +61,7 @@ function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null)
     return `<span class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</span>`;
   });
   const more = options.length - shown.length;
-  return `<div class="qb-doc-values" role="group" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted">and ${more} more</span>` : ""}</div>`;
+  return `<div class="qb-doc-values" role="group" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted qb-doc-more">and ${more} more</span>` : ""}</div>`;
 }
 
 function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {

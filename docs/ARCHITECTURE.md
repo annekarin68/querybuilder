@@ -121,9 +121,14 @@ colours, text, the top bar, the ALL/AND green and ANY/OR mustard of the group
 brackets, danger and warning). Change a colour there, never in a rule.
 `tests/themeContrast.test.ts` reads those tokens from the CSS and fails if a
 text/background pair we use (body text, muted text, text on the top bar and on
-the green fill, the selected row, the ANY/OR text, danger, warning) drops below
-WCAG AA (4.5:1), so a new palette cannot quietly become unreadable. Add a pair
-to its `PAIRS` list when you add a token that carries text.
+the green fill, the selected row, the ANY/OR text, danger, warning, the
+compliance badges in the account chip) drops below WCAG AA (4.5:1), so a new
+palette cannot quietly become unreadable. Add a pair to its `PAIRS` list when
+you add a token that carries text. A colour that carries text must be an opaque
+`#rrggbb` token, because the test cannot read a see-through `rgba()` (this is
+why the badge backgrounds are opaque). The test also checks that the green used
+to mark keyboard focus on the dictionary's resize handle stands out 3:1 from the
+page and the card (WCAG 1.4.11).
 
 The pickle is four small SVG files in `public/pickle/`, served as-is. Three of
 them are named by `MASCOT` in `src/config.ts` (`logo.svg`, `disappointed.svg`,
@@ -1368,7 +1373,7 @@ file it tests, in the same place under `tests/`. The ones to know about:
   payloads, what a drop creates, the warnings).
 - `tests/themeContrast.test.ts` — reads the `:root` colour tokens from
   `src/styles.css` and fails if a text/background pair falls below WCAG AA
-  (4.5:1) ("Pickle theme and mascot").
+  (4.5:1), or a keyboard-focus colour below 3:1 ("Pickle theme and mascot").
 - `tests/api/` — the client over a stubbed `fetch`, the contract checks
   (`contract.test.ts`), and the translation both ways: `response.test.ts`
   (backend → model) and `request.test.ts` (query → request body).
