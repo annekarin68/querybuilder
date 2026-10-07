@@ -5,26 +5,26 @@ import {
   collapseButton,
   footerHtml,
   groupHtml,
-  NO_FIELD,
   noticeHtml,
   rowDropdown,
 } from "../../src/ui/queryBuilder";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
-import { buildFieldCatalog } from "../../src/query/fieldCatalog";
+import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
 import type { Issue } from "../../src/query/types";
 
 describe("condition row dropdowns", () => {
   // There can be many facets and fields: typing filters the list (Fomantic's
   // `search`) instead of jumping to the first item starting with that letter.
-  // Operator is a search dropdown too, so all three behave alike: clicking one
-  // whose menu opened on its own (focusPart) keeps it open.
-  it.each(["facet", "field", "operator"] as const)("%s is a search dropdown", (part) => {
+  // Operator is a search dropdown too, so they behave alike: clicking one
+  // whose menu opened on its own (focusPart) keeps it open. (The Field
+  // dropdown has its own builder, below.)
+  it.each(["facet", "operator"] as const)("%s is a search dropdown", (part) => {
     expect(rowDropdown(part, [], null, true)).toContain('class="ui search selection dropdown"');
   });
 
   it("lists the choices by name, with the chosen one selected", () => {
     const html = rowDropdown(
-      "field",
+      "facet",
       [
         { id: "a", name: "Alpha" },
         { id: "b", name: "Beta" },
@@ -32,7 +32,7 @@ describe("condition row dropdowns", () => {
       "b",
       true,
     );
-    expect(html).toContain('aria-label="Field"');
+    expect(html).toContain('aria-label="Facet"');
     expect(html).toContain('<option value="a">Alpha</option>');
     expect(html).toContain('<option value="b" selected>Beta</option>');
   });
@@ -46,39 +46,87 @@ describe("condition row dropdowns", () => {
 describe("field dropdown", () => {
   const fields = [{ id: "a", name: "Alpha" }];
 
-  it("lists the no-field choice first, apart from real fields", () => {
-    const html = fieldDropdown(fields, null, false, true);
-    expect(html.indexOf(`value="${NO_FIELD}"`)).toBeLessThan(html.indexOf('value="f:a"'));
-    expect(html).toContain("— no field (facet only) —");
+  it("lists the whole-facet tests first, in their own group, apart from the fields", () => {
+    const html = fieldDropdown(fields, null, null, true);
+    expect(html).toContain('<optgroup label="About the whole facet">');
+    expect(html).toContain('<option value="op:present">Is present</option>');
+    expect(html).toContain('<option value="op:absent">Is absent</option>');
+    expect(html).toContain('<optgroup label="About a field">');
+    expect(html.indexOf('value="op:present"')).toBeLessThan(html.indexOf('value="f:a"'));
   });
 
-  it("a real field is encoded so it can never equal the no-field value", () => {
-    const html = fieldDropdown([{ id: NO_FIELD, name: "Any field" }], null, false, true);
-    expect(html).toContain(`<option value="f:${NO_FIELD}">Any field</option>`);
-    expect(html.match(new RegExp(`value="${NO_FIELD}"`, "g"))).toHaveLength(1);
+  it("a facet with no fields offers only the whole-facet tests", () => {
+    const html = fieldDropdown([], null, null, true);
+    expect(html).toContain('value="op:present"');
+    expect(html).not.toContain("About a field");
   });
 
-  it("marks the dropdown when no field is chosen", () => {
-    expect(fieldDropdown(fields, null, true, true)).toContain("qb-no-field");
-    expect(fieldDropdown(fields, null, true, true)).toContain(
-      `<option value="${NO_FIELD}" selected>`,
+  it("a real field is encoded so it can never equal a whole-facet test", () => {
+    const html = fieldDropdown([{ id: "present", name: "Present" }], null, null, true);
+    expect(html).toContain('<option value="f:present">Present</option>');
+    expect(html.match(/value="op:present"/g)).toHaveLength(1);
+  });
+
+  it("selects the chosen test or the chosen field", () => {
+    expect(fieldDropdown(fields, null, "absent", true)).toContain(
+      '<option value="op:absent" selected>',
     );
-    expect(fieldDropdown(fields, "a", false, true)).not.toContain("qb-no-field");
-    expect(fieldDropdown(fields, "a", false, true)).toContain('<option value="f:a" selected>');
+    expect(fieldDropdown(fields, "a", null, true)).toContain('<option value="f:a" selected>');
+    expect(fieldDropdown(fields, "a", null, true)).not.toContain('op:absent" selected');
   });
 
-  it("carries qb-field-select so the CSS can tell it from the facet and operator dropdowns", () => {
-    expect(fieldDropdown(fields, null, false, true)).toContain("qb-field-select");
-    expect(fieldDropdown(fields, "a", true, true)).toContain("qb-field-select");
-    expect(rowDropdown("facet", [], null, true)).not.toContain("qb-field-select");
-    expect(rowDropdown("operator", [], null, true)).not.toContain("qb-field-select");
-  });
-
-  it("is still a labelled search dropdown, disabled until a facet is chosen", () => {
-    const html = fieldDropdown(fields, null, false, false);
-    expect(html).toContain('class="ui search selection dropdown');
-    expect(html).toContain('aria-label="Field"');
+  it("is a search dropdown whose name says it holds both kinds of choice, disabled until a facet is chosen", () => {
+    const html = fieldDropdown(fields, null, null, false);
+    // `qb-field-select` is what styles.css scopes the header wrapping and the
+    // two-column span of a whole-facet row to.
+    expect(html).toContain('class="ui search selection dropdown qb-field-select"');
+    expect(html).toContain('aria-label="Field, or presence of the facet"');
+    expect(html).toContain('data-part="field"');
     expect(html).toContain(" disabled");
+    expect(fieldDropdown(fields, null, null, true)).not.toContain(" disabled");
+  });
+});
+
+describe("condition row slots", () => {
+  const catalog: FieldCatalog = {
+    facets: [{ id: "thing", name: "Thing" }],
+    fields: [
+      {
+        facetId: "thing",
+        fieldId: "size",
+        name: "Thing: size",
+        fieldName: "size",
+        valueType: "number",
+        operatorIds: ["gt", "present"],
+      },
+    ],
+  };
+  const row = (over: object) => {
+    const root = emptyQuery();
+    const c = { ...newCondition(), facetId: "thing", ...over };
+    return groupHtml({ catalog, facets: null, issues: [] }, { ...root, children: [c] }, true);
+  };
+
+  it("a whole-facet condition has no Operator or Value slot: the test is the whole sentence", () => {
+    const html = row({ operatorId: "present" });
+    expect(html).not.toContain('data-part="operator"');
+    expect(html).not.toContain('class="qb-value"');
+    expect(html).toContain('<option value="op:present" selected>');
+  });
+
+  it("a malformed whole-facet row shows 'Choose…', so picking a test is a real change that repairs it", () => {
+    // A foreign operator, or a value a presence test cannot take: the row has no
+    // Operator or Value slot, so the Field dropdown is the only way to fix it.
+    for (const bad of [{ operatorId: "eq" }, { operatorId: "present", value: 5 }]) {
+      const html = row(bad);
+      expect(html).not.toContain(" selected>");
+      expect(html).not.toContain('data-part="operator"');
+    }
+  });
+
+  it("a field condition and an unfinished one keep both slots", () => {
+    expect(row({ fieldId: "size", operatorId: "gt" })).toContain('data-part="operator"');
+    expect(row({})).toContain('data-part="operator"');
   });
 });
 
@@ -96,19 +144,27 @@ describe("drop warning", () => {
 });
 
 describe("decodeFieldValue", () => {
-  it('reads "none" as the facet-only choice', () => {
-    expect(decodeFieldValue("none")).toEqual({ facetOnly: true, fieldId: null });
+  it("reads op:present and op:absent as whole-facet tests", () => {
+    expect(decodeFieldValue("op:present")).toEqual({ facetOperatorId: "present", fieldId: null });
+    expect(decodeFieldValue("op:absent")).toEqual({ facetOperatorId: "absent", fieldId: null });
+  });
+  it("ignores an operator a whole facet can't take: the value comes from the DOM", () => {
+    expect(decodeFieldValue("op:eq")).toEqual({ facetOperatorId: null, fieldId: null });
   });
   it("strips the field prefix once", () => {
-    expect(decodeFieldValue("f:x")).toEqual({ facetOnly: false, fieldId: "x" });
-    expect(decodeFieldValue("f:f:x")).toEqual({ facetOnly: false, fieldId: "f:x" });
+    expect(decodeFieldValue("f:x")).toEqual({ facetOperatorId: null, fieldId: "x" });
+    expect(decodeFieldValue("f:f:x")).toEqual({ facetOperatorId: null, fieldId: "f:x" });
   });
-  it('a field whose id is literally "none" is a field, not the no-field choice', () => {
-    expect(decodeFieldValue("f:none")).toEqual({ facetOnly: false, fieldId: "none" });
+  it("a field whose id looks like a test is a field, not a test", () => {
+    expect(decodeFieldValue("f:op:present")).toEqual({
+      facetOperatorId: null,
+      fieldId: "op:present",
+    });
+    expect(decodeFieldValue("f:present")).toEqual({ facetOperatorId: null, fieldId: "present" });
   });
-  it("nothing chosen gives no field and no facet-only", () => {
+  it("nothing chosen gives neither", () => {
     for (const empty of ["f:", "", null]) {
-      expect(decodeFieldValue(empty)).toEqual({ facetOnly: false, fieldId: null });
+      expect(decodeFieldValue(empty)).toEqual({ facetOperatorId: null, fieldId: null });
     }
   });
 });

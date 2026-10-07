@@ -3,10 +3,12 @@ import type { Condition, Group, Issue, QueryNode } from "../query/types";
 import type { Facet } from "../model";
 import {
   FACET_OPERATOR_IDS,
+  FACET_OPERATORS,
   fieldsOfFacet,
   findField,
   findOperator,
   isFacetLevel,
+  isFacetTest,
   operatorName,
   OPERATORS,
   type FieldCatalog,
@@ -20,7 +22,7 @@ import {
   removeNode,
   updateNode,
 } from "../query/tree";
-import { nextCondition } from "../query/conditionEdit";
+import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { placeIssues } from "../query/issues";
 import { queryToText } from "../query/summary";
@@ -82,14 +84,15 @@ function iconButton(action: string, label: string, icon: string, extra = ""): st
   return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
 }
 
-/** The three dropdowns of a condition row, in order, and their labels. */
-const ROW_DROPDOWNS = { facet: "Facet", field: "Field", operator: "Operator" };
+/** The condition row's plain dropdowns and their labels. The Field dropdown
+ *  is not here: it holds two kinds of choice and has its own builder,
+ *  `fieldDropdown`. */
+const ROW_DROPDOWNS = { facet: "Facet", operator: "Operator" };
 
 /**
- * One of a condition row's dropdowns: `part` is "facet", "field" or
- * "operator". Every one is a search dropdown — there can be many facets and
- * fields, so typing filters the list — and is disabled until the dropdown
- * before it has a choice.
+ * One of a condition row's plain dropdowns: `part` is "facet" or "operator".
+ * Both are search dropdowns — there can be many facets, so typing filters the
+ * list — and the Operator is disabled until a field is chosen.
  */
 export function rowDropdown(
   part: keyof typeof ROW_DROPDOWNS,
@@ -107,47 +110,73 @@ export function rowDropdown(
   return `<select class="ui search selection dropdown" data-part="${part}" aria-label="${label}"${enabled ? "" : " disabled"}><option value="">${label}…</option>${opts}</select>`;
 }
 
-/** The Field dropdown's value for "no field — about the facet itself". "" means
- *  nothing chosen yet; real fields are `FIELD_PREFIX` + id, so no field can
- *  ever collide with this value (or with a field literally named "Any field"). */
-export const NO_FIELD = "none";
+/** The Field dropdown holds two kinds of choice, told apart by a prefix so no
+ *  field id can ever collide with a test: a whole-facet test is
+ *  `FACET_TEST_PREFIX` + the operator ("op:present"), a field is `FIELD_PREFIX`
+ *  + its id ("f:size"), and "" is nothing chosen yet. */
+export const FACET_TEST_PREFIX = "op:";
 export const FIELD_PREFIX = "f:";
 
-/** The row's Field dropdown: nothing chosen, the no-field choice, then the fields. */
+/**
+ * The row's second dropdown: nothing chosen, then what to say about the whole
+ * facet ("Is present" / "Is absent"), then the facet's fields. One list, so a
+ * user who wants a field and one who wants the facet look in the same place.
+ */
 export function fieldDropdown(
   fields: { id: string; name: string }[],
   selectedId: string | null,
-  facetOnly: boolean,
+  facetOperatorId: string | null,
   enabled: boolean,
 ): string {
-  const opts = optionsHtml(
+  const testOpts = optionsHtml(
+    FACET_OPERATORS,
+    (o) => FACET_TEST_PREFIX + o.id,
+    (o) => operatorName(o, true),
+    (o) => o.id === facetOperatorId,
+  );
+  const fieldOpts = optionsHtml(
     fields,
     (f) => FIELD_PREFIX + f.id,
     (f) => f.name,
     (f) => f.id === selectedId,
   );
-  const noField = `<option value="${NO_FIELD}"${facetOnly ? " selected" : ""}>— no field (facet only) —</option>`;
+  // Fomantic turns an <optgroup> into a header in the menu. A facet without
+  // fields has nothing to put under the second header, so it gets none.
+  const fieldGroup = fields.length ? `<optgroup label="About a field">${fieldOpts}</optgroup>` : "";
   // Fomantic copies the <select>'s classes onto the dropdown it builds, so
-  // `qb-field-select` limits the "no field" styling to this dropdown (a facet
-  // or operator whose id is "none" is left alone) and `qb-no-field` styles the
-  // shown text when that choice is selected.
-  return `<select class="ui search selection dropdown qb-field-select${facetOnly ? " qb-no-field" : ""}" data-part="field" aria-label="Field"${enabled ? "" : " disabled"}><option value="">Field…</option>${noField}${opts}</select>`;
+  // `qb-field-select` lets styles.css restyle this dropdown's menu and its
+  // width on a whole-facet row without touching the other dropdowns.
+  return `<select class="ui search selection dropdown qb-field-select" data-part="field" aria-label="Field, or presence of the facet"${enabled ? "" : " disabled"}><option value="">Choose…</option><optgroup label="About the whole facet">${testOpts}</optgroup>${fieldGroup}</select>`;
 }
 
-/** Read the Field dropdown's value (see NO_FIELD / FIELD_PREFIX): the no-field
- *  choice, a real field's id, or nothing chosen yet. */
+/** Read the Field dropdown's value (see FACET_TEST_PREFIX / FIELD_PREFIX). The
+ *  value comes from the page, so a test a whole facet can't take counts as
+ *  nothing chosen. */
 export function decodeFieldValue(value: string | null): {
-  facetOnly: boolean;
+  facetOperatorId: string | null;
   fieldId: string | null;
 } {
-  if (value === NO_FIELD) return { facetOnly: true, fieldId: null };
+  if (value?.startsWith(FACET_TEST_PREFIX)) {
+    const operatorId = value.slice(FACET_TEST_PREFIX.length);
+    const known = FACET_OPERATOR_IDS.includes(operatorId);
+    return { facetOperatorId: known ? operatorId : null, fieldId: null };
+  }
   const fieldId = value?.startsWith(FIELD_PREFIX) ? value.slice(FIELD_PREFIX.length) : "";
-  return { facetOnly: false, fieldId: fieldId || null };
+  return { facetOperatorId: null, fieldId: fieldId || null };
 }
 
-/** Where the cursor goes after a choice in a condition row's dropdown, so a
- *  whole condition can be built from the keyboard. */
-const NEXT_PART: Record<string, string> = { facet: "field", field: "operator", operator: "value" };
+/** The condition row or group of node `nodeId`, or null if it is not on screen.
+ *  Ids are unique, so one lookup serves rows and groups alike. */
+function nodeOf(container: HTMLElement, nodeId: string): HTMLElement | null {
+  return container.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"]`);
+}
+
+/** The `.ui.dropdown` Fomantic built from the row's `<select data-part=…>`. */
+function dropdownOf(row: HTMLElement | null, part: string): HTMLElement | null {
+  return (
+    row?.querySelector(`select[data-part="${part}"]`)?.closest<HTMLElement>(".ui.dropdown") ?? null
+  );
+}
 
 /**
  * Put the cursor in `part` of condition `nodeId`'s row, opening it if it is a
@@ -155,17 +184,22 @@ const NEXT_PART: Record<string, string> = { facet: "field", field: "operator", o
  * cursor goes to the first. Does nothing for a value the operator doesn't take.
  */
 function focusPart(container: HTMLElement, nodeId: string, part: string): void {
-  const row = container.querySelector(`.qb-condition[data-node-id="${CSS.escape(nodeId)}"]`);
+  const row = nodeOf(container, nodeId);
   const slot =
-    part === "value"
-      ? row?.querySelector<HTMLElement>(".qb-value")
-      : row?.querySelector(`select[data-part="${part}"]`)?.closest<HTMLElement>(".ui.dropdown");
+    part === "value" ? row?.querySelector<HTMLElement>(".qb-value") : dropdownOf(row, part);
   if (!slot) return;
   const dropdown = slot.matches(".ui.dropdown")
     ? slot
     : slot.querySelector<HTMLElement>(".ui.dropdown");
   if (dropdown) openDropdown(dropdown);
   else slot.querySelector("input")?.focus();
+}
+
+/** Put the cursor in condition `nodeId`'s Field dropdown without opening it. */
+function focusFieldDropdown(container: HTMLElement, nodeId: string): void {
+  dropdownOf(nodeOf(container, nodeId), "field")
+    ?.querySelector<HTMLElement>("input.search")
+    ?.focus();
 }
 
 function conditionHtml(ctx: BuilderCtx, c: Condition): string {
@@ -176,20 +210,26 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
     name: f.fieldName,
   }));
   const facetLevel = isFacetLevel(c);
-  const operators = facetLevel
-    ? OPERATORS.filter((o) => FACET_OPERATOR_IDS.includes(o.id))
-    : field
-      ? OPERATORS.filter((o) => field.operatorIds.includes(o.id))
-      : [];
-  const operatorChoices = operators.map((o) => ({ id: o.id, name: operatorName(o, facetLevel) }));
+  const operatorChoices = OPERATORS.filter((o) => field?.operatorIds.includes(o.id)).map((o) => ({
+    id: o.id,
+    name: o.name,
+  }));
+  // A whole-facet test ("Is present") is the whole sentence: it was picked in
+  // the Field dropdown and takes no value, so the row has no Operator or Value
+  // slot (`.is-facet-level` keeps the ✕ at the row's end). A malformed one
+  // (foreign operator, or a value) is drawn the same way but its Field dropdown
+  // shows "Choose…" (isFacetTest), where picking a test repairs it.
+  const operatorAndValue = facetLevel
+    ? ""
+    : `${rowDropdown("operator", operatorChoices, c.operatorId, field !== undefined)}
+        <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>`;
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-row">
       ${nodeGrip(c.id, "condition")}
-      <div class="qb-cond-grid">
+      <div class="qb-cond-grid${facetLevel ? " is-facet-level" : ""}">
         ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
-        ${fieldDropdown(fields, c.fieldId, facetLevel, Boolean(c.facetId))}
-        ${rowDropdown("operator", operatorChoices, c.operatorId, field !== undefined || facetLevel)}
-        <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
+        ${fieldDropdown(fields, c.fieldId, isFacetTest(c) ? c.operatorId : null, Boolean(c.facetId))}
+        ${operatorAndValue}
         ${iconButton("remove-node", "Remove condition", "times")}
       </div>
     </div>
@@ -199,10 +239,8 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
 
 /** Put the cursor on group `nodeId`'s fold/unfold button. */
 function focusCollapseButton(container: HTMLElement, nodeId: string): void {
-  container
-    .querySelector<HTMLElement>(
-      `[data-node-id="${CSS.escape(nodeId)}"] > .qb-group-head .qb-collapse-btn`,
-    )
+  nodeOf(container, nodeId)
+    ?.querySelector<HTMLElement>(":scope > .qb-group-head .qb-collapse-btn")
     ?.focus();
 }
 
@@ -319,7 +357,12 @@ export function wireQueryBuilder(
   container: HTMLElement,
   getState: () => AppState,
   onChange: (next: Group) => void,
-  drops: { onDrop(item: DragItem | null, targetNodeId: string): void; onDismissNotice(): void },
+  hooks: {
+    onDrop(item: DragItem | null, targetNodeId: string): void;
+    onDismissNotice(): void;
+    /** Say something to screen-reader users (the shell's live region). */
+    announce(message: string): void;
+  },
 ): (state: AppState) => void {
   /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
   function handleRowChange(row: HTMLElement, changedPart?: string): void {
@@ -328,29 +371,36 @@ export function wireQueryBuilder(
     if (!catalog || !cond || cond.kind !== "condition") return;
     const picked = (part: string) =>
       row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
-    const { facetOnly, fieldId } = decodeFieldValue(picked("field"));
-    const nextPart = changedPart && picked(changedPart) ? NEXT_PART[changedPart] : undefined;
+    const { facetOperatorId, fieldId } = decodeFieldValue(picked("field"));
     const patch = nextCondition(
       cond,
       {
         facetId: picked("facet"),
         fieldId,
         operatorId: picked("operator"),
-        facetOnly,
+        facetOperatorId,
       },
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
+    // Read the changed dropdown now: onChange repaints at once and replaces
+    // this row, so it must not be read afterwards.
+    const hasChoice = Boolean(changedPart && picked(changedPart));
     onChange(updateNode(query, cond.id, patch));
-    // onChange repaints at once, replacing the row, so the cursor is lost:
-    // put it in the next part of the new row.
-    if (nextPart) focusPart(container, cond.id, nextPart);
+    // The repaint also lost the cursor: put it back where cursorAfterChange
+    // says, judging by the committed patch (the row's dropdowns may still show
+    // the previous facet's choice).
+    const target = cursorAfterChange(changedPart, hasChoice, patch);
+    if (target === "field-closed") focusFieldDropdown(container, cond.id);
+    else if (target) focusPart(container, cond.id, target);
+    const spoken = announcementAfterChange(changedPart, hasChoice, { ...cond, ...patch }, catalog);
+    if (spoken) hooks.announce(spoken);
   }
 
   /** Dismiss the warning. The repaint removes the ✕ the user was on, which
    *  would drop their keyboard focus, so move focus to the query card. */
   function dismissNotice(): void {
-    drops.onDismissNotice();
+    hooks.onDismissNotice();
     container.querySelector<HTMLElement>(".qb-query")?.focus();
   }
 
@@ -451,7 +501,7 @@ export function wireQueryBuilder(
     const target = targetOf(e.target);
     if (!target) return;
     // An unreadable payload arrives as null; the app explains it to the user.
-    drops.onDrop(parseDragItem(e.dataTransfer!.getData(DRAG_MIME)), target.dataset.nodeId!);
+    hooks.onDrop(parseDragItem(e.dataTransfer!.getData(DRAG_MIME)), target.dataset.nodeId!);
   });
 
   container.addEventListener("dragend", unmark);

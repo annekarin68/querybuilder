@@ -55,7 +55,7 @@ describe("validateQuery", () => {
   });
 
   it("condition without a field is incomplete", () => {
-    expectIssue({}, "Choose a field.", "incomplete");
+    expectIssue({}, "Choose a field, or whether the facet is present.", "incomplete");
   });
 
   it("condition with a field but no operator is incomplete", () => {
@@ -100,7 +100,7 @@ describe("validateQuery", () => {
   });
 
   it("a condition without a facet is incomplete", () => {
-    expectIssue({ facetId: null, fieldId: "color" }, "Choose a field.", "incomplete");
+    expectIssue({ facetId: null, fieldId: "color" }, "Choose a facet.", "incomplete");
   });
 
   it("an operator the field does not offer is invalid", () => {
@@ -247,8 +247,12 @@ describe("facet-level conditions (no field)", () => {
   it("absent is complete too", () => {
     expect(validateOne({ fieldId: null, operatorId: "absent", value: null }).issues).toEqual([]);
   });
-  it("a facet alone, with no operator, still says Choose a field.", () => {
-    expectIssue({ fieldId: null, operatorId: null }, "Choose a field.", "incomplete");
+  it("a facet alone, with no operator, still asks for a field or a whole-facet test.", () => {
+    expectIssue(
+      { fieldId: null, operatorId: null },
+      "Choose a field, or whether the facet is present.",
+      "incomplete",
+    );
   });
   it("an unknown facet is invalid", () => {
     expectIssue(
@@ -260,14 +264,14 @@ describe("facet-level conditions (no field)", () => {
   it("an operator that needs a field is invalid", () => {
     expectIssue(
       { fieldId: null, operatorId: "eq", value: "x" },
-      "That operator isn't available for a whole facet.",
+      "That operator isn't available for a whole facet. Pick Is present or Is absent.",
       "invalid",
     );
   });
   it("a value on a facet-level condition is invalid", () => {
     expectIssue(
       { fieldId: null, operatorId: "present", value: "x" },
-      "This operator takes no value.",
+      "This operator takes no value. Pick Is present or Is absent again.",
       "invalid",
     );
   });
