@@ -13,6 +13,7 @@ const field = (fieldId: string, name: string, options?: string[]): CatalogField 
   operatorIds: [],
 });
 const catalog: FieldCatalog = {
+  facets: [{ id: "thing", name: "Thing" }],
   fields: [
     field("size", "Size (cm)"),
     field("active", "Active"),
@@ -68,10 +69,10 @@ describe("queryToText", () => {
     t = updateNode(t, c.id, {
       facetId: "thing",
       fieldId: "color",
-      operatorId: "isEmpty",
+      operatorId: "absent",
       value: null,
     });
-    expect(queryToText(t, catalog)).toBe("Color Is empty");
+    expect(queryToText(t, catalog)).toBe("Color Has no value");
   });
 });
 

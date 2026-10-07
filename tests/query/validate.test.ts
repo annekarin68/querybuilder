@@ -26,9 +26,10 @@ const field = (
   operatorIds,
 });
 const catalog: FieldCatalog = {
+  facets: [{ id: "thing", name: "Thing" }],
   fields: [
-    field("color", "string", ["eq", "in", "isEmpty"], ["red", "blue"]),
-    field("count", "number", ["eq", "between", "in", "isEmpty"]),
+    field("color", "string", ["eq", "in", "absent"], ["red", "blue"]),
+    field("count", "number", ["eq", "between", "in", "absent"]),
     field("seenAt", "date", ["eq", "between"]),
     field("active", "boolean", ["eq"]),
   ],
@@ -76,14 +77,12 @@ describe("validateQuery", () => {
   });
 
   it("arity 'none' takes a null value", () => {
-    expect(validateOne({ fieldId: "color", operatorId: "isEmpty", value: null }).issues).toEqual(
-      [],
-    );
+    expect(validateOne({ fieldId: "color", operatorId: "absent", value: null }).issues).toEqual([]);
   });
 
   it("arity 'none' with any other value (a tampered saved query) is invalid", () => {
     for (const value of [{}, "", "red", 0, false, [], undefined]) {
-      const patch = { fieldId: "color", operatorId: "isEmpty", value };
+      const patch = { fieldId: "color", operatorId: "absent", value };
       expectIssue(patch, "This operator takes no value.", "invalid");
     }
   });

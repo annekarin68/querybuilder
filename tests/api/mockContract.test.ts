@@ -80,7 +80,7 @@ async function everyEventQuery(): Promise<Group> {
         id: "c1",
         facetId: facet!.id,
         fieldId: facet!.fields[0]!.id,
-        operatorId: "isNotEmpty",
+        operatorId: "present",
         value: null,
       },
     ],

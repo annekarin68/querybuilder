@@ -66,9 +66,9 @@ describe("matches", () => {
     expect(matches(cond("madeOn", "before", "2019-01-01"), row)).toBe(true);
     expect(matches(cond("madeOn", "after", "2019-01-01"), row)).toBe(false);
   });
-  it("isEmpty / isNotEmpty", () => {
-    expect(matches(cond("spare", "isEmpty", null), row)).toBe(true);
-    expect(matches(cond("color", "isNotEmpty", null), row)).toBe(true);
+  it("absent / present", () => {
+    expect(matches(cond("spare", "absent", null), row)).toBe(true);
+    expect(matches(cond("color", "present", null), row)).toBe(true);
   });
   it("AND / OR groups", () => {
     expect(matches(group("AND", cond("color", "eq", "red"), cond("count", "gte", 12)), row)).toBe(

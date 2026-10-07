@@ -12,6 +12,7 @@ const field = (fieldId: string, valueType: CatalogField["valueType"]): CatalogFi
   operatorIds: [],
 });
 const catalog: FieldCatalog = {
+  facets: [{ id: "thing", name: "Thing" }],
   fields: [field("size", "number"), field("active", "boolean"), field("name", "string")],
 };
 

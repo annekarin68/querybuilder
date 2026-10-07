@@ -71,7 +71,7 @@ const everyEvent = {
       id: "c1",
       facetId: "observation_window",
       fieldId: "from_timestamp",
-      operatorId: "isNotEmpty",
+      operatorId: "present",
       value: null,
     },
   ],

@@ -31,9 +31,16 @@ export interface CatalogOperator {
   arity: Arity;
 }
 
-/** What the query builder can offer: every queryable field. The operators are
- *  the fixed `OPERATORS` list below, the same for every backend. */
+/** One facet the query can be about, even a facet with no fields. */
+export interface CatalogFacet {
+  id: string;
+  name: string;
+}
+
+/** What the query builder can offer: every facet and every queryable field. The
+ *  operators are the fixed `OPERATORS` list below, the same for every backend. */
 export interface FieldCatalog {
+  facets: CatalogFacet[];
   fields: CatalogField[];
 }
 
@@ -49,9 +56,37 @@ export const OPERATORS: CatalogOperator[] = [
   { id: "contains", name: "Contains", arity: "one" },
   { id: "between", name: "Between", arity: "two" },
   { id: "in", name: "Is any of", arity: "many" },
-  { id: "isEmpty", name: "Is empty", arity: "none" },
-  { id: "isNotEmpty", name: "Is not empty", arity: "none" },
+  { id: "present", name: "Has any value", arity: "none" },
+  { id: "absent", name: "Has no value", arity: "none" },
 ];
+
+/** The only operators a condition about a whole facet (no field) offers. */
+export const FACET_OPERATOR_IDS = ["present", "absent"];
+
+const FACET_OPERATOR_NAMES: Record<string, string> = {
+  present: "Is present",
+  absent: "Is absent",
+};
+
+/** An operator's label. "present" / "absent" read differently for a whole
+ *  facet ("Is present") than for a field ("Has any value"); the id is the same. */
+export function operatorName(op: CatalogOperator, facetLevel: boolean): string {
+  return (facetLevel && FACET_OPERATOR_NAMES[op.id]) || op.name;
+}
+
+/** Whether a condition is about the facet itself: a facet and an operator are
+ *  chosen, but no field. (A facet with nothing else chosen is just unfinished.) */
+export function isFacetLevel(c: {
+  facetId: string | null;
+  fieldId: string | null;
+  operatorId: string | null;
+}): boolean {
+  return c.facetId !== null && c.fieldId === null && c.operatorId !== null;
+}
+
+export function findFacet(catalog: FieldCatalog, facetId: string | null): CatalogFacet | undefined {
+  return facetId ? catalog.facets.find((f) => f.id === facetId) : undefined;
+}
 
 export function findField(
   catalog: FieldCatalog,
@@ -78,10 +113,10 @@ export function findOperator(id: string | null): CatalogOperator | undefined {
  * which specific field it is, nor by whether it has a pick-list.
  */
 const OPERATOR_PROFILE: Record<ValueType, string[]> = {
-  string: ["eq", "neq", "contains", "in", "isEmpty", "isNotEmpty"],
-  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "isEmpty", "isNotEmpty"],
+  string: ["eq", "neq", "contains", "in", "present", "absent"],
+  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "present", "absent"],
   boolean: ["eq", "neq"],
-  date: ["eq", "neq", "before", "after", "between", "isEmpty", "isNotEmpty"],
+  date: ["eq", "neq", "before", "after", "between", "present", "absent"],
 };
 
 /**
@@ -177,5 +212,5 @@ export function buildFieldCatalog(facets: Facet[]): FieldCatalog {
       });
     }
   }
-  return { fields };
+  return { facets: facets.map((f) => ({ id: f.id, name: f.name })), fields };
 }

@@ -2,10 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   buildFieldCatalog,
   fieldsOfFacet,
+  FACET_OPERATOR_IDS,
+  findFacet,
   findField,
   findOperator,
+  isFacetLevel,
   isNumberText,
   OPERATORS,
+  operatorName,
   pickListFor,
   valueTypeFor,
 } from "../../src/query/fieldCatalog";
@@ -81,6 +85,25 @@ describe("buildFieldCatalog", () => {
     });
   });
 
+  it("lists every facet, even one with no fields", () => {
+    const catalog = buildFieldCatalog([
+      {
+        id: "a",
+        name: "Alpha",
+        tags: [],
+        group: "",
+        comment: "",
+        description: "",
+        eventCount: 1,
+        fields: [],
+      },
+    ]);
+    expect(catalog.facets).toEqual([{ id: "a", name: "Alpha" }]);
+    expect(findFacet(catalog, "a")?.name).toBe("Alpha");
+    expect(findFacet(catalog, "zzz")).toBeUndefined();
+    expect(findFacet(catalog, null)).toBeUndefined();
+  });
+
   it("findField needs both ids", () => {
     const catalog = buildFieldCatalog(facets);
     expect(findField(catalog, "vehicle_identity", "vin")?.valueType).toBe("string");
@@ -108,8 +131,8 @@ describe("buildFieldCatalog", () => {
       "neq",
       "contains",
       "in",
-      "isEmpty",
-      "isNotEmpty",
+      "present",
+      "absent",
     ]);
     expect(only("BIGINT", []).operatorIds).toEqual([
       "eq",
@@ -120,8 +143,8 @@ describe("buildFieldCatalog", () => {
       "lte",
       "between",
       "in",
-      "isEmpty",
-      "isNotEmpty",
+      "present",
+      "absent",
     ]);
     expect(only("BOOLEAN", []).operatorIds).toEqual(["eq", "neq"]);
     expect(only("TIMESTAMP", []).operatorIds).toEqual([
@@ -130,8 +153,8 @@ describe("buildFieldCatalog", () => {
       "before",
       "after",
       "between",
-      "isEmpty",
-      "isNotEmpty",
+      "present",
+      "absent",
     ]);
   });
 
@@ -239,5 +262,35 @@ describe("isNumberText", () => {
 
   it.each(["", "  ", "3x", "N/A", "Infinity", "NaN"])("%j is not", (t) => {
     expect(isNumberText(t)).toBe(false);
+  });
+});
+
+describe("presence operators", () => {
+  it("present / absent replace isNotEmpty / isEmpty", () => {
+    expect(findOperator("present")).toMatchObject({ arity: "none" });
+    expect(findOperator("absent")).toMatchObject({ arity: "none" });
+    expect(findOperator("isEmpty")).toBeUndefined();
+    expect(findOperator("isNotEmpty")).toBeUndefined();
+  });
+
+  it("labels depend on whether the condition is about a facet or a field", () => {
+    const present = findOperator("present")!;
+    const absent = findOperator("absent")!;
+    expect(operatorName(present, false)).toBe("Has any value");
+    expect(operatorName(present, true)).toBe("Is present");
+    expect(operatorName(absent, false)).toBe("Has no value");
+    expect(operatorName(absent, true)).toBe("Is absent");
+    expect(operatorName(findOperator("eq")!, true)).toBe("Equals");
+  });
+
+  it("a facet-level condition offers only present / absent", () => {
+    expect(FACET_OPERATOR_IDS).toEqual(["present", "absent"]);
+  });
+
+  it("isFacetLevel needs a facet, no field and an operator", () => {
+    expect(isFacetLevel({ facetId: "a", fieldId: null, operatorId: "present" })).toBe(true);
+    expect(isFacetLevel({ facetId: "a", fieldId: null, operatorId: null })).toBe(false);
+    expect(isFacetLevel({ facetId: "a", fieldId: "f", operatorId: "present" })).toBe(false);
+    expect(isFacetLevel({ facetId: null, fieldId: null, operatorId: "present" })).toBe(false);
   });
 });

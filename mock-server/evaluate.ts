@@ -136,9 +136,9 @@ function conditionMatches(c: RequestCondition, row: Row): boolean {
     }
     case "in":
       return Array.isArray(c.value) && c.value.includes(v as never);
-    case "isEmpty":
+    case "absent":
       return v === null || v === undefined || v === "";
-    case "isNotEmpty":
+    case "present":
       return !(v === null || v === undefined || v === "");
     default:
       return false;

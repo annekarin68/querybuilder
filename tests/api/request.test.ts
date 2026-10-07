@@ -88,7 +88,7 @@ describe("toQueryRequest", () => {
     t = updateNode(t, c2.id, {
       facetId: "thing",
       fieldId: "note",
-      operatorId: "isEmpty",
+      operatorId: "absent",
       value: null,
     });
     t = updateNode(t, c3.id, {
@@ -100,7 +100,7 @@ describe("toQueryRequest", () => {
     const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
     expect(sent.map((c) => [c.operatorId, c.value])).toEqual([
       ["eq", "2024-11"],
-      ["isEmpty", null],
+      ["absent", null],
       ["eq", false],
     ]);
   });
