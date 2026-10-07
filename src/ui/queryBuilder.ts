@@ -270,6 +270,17 @@ function focusCollapseButton(container: HTMLElement, nodeId: string): void {
 }
 
 /**
+ * After a keyboard press on a ✕ the node and its button are gone, so `paint`
+ * has nothing to put the cursor back on. Put it on the "+ Condition" button of
+ * the group the node was in: the user is most likely to go on editing there.
+ */
+function focusAddConditionButton(container: HTMLElement, groupId: string): void {
+  nodeOf(container, groupId)
+    ?.querySelector<HTMLElement>(":scope > .qb-group-head [data-action='add-condition']")
+    ?.focus();
+}
+
+/**
  * After a keyboard press on group or condition `nodeId`'s Move up / Move down
  * button the repaint replaced it: put the cursor on the same node's button for
  * the same `direction`, so the user can press it again to keep moving. When the
@@ -490,8 +501,15 @@ export function wireQueryBuilder(
         return onChange(addChild(q, nodeId, newCondition()));
       case "add-group":
         return onChange(addChild(q, nodeId, newGroup()));
-      case "remove-node":
-        return onChange(removeNode(q, nodeId));
+      case "remove-node": {
+        // Find the parent first: the repaint removes the node from the page.
+        const groupId = nodeOf(container, nodeId)?.parentElement?.closest<HTMLElement>(
+          "[data-node-id]",
+        )?.dataset.nodeId;
+        onChange(removeNode(q, nodeId));
+        if (e.detail === 0 && groupId) focusAddConditionButton(container, groupId);
+        return;
+      }
       case "set-and":
         return onChange(updateNode(q, nodeId, { operator: "AND" }));
       case "set-or":

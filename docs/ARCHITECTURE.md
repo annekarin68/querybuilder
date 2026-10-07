@@ -235,7 +235,8 @@ state. The hazard is contained in one file and one helper:
   shown choice's full text in a `title`, so a name cut off with "…" can be read
   on hover (kept in step on every change).
 - **`src/ui/panel.ts`** — `paint(container, html)`: `destroy`, swap
-  `innerHTML`, `activate`. The only way a panel updates its DOM.
+  `innerHTML`, `activate`. The only way a panel updates its DOM. It also keeps
+  the keyboard user's place (see "Focus across a repaint" below).
 
 ### The rules a maintainer learns on day one
 
@@ -251,6 +252,36 @@ state. The hazard is contained in one file and one helper:
    rendered once; it only toggles classes and `hidden`).
 4. **Panels repaint only for the state they read** (`panelRenderers` in
    `main.ts`, see "State and the render loop").
+
+### Focus across a repaint
+
+A repaint destroys the button the user just pressed, and the browser then
+drops focus to the page, so a keyboard user would have to Tab from the top
+after every action. So `paint()` notes the focused element before `destroy`
+and, after `activate`, focuses its replacement (`preventScroll: true`). The
+pure part is `focusSelectorFor` in `panel.ts`, which turns a plain description
+of the element (`FocusDescription`) into a CSS selector, or `null`. It knows the
+database checkboxes and All / None, the buttons inside a group or condition
+(found by `data-node-id` plus `data-action`), Run query, and the other buttons
+with a unique `data-action` (account menu, Clear search). A few things are
+deliberately **not** restored:
+
+- **Anything inside a Fomantic dropdown, and text or number boxes.** The query
+  builder puts the cursor back there itself (`focusPart`, `focusFieldDropdown`),
+  judging by what the user just did, and the data dictionary's search box is
+  never repainted. A second, generic rule would fight them.
+- **A mouse click.** Only an element that matched `:focus-visible` is restored,
+  so the browser draws the focus ring on the new button only when focus came
+  from the keyboard. Without this, every click on **+ Condition** would leave a
+  ring on the new button.
+- **The data dictionary's Add buttons.** They share one `data-action` and the
+  same item can appear several times (a facet under each of its tags), so no
+  selector can name the one that was focused.
+
+Code that wants the cursor somewhere else (`focusCollapseButton`,
+`focusMoveButton`, the ✕ rule in "Centre — `queryBuilder.ts`", the
+dismiss-notice focus, `setSidebarCollapsed`) focuses it *after* `paint`, so it
+wins over this rule.
 
 ### The bootstrap wrinkle
 
@@ -316,7 +347,7 @@ src/
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
-    panel.ts           paint(), escapeHtml(), optionsHtml().
+    panel.ts           paint() (keeps keyboard focus), focusSelectorFor(), escapeHtml(), optionsHtml().
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed, announce,
                        setMascot, the sidebar's resize handle, onMenu.
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
@@ -909,7 +940,9 @@ instead of outlined, so they are not mistaken for the buttons beside them, and
 the labelled buttons have a keyboard focus ring like the icon buttons.
 
 **Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
-user's focus to the page, so it is put back: folding the docs while focus is
+user's focus to the page. `paint()` puts it back on the same control after a
+keyboard press (see "Focus across a repaint"); the cases where the control does
+not survive or moves are handled by hand: folding the docs while focus is
 inside them moves it to the rail (`setSidebarCollapsed`), and folding or
 unfolding a group in the builder moves it to that group's collapse button, but
 only after a keyboard press (`e.detail === 0`); after a mouse click the new
@@ -1084,6 +1117,12 @@ the issue's message tells the user to do exactly that.
   the node has just reached an end (`focusMoveButton`); after a mouse click it
   stays unfocused, like the collapse button. The pair is two 1rem buttons,
   28px, so it adds no height to a condition row or a group header.
+- **After a ✕ by keyboard, focus goes to the group's "+ Condition".** The
+  removed node and its button are gone, so there is nothing to put the cursor
+  back on; the remove-node handler takes the enclosing group's id before the
+  repaint and focuses that group's **+ Condition** after it
+  (`focusAddConditionButton`), where the user most likely goes on editing.
+  After a mouse click focus stays unset, as for the other buttons.
 - **A lone blank row is replaced, not joined.** When a group's only child is a
   blank condition (the starting query's root, or a group just added with
   "+ Group"), any drop or + that creates something puts it in that row's place
