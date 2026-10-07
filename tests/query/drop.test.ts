@@ -3,6 +3,7 @@ import {
   addedMessage,
   dropNotice,
   movedMessage,
+  reorderedMessage,
   nodesForItem,
   parseDragItem,
 } from "../../src/query/drop";
@@ -174,5 +175,16 @@ describe("addedMessage / movedMessage (read out to screen readers)", () => {
   it("says what was moved", () => {
     expect(movedMessage("condition")).toBe("Moved the condition.");
     expect(movedMessage("group")).toBe("Moved the group.");
+  });
+});
+
+describe("reorderedMessage (read out after Move up / Move down)", () => {
+  it("says what moved, which way, and where it stands now", () => {
+    expect(reorderedMessage("condition", "up", { index: 1, count: 3 })).toBe(
+      "Moved the condition up, to position 1 of 3.",
+    );
+    expect(reorderedMessage("group", "down", { index: 3, count: 3 })).toBe(
+      "Moved the group down, to position 3 of 3.",
+    );
   });
 });

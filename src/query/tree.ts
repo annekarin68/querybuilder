@@ -172,3 +172,49 @@ export function moveNode(tree: Group, nodeId: string, targetId: string): Group |
   // Judge the target after the node is out: taking it out can leave a lone blank row.
   return placeNodes(removeNode(tree, nodeId), targetId, [node]);
 }
+
+export type Direction = "up" | "down";
+
+/** The group that holds `nodeId` directly, or null for the root and unknown ids. */
+function parentOf(tree: Group, nodeId: string): Group | null {
+  for (const child of tree.children) {
+    if (child.id === nodeId) return tree;
+    if (child.kind === "group") {
+      const hit = parentOf(child, nodeId);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/** Where `nodeId` stands among its siblings (`index` counts from 1), or null for
+ *  the root and unknown ids. */
+export function positionOf(tree: Group, nodeId: string): { index: number; count: number } | null {
+  const parent = parentOf(tree, nodeId);
+  if (!parent) return null;
+  return {
+    index: parent.children.findIndex((c) => c.id === nodeId) + 1,
+    count: parent.children.length,
+  };
+}
+
+/**
+ * Swap `nodeId` with its previous ("up") or next ("down") sibling: the
+ * keyboard's way to reorder (the Move up / Move down buttons). It never changes
+ * which group a node is in; that is what dragging is for. Returns null when
+ * there is nothing to swap with: the first node up, the last one down, the
+ * root, an unknown id.
+ */
+export function moveSibling(tree: Group, nodeId: string, direction: Direction): Group | null {
+  const parent = parentOf(tree, nodeId);
+  if (!parent) return null;
+  const from = parent.children.findIndex((c) => c.id === nodeId);
+  const to = direction === "up" ? from - 1 : from + 1;
+  if (to < 0 || to >= parent.children.length) return null;
+  return mapTree(tree, (n) => {
+    if (n.kind !== "group" || n.id !== parent.id) return n;
+    const children = [...n.children];
+    [children[from], children[to]] = [children[to]!, children[from]!];
+    return { ...n, children };
+  }) as Group;
+}

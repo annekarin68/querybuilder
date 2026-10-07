@@ -12,6 +12,8 @@ import {
   insertNodes,
   replaceLoneBlankCondition,
   moveNode,
+  moveSibling,
+  positionOf,
   placeNodes,
 } from "../../src/query/tree";
 import type { Condition, Group } from "../../src/query/types";
@@ -300,5 +302,64 @@ describe("moveNode", () => {
   it("returns null for unknown ids", () => {
     const root = emptyQuery();
     expect(moveNode(root, "a", "b")).toBeNull();
+  });
+});
+
+describe("moveSibling", () => {
+  /** A root holding three conditions, a, b and c (given distinct facets). */
+  function rootOfThree() {
+    const [a, b, c] = ["a", "b", "c"].map((facetId) => ({ ...newCondition(), facetId }));
+    const root = [a!, b!, c!].reduce((t, n) => addChild(t, t.id, n), emptyQuery());
+    return { root, a: a!, b: b!, c: c! };
+  }
+  const ids = (g: Group) => g.children.map((n) => n.id);
+
+  it("moves a node up past its previous sibling", () => {
+    const { root, a, b, c } = rootOfThree();
+    expect(ids(moveSibling(root, b.id, "up")!)).toEqual([b.id, a.id, c.id]);
+  });
+  it("moves a node down past its next sibling", () => {
+    const { root, a, b, c } = rootOfThree();
+    expect(ids(moveSibling(root, b.id, "down")!)).toEqual([a.id, c.id, b.id]);
+  });
+  it("moves a node inside a nested group, leaving the rest alone", () => {
+    const { root, a } = rootOfThree();
+    const [x, y] = [newCondition(), newCondition()];
+    const g = { ...newGroup(), children: [x, y] };
+    const moved = moveSibling(addChild(root, root.id, g), y.id, "up")!;
+    const inner = findNode(moved, g.id);
+    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([y.id, x.id]);
+    expect(moved.children[0]?.id).toBe(a.id);
+  });
+  it("keeps the node's data and its group's fold state", () => {
+    const { root, b } = rootOfThree();
+    const g = { ...newGroup(), collapsed: true };
+    const moved = moveSibling(addChild(root, root.id, g), g.id, "up")!;
+    expect(findNode(moved, g.id)).toMatchObject({ collapsed: true });
+    expect(findNode(moved, b.id)).toMatchObject({ facetId: "b" });
+  });
+  it("returns null at either end, where there is nothing to pass", () => {
+    const { root, a, c } = rootOfThree();
+    expect(moveSibling(root, a.id, "up")).toBeNull();
+    expect(moveSibling(root, c.id, "down")).toBeNull();
+  });
+  it("returns null for the root and for unknown ids", () => {
+    const { root } = rootOfThree();
+    expect(moveSibling(root, root.id, "down")).toBeNull();
+    expect(moveSibling(root, "gone", "up")).toBeNull();
+  });
+});
+
+describe("positionOf", () => {
+  it("says where a node stands among its siblings, counting from 1", () => {
+    const [a, b] = [newCondition(), newCondition()];
+    const t = { ...emptyQuery(), children: [a, b] };
+    expect(positionOf(t, b.id)).toEqual({ index: 2, count: 2 });
+    expect(positionOf(t, a.id)).toEqual({ index: 1, count: 2 });
+  });
+  it("is null for the root and for unknown ids", () => {
+    const t = emptyQuery();
+    expect(positionOf(t, t.id)).toBeNull();
+    expect(positionOf(t, "gone")).toBeNull();
   });
 });

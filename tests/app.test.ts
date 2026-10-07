@@ -765,3 +765,40 @@ describe("dropping docs items", () => {
     );
   });
 });
+
+describe("moving a node up or down", () => {
+  /** A root with conditions a, b, c in that order. */
+  function threeRows() {
+    const [a, b, c] = ["a", "b", "c"].map((facetId) => ({ ...newCondition(), facetId }));
+    const root = [a!, b!, c!].reduce((t, n) => addChild(t, t.id, n), emptyQuery());
+    return { root, a: a!, b: b!, c: c! };
+  }
+  const order = (store: ReturnType<typeof setup>["store"]) =>
+    store.getState().query.children.map((n) => n.id);
+
+  it("swaps the node with its neighbour and says where it ended up", () => {
+    const { root, a, b, c } = threeRows();
+    const { store, app, announce } = setup({ ...ready(root) });
+    app.onMoveNode(c.id, "up");
+    expect(order(store)).toEqual([a.id, c.id, b.id]);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition up, to position 2 of 3.");
+  });
+
+  it("is an edit like any other: the statistics and the preview are reset", () => {
+    const { root, a } = threeRows();
+    const { store, app } = setup({ ...ready(root), stats: { status: "ok", results: [] } });
+    app.onMoveNode(a.id, "down");
+    expect(store.getState().stats).toEqual({ status: "idle", results: [] });
+    expect(store.getState().preview).toEqual({ status: "idle" });
+  });
+
+  it("does nothing, and announces nothing, at the end of the list", () => {
+    const { root, a, c } = threeRows();
+    const { store, app, announce } = setup({ ...ready(root) });
+    app.onMoveNode(a.id, "up");
+    app.onMoveNode(c.id, "down");
+    app.onMoveNode("gone", "up");
+    expect(store.getState().query).toBe(root);
+    expect(announce).not.toHaveBeenCalled();
+  });
+});

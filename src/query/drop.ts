@@ -1,6 +1,6 @@
 import type { Facet } from "../model";
 import { findField, type FieldCatalog } from "./fieldCatalog";
-import { newCondition } from "./tree";
+import { newCondition, type Direction } from "./tree";
 import type { Condition, QueryNode } from "./types";
 
 /** The drag-and-drop data type our own drags carry. Drags from elsewhere
@@ -138,4 +138,14 @@ export function addedMessage(count: number): string {
 /** What a screen reader hears after an existing node was moved. */
 export function movedMessage(kind: QueryNode["kind"]): string {
   return `Moved the ${kind}.`;
+}
+
+/** What a screen reader hears after Move up / Move down. The query card
+ *  repaints, so nothing there says that the row moved or where it is now. */
+export function reorderedMessage(
+  kind: QueryNode["kind"],
+  direction: Direction,
+  position: { index: number; count: number },
+): string {
+  return `Moved the ${kind} ${direction}, to position ${position.index} of ${position.count}.`;
 }

@@ -3,16 +3,26 @@ import type * as client from "./api/client";
 import type { Compliance, DatabaseResult } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
 import { serverIssues } from "./query/issues";
-import { addedMessage, dropNotice, movedMessage, nodesForItem, type DragItem } from "./query/drop";
+import {
+  addedMessage,
+  dropNotice,
+  movedMessage,
+  nodesForItem,
+  reorderedMessage,
+  type DragItem,
+} from "./query/drop";
 import {
   addChild,
   countConditions,
   findNode,
   moveNode,
+  moveSibling,
   newCondition,
   placeNodes,
+  positionOf,
   sameSemantics,
   updateNode,
+  type Direction,
 } from "./query/tree";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
@@ -300,6 +310,21 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     onDropItem(item, store.getState().query.id);
   }
 
+  /**
+   * The Move up / Move down buttons: the keyboard's way to reorder. Swaps the
+   * node with a sibling, never changes its group (dragging does that). Nothing
+   * to swap with (an end of the list) does nothing, and says nothing.
+   */
+  function onMoveNode(nodeId: string, direction: Direction): void {
+    const { query } = store.getState();
+    const moved = moveSibling(query, nodeId, direction);
+    const node = findNode(query, nodeId);
+    const position = positionOf(moved ?? query, nodeId);
+    if (!moved || !node || !position) return;
+    onQueryChange(moved);
+    announce(reorderedMessage(node.kind, direction, position));
+  }
+
   function dismissDropNotice(): void {
     store.setState({ dropNotice: null });
   }
@@ -383,6 +408,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     onQueryChange,
     onDropItem,
     onAddItem,
+    onMoveNode,
     dismissDropNotice,
     onDatabasesChange,
     onLogout,
