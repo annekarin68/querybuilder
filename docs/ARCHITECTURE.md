@@ -187,7 +187,12 @@ reduced motion, nothing falls: the same five clicks show a short toast instead
 Vite 8 itself accepts 20.19 or 22.12, but Node 20 reached end of life in April
 2026 and CI runs Node 22, so 22.12 is the floor we test and deploy on
 (`engines` in `package.json`, `node-version` in `.github/workflows/ci.yml`).
-`npm audit` is clean.
+On 2026-10-07 `npm audit` reported 0 vulnerabilities for the production
+dependencies (`npm audit --omit=dev`, which is what ships to users). The full
+`npm audit` still reports 2 critical findings in `concurrently`'s pinned
+`shell-quote`, a dev-only helper for `npm run dev` that never reaches the build;
+the fix needs `concurrently` 10, a major version that requires Node 22. Re-run
+both commands when you change dependencies.
 
 ### The audience constraint
 
@@ -959,19 +964,19 @@ like the builder's **+ Condition**; the small value chips keep an icon-only
 "+". When the sidebar column is narrower than 21rem (a container query on
 `.qb-docs`, the card inside the column, so the rule is `max-width: 19rem`) the
 word drops and the "+" stays. The accessible name (`aria-label="Add … to the
-query"`) is the same either way. In the docs, the count pills are tinted
+query"`) is the same either way. In the dictionary, the count pills are tinted
 instead of outlined, so they are not mistaken for the buttons beside them, and
 the labelled buttons have a keyboard focus ring like the icon buttons.
 
 **Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
 user's focus to the page. `paint()` puts it back on the same control after a
 keyboard press (see "Focus across a repaint"); the cases where the control does
-not survive or moves are handled by hand: folding the docs while focus is
-inside them moves it to the rail (`setSidebarCollapsed`), and folding or
+not survive or moves are handled by hand: folding the dictionary while focus is
+inside it moves it to the rail (`setSidebarCollapsed`), and folding or
 unfolding a group in the builder moves it to that group's collapse button, but
 only after a keyboard press (`e.detail === 0`); after a mouse click the new
 button gets no focus ring. Green buttons (`.ui.primary.button`, e.g. **Hide
-docs**, **Log in**) show a ring on `:focus-visible` (a light ring on the dark
+dictionary**, **Log in**) show a ring on `:focus-visible` (a light ring on the dark
 top bar itself, a green one inside the light account-menu panel),
 and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
 colour and Fomantic's blue never shows.
@@ -995,9 +1000,9 @@ just isn't remembered). Under 1100 px the open panel floats over the page,
 so `main.ts` starts the page with it collapsed on such a screen (before the
 first paint; `initialState` stays `false`), and Escape closes the floating
 panel while focus is inside it, returning focus to the rail button. A click
-anywhere outside the docs column, the rail and the **Hide dictionary** / **Show dictionary**
-buttons closes it too (also `main.ts`, same 1100 px query): the open docs cover
-the builder, and nothing else would close them. Clicks inside the docs never
+anywhere outside the dictionary column, the rail and the **Hide dictionary** / **Show dictionary**
+buttons closes it too (also `main.ts`, same 1100 px query): the open dictionary covers
+the builder, and nothing else would close them. Clicks inside the dictionary never
 do, or **+ Add** and dragging would break.
 Nothing needed to read the dictionary is behind a hover: names, types and
 blurbs are visible text, and a `title` only labels a button or repeats a number.

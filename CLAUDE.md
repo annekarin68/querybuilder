@@ -14,7 +14,7 @@ your own result), say what you noticed, why it matters to the end user, what
 you recommend, and ask one sharp question. Typical targets: two names for one
 thing, labels or flows a first-time user would not understand, requirements
 that conflict with each other or with the backend, scope bigger than the goal,
-missing cases (empty states, errors, narrow screens, keyboard use). If they
+missing cases (empty states, errors, narrow windows below 1024 px, keyboard use). If they
 decide otherwise, follow the decision and write down why. Do not interrupt
 settled or trivial choices, and do not turn every task into a questionnaire.
 
