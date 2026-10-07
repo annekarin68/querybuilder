@@ -14,7 +14,7 @@ interface PendingQuery {
  * reason. sessionStorage only: never sent through the backend or any
  * redirect URL.
  */
-export function savePendingQuery(query: QueryNode, selectedDatabaseIds: string[]): void {
+export function savePendingQuery(query: Group, selectedDatabaseIds: string[]): void {
   try {
     sessionStorage.setItem(KEY, JSON.stringify({ query, selectedDatabaseIds }));
   } catch {
@@ -36,6 +36,8 @@ function isObject(v: unknown): v is Record<string, unknown> {
 function isQueryNode(v: unknown): v is QueryNode {
   if (!isObject(v) || typeof v.id !== "string") return false;
   if (v.kind === "condition") {
+    // A condition's `value` is not checked here on purpose: `validateQuery`
+    // flags a bad one, and Run stays blocked, so it never reaches the request.
     const nullableString = (x: unknown) => x === null || typeof x === "string";
     return nullableString(v.facetId) && nullableString(v.fieldId) && nullableString(v.operatorId);
   }

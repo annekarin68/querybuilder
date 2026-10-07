@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# The workflow only reads the repository, so give its token no more than that.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest

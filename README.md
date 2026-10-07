@@ -49,7 +49,8 @@ Other scripts:
 | `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client and its contract checks (also against the mock server), the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint + Prettier check. |
-| `npm run check:offline` | Scan `dist/` for off-origin `http(s)` URLs. |
+| `npm run format` | Rewrite files with Prettier. Run it when `npm run lint` fails on formatting. |
+| `npm run check:offline` | Scan the text files in `dist/` for off-origin URLs (`http(s)`, `ws(s)`, protocol-relative `//host`). |
 
 ## Must-know rules for maintainers
 

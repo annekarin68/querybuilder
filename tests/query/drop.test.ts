@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  ADDED_GROUP_MESSAGE,
   addedMessage,
   dropNotice,
   movedMessage,
@@ -170,6 +171,9 @@ describe("addedMessage / movedMessage (read out to screen readers)", () => {
   it("says how many conditions were added", () => {
     expect(addedMessage(1)).toBe("Added 1 condition to the query.");
     expect(addedMessage(3)).toBe("Added 3 conditions to the query.");
+  });
+  it("says a group was added (the query builder's own + Group)", () => {
+    expect(ADDED_GROUP_MESSAGE).toBe("Added a group to the query.");
   });
   it("says what was moved", () => {
     expect(movedMessage("condition")).toBe("Moved the condition.");

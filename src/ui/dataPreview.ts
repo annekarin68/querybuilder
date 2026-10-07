@@ -103,10 +103,15 @@ function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: Row
     </details>`;
 }
 
+/** The panel's card. It is its `data-focus-landing` (not in the Tab
+ *  order, tabindex -1, but can be given the focus by script; a mouse click also
+ *  focuses it): Run turns into a loader, then into the result, and a
+ *  keyboard user who pressed it stays in this card instead of dropping to the
+ *  page (paint(), focusMemory.ts). app.ts announces what happened. */
 function card(body: string, count?: number): string {
   const n =
     count === undefined ? "" : ` <span class="qb-card-count">· ${escapeHtml(exact(count))}</span>`;
-  return `<div class="qb-card qb-preview"><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
+  return `<div class="qb-card qb-preview" tabindex="-1" data-focus-landing><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
 }
 
 /**

@@ -121,9 +121,14 @@ colours, text, the top bar, the ALL/AND green and ANY/OR mustard of the group
 brackets, danger and warning). Change a colour there, never in a rule.
 `tests/themeContrast.test.ts` reads those tokens from the CSS and fails if a
 text/background pair we use (body text, muted text, text on the top bar and on
-the green fill, the selected row, the ANY/OR text, danger, warning) drops below
-WCAG AA (4.5:1), so a new palette cannot quietly become unreadable. Add a pair
-to its `PAIRS` list when you add a token that carries text.
+the green fill, the selected row, the ANY/OR text, danger, warning, the
+compliance badges in the account chip) drops below WCAG AA (4.5:1), so a new
+palette cannot quietly become unreadable. Add a pair to its `PAIRS` list when
+you add a token that carries text. A colour that carries text must be an opaque
+`#rrggbb` token, because the test cannot read a see-through `rgba()` (this is
+why the badge backgrounds are opaque). The test also checks that the green used
+to mark keyboard focus on the dictionary's resize handle stands out 3:1 from the
+page and the card (WCAG 1.4.11).
 
 The pickle is four small SVG files in `public/pickle/`, served as-is. Three of
 them are named by `MASCOT` in `src/config.ts` (`logo.svg`, `disappointed.svg`,
@@ -199,8 +204,12 @@ nothing else* — no internet. So:
    ships Lato and its icon font as local files with local `@font-face` rules,
    and has no Google Fonts `@import`. No separate font package is needed.
 4. **Guard script.** `npm run check:offline` (`scripts/check-offline.mjs`,
-   part of `npm run build` and CI) fails if any file in `dist/` contains an
-   `http://` or `https://` URL. Two exceptions, both exact: the SVG namespace
+   part of `npm run build` and CI) fails if any text file in `dist/` contains
+   an `http://`, `https://`, `ws://` or `wss://` URL, or a protocol-relative
+   one (`//host/…`) after `src=`, `href=`, `url(` or `@import`. Binary assets
+   (fonts, images) are not read. The scanning is the pure function
+   `findOffOrigin(text)`, tested in `tests/offlineCheck.test.ts`. Two
+   exceptions, both exact: the SVG namespace
    `http://www.w3.org/2000/svg` inside Fomantic's inline SVGs, and the file
    `dist/THIRD-PARTY-NOTICES.txt` (licence text, never loaded by the app).
    Some bundled code contains URLs that are never fetched — jQuery's licence
@@ -246,8 +255,9 @@ state. The hazard is contained in one file and one helper:
    the matching teardown to `destroy()`.
 3. **To update a panel**, build an HTML string from state and call `paint()`.
    Two deliberate exceptions change the painted DOM directly, because a
-   repaint would lose something: the data dictionary's search filter (it
-   would lose the input's focus and caret) and `layout.ts` (the frame is
+   repaint would lose or cost something: the data dictionary's search filter
+   (a repaint per keystroke would rebuild the whole dictionary and lose which
+   cards are open and the scroll position) and `layout.ts` (the frame is
    rendered once; it only toggles classes and `hidden`).
 4. **Panels repaint only for the state they read** (`panelRenderers` in
    `main.ts`, see "State and the render loop").
@@ -270,10 +280,11 @@ src/
   main.ts              Page setup only: imports setup-jquery + Fomantic, renders the frame, wires every
                        panel once to `app`, the panelRenderers table, reads `?resume=1`, fatal-error page,
                        the five-click pickle rain.
-  app.ts               createApp({ store, api, navigate }) — everything the app DOES, with no DOM: startup
+  app.ts               createApp({ store, api, navigate, announce }) — everything the app DOES, with no DOM: startup
                        (+ restoring a saved query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
-                       `dismissDropNotice`). Tested with a fake API.
+                       `dismissDropNotice`), previewAnnouncement (what a screen reader hears about Run).
+                       Tested with a fake API.
   state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
@@ -296,7 +307,7 @@ src/
   query/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
-                       sameSemantics, …).
+                       sameSemantics, sameTree, …).
     drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
                        docs item creates, and what it couldn't), `dropNotice` — pure.
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
@@ -316,7 +327,9 @@ src/
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
-    panel.ts           paint(), escapeHtml(), optionsHtml().
+    panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), escapeHtml(), optionsHtml().
+    focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
+                       `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed, announce,
                        setMascot, the sidebar's resize handle, onMenu.
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
@@ -327,7 +340,7 @@ src/
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
     databasePicker.ts  Database scope pills (render + wiring).
     queryBuilder.ts    The query builder (wiring, drop targets, node grips; returns its render function).
-    docsFilter.ts      tagsOf / groupByTag / matchDocs — the data dictionary's sections and search (pure).
+    docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
     statsPanel.ts      The statistics column (render).
     dataPreview.ts     Matching events and the Run button (render + wiring).
@@ -344,15 +357,21 @@ public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.sv
                        files, three named in `MASCOT`, the favicon in `index.html` ("Pickle theme and
                        mascot"). Served as-is, scanned by `check:offline`.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
-                       src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases,
-                       themeContrast and noBackendDataInSrc.
-scripts/check-offline.mjs  The offline guard ("Offline-first").
+                       src/query/tree.ts), plus app.test, lintRules, docReferences, offlineCheck,
+                       dateCases, themeContrast and noBackendDataInSrc.
+scripts/check-offline.mjs  The offline guard ("Offline-first"); findOffOrigin(text) is pure and tested.
 vite.config.ts         Dev proxy of the API prefix to DEV_BACKEND_URL, the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE or DEV_BACKEND_URL is missing.
 .env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract");
                        DEV_BACKEND_URL — the backend the dev server proxies to ("Mock server").
 eslint.config.js       ESLint + the import airlocks (jQuery; src/ never imports mock-server/; only src/api/
                        imports src/api/types.ts).
-.github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main.
+.github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main (read-only token).
+package.json           Scripts and dependencies; package-lock.json pins them (`npm ci`).
+tsconfig.json          Strict TypeScript for everything `npm run typecheck` checks (src, mock-server, tests, configs).
+tsconfig.app.json      The subset that ends up in dist/ (src and vite.config.ts), used by `build:app`.
+vitest.config.ts       Vitest: tests/**/*.test.ts, Node environment (no DOM).
+.prettierrc.json       Prettier options (100 columns, double quotes, trailing commas).
+.prettierignore        What Prettier skips (docs/, README.md, build output, lock file).
 docs/
   ARCHITECTURE.md      This file.
   CHANGELOG.md         The archived design history (not updated any more).
@@ -374,7 +393,9 @@ means something (only an `"authenticated"` auth has a `user`).
 keys it reads and how to render it. One subscriber runs a panel's render
 function when any of its keys changed. **When a render
 function starts reading a new key, add the key to its row** — otherwise the
-panel won't repaint.
+panel won't repaint. A render function that throws is logged
+(`console.error`) and skipped, so the other panels still repaint: one broken
+panel must not leave another showing the previous query's data.
 
 `renderShell` returns the page's panel containers (`shell.panels`); every
 render function takes its container as the first argument
@@ -389,10 +410,63 @@ binding its Fomantic dropdowns must always happen together.
 | App starts | Every panel paints its loader. `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
-| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
+| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 matching events.", "Could not load events: …"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (or, over a lone blank row, put in its place; a moved node too) and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
+
+### Keyboard focus across repaints
+
+`paint()` replaces a panel's whole markup, so the element that had the keyboard
+focus is gone and the browser drops the focus to the page: a keyboard user
+would have to Tab from the top again after every Space on a database or Enter
+on **ANY**. So `paint()` (`panel.ts`, with `focusMemory.ts`) remembers which
+control had focus before it repaints and focuses the same control afterwards.
+
+- **Only a panel that had the focus.** If the focus is elsewhere (another
+  panel, or nowhere), a repaint leaves it alone: results arriving never pull a
+  user out of the builder.
+- **"The same control"** is found by what it is, not where it is: the row or
+  group it sits in (`data-node-id`), its tag, and the first of these attributes
+  it has: `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
+  `data-range`, `data-part`, `aria-label` (`controlOf`). The label comes last
+  because it can change with the state ("Collapse group" / "Expand group"), but
+  it is the only name a Fomantic dropdown's typing box has. A new control that
+  should keep the focus needs one of these attributes. A text box keeps its
+  caret; a number box hides its caret from scripts, so its number is selected
+  instead (typing replaces it, as after Tab).
+- **When the control is gone** (a removed row, Run turned into a loader, an
+  account action that rebuilt the menu closed), the focus goes to the nearest
+  `data-focus-landing`: one in the control's own row or group, then in each
+  group around it, then one outside every row and group. The landings are a
+  group's **+ Condition** (after a row's or sub-group's ✕: the user stays in
+  that group, and not on a neighbour's ✕, where a second Enter would delete
+  something else), the query card (after the warning's ✕), the Matching
+  events card (after **Run query**, through the loader to the result), and the
+  account chip or **Log in** (after **Invalidate** or **Log out**). Cards are
+  not in the Tab order (`tabindex="-1"`), but can be given the focus by script.
+- **Code that moves the cursor on purpose wins**: it runs after the paint
+  (`focusPart` moving on to the next dropdown, `setSidebarCollapsed`).
+- **A mouse click** focuses the button too, but the repainted one shows no
+  focus ring: the browser's `:focus-visible` follows the last input device.
+- **A value box commits on `change`, which fires as the box loses the focus,
+  before the focus reaches the next control** (Tab, or a click on "To"). A
+  repaint at that moment would remove that control, so the builder commits the
+  value one tick later (`setTimeout`), once the focus has landed, and `paint()`
+  keeps it there. A click that arrives before that tick (press and release both
+  inside it, as a fast click or a script does) would run its handler on the OLD
+  query, so `wireQueryBuilder` also commits the waiting value from a
+  capture-phase `click` listener on `document`, before any other handler sees
+  the click: **Run query** then runs, and the login / compliance links
+  (`saveQueryBeforeRedirect`) save, the query with the value in it.
+  **Known gap:** a button press held longer than that tick (a normal mouse
+  click) on a control that the commit repaints still loses the click: the
+  button is replaced between press and release. Typing a value and then
+  clicking **Run query** or **+ Condition** commits the value but needs a
+  second click. It was lost before as well.
+
+The pure part (`controlOf`, `sameControl`) has Node tests; the rest needs a
+DOM and is checked in a browser.
 
 ---
 
@@ -527,7 +601,7 @@ the value it reads. There are two kinds:
 
 | Read | For | When the value is missing or wrong |
 |---|---|---|
-| `id`, `number`, `boolean`, `list`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest | throws a `ContractError` |
+| `id`, `number`, `boolean`, `list`, `optionalList`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest. `optionalList` is `list` for a key marked `?` in `types.ts` (a stats line's `errorMessages`) | throws a `ContractError`; only `optionalList` accepts a missing (or `null`) value, which becomes `[]` |
 | `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
 | `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` in `types.ts` | becomes `""`, `[]` or `undefined`; a warning only if the value is there but of the wrong kind |
 
@@ -597,10 +671,11 @@ can be chosen and tested for presence even when it has nothing to compare.
 
 - **Value type** comes from `Field.typeName` (the backend's `type`, else its
   `format`) via `valueTypeFor` and `TYPE_NAMES`: case-insensitive, ignoring
-  size parameters,
-  covering the common SQL spellings. An unrecognised type becomes `"string"`
-  and silently loses the comparison operators — when the real backend's type
-  list is known, check it against `TYPE_NAMES`.
+  size parameters and the words `UNSIGNED`, `SIGNED` and `ZEROFILL`
+  (`INT UNSIGNED` is a number), covering the common SQL spellings. Vendor
+  aliases (`INT4`, `FLOAT8`, …) are deliberately not guessed. An unrecognised
+  type becomes `"string"` and silently loses the comparison operators — when
+  the real backend's type list is known, check it against `TYPE_NAMES`.
 - **`values` is a pick-list, never a type.** `Field.values` is a static
   list built ahead of time and can be out of date, so `pickListFor` turns it
   into suggestions (`CatalogField.options`) and nothing more: every value for a
@@ -735,7 +810,7 @@ does).
 | `none` (`present`, `absent`) | `null` |
 | `one` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `before`, `after`, `contains`) | one value |
 | `two` (`between`) | `[from, to]` |
-| `many` (`in`) | a non-empty list |
+| `many` (`in`) | a non-empty list with no blank item |
 
 Each value has the field's type (the value control converts what the user
 picks or types, `parseEntry`):
@@ -775,7 +850,8 @@ Dropping a facet or a tag on the builder creates such conditions.
 
 - **`tree.ts`** — pure and immutable: every edit is "read `state.query`, call
   one `tree.ts` function, write the new tree back". `sameSemantics` tells a
-  real edit from a collapse toggle.
+  real edit from a collapse toggle; `sameTree` (collapse included) tells a move
+  that changed something from one that put a node back where it was.
 - **`src/api/request.ts`** — `toQueryRequest`, the one place the tree becomes
   the request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
@@ -824,8 +900,9 @@ Dropping a facet or a tag on the builder creates such conditions.
   drop calls: it first tries `replaceLoneBlankCondition`, then falls back to
   `insertNodes`. `moveNode` moves an existing node the same way (through
   `placeNodes`, after taking the node out) and returns `null` for a move that
-  is impossible (unknown id, the root, a group into itself or something inside
-  it).
+  is impossible (unknown id, an unknown target, the root, a group into itself
+  or something inside it). `insertNodes` with an unknown target returns the
+  tree unchanged.
   `replaceLoneBlankCondition` is how a blank row gives way: when the group a
   drop lands in (the target group, or the parent of the target row) holds
   exactly one condition with nothing chosen (the starting query's seed from
@@ -844,6 +921,9 @@ Anonymous: a **Log in** button. Logged in: a chip with the user's name and a
 compliance badge that opens a native `<details>` menu with the reason and when
 it was given (+ **Invalidate**), or **Start compliance check**; then **Log
 out**. Outside clicks and Escape close it. Display-only (see "Auth").
+**Invalidate** and **Log out** change what the menu shows, and its repaint
+rebuilds it closed, so the keyboard focus goes to the chip, or to **Log in**
+("Keyboard focus across repaints").
 
 ### Above the builder — `databasePicker.ts`
 
@@ -881,7 +961,11 @@ one exception to "always repaint", see "The Fomantic discipline"). A facet
 card opens only when a *field* matched (`DocsMatch.openFacets`), and that
 field row gets the `is-match` highlight (`DocsMatch.fields`, found through the
 row's `data-field-id`); a facet that matched by name alone stays closed.
-Clearing the search closes everything again.
+Clearing the search closes everything again. A status line under the box
+(`.qb-docs-status`, `role="status"`, painted empty so the region exists before
+its text changes) is filled by `filterStatus`: "3 facets match." for screen
+readers only (`qb-sr-only`), or "No facets match “…”." in plain sight when
+nothing does.
 
 **Rows that open say so.** Tag sections, facet cards and field rows are native
 `<details>`, and each one starts its `<summary>` with a Fomantic `angle right`
@@ -907,12 +991,12 @@ the labelled buttons have a keyboard focus ring like the icon buttons.
 **Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
 user's focus to the page, so it is put back: folding the docs while focus is
 inside them moves it to the rail (`setSidebarCollapsed`), and folding or
-unfolding a group in the builder moves it to that group's collapse button, but
-only after a keyboard press (`e.detail === 0`); after a mouse click the new
-button gets no focus ring. Green buttons (`.ui.primary.button`, e.g. **Hide
-docs**, **Log in**) show a ring on `:focus-visible` (a light ring on the dark
-top bar itself, a green one inside the light account-menu panel),
-and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
+unfolding a group in the builder keeps it on that group's (repainted) collapse
+button, like every control a repaint replaces (see "Keyboard focus across
+repaints"); after a mouse click the new button gets no focus ring. Green
+buttons (`.ui.primary.button`, e.g. **Hide docs**, **Log in**) show a ring on
+`:focus-visible` (a light ring on the dark top bar itself, a green one inside
+the light account-menu panel), and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
 colour and Fomantic's blue never shows.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
@@ -933,7 +1017,10 @@ remembered in `localStorage` (`qb:docs-width`; if storage is unavailable it
 just isn't remembered). Under 1100 px the open panel floats over the page,
 so `main.ts` starts the page with it collapsed on such a screen (before the
 first paint; `initialState` stays `false`), and Escape closes the floating
-panel while focus is inside it, returning focus to the rail button. A click
+panel while focus is inside it, returning focus to the rail button
+(`escapeClosesDocs`). In the search box the first Escape only clears its text
+(the box calls `preventDefault()`, which `escapeClosesDocs` treats as "spent");
+a second Escape, with the box empty, closes the panel. A click
 anywhere outside the docs column, the rail and the **Hide dictionary** / **Show dictionary**
 buttons closes it too (also `main.ts`, same 1100 px query): the open docs cover
 the builder, and nothing else would close them. Clicks inside the docs never
@@ -1083,15 +1170,23 @@ the issue's message tells the user to do exactly that.
   gives `wireQueryBuilder` `announce`, see "The Field dropdown's two kinds of
   choice"). After a drop or move
   that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
-  the query.", "Moved the group.", the words in `drop.ts`). `announce` is a
+  the query.", "Moved the group.", the words in `drop.ts`). A move that leaves
+  the tree identical (`sameTree`: the last row dropped on its own group) changes
+  nothing and announces nothing. The builder's own
+  **+ Condition** and **+ Group** say "Added 1 condition to the query." and
+  "Added a group to the query." (`ADDED_GROUP_MESSAGE`); the focus stays on the
+  button, so pressing it again adds another. `announce` is a
   dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
   which writes to one visually hidden `role="status"` region in the page frame.
   That region is never repainted, which is what makes a screen reader speak a
-  change. A drop that did nothing announces nothing; its `dropNotice` is the
-  message.
+  change. When several messages arrive within its 50 ms pause (a drop that adds
+  some things and refuses others) they are read together, in order. A drop that
+  did nothing announces no "Added" or "Moved"; its `dropNotice` is the message,
+  and `setNotice` also sends it through `announce`: the warning box is painted
+  together with its text, which a screen reader may not speak.
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
-  (`noticeHtml`, `role="status"`; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
+  (`noticeHtml`, which has no `role` of its own: it is inserted already holding its text, so it would never be spoken, and it is spoken through `announce` instead; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
   succeeds clears an older warning; a drop that partly succeeds still inserts
   what it can. The messages:
 
@@ -1165,6 +1260,11 @@ one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default), up to 3
 tag and 2 group badges ranked by how many of the event's facets carry them
 (values in `HIDDEN_ROW_BADGES` left out), and the facet count; expanding a row
 shows the event's JSON.
+
+Pressing **Run query** from the keyboard leaves the focus on this card (the
+button is replaced by the loader, then by the result; see "Keyboard focus
+across repaints"), and `app.ts` announces the loader, the result's count or the
+error to screen readers, wherever their focus is.
 
 **Decision: a list, not a grid.** Events are heterogeneous: facets as columns
 would mean 60–100+ columns for a varied sample, and events as columns stop
@@ -1262,7 +1362,8 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   database's row, and an error that points at a query node is also shown in
   the builder and blocks Run ("Statistics lines").
 - Failing to load databases or facets at startup is fatal: `#app` is replaced
-  by an error and a **Reload** button (the message escaped like every
+  by an error (`role="alert"`) and a **Reload** button that takes the focus
+  (the message escaped like every
   server-supplied string; no inline `onclick`, so a strict
   Content-Security-Policy allows it). Login and compliance status failures are
   not fatal.
@@ -1286,7 +1387,7 @@ file it tests, in the same place under `tests/`. The ones to know about:
   payloads, what a drop creates, the warnings).
 - `tests/themeContrast.test.ts` — reads the `:root` colour tokens from
   `src/styles.css` and fails if a text/background pair falls below WCAG AA
-  (4.5:1) ("Pickle theme and mascot").
+  (4.5:1), or a keyboard-focus colour below 3:1 ("Pickle theme and mascot").
 - `tests/api/` — the client over a stubbed `fetch`, the contract checks
   (`contract.test.ts`), and the translation both ways: `response.test.ts`
   (backend → model) and `request.test.ts` (query → request body).
@@ -1308,7 +1409,7 @@ file it tests, in the same place under `tests/`. The ones to know about:
 Scripts: `npm run dev` (mock + Vite), `dev:app` (Vite alone, for a real
 backend), `mock`, `build` (`typecheck`, then `build:app`), `build:app`
 (type-check the app only + bundle + `check:offline`), `preview`, `test`, `test:watch`, `typecheck`, `lint`
-(ESLint + Prettier), `check:offline`. CI (`.github/workflows/ci.yml`) runs
+(ESLint + Prettier check), `format` (Prettier, rewriting files), `check:offline`. CI (`.github/workflows/ci.yml`) runs
 typecheck, test, lint and build on every pull request and push to `main`.
 
 The mock server is a dev stand-in, so it can never stop the app from running
@@ -1319,7 +1420,10 @@ mock or the tests have drifted from `src/api/types.ts`. `build` is the full
 `typecheck` followed by `build:app`, so it still checks everything. `tests/appScripts.test.ts` keeps both
 that way.
 
-`tsconfig.json` is `strict` with `noUncheckedIndexedAccess`. ESLint is
+`tsconfig.json` is `strict` with `noUncheckedIndexedAccess`; `allowJs` lets
+`tests/offlineCheck.test.ts` import `scripts/check-offline.mjs` with its JSDoc
+types. ESLint skips `dist/`, `coverage/` and `.claude/` (other worktrees live
+there). ESLint is
 `eslint:recommended` + `typescript-eslint` recommended, plus the import
 airlocks (jQuery only in its two files; `src/` never imports `mock-server/`;
 only `src/api/` imports `src/api/types.ts`).

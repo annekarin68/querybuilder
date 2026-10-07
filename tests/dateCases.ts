@@ -20,6 +20,7 @@ export const WELL_FORMED = [
   "2024-11-06T14:32:05.1Z",
   "2024-11-06T14:32:05.123Z",
   "2024-02-29",
+  "2000-02-29", // divisible by 400: a leap year although divisible by 100
   "2024-12-31T23:59:59.999Z",
 ];
 
@@ -46,6 +47,7 @@ export const OUT_OF_RANGE = [
   "2024-13",
   "2024-00",
   "2023-02-29",
+  "1900-02-29", // divisible by 100 but not by 400: not a leap year
   "2024-11-31",
   "2024-11-06T24",
   "2024-11-06T14:60",

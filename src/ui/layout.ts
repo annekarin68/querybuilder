@@ -104,6 +104,8 @@ export function renderShell(root: HTMLElement): Shell {
   const steps = find('[data-menu="views"]');
   const logo = find<HTMLImageElement>(".qb-logo");
   const announcer = find("[data-announcer]");
+  /** Messages for the live region, collected until it is filled (see `announce`). */
+  let waiting: string[] = [];
   // Face files that failed to load: never asked for again, so a missing file is
   // requested once, not on every repaint.
   const failed = new Set<string>();
@@ -158,12 +160,19 @@ export function renderShell(root: HTMLElement): Shell {
     },
 
     announce(message) {
-      // Emptied first, then filled on the next tick: a screen reader only speaks
+      // Emptied first, then filled a moment later: a screen reader only speaks
       // a change, so the same message twice in a row would otherwise be silent.
-      announcer.textContent = "";
-      setTimeout(() => {
-        announcer.textContent = message;
-      }, 50);
+      // Messages sent while it waits are read together, in order: a drop that
+      // is only partly done says what it could not do and what it did, and the
+      // second text would otherwise replace the first before it was spoken.
+      if (waiting.length === 0) {
+        announcer.textContent = "";
+        setTimeout(() => {
+          announcer.textContent = waiting.join(" ");
+          waiting = [];
+        }, 50);
+      }
+      waiting.push(message);
     },
 
     setSidebarCollapsed(collapsed) {

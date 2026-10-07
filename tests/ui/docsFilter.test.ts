@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Facet } from "../../src/model";
-import { groupByTag, matchDocs, tagsOf, UNTAGGED } from "../../src/ui/docsFilter";
+import { filterStatus, groupByTag, matchDocs, tagsOf, UNTAGGED } from "../../src/ui/docsFilter";
 
 function facet(id: string, tags: string[], name: string, fields: string[], group = ""): Facet {
   return {
@@ -136,5 +136,35 @@ describe("matchDocs", () => {
   it("lists every matching field of a facet", () => {
     const m = matchDocs(facets, "_rpm")!;
     expect(m.fields.get("engine_rpm")).toEqual(new Set(["value_rpm", "redline_rpm"]));
+  });
+});
+
+describe("filterStatus", () => {
+  const facetNamed = (id: string, name: string): Facet => ({
+    id,
+    name,
+    tags: [],
+    group: "",
+    comment: "",
+    description: "",
+    eventCount: 1,
+    fields: [],
+  });
+  const all = [facetNamed("a", "Alpha"), facetNamed("b", "Alphabet"), facetNamed("c", "Gamma")];
+
+  it("says nothing when nothing is being filtered", () => {
+    expect(filterStatus(matchDocs(all, ""), "")).toBe("");
+  });
+
+  it("counts the matching facets", () => {
+    expect(filterStatus(matchDocs(all, "alpha"), "alpha")).toBe("2 facets match.");
+  });
+
+  it("uses the singular for one facet", () => {
+    expect(filterStatus(matchDocs(all, "gamma"), "gamma")).toBe("1 facet matches.");
+  });
+
+  it("says when nothing matches, quoting what was typed without the padding", () => {
+    expect(filterStatus(matchDocs(all, " zzz "), " zzz ")).toBe("No facets match “zzz”.");
   });
 });

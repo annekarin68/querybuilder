@@ -23,7 +23,13 @@ import {
   updateNode,
 } from "../query/tree";
 import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
-import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
+import {
+  ADDED_GROUP_MESSAGE,
+  addedMessage,
+  DRAG_MIME,
+  parseDragItem,
+  type DragItem,
+} from "../query/drop";
 import { placeIssues } from "../query/issues";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
@@ -63,7 +69,7 @@ function issuesHtml(nodeId: string, issues: Issue[]): string {
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
   if (!notice) return "";
-  return `<div class="ui warning message qb-notice" role="status">
+  return `<div class="ui warning message qb-notice">
       <i class="close icon" data-action="dismiss-notice" role="button" tabindex="0" aria-label="Dismiss"></i>
       <p>${escapeHtml(notice)}</p>
     </div>`;
@@ -80,8 +86,8 @@ function nodeGrip(nodeId: string, kind: "group" | "condition"): string {
   return `<span class="${cls}" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move this ${kind}"><i class="grip vertical icon"></i></span>`;
 }
 
-function iconButton(action: string, label: string, icon: string, extra = ""): string {
-  return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
+function iconButton(action: string, label: string, icon: string): string {
+  return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"><i class="${icon} icon"></i></button>`;
 }
 
 /** The condition row's plain dropdowns and their labels. The Field dropdown
@@ -237,13 +243,6 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
   </div>`;
 }
 
-/** Put the cursor on group `nodeId`'s fold/unfold button. */
-function focusCollapseButton(container: HTMLElement, nodeId: string): void {
-  nodeOf(container, nodeId)
-    ?.querySelector<HTMLElement>(":scope > .qb-group-head .qb-collapse-btn")
-    ?.focus();
-}
-
 /**
  * The group's fold/unfold button: a bordered chevron (down while open, right
  * while folded — the same arrows the data dictionary uses), so it reads as
@@ -261,6 +260,11 @@ export function collapseButton(collapsed: boolean): string {
  * "joiner" on the bracket line. A collapsed group folds to one line: its
  * plain-English summary and how many conditions it holds. That whole line is a
  * click target for unfolding it (buttons and the grip inside keep their own jobs).
+ *
+ * "+ Condition" is the group's `data-focus-landing`: when the control that had
+ * the keyboard focus is removed (a row's or a sub-group's ✕), focus goes there,
+ * in the same group, and not onto a neighbour's ✕ where a second Enter would
+ * delete something else (see focusMemory.ts).
  */
 export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   const tone = g.operator === "OR" ? "or" : "and";
@@ -293,7 +297,7 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
       </span>
       <span class="qb-group-label">of the following</span>
       <span class="qb-spacer"></span>
-      <button type="button" class="ui mini basic button" data-action="add-condition"><i class="plus icon"></i>Condition</button>
+      <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
       <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
       ${remove}
     </div>
@@ -335,7 +339,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
   paint(
     el,
-    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1">
+    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
        <h2 class="qb-card-title">Query</h2>
        ${nodeHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
@@ -397,11 +401,24 @@ export function wireQueryBuilder(
     if (spoken) hooks.announce(spoken);
   }
 
-  /** Dismiss the warning. The repaint removes the ✕ the user was on, which
-   *  would drop their keyboard focus, so move focus to the query card. */
+  /** The condition row whose value box lost the focus and is waiting for its
+   *  tick to be committed (see the `change` listener). */
+  let pendingRow: HTMLElement | null = null;
+  let pendingTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Commit the waiting value now, if there is one. Safe to call at any time. */
+  function commitPendingValue(): void {
+    clearTimeout(pendingTimer);
+    const row = pendingRow;
+    pendingRow = null;
+    if (row) handleRowChange(row);
+  }
+
+  /** Dismiss the warning. The repaint removes the ✕ the user was on, so
+   *  paint() moves their keyboard focus to the query card (its
+   *  `data-focus-landing`). */
   function dismissNotice(): void {
     hooks.onDismissNotice();
-    container.querySelector<HTMLElement>(".qb-query")?.focus();
   }
 
   container.addEventListener("click", (e) => {
@@ -419,10 +436,15 @@ export function wireQueryBuilder(
     if (!btn || !nodeId) return;
     const q = getState().query;
     switch (btn.dataset.action) {
+      // paint() keeps the keyboard focus on the "+" button, so pressing it
+      // again adds another; the new row itself is not visible to a screen
+      // reader user, so it is announced (like the dictionary's "+").
       case "add-condition":
-        return onChange(addChild(q, nodeId, newCondition()));
+        onChange(addChild(q, nodeId, newCondition()));
+        return hooks.announce(addedMessage(1));
       case "add-group":
-        return onChange(addChild(q, nodeId, newGroup()));
+        onChange(addChild(q, nodeId, newGroup()));
+        return hooks.announce(ADDED_GROUP_MESSAGE);
       case "remove-node":
         return onChange(removeNode(q, nodeId));
       case "set-and":
@@ -430,14 +452,11 @@ export function wireQueryBuilder(
       case "set-or":
         return onChange(updateNode(q, nodeId, { operator: "OR" }));
       case "toggle-collapse": {
+        // paint() puts the focus back on this group's (new) collapse button.
         const node = findNode(q, nodeId);
-        onChange(updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }));
-        // The repaint replaced the button that had focus; after a keyboard
-        // press (a click event with detail 0) put it back on the same group's
-        // (new) collapse button, as focusPart does for a condition. A mouse
-        // click (detail >= 1) needs no focus ring on the new button.
-        if (e.detail === 0) focusCollapseButton(container, nodeId);
-        return;
+        return onChange(
+          updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }),
+        );
       }
     }
   });
@@ -519,8 +538,27 @@ export function wireQueryBuilder(
     // <input>s (text/number, the range pair and the boolean toggle's checkbox).
     if (target instanceof HTMLSelectElement || target.closest(".ui.dropdown")) return;
     const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
-    if (row) handleRowChange(row);
+    // A box's "change" fires as it loses focus (Tab, or a click on "To"),
+    // BEFORE the focus reaches the next control. Repainting now would remove
+    // that control and drop the focus to the page. So the value is committed
+    // on the next tick, once the focus has landed, and paint() keeps it there.
+    // The row may be repainted by then; its boxes still hold what was typed.
+    if (!row) return;
+    // Only one value waits at a time. If another row's box changes first,
+    // commit the earlier one now rather than lose it.
+    if (pendingRow && pendingRow !== row) commitPendingValue();
+    clearTimeout(pendingTimer);
+    pendingRow = row;
+    pendingTimer = setTimeout(commitPendingValue);
   });
+
+  // A quick click on a button right after typing (press and release inside the
+  // one-tick wait above) would run its handler on the OLD query: Run would
+  // search without the value, and the login / compliance links would save a
+  // query without it. So any click, before anything else sees it, first
+  // commits the value waiting for its tick. (`capture`: it must run before the
+  // handlers on the panels and on `document`.)
+  document.addEventListener("click", commitPendingValue, true);
 
   return (state) => {
     paintQueryBuilder(container, state);

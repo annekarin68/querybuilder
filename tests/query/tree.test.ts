@@ -9,6 +9,7 @@ import {
   findNode,
   countConditions,
   sameSemantics,
+  sameTree,
   insertNodes,
   replaceLoneBlankCondition,
   moveNode,
@@ -134,6 +135,32 @@ describe("sameSemantics", () => {
     const folded = { ...root, collapsed: true };
     sameSemantics(root, folded);
     expect(folded.collapsed).toBe(true);
+  });
+});
+
+describe("sameTree", () => {
+  it("is true for equal trees that are different objects", () => {
+    const root = emptyQuery();
+    const tree = addChild(root, root.id, newCondition());
+    expect(sameTree(tree, structuredClone(tree))).toBe(true);
+  });
+
+  it("counts a collapse toggle as a difference, unlike sameSemantics", () => {
+    // The user sees a group fold, so something visible changed.
+    const root = emptyQuery();
+    const g = newGroup();
+    const tree = addChild(root, root.id, g);
+    expect(sameTree(tree, updateNode(tree, g.id, { collapsed: true }))).toBe(false);
+  });
+
+  it("notices a reorder and an edit", () => {
+    const root = emptyQuery();
+    const a = newCondition();
+    const b = newCondition();
+    const ab = addChild(addChild(root, root.id, a), root.id, b);
+    const ba = addChild(addChild(root, root.id, b), root.id, a);
+    expect(sameTree(ab, ba)).toBe(false);
+    expect(sameTree(ab, updateNode(ab, a.id, { value: "x" }))).toBe(false);
   });
 });
 
@@ -300,5 +327,39 @@ describe("moveNode", () => {
   it("returns null for unknown ids", () => {
     const root = emptyQuery();
     expect(moveNode(root, "a", "b")).toBeNull();
+  });
+  it("returns null for an unknown target, even when the node exists", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    expect(moveNode(addChild(root, root.id, c), c.id, "nowhere")).toBeNull();
+  });
+  it("appends at the end of a group that already has children", () => {
+    const root = emptyQuery();
+    const moving = { ...newCondition(), facetId: "x" };
+    const first = { ...newCondition(), facetId: "y" };
+    const second = { ...newCondition(), facetId: "z" };
+    const g = { ...newGroup(), children: [first, second] };
+    const t = addChild(addChild(root, root.id, moving), root.id, g);
+    const inner = findNode(moveNode(t, moving.id, g.id)!, g.id);
+    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([
+      first.id,
+      second.id,
+      moving.id,
+    ]);
+  });
+  it("leaves the input tree unchanged", () => {
+    const root = emptyQuery();
+    const c = { ...newCondition(), facetId: "x" };
+    const g = { ...newGroup(), children: [] };
+    const t = addChild(addChild(root, root.id, c), root.id, g);
+    const before = structuredClone(t);
+    moveNode(t, c.id, g.id);
+    expect(t).toEqual(before);
+  });
+  it("refuses to move a group onto a condition inside it", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    const g = { ...newGroup(), children: [c] };
+    expect(moveNode(addChild(root, root.id, g), g.id, c.id)).toBeNull();
   });
 });

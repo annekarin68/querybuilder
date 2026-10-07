@@ -111,10 +111,10 @@ function pendingHtml(stats: StatsWithResults, selectedCount: number): string {
 }
 
 function card(state: AppState, body: string): string {
+  // Decoration only. (An aria-label on a span without a role is not read, and
+  // the panel's own text, "Counting matches…" or the headline, says what is up.)
   const busy =
-    state.stats.status === "loading"
-      ? `<span class="ui active mini inline loader" aria-label="Updating"></span>`
-      : "";
+    state.stats.status === "loading" ? `<span class="ui active mini inline loader"></span>` : "";
   return `<div class="qb-card qb-stats"><h2 class="qb-card-title">Statistics${busy ? " " + busy : ""}</h2>${body}</div>`;
 }
 

@@ -87,6 +87,16 @@ export function sameSemantics(a: QueryNode, b: QueryNode): boolean {
 }
 
 /**
+ * Whether two trees are identical, `collapsed` included: nothing on screen
+ * would change. Unlike `sameSemantics`, folding a group counts as a change,
+ * because the user sees it. Used to tell a move that did something from one
+ * that put a node back where it was.
+ */
+export function sameTree(a: QueryNode, b: QueryNode): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
  * Put `nodes` where a drop on `targetId` lands: at the end of the target if it
  * is a group, otherwise just before the target in its parent. An unknown
  * target changes nothing.

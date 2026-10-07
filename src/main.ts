@@ -19,7 +19,7 @@ import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
 import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
-import { renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
+import { escapeClosesDocs, renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { wireQueryBuilder } from "./ui/queryBuilder";
@@ -128,16 +128,24 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
 
 // Below this width the open docs float over the page (styles.css), so start
 // with them folded away instead of covering the builder on first load. Set
-// before the first paint below, so nothing flickers.
+// before the first paint below, so nothing flickers. Keep the number in step
+// with the `@media (max-width: 1100px)` rule in styles.css (CSS cannot import it).
 const NARROW_SCREEN = "(max-width: 1100px)";
 if (window.matchMedia(NARROW_SCREEN).matches) store.setState({ sidebarCollapsed: true });
 
-// Escape closes the floating docs (only while focus is inside them), and
+// Escape closes the floating docs (only while focus is inside them, and not
+// when the search box just used it to clear its text), and
 // focus moves to the rail button so keyboard users are not left on a hidden panel.
 const docsColumn = root.querySelector<HTMLElement>("#qb-docs")!;
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !window.matchMedia(NARROW_SCREEN).matches) return;
-  if (store.getState().sidebarCollapsed || !docsColumn.contains(document.activeElement)) return;
+  const closes = escapeClosesDocs({
+    key: e.key,
+    defaultPrevented: e.defaultPrevented,
+    floating: window.matchMedia(NARROW_SCREEN).matches,
+    collapsed: store.getState().sidebarCollapsed,
+    focusInDocs: docsColumn.contains(document.activeElement),
+  });
+  if (!closes) return;
   store.setState({ sidebarCollapsed: true });
   root.querySelector<HTMLElement>(".qb-docs-rail")?.focus();
 });
@@ -156,9 +164,24 @@ document.addEventListener("click", (e) => {
   store.setState({ sidebarCollapsed: true });
 });
 
+/**
+ * Repaint one panel. A renderer that throws (say, on data it did not expect)
+ * is logged and skipped, so the panels after it still repaint: otherwise the
+ * Matching events panel could keep showing the previous query's rows next to
+ * new statistics, and the error would reach whoever called `setState`
+ * (app.ts), which may report it as an unrelated failure.
+ */
+function repaintPanel(run: (state: AppState) => void, state: AppState): void {
+  try {
+    run(state);
+  } catch (err) {
+    console.error("Could not repaint a panel:", err);
+  }
+}
+
 store.subscribe((state, changed) => {
   for (const { keys, run } of panelRenderers) {
-    if (keys.some((k) => changed.has(k))) run(state);
+    if (keys.some((k) => changed.has(k))) repaintPanel(run, state);
   }
 });
 
@@ -185,17 +208,20 @@ function consumeResumeParam(): boolean {
  */
 function showFatalError(err: unknown): void {
   console.error("Could not load the app:", err);
-  root.innerHTML = `<div class="ui negative message" style="margin:2rem">
+  // role="alert" makes a screen reader read the message at once, and the focus
+  // goes to Reload: the page the user was on has just vanished, so without
+  // this their focus is on nothing and the only action is out of reach.
+  root.innerHTML = `<div class="ui negative message" style="margin:2rem" role="alert">
       <div class="header">Could not load the app</div>
       <p>${escapeHtml(errorMessage(err))}</p>
       <button class="ui button" data-action="reload">Reload</button>
     </div>`;
-  root
-    .querySelector('[data-action="reload"]')
-    ?.addEventListener("click", () => window.location.reload());
+  const reload = root.querySelector<HTMLButtonElement>('[data-action="reload"]');
+  reload?.addEventListener("click", () => window.location.reload());
+  reload?.focus();
 }
 
 const resumed = consumeResumeParam();
 // First paint: loaders/placeholders until the startup requests finish.
-for (const { run } of panelRenderers) run(store.getState());
+for (const { run } of panelRenderers) repaintPanel(run, store.getState());
 app.start(resumed).catch(showFatalError);

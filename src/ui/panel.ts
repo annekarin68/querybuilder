@@ -1,10 +1,19 @@
 import { activate, destroy } from "./fomantic";
+import { rememberFocus, restoreFocus } from "./focusMemory";
 
-/** Replace a panel's contents: tear down old Fomantic plugins, swap markup, init new ones. */
+/**
+ * Replace a panel's contents: tear down old Fomantic plugins, swap markup, init
+ * new ones. If the keyboard focus was inside the panel, it is put back on the
+ * same control (or the nearest `data-focus-landing`, see focusMemory.ts): the
+ * old element is gone, and without this the focus would drop to the page.
+ */
 export function paint(container: HTMLElement, html: string): void {
+  const focus = rememberFocus(container);
   destroy(container);
   container.innerHTML = html;
   activate(container);
+  // After activate: a dropdown's typing box only exists once Fomantic built it.
+  restoreFocus(container, focus);
 }
 
 const ENTITIES: Record<string, string> = {

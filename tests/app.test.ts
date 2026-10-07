@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createApp, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
+import { createApp, previewAnnouncement, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
 import type { Database, DatabaseResult, EventRecord, Facet } from "../src/model";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
@@ -232,6 +232,48 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(store.getState().preview).toEqual({ status: "error", error: "boom" });
+  });
+
+  // The panel repaints out of sight of a screen-reader user, and their focus
+  // may be elsewhere: they hear that the run started and how it ended.
+  it("tells screen-reader users the run started and what came back", async () => {
+    const { app, announce } = setup(ready());
+    app.runPreview();
+    expect(announce).toHaveBeenLastCalledWith("Fetching events…");
+    await flushPromises();
+    expect(announce.mock.calls).toEqual([["Fetching events…"], ["Showing 1 matching event."]]);
+  });
+
+  it("tells screen-reader users about a failed run", async () => {
+    const api = fakeApi({ runQuery: vi.fn(async () => Promise.reject(new Error("boom"))) });
+    const { app, announce } = setup(ready(), api);
+    app.runPreview();
+    await flushPromises();
+    expect(announce).toHaveBeenLastCalledWith("Could not load events: boom");
+  });
+
+  it("says nothing about a run the query has moved on from", async () => {
+    const response = deferred<EventRecord[]>();
+    const api = fakeApi({ runQuery: vi.fn(() => response.promise) });
+    const { app, announce } = setup(ready(), api);
+    app.runPreview();
+    app.onQueryChange(runnableQuery(4));
+    response.resolve(events);
+    await flushPromises();
+    expect(announce.mock.calls).toEqual([["Fetching events…"]]);
+  });
+});
+
+describe("previewAnnouncement", () => {
+  it("says nothing while no run is shown", () => {
+    expect(previewAnnouncement({ status: "idle" })).toBeNull();
+  });
+  it("counts the events, or says there are none", () => {
+    expect(previewAnnouncement({ status: "ok", events: [] })).toBe("No events match this query.");
+    expect(previewAnnouncement({ status: "ok", events })).toBe("Showing 1 matching event.");
+    expect(previewAnnouncement({ status: "ok", events: [...events, ...events] })).toBe(
+      "Showing 2 matching events.",
+    );
   });
 });
 
@@ -531,12 +573,51 @@ describe("dropping docs items", () => {
     expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition.");
   });
 
-  it("announces nothing when nothing was added or moved", () => {
+  it("announces no 'Added' or 'Moved' when nothing was added or moved", () => {
     const { store, app, announce } = setup({ ...ready(emptyQuery()) });
     app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
     app.onDropItem({ type: "node", nodeId: "gone" }, store.getState().query.id);
     app.onDropItem(null, store.getState().query.id);
+    // Only the three warnings are spoken, in order (see the next test).
+    expect(announce.mock.calls).toEqual([
+      [expect.stringMatching(/^Couldn't add “ghost”: /)],
+      ["That item is no longer in the query."],
+      ["That item can't be added to a query."],
+    ]);
+  });
+
+  it("speaks a refused drop's warning, since its box appears with its text already in it", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("That item can't be added to a query.");
+    // The same refusal again is a new action: it is spoken again.
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).toHaveBeenCalledTimes(2);
+  });
+
+  it("a drop that fully succeeds speaks no warning", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()), dropNotice: "old" });
+    app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 condition to the query.");
+  });
+
+  it("moving a node onto the spot it already holds changes and announces nothing", () => {
+    // The last child dropped on its own parent goes "to the end of the group":
+    // where it already is.
+    // (Finished conditions: a lone blank row would be replaced by the moved one.)
+    const done = { facetId: "thing", fieldId: "size", operatorId: "gt", value: 1 };
+    const root = emptyQuery();
+    const first = newCondition();
+    const last = newCondition();
+    const q = updateNode(
+      updateNode(addChild(addChild(root, root.id, first), root.id, last), first.id, done),
+      last.id,
+      done,
+    );
+    const { store, app, announce } = setup({ ...ready(q) });
+    app.onDropItem({ type: "node", nodeId: last.id }, root.id);
     expect(announce).not.toHaveBeenCalled();
+    expect(store.getState().query).toBe(q);
   });
 
   it("an unknown facet adds nothing and says why", () => {

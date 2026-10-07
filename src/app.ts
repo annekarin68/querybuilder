@@ -12,11 +12,12 @@ import {
   newCondition,
   placeNodes,
   sameSemantics,
+  sameTree,
   updateNode,
 } from "./query/tree";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
-import { runBlocker, type AppState, type StatsState, type Store } from "./state";
+import { runBlocker, type AppState, type PreviewState, type StatsState, type Store } from "./state";
 import { debounce } from "./util/debounce";
 import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
 import { requestSlot } from "./util/requestSlot";
@@ -64,6 +65,27 @@ export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * What a screen reader hears when Run query's panel changes: it repaints out of
+ * sight of a user who isn't looking at it, and their focus may be elsewhere
+ * (paint() never moves focus into a panel it wasn't in). Null: say nothing.
+ */
+export function previewAnnouncement(preview: PreviewState): string | null {
+  switch (preview.status) {
+    case "idle":
+      return null;
+    case "loading":
+      return "Fetching events…";
+    case "error":
+      return `Could not load events: ${preview.error}`;
+    case "ok": {
+      const n = preview.events.length;
+      if (n === 0) return "No events match this query.";
+      return `Showing ${n} matching ${n === 1 ? "event" : "events"}.`;
+    }
+  }
+}
+
 export function createApp({ store, api, navigate, announce }: AppDeps) {
   // One slot per request kind. Every query/scope edit cancels both
   // (docs/ARCHITECTURE.md, "Correctness invariant").
@@ -106,15 +128,20 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     const state = store.getState();
     if (runBlocker(state)) return;
     const req = previewSlot.start();
+    const show = (preview: PreviewState) => {
+      store.setState({ preview });
+      const spoken = previewAnnouncement(preview);
+      if (spoken) announce(spoken);
+    };
     const showError = (err: unknown) => {
       console.error("Run query failed:", err);
-      store.setState({ preview: { status: "error", error: errorMessage(err) } });
+      show({ status: "error", error: errorMessage(err) });
     };
-    store.setState({ preview: { status: "loading" } });
+    show({ status: "loading" });
     api
       .runQuery(state.query, state.selectedDatabaseIds, req.signal)
       .then((events) => {
-        if (!req.isStale()) store.setState({ preview: { status: "ok", events } });
+        if (!req.isStale()) show({ status: "ok", events });
       })
       .catch(async (err) => {
         if (req.isStale()) return;
@@ -239,6 +266,11 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   function setNotice(problems: string[]): void {
     const notice = dropNotice(problems);
     if (notice !== store.getState().dropNotice) store.setState({ dropNotice: notice });
+    // The warning's box is painted together with its text, and a screen reader
+    // only speaks text that CHANGES inside a region it already knows, so the
+    // box itself is never spoken: say it through the page's region.
+    // Also when the text is the same as before: it is a new refused drop.
+    if (notice) announce(notice);
   }
 
   /** `tree` with the group `nodeId` expanded, if it is a collapsed group: so
@@ -277,7 +309,11 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
         return;
       }
       setNotice([]);
-      onQueryChange(openGroup(moved, targetNodeId));
+      const next = openGroup(moved, targetNodeId);
+      // Dropped where it already was (say, the last row onto its own group):
+      // nothing changed, so there is nothing to announce either.
+      if (sameTree(next, query)) return;
+      onQueryChange(next);
       announce(movedMessage(node.kind));
       return;
     }

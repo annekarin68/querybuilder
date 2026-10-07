@@ -65,6 +65,33 @@ function hangingFetch() {
   );
 }
 
+/**
+ * A fetch whose streamed body the test feeds by hand, chunk by chunk, so it can
+ * wait (with fake timers) between chunks. Like a real fetch, aborting the
+ * request's signal makes the body stream fail, which is what ends a stalled read.
+ */
+function feedableStreamFetch() {
+  const encoder = new TextEncoder();
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+    },
+  });
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+    init?.signal?.addEventListener("abort", () => controller.error(init.signal!.reason));
+    return new Response(body, { status: 200 });
+  });
+  return {
+    fetchMock,
+    send: (text: string) => controller.enqueue(encoder.encode(text)),
+    sendBytes: (bytes: Uint8Array) => controller.enqueue(bytes),
+    close: () => controller.close(),
+  };
+}
+
+const alphaLine = JSON.stringify({ label: "alpha", success: true, matchCount: 1 });
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -293,6 +320,93 @@ describe("api client", () => {
     const pending = getStats(query, databaseIds, () => {}, ctrl.signal);
     ctrl.abort(new Error("superseded"));
     await expect(pending).rejects.toThrow("superseded");
+  });
+
+  it("getStats: the timeout clock restarts on every chunk, so a slow stream is never cut off", async () => {
+    vi.useFakeTimers();
+    const stream = feedableStreamFetch();
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const received: unknown[] = [];
+    const pending = getStats(query, databaseIds, (r) => received.push(r));
+    // Three chunks, each well inside the timeout, together longer than it.
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1_000);
+      stream.send(i === 0 ? alphaLine + "\n" : "\n");
+    }
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1_000);
+    stream.close();
+    await pending;
+    expect(received).toHaveLength(1);
+  });
+
+  it("getStats: a stream that goes silent after some chunks times out", async () => {
+    vi.useFakeTimers();
+    const stream = feedableStreamFetch();
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const pending = expect(getStats(query, databaseIds, () => {})).rejects.toBeInstanceOf(
+      TimeoutError,
+    );
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1_000);
+    stream.send(alphaLine + "\n");
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await pending;
+  });
+
+  it("a body that stalls after the headers arrived times out too", async () => {
+    vi.useFakeTimers();
+    const stream = feedableStreamFetch(); // headers are answered at once, no chunk ever follows
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const pending = expect(getStats(query, databaseIds, () => {})).rejects.toBeInstanceOf(
+      TimeoutError,
+    );
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await pending;
+  });
+
+  it("getStats delivers a last line that has no trailing newline", async () => {
+    vi.stubGlobal("fetch", mockStreamFetch(200, [alphaLine]));
+    const received: unknown[] = [];
+    await getStats(query, databaseIds, (r) => received.push(r));
+    expect(received).toEqual([{ databaseId: "alpha", status: "ok", matchCount: 1, notes: [] }]);
+  });
+
+  it("getStats keeps a multi-byte character that is split across two chunks", async () => {
+    // "é" is two bytes in UTF-8; cut between them. Decoding each chunk on its
+    // own would turn both halves into U+FFFD.
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({ label: "caf\u00e9", success: true, matchCount: 1 }) + "\n",
+    );
+    const cut = bytes.indexOf(0xc3) + 1;
+    const stream = feedableStreamFetch();
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const received: { databaseId: string }[] = [];
+    const pending = getStats(query, databaseIds, (r) => received.push(r));
+    stream.sendBytes(bytes.slice(0, cut));
+    stream.sendBytes(bytes.slice(cut));
+    stream.close();
+    await pending;
+    expect(received.map((r) => r.databaseId)).toEqual(["caf\u00e9"]);
+  });
+
+  it("getStats accepts \\r\\n line endings", async () => {
+    const beta = JSON.stringify({ label: "beta", success: true, matchCount: 2 });
+    vi.stubGlobal("fetch", mockStreamFetch(200, [`${alphaLine}\r\n${beta}\r\n`]));
+    const received: { databaseId: string }[] = [];
+    await getStats(query, databaseIds, (r) => received.push(r));
+    expect(received.map((r) => r.databaseId)).toEqual(["alpha", "beta"]);
+  });
+
+  it("a signal that is already aborted rejects with its reason instead of hanging", async () => {
+    // Like a real fetch: an already-aborted signal rejects at once. (An abort
+    // *event* would never fire for it, so a mock that only listens would hang.)
+    const f = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw init.signal.reason;
+      return new Response("[]");
+    });
+    vi.stubGlobal("fetch", f);
+    const ctrl = new AbortController();
+    ctrl.abort(new Error("superseded"));
+    await expect(getStats(query, databaseIds, () => {}, ctrl.signal)).rejects.toThrow("superseded");
   });
 
   it("getStats throws a readable error when a 2xx response has no body", async () => {
