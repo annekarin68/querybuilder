@@ -3,7 +3,7 @@
 //
 // Run it with `npm run check:offline`. The scanning logic is exported as plain
 // functions so tests/offlineCheck.test.ts can call them without a build.
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,7 +12,7 @@ const ABSOLUTE_URL_RE = /(?:https?|wss?):\/\/[^\s"'`)]+/gi;
 // A protocol-relative URL ("//host/path") inherits the page's scheme, so a
 // browser fetches it from another host all the same. "//" alone is also how a
 // comment starts, so only count it where a URL is expected: after `src=` or
-// `href=` (HTML attributes and JS properties), inside `url(` and after `@import`.
+// `href=` (HTML attributes and assignments), inside `url(` and after `@import`.
 const PROTOCOL_RELATIVE_URL_RE =
   /(?:\b(?:src|href)\s*=\s*|url\(\s*|@import\s+)["']?(\/\/[^\s"'`)>]+)/gi;
 
@@ -94,5 +94,8 @@ function main() {
   console.log("check:offline OK — no off-origin URLs in dist/.");
 }
 
-// Scan only when run as a script, not when a test imports this file.
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+// Scan only when run as a script, not when a test imports this file. Compare
+// real paths: started through a symlink, argv[1] is the link while import.meta.url
+// is the file it points to, and a plain comparison would silently skip the scan
+// (exit 0 with no output) so a leaking build would pass.
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) main();

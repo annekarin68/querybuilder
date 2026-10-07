@@ -1,7 +1,9 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { findOffOrigin, findOffOriginInDir } from "../scripts/check-offline.mjs";
 
 /**
@@ -96,5 +98,43 @@ describe("findOffOriginInDir", () => {
     expect(findOffOriginInDir(dist).map((p) => p.file)).toEqual([
       path.join(dist, "assets/THIRD-PARTY-NOTICES.txt"),
     ]);
+  });
+});
+
+/**
+ * The script must run its check however it is started. A guard that decided
+ * "I was imported by a test" by comparing paths would fail OPEN (print nothing,
+ * exit 0) when started through a symlink, and the build would pass with a leak.
+ */
+describe("running check-offline.mjs as a script", () => {
+  const scriptPath = fileURLToPath(new URL("../scripts/check-offline.mjs", import.meta.url));
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  /** A temp project whose dist/ leaks a URL; runs the script from there. */
+  function runInLeakyProject(scriptToRun: (projectDir: string) => string) {
+    const project = mkdtempSync(path.join(tmpdir(), "offline-script-"));
+    dirs.push(project);
+    mkdirSync(path.join(project, "dist"));
+    writeFileSync(path.join(project, "dist/index.html"), '<script src="https://cdn.example/a.js">');
+    return spawnSync(process.execPath, [scriptToRun(project)], { cwd: project, encoding: "utf8" });
+  }
+
+  it("fails the build when dist/ leaks", () => {
+    const run = runInLeakyProject(() => scriptPath);
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain("https://cdn.example/a.js");
+  });
+
+  it("still fails the build when started through a symlink", () => {
+    const run = runInLeakyProject((project) => {
+      const link = path.join(project, "link.mjs");
+      symlinkSync(scriptPath, link);
+      return link;
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain("https://cdn.example/a.js");
   });
 });

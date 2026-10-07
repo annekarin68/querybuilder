@@ -7,9 +7,8 @@ Their copyright and license notices are reproduced here.
 Some of these vendors ship their license banner only as a CSS/JS comment
 (Fomantic-UI's CSS uses a plain "/*" comment; jQuery uses a "/*!" banner). The
 production minifier strips these banners from the built bundle in dist/,
-including jQuery's (checked by searching the built dist/assets/*.js). This
-file exists so the notices are retained regardless of what survives
-minification.
+including jQuery's. This file exists so the notices are retained regardless
+of what survives minification.
 
 Everything the app actually ships to the browser (jQuery, Fomantic-UI CSS/JS)
 is MIT-licensed. Fomantic-UI additionally bundles font *files* that carry their
