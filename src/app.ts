@@ -12,6 +12,7 @@ import {
   newCondition,
   placeNodes,
   sameSemantics,
+  sameTree,
   updateNode,
 } from "./query/tree";
 import type { Group } from "./query/types";
@@ -265,6 +266,11 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   function setNotice(problems: string[]): void {
     const notice = dropNotice(problems);
     if (notice !== store.getState().dropNotice) store.setState({ dropNotice: notice });
+    // The warning's box is painted together with its text, and a screen reader
+    // only speaks text that CHANGES inside a region it already knows, so the
+    // box's own role="status" is not enough: say it through the page's region.
+    // Also when the text is the same as before: it is a new refused drop.
+    if (notice) announce(notice);
   }
 
   /** `tree` with the group `nodeId` expanded, if it is a collapsed group: so
@@ -303,7 +309,11 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
         return;
       }
       setNotice([]);
-      onQueryChange(openGroup(moved, targetNodeId));
+      const next = openGroup(moved, targetNodeId);
+      // Dropped where it already was (say, the last row onto its own group):
+      // nothing changed, so there is nothing to announce either.
+      if (sameTree(next, query)) return;
+      onQueryChange(next);
       announce(movedMessage(node.kind));
       return;
     }

@@ -995,7 +995,7 @@ body {
   right: 0.2rem;
   transform: translateY(-50%);
 }
-.qb-docs-empty {
+.qb-docs-status {
   margin: 0.25rem 0 0.5rem;
   font-size: 0.85rem;
   color: var(--qb-muted);

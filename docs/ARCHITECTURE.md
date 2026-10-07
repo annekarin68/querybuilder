@@ -246,8 +246,9 @@ state. The hazard is contained in one file and one helper:
    the matching teardown to `destroy()`.
 3. **To update a panel**, build an HTML string from state and call `paint()`.
    Two deliberate exceptions change the painted DOM directly, because a
-   repaint would lose something: the data dictionary's search filter (it
-   would lose the input's focus and caret) and `layout.ts` (the frame is
+   repaint would lose or cost something: the data dictionary's search filter
+   (a repaint per keystroke would rebuild the whole dictionary and lose which
+   cards are open and the scroll position) and `layout.ts` (the frame is
    rendered once; it only toggles classes and `hidden`).
 4. **Panels repaint only for the state they read** (`panelRenderers` in
    `main.ts`, see "State and the render loop").
@@ -297,7 +298,7 @@ src/
   query/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
-                       sameSemantics, …).
+                       sameSemantics, sameTree, …).
     drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
                        docs item creates, and what it couldn't), `dropNotice` — pure.
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
@@ -330,7 +331,7 @@ src/
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
     databasePicker.ts  Database scope pills (render + wiring).
     queryBuilder.ts    The query builder (wiring, drop targets, node grips; returns its render function).
-    docsFilter.ts      tagsOf / groupByTag / matchDocs — the data dictionary's sections and search (pure).
+    docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
     statsPanel.ts      The statistics column (render).
     dataPreview.ts     Matching events and the Run button (render + wiring).
@@ -426,7 +427,7 @@ control had focus before it repaints and focuses the same control afterwards.
   something else), the query card (after the warning's ✕), the Matching
   events card (after **Run query**, through the loader to the result), and the
   account chip or **Log in** (after **Invalidate** or **Log out**). Cards are
-  focusable by script only (`tabindex="-1"`).
+  not in the Tab order (`tabindex="-1"`), but can be given the focus by script.
 - **Code that moves the cursor on purpose wins**: it runs after the paint
   (`focusPart` moving on to the next dropdown, `setSidebarCollapsed`).
 - **A mouse click** focuses the button too, but the repainted one shows no
@@ -435,10 +436,17 @@ control had focus before it repaints and focuses the same control afterwards.
   before the focus reaches the next control** (Tab, or a click on "To"). A
   repaint at that moment would remove that control, so the builder commits the
   value one tick later (`setTimeout`), once the focus has landed, and `paint()`
-  keeps it there. **Known gap:** a button press held longer than that tick
-  (a normal mouse click) on a control that the commit repaints still loses the
-  click: typing a value and then clicking **Run query** or **+ Condition**
-  commits the value but needs a second click. It was lost before as well.
+  keeps it there. A click that arrives before that tick (press and release both
+  inside it, as a fast click or a script does) would run its handler on the OLD
+  query, so `wireQueryBuilder` also commits the waiting value from a
+  capture-phase `click` listener on `document`, before any other handler sees
+  the click: **Run query** then runs, and the login / compliance links
+  (`saveQueryBeforeRedirect`) save, the query with the value in it.
+  **Known gap:** a button press held longer than that tick (a normal mouse
+  click) on a control that the commit repaints still loses the click: the
+  button is replaced between press and release. Typing a value and then
+  clicking **Run query** or **+ Condition** commits the value but needs a
+  second click. It was lost before as well.
 
 The pure part (`controlOf`, `sameControl`) has Node tests; the rest needs a
 DOM and is checked in a browser.
@@ -824,7 +832,8 @@ Dropping a facet or a tag on the builder creates such conditions.
 
 - **`tree.ts`** — pure and immutable: every edit is "read `state.query`, call
   one `tree.ts` function, write the new tree back". `sameSemantics` tells a
-  real edit from a collapse toggle.
+  real edit from a collapse toggle; `sameTree` (collapse included) tells a move
+  that changed something from one that put a node back where it was.
 - **`src/api/request.ts`** — `toQueryRequest`, the one place the tree becomes
   the request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
@@ -933,7 +942,11 @@ one exception to "always repaint", see "The Fomantic discipline"). A facet
 card opens only when a *field* matched (`DocsMatch.openFacets`), and that
 field row gets the `is-match` highlight (`DocsMatch.fields`, found through the
 row's `data-field-id`); a facet that matched by name alone stays closed.
-Clearing the search closes everything again.
+Clearing the search closes everything again. A status line under the box
+(`.qb-docs-status`, `role="status"`, painted empty so the region exists before
+its text changes) is filled by `filterStatus`: "3 facets match." for screen
+readers only (`qb-sr-only`), or "No facets match “…”." in plain sight when
+nothing does.
 
 **Rows that open say so.** Tag sections, facet cards and field rows are native
 `<details>`, and each one starts its `<summary>` with a Fomantic `angle right`
@@ -985,7 +998,10 @@ remembered in `localStorage` (`qb:docs-width`; if storage is unavailable it
 just isn't remembered). Under 1100 px the open panel floats over the page,
 so `main.ts` starts the page with it collapsed on such a screen (before the
 first paint; `initialState` stays `false`), and Escape closes the floating
-panel while focus is inside it, returning focus to the rail button. A click
+panel while focus is inside it, returning focus to the rail button
+(`escapeClosesDocs`). In the search box the first Escape only clears its text
+(the box calls `preventDefault()`, which `escapeClosesDocs` treats as "spent");
+a second Escape, with the box empty, closes the panel. A click
 anywhere outside the docs column, the rail and the **Hide dictionary** / **Show dictionary**
 buttons closes it too (also `main.ts`, same 1100 px query): the open docs cover
 the builder, and nothing else would close them. Clicks inside the docs never
@@ -1135,18 +1151,23 @@ the issue's message tells the user to do exactly that.
   gives `wireQueryBuilder` `announce`, see "The Field dropdown's two kinds of
   choice"). After a drop or move
   that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
-  the query.", "Moved the group.", the words in `drop.ts`). The builder's own
+  the query.", "Moved the group.", the words in `drop.ts`). A move that leaves
+  the tree identical (`sameTree`: the last row dropped on its own group) changes
+  nothing and announces nothing. The builder's own
   **+ Condition** and **+ Group** say "Added 1 condition to the query." and
   "Added a group to the query." (`ADDED_GROUP_MESSAGE`); the focus stays on the
   button, so pressing it again adds another. `announce` is a
   dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
   which writes to one visually hidden `role="status"` region in the page frame.
   That region is never repainted, which is what makes a screen reader speak a
-  change. A drop that did nothing announces nothing; its `dropNotice` is the
-  message.
+  change. When several messages arrive within its 50 ms pause (a drop that adds
+  some things and refuses others) they are read together, in order. A drop that
+  did nothing announces no "Added" or "Moved"; its `dropNotice` is the message,
+  and `setNotice` also sends it through `announce`: the warning box is painted
+  together with its text, which a screen reader may not speak.
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
-  (`noticeHtml`, `role="status"`; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
+  (`noticeHtml`, `role="status"`, and spoken through `announce` as well; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
   succeeds clears an older warning; a drop that partly succeeds still inserts
   what it can. The messages:
 
@@ -1322,7 +1343,8 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   database's row, and an error that points at a query node is also shown in
   the builder and blocks Run ("Statistics lines").
 - Failing to load databases or facets at startup is fatal: `#app` is replaced
-  by an error and a **Reload** button (the message escaped like every
+  by an error (`role="alert"`) and a **Reload** button that takes the focus
+  (the message escaped like every
   server-supplied string; no inline `onclick`, so a strict
   Content-Security-Policy allows it). Login and compliance status failures are
   not fatal.

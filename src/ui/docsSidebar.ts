@@ -2,7 +2,7 @@ import type { AppState } from "../state";
 import type { Database, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { compact, countLabel, displayLabel, exact, matchRatio } from "./format";
-import { groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
+import { filterStatus, groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { findField, type FieldCatalog } from "../query/fieldCatalog";
 
@@ -161,7 +161,8 @@ export function groupHtml(
  *
  * This is the one place a panel changes its painted DOM directly instead of
  * repainting: the filter text is local to this panel (not AppState), and a
- * repaint on every keystroke would throw away the input's focus and caret.
+ * repaint on every keystroke would rebuild the whole dictionary each time and
+ * throw away which cards the user has open and where the list is scrolled.
  */
 function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
   const match = matchDocs(facets, query);
@@ -190,10 +191,34 @@ function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
     group.open = n > 0;
     count.textContent = countLabel(n, "match", "matches");
   });
-  const empty = el.querySelector<HTMLElement>(".qb-docs-empty")!;
-  empty.hidden = !match || match.facets.size > 0;
-  empty.textContent = `No facets match “${query.trim()}”.`;
+  // The status line is a live region that was painted empty, so a change to its
+  // text is spoken. It is shown only when nothing matches; otherwise it is for
+  // screen readers alone (the group counts already tell sighted users).
+  const status = el.querySelector<HTMLElement>(".qb-docs-status")!;
+  status.textContent = filterStatus(match, query);
+  status.classList.toggle("qb-sr-only", !match || match.facets.size > 0);
   el.querySelector<HTMLElement>("[data-action='clear-filter']")!.hidden = query === "";
+}
+
+/** What decides whether Escape closes the floating dictionary. */
+export interface EscapeContext {
+  key: string;
+  /** The search box calls `preventDefault()` when its Escape cleared the text. */
+  defaultPrevented: boolean;
+  /** The screen is narrow, so the open dictionary floats over the page. */
+  floating: boolean;
+  collapsed: boolean;
+  focusInDocs: boolean;
+}
+
+/**
+ * Whether this key press should fold the floating dictionary away. Escape
+ * first clears a search that has text in it (the search box handles that and
+ * marks the event as used), and only the next Escape closes the dictionary:
+ * a user who wanted to clear their search must not lose the whole panel.
+ */
+export function escapeClosesDocs(c: EscapeContext): boolean {
+  return c.key === "Escape" && !c.defaultPrevented && c.floating && !c.collapsed && c.focusInDocs;
 }
 
 export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
@@ -220,7 +245,7 @@ export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
          <input type="text" id="qb-docs-filter" placeholder="Search facets and fields…" aria-label="Search the data dictionary" autocomplete="off" />
          <button type="button" class="qb-icon-btn qb-docs-clear" data-action="clear-filter" aria-label="Clear search" hidden><i class="times icon"></i></button>
        </div>
-       <p class="qb-docs-empty" hidden></p>
+       <p class="qb-docs-status qb-sr-only" role="status"></p>
        <div class="qb-doc-groups">
          ${[...groups.entries()].map(([group, facets]) => groupHtml(group, facets, total, state.catalog)).join("")}
        </div>
@@ -253,6 +278,8 @@ export function wireDocsSidebar(
     if (e.key !== "Escape" || !isSearch(e.target) || !e.target.value) return;
     e.target.value = "";
     filter("");
+    // Tell main.ts's Escape handler this key press is spent (escapeClosesDocs).
+    e.preventDefault();
   });
   /** The drag/add data of the nearest item at or above `el`, if it parses. */
   const itemOf = (el: EventTarget | null): { node: HTMLElement; item: DragItem } | null => {
@@ -265,6 +292,9 @@ export function wireDocsSidebar(
     const grabbed =
       e.target instanceof Element && e.target.closest(".qb-grip") ? itemOf(e.target) : null;
     if (!grabbed || !e.dataTransfer) {
+      // Only the grips drag, so a <summary> row or a value chip is never picked
+      // up by accident. (A side effect: selected text can't be dragged out of
+      // the dictionary, e.g. into the search box.)
       e.preventDefault();
       return;
     }

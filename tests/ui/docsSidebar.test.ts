@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { DOCS_HINT, dragData, facetHtml, groupHtml } from "../../src/ui/docsSidebar";
+import {
+  DOCS_HINT,
+  dragData,
+  escapeClosesDocs,
+  facetHtml,
+  groupHtml,
+} from "../../src/ui/docsSidebar";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { parseDragItem } from "../../src/query/drop";
 import type { Facet } from "../../src/model";
@@ -212,5 +218,32 @@ describe("expand and add affordances", () => {
     expect(DOCS_HINT).toMatch(/expand/i);
     expect(DOCS_HINT).toMatch(/\+ Add/);
     expect(DOCS_HINT).toMatch(/with an arrow/);
+  });
+});
+
+describe("escapeClosesDocs", () => {
+  const closing = {
+    key: "Escape",
+    defaultPrevented: false,
+    floating: true,
+    collapsed: false,
+    focusInDocs: true,
+  };
+
+  it("closes the floating docs when Escape is pressed inside them", () => {
+    expect(escapeClosesDocs(closing)).toBe(true);
+  });
+
+  it("leaves Escape alone when the search box has already used it to clear its text", () => {
+    // The search box calls preventDefault() when it clears; the first Escape
+    // clears the search, only a second one closes the dictionary.
+    expect(escapeClosesDocs({ ...closing, defaultPrevented: true })).toBe(false);
+  });
+
+  it("ignores other keys, wide screens, folded docs and focus outside the docs", () => {
+    expect(escapeClosesDocs({ ...closing, key: "Enter" })).toBe(false);
+    expect(escapeClosesDocs({ ...closing, floating: false })).toBe(false);
+    expect(escapeClosesDocs({ ...closing, collapsed: true })).toBe(false);
+    expect(escapeClosesDocs({ ...closing, focusInDocs: false })).toBe(false);
   });
 });

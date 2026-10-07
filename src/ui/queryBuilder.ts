@@ -86,8 +86,8 @@ function nodeGrip(nodeId: string, kind: "group" | "condition"): string {
   return `<span class="${cls}" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move this ${kind}"><i class="grip vertical icon"></i></span>`;
 }
 
-function iconButton(action: string, label: string, icon: string, extra = ""): string {
-  return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
+function iconButton(action: string, label: string, icon: string): string {
+  return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"><i class="${icon} icon"></i></button>`;
 }
 
 /** The condition row's plain dropdowns and their labels. The Field dropdown
@@ -401,6 +401,19 @@ export function wireQueryBuilder(
     if (spoken) hooks.announce(spoken);
   }
 
+  /** The condition row whose value box lost the focus and is waiting for its
+   *  tick to be committed (see the `change` listener). */
+  let pendingRow: HTMLElement | null = null;
+  let pendingTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Commit the waiting value now, if there is one. Safe to call at any time. */
+  function commitPendingValue(): void {
+    clearTimeout(pendingTimer);
+    const row = pendingRow;
+    pendingRow = null;
+    if (row) handleRowChange(row);
+  }
+
   /** Dismiss the warning. The repaint removes the ✕ the user was on, so
    *  paint() moves their keyboard focus to the query card (its
    *  `data-focus-landing`). */
@@ -530,8 +543,22 @@ export function wireQueryBuilder(
     // that control and drop the focus to the page. So the value is committed
     // on the next tick, once the focus has landed, and paint() keeps it there.
     // The row may be repainted by then; its boxes still hold what was typed.
-    if (row) setTimeout(() => handleRowChange(row));
+    if (!row) return;
+    // Only one value waits at a time. If another row's box changes first,
+    // commit the earlier one now rather than lose it.
+    if (pendingRow && pendingRow !== row) commitPendingValue();
+    clearTimeout(pendingTimer);
+    pendingRow = row;
+    pendingTimer = setTimeout(commitPendingValue);
   });
+
+  // A quick click on a button right after typing (press and release inside the
+  // one-tick wait above) would run its handler on the OLD query: Run would
+  // search without the value, and the login / compliance links would save a
+  // query without it. So any click, before anything else sees it, first
+  // commits the value waiting for its tick. (`capture`: it must run before the
+  // handlers on the panels and on `document`.)
+  document.addEventListener("click", commitPendingValue, true);
 
   return (state) => {
     paintQueryBuilder(container, state);

@@ -573,12 +573,49 @@ describe("dropping docs items", () => {
     expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition.");
   });
 
-  it("announces nothing when nothing was added or moved", () => {
+  it("announces no 'Added' or 'Moved' when nothing was added or moved", () => {
     const { store, app, announce } = setup({ ...ready(emptyQuery()) });
     app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
     app.onDropItem({ type: "node", nodeId: "gone" }, store.getState().query.id);
     app.onDropItem(null, store.getState().query.id);
+    // Only the warnings are spoken (see the next test).
+    for (const [message] of announce.mock.calls) {
+      expect(message).not.toMatch(/^(Added|Moved)/);
+    }
+  });
+
+  it("speaks a refused drop's warning, since its box appears with its text already in it", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("That item can't be added to a query.");
+    // The same refusal again is a new action: it is spoken again.
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).toHaveBeenCalledTimes(2);
+  });
+
+  it("a drop that fully succeeds speaks no warning", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()), dropNotice: "old" });
+    app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 condition to the query.");
+  });
+
+  it("moving a node onto the spot it already holds changes and announces nothing", () => {
+    // The last child dropped on its own parent goes "to the end of the group":
+    // where it already is.
+    // (Finished conditions: a lone blank row would be replaced by the moved one.)
+    const done = { facetId: "thing", fieldId: "size", operatorId: "gt", value: 1 };
+    const root = emptyQuery();
+    const first = newCondition();
+    const last = newCondition();
+    const q = updateNode(
+      updateNode(addChild(addChild(root, root.id, first), root.id, last), first.id, done),
+      last.id,
+      done,
+    );
+    const { store, app, announce } = setup({ ...ready(q) });
+    app.onDropItem({ type: "node", nodeId: last.id }, root.id);
     expect(announce).not.toHaveBeenCalled();
+    expect(store.getState().query).toBe(q);
   });
 
   it("an unknown facet adds nothing and says why", () => {

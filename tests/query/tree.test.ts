@@ -9,6 +9,7 @@ import {
   findNode,
   countConditions,
   sameSemantics,
+  sameTree,
   insertNodes,
   replaceLoneBlankCondition,
   moveNode,
@@ -134,6 +135,32 @@ describe("sameSemantics", () => {
     const folded = { ...root, collapsed: true };
     sameSemantics(root, folded);
     expect(folded.collapsed).toBe(true);
+  });
+});
+
+describe("sameTree", () => {
+  it("is true for equal trees that are different objects", () => {
+    const root = emptyQuery();
+    const tree = addChild(root, root.id, newCondition());
+    expect(sameTree(tree, structuredClone(tree))).toBe(true);
+  });
+
+  it("counts a collapse toggle as a difference, unlike sameSemantics", () => {
+    // The user sees a group fold, so something visible changed.
+    const root = emptyQuery();
+    const g = newGroup();
+    const tree = addChild(root, root.id, g);
+    expect(sameTree(tree, updateNode(tree, g.id, { collapsed: true }))).toBe(false);
+  });
+
+  it("notices a reorder and an edit", () => {
+    const root = emptyQuery();
+    const a = newCondition();
+    const b = newCondition();
+    const ab = addChild(addChild(root, root.id, a), root.id, b);
+    const ba = addChild(addChild(root, root.id, b), root.id, a);
+    expect(sameTree(ab, ba)).toBe(false);
+    expect(sameTree(ab, updateNode(ab, a.id, { value: "x" }))).toBe(false);
   });
 });
 
