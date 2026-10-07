@@ -109,6 +109,44 @@ export function insertNodes(tree: Group, targetId: string, nodes: QueryNode[]): 
   }) as Group;
 }
 
+/** A condition nobody has touched: nothing chosen yet (what "+ Condition" adds). */
+function isBlankCondition(node: QueryNode): boolean {
+  return (
+    node.kind === "condition" &&
+    node.facetId === null &&
+    node.fieldId === null &&
+    node.operatorId === null &&
+    node.value === null
+  );
+}
+
+/**
+ * A group that holds just one blank condition (the starting query, or what
+ * "+ Group" adds) is waiting to be filled in: nobody wants to keep that blank
+ * row once something is added. If the drop on `targetId` lands in such a group
+ * (on the group, or on its blank row), return `tree` with `nodes` in that row's
+ * place; otherwise null, so the caller inserts as usual. The group keeps its
+ * ALL/ANY choice and fold state: only a blank row is replaced, never something
+ * the user chose.
+ */
+export function replaceLoneBlankCondition(
+  tree: Group,
+  targetId: string,
+  nodes: QueryNode[],
+): Group | null {
+  if (nodes.length === 0) return null;
+  let replaced = false;
+  const next = mapTree(tree, (n) => {
+    if (n.kind !== "group") return n;
+    const [only] = n.children;
+    const targetsThisGroup = n.id === targetId || only?.id === targetId;
+    if (!targetsThisGroup || n.children.length !== 1 || !only || !isBlankCondition(only)) return n;
+    replaced = true;
+    return { ...n, children: nodes };
+  }) as Group;
+  return replaced ? next : null;
+}
+
 /**
  * Move `nodeId` to where a drop on `targetId` lands (see `insertNodes`).
  * Returns null when the move is impossible: an unknown id, the root, or a

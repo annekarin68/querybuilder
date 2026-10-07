@@ -808,6 +808,13 @@ Dropping a facet or a tag on the builder creates such conditions.
   target group, or just before a target condition; `moveNode` does the same
   for an existing node and returns `null` for a move that is impossible
   (unknown id, the root, a group into itself or something inside it).
+  `replaceLoneBlankCondition` is how a blank row gives way: when the group a
+  drop lands in (the target group, or the parent of the target row) holds
+  exactly one condition with nothing chosen (the starting query's seed from
+  `start()`, a group fresh from "+ Group", or what is left when a user deletes
+  everything else and keeps an untouched "+ Condition"), the new nodes take
+  that condition's place. The group's ALL/ANY choice and fold state stay. It
+  returns `null` otherwise, and the caller inserts as usual.
 
 ---
 
@@ -989,6 +996,13 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
   at its end. The + button is a real `<button>`, so Tab and Enter work. (Moving an
   existing node is mouse-only; use the row's own dropdowns and ✕ to rebuild
   without a mouse.)
+- **A lone blank row is replaced, not joined.** When a group's only child is a
+  blank condition (the starting query's root, or a group just added with
+  "+ Group"), any drop or + that creates something puts it in that row's place
+  instead of beside it, so the user is not left with an empty row that blocks
+  Run (`replaceLoneBlankCondition`, called from `onDropItem`). It does not
+  matter whether the drop landed on the group or on the blank row, and a drop
+  that fails (see `dropNotice`) leaves the row alone.
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
   (`noticeHtml`, `role="status"`; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully

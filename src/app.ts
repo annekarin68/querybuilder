@@ -11,6 +11,7 @@ import {
   insertNodes,
   moveNode,
   newCondition,
+  replaceLoneBlankCondition,
   sameSemantics,
   updateNode,
 } from "./query/tree";
@@ -281,11 +282,15 @@ export function createApp({ store, api, navigate }: AppDeps) {
     }
     const { nodes, problems } = nodesForItem(item, facets, catalog);
     setNotice(problems);
-    if (nodes.length > 0)
-      onQueryChange(openGroup(insertNodes(query, targetNodeId, nodes), targetNodeId));
+    if (nodes.length === 0) return;
+    // A group holding just a blank row (the starting query, or a new "+ Group")
+    // is waiting to be filled in, so the new nodes take that row's place.
+    const replaced = replaceLoneBlankCondition(query, targetNodeId, nodes);
+    onQueryChange(openGroup(replaced ?? insertNodes(query, targetNodeId, nodes), targetNodeId));
   }
 
-  /** The keyboard path: "Add to query" puts the item in the root group. */
+  /** The keyboard path: "Add to query" puts the item in the root group (or, if
+   *  that holds just a blank row, in its place). */
   function onAddItem(item: DragItem): void {
     onDropItem(item, store.getState().query.id);
   }
