@@ -117,7 +117,7 @@ to its `PAIRS` list when you add a token that carries text.
 The pickle is four small SVG files in `public/pickle/`, served as-is. Three of
 them are named by `MASCOT` in `src/config.ts` (`logo.svg`, `disappointed.svg`,
 `loading.svg`); the favicon is referenced from `index.html`. They are meant to
-be replaced: overwrite a file with the same name and nothing else changes.
+be replaced: overwrite a file with the same name and nothing else changes. Replacement SVGs must be self-contained plain SVG: export them as plain or optimised SVG with no namespaces other than `http://www.w3.org/2000/svg` (typical Inkscape or Illustrator exports add `xmlns:xlink`, `xmlns:inkscape`, `sodipodi` and `rdf` URLs, which make `npm run build`'s `check:offline` fail; nothing checks a file swapped in on an already-deployed build).
 
 | File | Where it shows |
 |---|---|
@@ -295,7 +295,7 @@ src/
     requestSlot.ts     At most one request per kind in flight; the whole stale-response guard.
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
   ui/
-    fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown.
+    fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
     panel.ts           paint(), escapeHtml(), optionsHtml().
     layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed,
                        setMascot, the sidebar's resize handle, onMenu.
@@ -806,7 +806,11 @@ Blank texts are `""` in the model ("Data model"), and blank parts are left
 out. The panel header has a **Hide docs** button, a one-line hint and the
 search box (`matchDocs`: facet name, field id or name), which hides what
 doesn't match and opens the sections that do, directly on the painted DOM (the
-one exception to "always repaint", see "The Fomantic discipline").
+one exception to "always repaint", see "The Fomantic discipline"). A facet
+card opens only when a *field* matched (`DocsMatch.openFacets`), and that
+field row gets the `is-match` highlight (`DocsMatch.fields`, found through the
+row's `data-field-id`); a facet that matched by name alone stays closed.
+Clearing the search closes everything again.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
 on the tag section, facet card, field row and value chip) starts a drag, and a
@@ -823,7 +827,10 @@ edge is a separator (`role="separator"`, focusable) wired by `docsResize.ts`:
 drag it, or press Left / Right (1rem a step). The width is kept in the
 `--qb-docs-w` CSS variable, limited to 20–40rem (26rem to start) and
 remembered in `localStorage` (`qb:docs-width`; if storage is unavailable it
-just isn't remembered). Under 1100 px the open panel floats over the page.
+just isn't remembered). Under 1100 px the open panel floats over the page,
+so `main.ts` starts the page with it collapsed on such a screen (before the
+first paint; `initialState` stays `false`), and Escape closes the floating
+panel while focus is inside it, returning focus to the rail button.
 Nothing needed to read the dictionary is behind a hover: names, types and
 blurbs are visible text, and a `title` only labels a button or repeats a number.
 
@@ -895,7 +902,7 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
   without a mouse.)
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
-  (`noticeHtml`; the ✕ works by click, Enter and Space). A drop that fully
+  (`noticeHtml`, `role="status"`; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
   succeeds clears an older warning; a drop that partly succeeds still inserts
   what it can. The messages:
 
@@ -905,7 +912,8 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
 | Value that isn't on its field's known values | nothing added | "Couldn't add “…”: it is not one of <field>'s known values." |
 | Tag with no facets | nothing added | "The tag “…” has no facets." |
 | Data that isn't ours or can't be read | nothing added | "That item can't be added to a query." |
-| A group onto itself or something inside it (or a stale node id) | nothing moved | "A group can't be moved into itself." |
+| A node that is no longer in the query (a stale drag) or the root | nothing moved | "That item is no longer in the query." |
+| A group onto something inside itself | nothing moved | "A group can't be moved into itself." |
 | Anything before facets and catalog have loaded | nothing added | "The docs are still loading; try again in a moment." |
 
 Finding and picking in the dropdowns (settings in `fomantic.ts`, cursor

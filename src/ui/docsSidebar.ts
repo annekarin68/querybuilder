@@ -43,7 +43,7 @@ function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null)
 function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {
   const item = dragData({ type: "field", facetId: facet.id, fieldId: f.id });
   const blurb = f.comment || f.description;
-  return `<details class="qb-doc-field" data-item="${item}">
+  return `<details class="qb-doc-field" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
       <summary>
         ${grip}
         <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
@@ -110,7 +110,8 @@ function groupHtml(
 
 /**
  * Show only what matches: hide non-matching facets and groups, open the groups
- * that have a match, and swap each group's size for its match count.
+ * that have a match (and the facet cards whose fields matched, highlighting
+ * those fields), and swap each group's size for its match count.
  *
  * This is the one place a panel changes its painted DOM directly instead of
  * repainting: the filter text is local to this panel (not AppState), and a
@@ -120,6 +121,15 @@ function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
   const match = matchDocs(facets, query);
   el.querySelectorAll<HTMLElement>("[data-facet-id]").forEach((node) => {
     node.hidden = match !== null && !match.facets.has(node.dataset.facetId!);
+    // Open a card whose field matched, so the reason for the match is visible;
+    // clearing the filter closes it again, like the tag groups below.
+    if (node instanceof HTMLDetailsElement) {
+      node.open = match !== null && match.openFacets.has(node.dataset.facetId!);
+    }
+    const matchingFields = match?.fields.get(node.dataset.facetId!);
+    node.querySelectorAll<HTMLElement>("details.qb-doc-field").forEach((field) => {
+      field.classList.toggle("is-match", matchingFields?.has(field.dataset.fieldId!) ?? false);
+    });
   });
   el.querySelectorAll<HTMLDetailsElement>("details[data-group]").forEach((group) => {
     const count = group.querySelector<HTMLElement>("[data-group-count]")!;

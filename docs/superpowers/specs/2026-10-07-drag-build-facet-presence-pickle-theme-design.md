@@ -2,6 +2,8 @@
 
 Status: approved in chat on 2026-10-07; revised the same day after review (value drops, sidebar redesign, easter egg, "no field" choice). Awaiting final spec review.
 
+Where this spec and docs/ARCHITECTURE.md differ, ARCHITECTURE.md describes the code as built (e.g. no text/plain drag fallback; the mascot state comes from mascotFor; the rain is wired in main.ts; facet cards show name and field count).
+
 ## 1. Goals
 
 1. Build the query by dragging items from the docs sidebar into the query

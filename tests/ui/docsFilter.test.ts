@@ -116,5 +116,25 @@ describe("matchDocs", () => {
     const m = matchDocs(facets, "zzz")!;
     expect(m.facets.size).toBe(0);
     expect(m.groups.size).toBe(0);
+    expect(m.openFacets.size).toBe(0);
+    expect(m.fields.size).toBe(0);
+  });
+
+  it("does not open a facet that matches only by name", () => {
+    const nameOnly = matchDocs(facets, "front left")!;
+    expect(nameOnly.facets.has("tire_pressure_front_left")).toBe(true);
+    expect(nameOnly.openFacets.has("tire_pressure_front_left")).toBe(false);
+    expect(nameOnly.fields.size).toBe(0);
+  });
+
+  it("opens a facet that matches because of a field, and lists the matching fields", () => {
+    const m = matchDocs(facets, "redline")!;
+    expect([...m.openFacets]).toEqual(["engine_rpm"]);
+    expect(m.fields).toEqual(new Map([["engine_rpm", new Set(["redline_rpm"])]]));
+  });
+
+  it("lists every matching field of a facet", () => {
+    const m = matchDocs(facets, "_rpm")!;
+    expect(m.fields.get("engine_rpm")).toEqual(new Set(["value_rpm", "redline_rpm"]));
   });
 });

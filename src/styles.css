@@ -1045,6 +1045,10 @@ body {
 .qb-doc-field > summary {
   flex-wrap: wrap;
 }
+.qb-doc-field.is-match > summary {
+  background: var(--qb-selected-bg);
+  border-radius: 4px;
+}
 .qb-doc-field-name {
   font-size: 0.85rem;
   overflow-wrap: anywhere;

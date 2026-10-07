@@ -112,6 +112,22 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   { keys: ["auth", "compliance"], run: (s) => renderAccountMenu(panels.account, s) },
 ];
 
+// Below this width the open docs float over the page (styles.css), so start
+// with them folded away instead of covering the builder on first load. Set
+// before the first paint below, so nothing flickers.
+const NARROW_SCREEN = "(max-width: 1100px)";
+if (window.matchMedia(NARROW_SCREEN).matches) store.setState({ sidebarCollapsed: true });
+
+// Escape closes the floating docs (only while focus is inside them), and
+// focus moves to the rail button so keyboard users are not left on a hidden panel.
+const docsColumn = root.querySelector<HTMLElement>("#qb-docs")!;
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !window.matchMedia(NARROW_SCREEN).matches) return;
+  if (store.getState().sidebarCollapsed || !docsColumn.contains(document.activeElement)) return;
+  store.setState({ sidebarCollapsed: true });
+  root.querySelector<HTMLElement>(".qb-docs-rail")?.focus();
+});
+
 store.subscribe((state, changed) => {
   for (const { keys, run } of panelRenderers) {
     if (keys.some((k) => changed.has(k))) run(state);

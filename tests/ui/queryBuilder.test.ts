@@ -85,7 +85,7 @@ describe("drop warning", () => {
     expect(html).toContain("ui warning message");
     expect(html).toContain("Couldn&#39;t add &lt;x&gt;");
     expect(html).toContain('data-action="dismiss-notice"');
-    expect(html).toContain('role="alert"');
+    expect(html).toContain('role="status"');
   });
 });
 

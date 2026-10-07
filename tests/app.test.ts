@@ -536,6 +536,24 @@ describe("dropping docs items", () => {
     expect(store.getState().query).toBe(before);
   });
 
+  it("a node that is no longer in the query is refused with its own warning", () => {
+    const q = runnableQuery();
+    const { store, app } = setup({ ...ready(q) });
+    app.onDropItem({ type: "node", nodeId: "gone" }, q.id);
+    expect(store.getState().dropNotice).toBe("That item is no longer in the query.");
+    expect(store.getState().query).toBe(q);
+  });
+
+  it("the root can't be moved", () => {
+    const q = runnableQuery();
+    const g = newGroup();
+    const query = addChild(q, q.id, g);
+    const { store, app } = setup({ ...ready(query) });
+    app.onDropItem({ type: "node", nodeId: query.id }, g.id);
+    expect(store.getState().dropNotice).toBe("That item is no longer in the query.");
+    expect(store.getState().query).toBe(query);
+  });
+
   it("dropping a node on itself does nothing quietly", () => {
     const q = runnableQuery();
     const c = q.children[0]!;

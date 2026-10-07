@@ -59,7 +59,7 @@ function issuesHtml(nodeId: string, issues: Issue[]): string {
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
   if (!notice) return "";
-  return `<div class="ui warning message qb-notice" role="alert">
+  return `<div class="ui warning message qb-notice" role="status">
       <i class="close icon" data-action="dismiss-notice" role="button" tabindex="0" aria-label="Dismiss"></i>
       <p>${escapeHtml(notice)}</p>
     </div>`;
@@ -276,7 +276,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues: state.issues };
   paint(
     el,
-    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query">
+    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1">
        <h2 class="qb-card-title">Query</h2>
        ${nodeHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state, state.catalog)}</div>
@@ -326,9 +326,16 @@ export function wireQueryBuilder(
     if (nextPart) focusPart(container, cond.id, nextPart);
   }
 
+  /** Dismiss the warning. The repaint removes the ✕ the user was on, which
+   *  would drop their keyboard focus, so move focus to the query card. */
+  function dismissNotice(): void {
+    drops.onDismissNotice();
+    container.querySelector<HTMLElement>(".qb-query")?.focus();
+  }
+
   container.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
-      return drops.onDismissNotice();
+      return dismissNotice();
     }
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
@@ -359,7 +366,7 @@ export function wireQueryBuilder(
     if (e.key !== "Enter" && e.key !== " ") return;
     if (!(e.target as HTMLElement).closest("[data-action='dismiss-notice']")) return;
     e.preventDefault();
-    drops.onDismissNotice();
+    dismissNotice();
   });
 
   /** Whether the drag in progress is one of ours (seen via the data type). */

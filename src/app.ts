@@ -245,9 +245,15 @@ export function createApp({ store, api, navigate }: AppDeps) {
     }
     if (item.type === "node") {
       if (item.nodeId === targetNodeId) return;
+      // A node that is gone (a stale drag) or the root can't be moved.
+      if (item.nodeId === query.id || !findNode(query, item.nodeId)) {
+        setNotice(["That item is no longer in the query."]);
+        return;
+      }
       const moved = moveNode(query, item.nodeId, targetNodeId);
       if (!moved) {
-        // (A stale or foreign node id lands here too.)
+        // The node exists, so the only refusal left is a group dropped on
+        // something inside itself (or a target that is gone).
         setNotice(["A group can't be moved into itself."]);
         return;
       }

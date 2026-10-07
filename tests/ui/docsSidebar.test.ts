@@ -47,6 +47,11 @@ describe("data dictionary markup", () => {
     expect(items).toContainEqual({ type: "value", facetId: "a&b", fieldId: "size", value: "7" });
   });
 
+  it("each field row carries its escaped field id, for the search highlight", () => {
+    expect(html).toContain('class="qb-doc-field" data-field-id="size"');
+    expect(html).toContain('data-field-id="flag"');
+  });
+
   it("only fields with a pick-list get value chips", () => {
     expect(html.match(/qb-doc-value"/g)).toHaveLength(2);
   });
