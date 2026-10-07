@@ -42,6 +42,7 @@ const app = createApp({
   navigate: (url) => {
     window.location.href = url;
   },
+  announce: shell.announce,
 });
 
 // Links straight into the login or compliance flow (marked data-flow-link)

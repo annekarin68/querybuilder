@@ -309,7 +309,7 @@ src/
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
     panel.ts           paint(), escapeHtml(), optionsHtml().
-    layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed,
+    layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed, announce,
                        setMascot, the sidebar's resize handle, onMenu.
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
     pickleRain.ts      The hidden five-click pickle rain: createClickCounter, planRain, startRain.
@@ -383,7 +383,7 @@ binding its Fomantic dropdowns must always happen together.
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
-| User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
+| User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (or, over a lone blank row, put in its place; a moved node too) and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
 
 ---
@@ -805,9 +805,19 @@ Dropping a facet or a tag on the builder creates such conditions.
   The maintainers chose to keep it and to switch to an ANY group only if users
   give negative feedback on this part of the application.
 - **`tree.ts`, placement** — `insertNodes` puts new nodes at the end of a
-  target group, or just before a target condition; `moveNode` does the same
-  for an existing node and returns `null` for a move that is impossible
-  (unknown id, the root, a group into itself or something inside it).
+  target group, or just before a target condition. `placeNodes` is what every
+  drop calls: it first tries `replaceLoneBlankCondition`, then falls back to
+  `insertNodes`. `moveNode` moves an existing node the same way (through
+  `placeNodes`, after taking the node out) and returns `null` for a move that
+  is impossible (unknown id, the root, a group into itself or something inside
+  it).
+  `replaceLoneBlankCondition` is how a blank row gives way: when the group a
+  drop lands in (the target group, or the parent of the target row) holds
+  exactly one condition with nothing chosen (the starting query's seed from
+  `start()`, a group fresh from "+ Group", or what is left when a user deletes
+  everything else and keeps an untouched "+ Condition"), the new nodes take
+  that condition's place. The group's ALL/ANY choice and fold state stay. It
+  returns `null` otherwise, and the caller inserts as usual.
 
 ---
 
@@ -989,6 +999,24 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
   at its end. The + button is a real `<button>`, so Tab and Enter work. (Moving an
   existing node is mouse-only; use the row's own dropdowns and ✕ to rebuild
   without a mouse.)
+- **A lone blank row is replaced, not joined.** When a group's only child is a
+  blank condition (the starting query's root, or a group just added with
+  "+ Group"), any drop or + that creates something puts it in that row's place
+  instead of beside it, so the user is not left with an empty row that blocks
+  Run (`replaceLoneBlankCondition`, called from `onDropItem`). It does not
+  matter whether the drop landed on the group or on the blank row, and a drop
+  that fails (see `dropNotice`) leaves the row alone. This holds for a
+  moved node too, judged after the node is taken out: dragging the last other
+  row onto a group's blank row (or into a new group) leaves just that row.
+- **Announcements.** The query card repaints on every change, so a screen-reader
+  user hears nothing when "+" adds a row or a drop lands. After a drop or move
+  that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
+  the query.", "Moved the group.", the words in `drop.ts`). `announce` is a
+  dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
+  which writes to one visually hidden `role="status"` region in the page frame.
+  That region is never repainted, which is what makes a screen reader speak a
+  change. A drop that did nothing announces nothing; its `dropNotice` is the
+  message.
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
   (`noticeHtml`, `role="status"`; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully

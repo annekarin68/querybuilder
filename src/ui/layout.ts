@@ -47,6 +47,9 @@ export interface Shell {
   logo: HTMLImageElement;
   /** Show the pickle with the face for `state`. */
   setMascot(state: MascotState): void;
+  /** Say `message` to screen-reader users (a polite live region that is never
+   *  repainted, so repeating a message is heard again). */
+  announce(message: string): void;
   /** Fold the data dictionary into its rail, or open it. */
   setSidebarCollapsed(collapsed: boolean): void;
   /** Listen for clicks on the workflow steps and the docs toggles. Call once. */
@@ -89,6 +92,7 @@ export function renderShell(root: HTMLElement): Shell {
       </main>
       <aside class="qb-col-stats" data-panel="stats"></aside>
     </div>
+    <div class="qb-sr-only" role="status" aria-live="polite" data-announcer></div>
   `;
   const find = <T extends HTMLElement = HTMLElement>(selector: string) =>
     root.querySelector<T>(selector)!;
@@ -99,6 +103,7 @@ export function renderShell(root: HTMLElement): Shell {
   const docsColumn = find(".qb-col-docs");
   const steps = find('[data-menu="views"]');
   const logo = find<HTMLImageElement>(".qb-logo");
+  const announcer = find("[data-announcer]");
   // Face files that failed to load: never asked for again, so a missing file is
   // requested once, not on every repaint.
   const failed = new Set<string>();
@@ -150,6 +155,15 @@ export function renderShell(root: HTMLElement): Shell {
         body.after(placeholder);
       }
       if (placeholder) placeholder.hidden = filtering;
+    },
+
+    announce(message) {
+      // Emptied first, then filled on the next tick: a screen reader only speaks
+      // a change, so the same message twice in a row would otherwise be silent.
+      announcer.textContent = "";
+      setTimeout(() => {
+        announcer.textContent = message;
+      }, 50);
     },
 
     setSidebarCollapsed(collapsed) {

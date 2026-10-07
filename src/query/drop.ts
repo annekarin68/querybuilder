@@ -128,3 +128,14 @@ export function nodesForItem(
 export function dropNotice(problems: string[]): string | null {
   return problems.length > 0 ? problems.join(" ") : null;
 }
+
+/** What a screen reader hears after new conditions were added. The query card
+ *  repaints on every change, so nothing there says that something happened. */
+export function addedMessage(count: number): string {
+  return `Added ${count} ${count === 1 ? "condition" : "conditions"} to the query.`;
+}
+
+/** What a screen reader hears after an existing node was moved. */
+export function movedMessage(kind: QueryNode["kind"]): string {
+  return `Moved the ${kind}.`;
+}

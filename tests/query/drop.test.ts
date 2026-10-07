@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { dropNotice, nodesForItem, parseDragItem } from "../../src/query/drop";
+import {
+  addedMessage,
+  dropNotice,
+  movedMessage,
+  nodesForItem,
+  parseDragItem,
+} from "../../src/query/drop";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import type { Condition } from "../../src/query/types";
 import type { Facet } from "../../src/model";
@@ -158,4 +164,15 @@ describe("nodesForItem", () => {
 describe("dropNotice", () => {
   it("is null without problems", () => expect(dropNotice([])).toBeNull());
   it("joins problems", () => expect(dropNotice(["One.", "Two."])).toBe("One. Two."));
+});
+
+describe("addedMessage / movedMessage (read out to screen readers)", () => {
+  it("says how many conditions were added", () => {
+    expect(addedMessage(1)).toBe("Added 1 condition to the query.");
+    expect(addedMessage(3)).toBe("Added 3 conditions to the query.");
+  });
+  it("says what was moved", () => {
+    expect(movedMessage("condition")).toBe("Moved the condition.");
+    expect(movedMessage("group")).toBe("Moved the group.");
+  });
 });

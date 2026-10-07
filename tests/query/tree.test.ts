@@ -10,7 +10,9 @@ import {
   countConditions,
   sameSemantics,
   insertNodes,
+  replaceLoneBlankCondition,
   moveNode,
+  placeNodes,
 } from "../../src/query/tree";
 import type { Condition, Group } from "../../src/query/types";
 
@@ -157,6 +159,91 @@ describe("insertNodes", () => {
   });
 });
 
+describe("replaceLoneBlankCondition", () => {
+  it("swaps a group's only, blank condition for the new nodes (drop on the group)", () => {
+    const root = emptyQuery();
+    const blank = newCondition();
+    const a = newCondition();
+    const b = newCondition();
+    const t = replaceLoneBlankCondition(addChild(root, root.id, blank), root.id, [a, b]);
+    expect(t?.id).toBe(root.id);
+    expect(t?.children.map((n) => n.id)).toEqual([a.id, b.id]);
+  });
+  it("does the same for a drop on the blank row itself", () => {
+    const root = emptyQuery();
+    const blank = newCondition();
+    const a = newCondition();
+    const t = replaceLoneBlankCondition(addChild(root, root.id, blank), blank.id, [a]);
+    expect(t?.children.map((n) => n.id)).toEqual([a.id]);
+  });
+  it("works in a nested group (what + Group adds) and leaves the rest alone", () => {
+    const root = emptyQuery();
+    const sibling = newCondition();
+    const group = newGroup();
+    const a = newCondition();
+    const q = addChild(addChild(root, root.id, sibling), root.id, group);
+    const t = replaceLoneBlankCondition(q, group.id, [a]);
+    expect(t?.children.map((n) => n.id)).toEqual([sibling.id, group.id]);
+    const inner = t?.children[1];
+    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([a.id]);
+  });
+  it("keeps the group's ALL/ANY choice and fold state", () => {
+    const root = emptyQuery();
+    const q = updateNode(addChild(root, root.id, newCondition()), root.id, {
+      operator: "OR",
+      collapsed: true,
+    });
+    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toMatchObject({
+      operator: "OR",
+      collapsed: true,
+    });
+  });
+  it("is null when the group has no children", () => {
+    const root = emptyQuery();
+    expect(replaceLoneBlankCondition(root, root.id, [newCondition()])).toBeNull();
+  });
+  it("is null when the only condition has anything chosen", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    const q = updateNode(addChild(root, root.id, c), c.id, { facetId: "x" });
+    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toBeNull();
+  });
+  it("is null when the group has more than one child", () => {
+    const root = emptyQuery();
+    const blank = newCondition();
+    const q = addChild(addChild(root, root.id, blank), root.id, newCondition());
+    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toBeNull();
+    expect(replaceLoneBlankCondition(q, blank.id, [newCondition()])).toBeNull();
+  });
+  it("is null when the only child is a group", () => {
+    const root = emptyQuery();
+    const q = addChild(root, root.id, newGroup());
+    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toBeNull();
+  });
+  it("is null for an unknown target or nothing to put in", () => {
+    const root = emptyQuery();
+    const q = addChild(root, root.id, newCondition());
+    expect(replaceLoneBlankCondition(q, "nope", [newCondition()])).toBeNull();
+    expect(replaceLoneBlankCondition(q, root.id, [])).toBeNull();
+  });
+});
+
+describe("placeNodes", () => {
+  it("replaces a lone blank row", () => {
+    const root = emptyQuery();
+    const a = newCondition();
+    const t = placeNodes(addChild(root, root.id, newCondition()), root.id, [a]);
+    expect(t.children.map((n) => n.id)).toEqual([a.id]);
+  });
+  it("otherwise inserts, like insertNodes", () => {
+    const root = emptyQuery();
+    const first = { ...newCondition(), facetId: "x" };
+    const a = newCondition();
+    const t = placeNodes(addChild(root, root.id, first), root.id, [a]);
+    expect(t.children.map((n) => n.id)).toEqual([first.id, a.id]);
+  });
+});
+
 describe("moveNode", () => {
   it("moves a condition into another group", () => {
     const root = emptyQuery();
@@ -168,6 +255,24 @@ describe("moveNode", () => {
     expect(moved.children.map((n) => n.id)).toEqual([g.id]);
     const inner = findNode(moved, g.id);
     expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
+  });
+  it("replaces the blank row of a group it is moved into", () => {
+    const root = emptyQuery();
+    const g = newGroup(); // one blank condition
+    const c = { ...newCondition(), facetId: "x" };
+    const t = addChild(addChild(root, root.id, c), root.id, g);
+    const moved = moveNode(t, c.id, g.id)!;
+    const inner = findNode(moved, g.id);
+    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
+    expect(moved.children.map((n) => n.id)).toEqual([g.id]);
+  });
+  it("replaces a blank row it is dropped on, once it is the group's only child", () => {
+    const root = emptyQuery();
+    const blank = newCondition();
+    const c = { ...newCondition(), facetId: "x" };
+    const t = addChild(addChild(root, root.id, blank), root.id, c);
+    // Taking `c` out leaves just the blank row, which `c` then replaces.
+    expect(moveNode(t, c.id, blank.id)?.children.map((n) => n.id)).toEqual([c.id]);
   });
   it("reorders before a sibling and keeps the node's data", () => {
     const root = emptyQuery();

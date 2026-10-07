@@ -84,8 +84,9 @@ function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
 function setup(state: Partial<AppState> = {}, api: AppApi = fakeApi()) {
   const store = createStore({ ...initialState, ...state });
   const navigate = vi.fn();
-  const app = createApp({ store, api, navigate });
-  return { store, api, navigate, app };
+  const announce = vi.fn();
+  const app = createApp({ store, api, navigate, announce });
+  return { store, api, navigate, announce, app };
 }
 
 /** A promise the test settles by hand, to control when a response "arrives". */
@@ -515,6 +516,29 @@ describe("dropping docs items", () => {
     expect(store.getState().dropNotice).toBeNull();
   });
 
+  it("announces what was added, for screen readers", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 condition to the query.");
+  });
+
+  it("announces a move", () => {
+    const root = emptyQuery();
+    const c = newCondition();
+    const g = newGroup();
+    const { app, announce } = setup({ ...ready(addChild(addChild(root, root.id, c), root.id, g)) });
+    app.onDropItem({ type: "node", nodeId: c.id }, g.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition.");
+  });
+
+  it("announces nothing when nothing was added or moved", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
+    app.onDropItem({ type: "node", nodeId: "gone" }, store.getState().query.id);
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
   it("an unknown facet adds nothing and says why", () => {
     const { store, app } = setup({ ...ready(emptyQuery()) });
     app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
@@ -598,8 +622,9 @@ describe("dropping docs items", () => {
       app.onDropItem({ type: "facet", facetId: "thing" }, groupId);
       const g = groupOf(store.getState().query, groupId);
       expect(g).toMatchObject({ collapsed: false });
-      // (A new group starts with one empty condition; the drop adds one more.)
-      expect(g?.kind === "group" && g.children).toHaveLength(2);
+      // (A new group starts with one blank condition; the drop replaces it.)
+      expect(g?.kind === "group" && g.children).toHaveLength(1);
+      expect(g?.kind === "group" && g.children[0]).toMatchObject({ facetId: "thing" });
     });
 
     it("stays collapsed when the drop fails", () => {
@@ -625,6 +650,104 @@ describe("dropping docs items", () => {
       const { store, app } = setup({ ...ready(query) });
       app.onDropItem({ type: "node", nodeId: "no-such-node" }, groupId);
       expect(groupOf(store.getState().query, groupId)).toMatchObject({ collapsed: true });
+    });
+  });
+
+  describe("a lone blank condition (the starting query)", () => {
+    const blank = newCondition();
+    function startingQuery(): Group {
+      const root = emptyQuery();
+      return addChild(root, root.id, blank);
+    }
+
+    it("is replaced by a dropped facet", () => {
+      const { store, app } = setup({ ...ready(startingQuery()) });
+      app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+      const q = store.getState().query;
+      expect(q.children).toHaveLength(1);
+      expect(q.children[0]).toMatchObject({ facetId: "thing", operatorId: "present" });
+      expect(store.getState().issues).toEqual([]);
+    });
+
+    it("is replaced when the drop lands on the blank row itself", () => {
+      const { store, app } = setup({ ...ready(startingQuery()) });
+      app.onDropItem({ type: "facet", facetId: "thing" }, blank.id);
+      const q = store.getState().query;
+      expect(q.children).toHaveLength(1);
+      expect(q.children[0]).toMatchObject({ facetId: "thing" });
+    });
+
+    it("is replaced by the + button too", () => {
+      const { store, app } = setup({ ...ready(startingQuery()) });
+      app.onAddItem({ type: "field", facetId: "thing", fieldId: "size" });
+      const q = store.getState().query;
+      expect(q.children).toHaveLength(1);
+      expect(q.children[0]).toMatchObject({ facetId: "thing", fieldId: "size" });
+    });
+
+    it("is replaced even after the user switched the root to ANY, which stays", () => {
+      const anyRoot = { ...startingQuery(), operator: "OR" as const };
+      const { store, app } = setup({ ...ready(anyRoot) });
+      app.onAddItem({ type: "facet", facetId: "thing" });
+      expect(store.getState().query).toMatchObject({ operator: "OR" });
+      expect(store.getState().query.children).toHaveLength(1);
+    });
+
+    describe("in a group added with + Group", () => {
+      // The root holds two children, so only the new group's row is lone and blank.
+      function withNewGroup() {
+        const root = emptyQuery();
+        const g = newGroup();
+        const query = addChild(addChild(root, root.id, newCondition()), root.id, g);
+        return { query, groupId: g.id, blankId: g.children[0]?.id ?? "" };
+      }
+      function expectReplaced(q: Group, groupId: string) {
+        const g = q.children.find((n) => n.id === groupId);
+        expect(q.children).toHaveLength(2);
+        expect(g?.kind === "group" && g.children).toHaveLength(1);
+        expect(g?.kind === "group" && g.children[0]).toMatchObject({ facetId: "thing" });
+      }
+
+      it("is replaced by a drop on the group", () => {
+        const { query, groupId } = withNewGroup();
+        const { store, app } = setup({ ...ready(query) });
+        app.onDropItem({ type: "facet", facetId: "thing" }, groupId);
+        expectReplaced(store.getState().query, groupId);
+      });
+
+      it("is replaced by a drop on its blank row", () => {
+        const { query, groupId, blankId } = withNewGroup();
+        const { store, app } = setup({ ...ready(query) });
+        app.onDropItem({ type: "facet", facetId: "thing" }, blankId);
+        expectReplaced(store.getState().query, groupId);
+      });
+    });
+
+    it("is replaced by an existing node moved into a group, which then holds only that node", () => {
+      const root = emptyQuery();
+      const g = newGroup();
+      const c = { ...newCondition(), facetId: "thing", operatorId: "present" };
+      const { store, app } = setup({ ...ready(addChild(addChild(root, root.id, c), root.id, g)) });
+      app.onDropItem({ type: "node", nodeId: c.id }, g.id);
+      const q = store.getState().query;
+      expect(q.children.map((n) => n.id)).toEqual([g.id]);
+      const inner = q.children[0];
+      expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
+    });
+
+    it("stays when the drop fails", () => {
+      const { store, app } = setup({ ...ready(startingQuery()) });
+      app.onAddItem({ type: "facet", facetId: "ghost" });
+      expect(store.getState().query.children).toHaveLength(1);
+      expect(store.getState().query.children[0]).toMatchObject({ facetId: null });
+      expect(store.getState().dropNotice).toMatch(/ghost/);
+    });
+
+    it("stays when the user has already chosen something in it", () => {
+      const edited = updateNode(startingQuery(), blank.id, { facetId: "thing" });
+      const { store, app } = setup({ ...ready(edited) });
+      app.onAddItem({ type: "facet", facetId: "thing" });
+      expect(store.getState().query.children).toHaveLength(2);
     });
   });
 
