@@ -140,6 +140,20 @@ document.addEventListener("keydown", (e) => {
   root.querySelector<HTMLElement>(".qb-docs-rail")?.focus();
 });
 
+// A click anywhere else on the page also closes the floating docs, since they
+// cover the builder. Clicks inside the docs must not (that would break "+ Add"
+// and dragging), nor those on the rail or the Hide/Show buttons, which toggle
+// the docs themselves.
+document.addEventListener("click", (e) => {
+  if (!window.matchMedia(NARROW_SCREEN).matches || store.getState().sidebarCollapsed) return;
+  // composedPath() is fixed when the click starts, so it still says "inside the
+  // docs" if a handler has already repainted the element that was clicked.
+  const insideDocs = e.composedPath().includes(docsColumn);
+  const target = e.target as Element;
+  if (insideDocs || target.closest(".qb-docs-rail, [data-menu='toggle-sidebar']")) return;
+  store.setState({ sidebarCollapsed: true });
+});
+
 store.subscribe((state, changed) => {
   for (const { keys, run } of panelRenderers) {
     if (keys.some((k) => changed.has(k))) run(state);

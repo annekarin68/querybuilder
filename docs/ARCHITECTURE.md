@@ -81,17 +81,28 @@ the backend's vocabulary):
 │S │ matching events (the Run query button lives here)      │  per database)   │
 │› │                                                        │                  │
 └──┴────────────────────────────────────────────────────────┴──────────────────┘
- ↑ docs rail: shows or hides the data dictionary (open by default, resizable, 26rem to start)
+ ↑ dictionary rail: shows or hides the data dictionary (« Hide dictionary / » Show dictionary; open by default, resizable, 26rem to start)
 ```
 
 - **Top bar** — app name, the workflow steps, and the account menu (login +
   compliance acknowledgment).
-- **Docs rail / data dictionary** — generated from `GET /api/individuals`.
+- **Data dictionary and its rail** — generated from `GET /api/individuals`.
   Open by default, because dragging from it is the main way to build a query.
   It is 26rem wide to start, the user can drag its right edge to anything from
-  20rem to 40rem (remembered), and the rail or the **Hide docs** button folds
-  it to a 28 px rail. Under 1100 px wide it floats over the page instead of
+  20rem to 40rem (remembered), and the rail down its left edge or the
+  **Hide dictionary** button folds it away. The rail says what a click does: its
+  arrow and its vertical label flip between « **Hide dictionary** and » **Show dictionary**
+  (`docsToggle` in `layout.ts`), and the header's **Hide dictionary** is a solid green
+  button, so neither has to be guessed. Folded, the rail is a solid green bar
+  (a faint strip would be easy to miss, and it is the only way back to the
+  dictionary). Under 1100 px wide the open dictionary floats over the page instead of
   squeezing the builder. Searchable by facet and field name.
+  **Naming (decided 2026-10-07):** users see one name, **dictionary** ("data
+  dictionary" in the title, "Hide / Show dictionary" on the controls), because
+  the users will understand it. An earlier version also said "docs", which
+  suggested optional help text rather than the thing you build queries from.
+  The identifiers in the code still say "docs" (`qb-docs-*`, `docsToggle`,
+  `data-panel="docs"`); renaming them would only be churn, so they stay.
 - **Main column** — database scope, the query builder (nested ALL/ANY groups,
   any depth, collapsible), and **Matching events**: a sample of matching
   events, fetched only when the user presses **Run query** in that card.
@@ -373,7 +384,7 @@ binding its Fomantic dropdowns must always happen together.
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
-| Docs rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
+| Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
 
 ---
 
@@ -783,11 +794,16 @@ Dropping a facet or a tag on the builder creates such conditions.
 - **`drop.ts`** — the pure half of drag-to-build: the drag payload
   (`DragItem`: facet, field, value, tag or node; `parseDragItem` treats the
   data as untrusted and returns `null` for anything else) and `nodesForItem`,
-  which says what a dropped docs item creates. A facet becomes a facet-level
+  which says what a dropped dictionary item creates. A facet becomes a facet-level
   `present`; a field becomes a condition with that field chosen and nothing
   else; a value becomes `field eq value` (a number field's value goes out as a
   number); a tag becomes one facet-level `present` per facet carrying it. What
   can't be created comes back as `problems`, in words for the user.
+  **Tag drops and "Add all N" are ANDed on purpose (decided 2026-10-07).** The
+  new conditions land in the receiving group, so under ALL (the default) a query
+  matches only events that hold every one of those facets, which can be rare.
+  The maintainers chose to keep it and to switch to an ANY group only if users
+  give negative feedback on this part of the application.
 - **`tree.ts`, placement** — `insertNodes` puts new nodes at the end of a
   target group, or just before a target condition; `moveNode` does the same
   for an existing node and returns `null` for a move that is impossible
@@ -824,19 +840,55 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    (x%)", then the fields.
 3. **Field rows** — name, type and a one-line blurb (`comment`, else
    `description`) in plain sight, not hidden in a hover; opened, the full
-   texts and the field's known values.
+   texts and the field's known values. A field with no comment, no description
+   and no known values has nothing to open, so it is a plain row (`is-leaf`, a
+   `<div>`, not a `<details>`): no arrow, but a spacer of the arrow's width
+   (`.qb-chevron-spacer`) so its grip and name line up with the other rows.
 4. **Value chips** — the field's pick-list (`CatalogField.options`, at most 30
    shown, the rest counted).
 
 Blank texts are `""` in the model ("Data model"), and blank parts are left
-out. The panel header has a **Hide docs** button, a one-line hint and the
-search box (`matchDocs`: facet name, field id or name), which hides what
+out. The panel header has a **Hide dictionary** button, a one-line hint (`DOCS_HINT`:
+"Click a section, facet or field with an arrow to expand it. Drag it into the
+query, or press + Add.") and the search box (`matchDocs`: facet name, field id or name), which hides what
 doesn't match and opens the sections that do, directly on the painted DOM (the
 one exception to "always repaint", see "The Fomantic discipline"). A facet
 card opens only when a *field* matched (`DocsMatch.openFacets`), and that
 field row gets the `is-match` highlight (`DocsMatch.fields`, found through the
 row's `data-field-id`); a facet that matched by name alone stays closed.
 Clearing the search closes everything again.
+
+**Rows that open say so.** Tag sections, facet cards and field rows are native
+`<details>`, and each one starts its `<summary>` with a Fomantic `angle right`
+chevron (`.qb-chevron`) that CSS turns a quarter-turn while the row is open
+(`details[open] > summary > .qb-chevron`). Under `prefers-reduced-motion` the
+chevron still ends up turned; only the animation is removed. The chevron is
+decoration, so it (and the rail's icon) carries `aria-hidden="true"`: the icon
+font's stray character would otherwise end up in the row's accessible name.
+The whole summary line answers the pointer (a hover background and a
+`:focus-visible` outline), Enter and Space open it from the keyboard, and the
+**+ Add** buttons are labelled on purpose: a bare "+" reads as "expand", which
+is the opposite of what it does. A card or row gets a labelled mini button
+(**Add**, or **Add all N** on a tag section, where N is the number of facets it
+adds, so the number cannot be mistaken for the search's match count beside it)
+like the builder's **+ Condition**; the small value chips keep an icon-only
+"+". When the sidebar column is narrower than 21rem (a container query on
+`.qb-docs`, the card inside the column, so the rule is `max-width: 19rem`) the
+word drops and the "+" stays. The accessible name (`aria-label="Add … to the
+query"`) is the same either way. In the docs, the count pills are tinted
+instead of outlined, so they are not mistaken for the buttons beside them, and
+the labelled buttons have a keyboard focus ring like the icon buttons.
+
+**Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
+user's focus to the page, so it is put back: folding the docs while focus is
+inside them moves it to the rail (`setSidebarCollapsed`), and folding or
+unfolding a group in the builder moves it to that group's collapse button, but
+only after a keyboard press (`e.detail === 0`); after a mouse click the new
+button gets no focus ring. Green buttons (`.ui.primary.button`, e.g. **Hide
+docs**, **Log in**) show a ring on `:focus-visible` (a light ring on the dark
+top bar itself, a green one inside the light account-menu panel),
+and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
+colour and Fomantic's blue never shows.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
 on the tag section, facet card, field row and value chip) starts a drag, and a
@@ -856,7 +908,11 @@ remembered in `localStorage` (`qb:docs-width`; if storage is unavailable it
 just isn't remembered). Under 1100 px the open panel floats over the page,
 so `main.ts` starts the page with it collapsed on such a screen (before the
 first paint; `initialState` stays `false`), and Escape closes the floating
-panel while focus is inside it, returning focus to the rail button.
+panel while focus is inside it, returning focus to the rail button. A click
+anywhere outside the docs column, the rail and the **Hide dictionary** / **Show dictionary**
+buttons closes it too (also `main.ts`, same 1100 px query): the open docs cover
+the builder, and nothing else would close them. Clicks inside the docs never
+do, or **+ Add** and dragging would break.
 Nothing needed to read the dictionary is behind a hover: names, types and
 blurbs are visible text, and a `title` only labels a button or repeats a number.
 
@@ -871,9 +927,14 @@ drag in a Firefox-only deployment.
 ### Centre — `queryBuilder.ts`
 
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
-collapse caret, "Match [ALL | ANY] of the following", **+ Condition**, **+
-Group**, ✕ (not on the root). A collapsed group folds to its `queryToText`
-summary and "N conditions". A condition row is three cascading Fomantic
+a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
+right` while folded, the same arrows as the data dictionary), "Match [ALL |
+ANY] of the following", **+ Condition**, **+ Group**, ✕ (not on the root). A
+collapsed group folds to its `queryToText` summary and "N conditions", and that
+whole line is the click target for unfolding it (`data-action="toggle-collapse"`
+on the header, a pointer cursor, a hover background and the tooltip "Click to
+expand"), except when the click ends a text selection; the grip inside it does
+not toggle, because a click there belongs to dragging. A condition row is three cascading Fomantic
 dropdowns — **Facet**, **Field** (that facet's fields, `fieldsOfFacet`, by
 `Field.name`), **Operator** (the field's `operatorIds`) — then the value
 control from `valueControl.ts`: nothing; for **Equals** /
@@ -936,13 +997,13 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
 
 | Drop | Result | Warning |
 |---|---|---|
-| Facet, field or value whose facet or field isn't in the loaded docs | nothing added | "Couldn't add “…”: it is not in the loaded docs. The docs may be out of date; reload the page." |
+| Facet, field or value whose facet or field isn't in the loaded data dictionary | nothing added | "Couldn't add “…”: it is not in the loaded data dictionary. The dictionary may be out of date; reload the page." |
 | Value that isn't on its field's known values | nothing added | "Couldn't add “…”: it is not one of <field>'s known values." |
 | Tag with no facets | nothing added | "The tag “…” has no facets." |
 | Data that isn't ours or can't be read | nothing added | "That item can't be added to a query." |
 | A node that is no longer in the query (a stale drag) or the root | nothing moved | "That item is no longer in the query." |
 | A group onto something inside itself | nothing moved | "A group can't be moved into itself." |
-| Anything before facets and catalog have loaded | nothing added | "The docs are still loading; try again in a moment." |
+| Anything before facets and catalog have loaded | nothing added | "The data dictionary is still loading; try again in a moment." |
 
 Finding and picking in the dropdowns (settings in `fomantic.ts`, cursor
 movement in `queryBuilder.ts`):

@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   decodeFieldValue,
   fieldDropdown,
+  collapseButton,
   footerHtml,
+  groupHtml,
   NO_FIELD,
   noticeHtml,
   rowDropdown,
@@ -128,5 +130,39 @@ describe("the query footer", () => {
 
   it("shows the query in plain English when nothing needs attention", () => {
     expect(footerHtml(query, [], catalog)).toContain('class="qb-summary"');
+  });
+});
+
+describe("group collapse controls", () => {
+  const catalog = buildFieldCatalog([]);
+  const ctx = { catalog, facets: null, issues: [] };
+  const group = { ...emptyQuery(), id: "g-inner", children: [newCondition()] };
+
+  it("the collapse button is a bordered chevron with an accessible state", () => {
+    const open = collapseButton(false);
+    expect(open).toContain("angle down icon");
+    expect(open).toContain('aria-expanded="true"');
+    expect(open).toContain('aria-label="Collapse group"');
+    expect(open).toContain("qb-collapse-btn");
+    const closed = collapseButton(true);
+    expect(closed).toContain("angle right icon");
+    expect(closed).toContain('aria-expanded="false"');
+    expect(closed).toContain('aria-label="Expand group"');
+  });
+
+  it("a collapsed group's whole header expands it, and says so", () => {
+    const html = groupHtml(ctx, { ...group, collapsed: true }, false);
+    const head = html.slice(html.indexOf('<div class="qb-group-head'), html.indexOf("</div>"));
+    expect(head).toContain('data-action="toggle-collapse"');
+    expect(head).toContain('title="Click to expand"');
+  });
+
+  it("an open group's header is not itself a toggle", () => {
+    const html = groupHtml(ctx, group, false);
+    const head = html.slice(html.indexOf('<div class="qb-group-head'), html.indexOf("</div>"));
+    expect(head).not.toContain('class="qb-group-head" data-action');
+    // the only toggle in an open header is the chevron button itself
+    expect(head.match(/data-action="toggle-collapse"/g)).toHaveLength(1);
+    expect(head).toContain('class="qb-icon-btn qb-collapse-btn" data-action="toggle-collapse"');
   });
 });

@@ -193,29 +193,41 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
   </div>`;
 }
 
-function collapseButton(collapsed: boolean): string {
-  return iconButton(
-    "toggle-collapse",
-    collapsed ? "Expand group" : "Collapse group",
-    collapsed ? "caret right" : "caret down",
-    ` aria-expanded="${!collapsed}"`,
-  );
+/** Put the cursor on group `nodeId`'s fold/unfold button. */
+function focusCollapseButton(container: HTMLElement, nodeId: string): void {
+  container
+    .querySelector<HTMLElement>(
+      `[data-node-id="${CSS.escape(nodeId)}"] > .qb-group-head .qb-collapse-btn`,
+    )
+    ?.focus();
 }
 
 /**
- * A group is drawn as a coloured bracket with a faint tint (blue = ALL/AND,
- * amber = ANY/OR — see styles.css). Between its children sits a small AND/OR
- * "joiner" on the bracket line. A collapsed group folds to one line: its
- * plain-English summary and how many conditions it holds.
+ * The group's fold/unfold button: a bordered chevron (down while open, right
+ * while folded — the same arrows the data dictionary uses), so it reads as
+ * something to click.
  */
-function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
+export function collapseButton(collapsed: boolean): string {
+  const label = collapsed ? "Expand group" : "Collapse group";
+  const icon = collapsed ? "angle right" : "angle down";
+  return `<button type="button" class="qb-icon-btn qb-collapse-btn" data-action="toggle-collapse" aria-label="${label}" title="${label}" aria-expanded="${!collapsed}"><i class="${icon} icon"></i></button>`;
+}
+
+/**
+ * A group is drawn as a coloured bracket with a faint tint (green = ALL/AND,
+ * mustard = ANY/OR — see styles.css). Between its children sits a small AND/OR
+ * "joiner" on the bracket line. A collapsed group folds to one line: its
+ * plain-English summary and how many conditions it holds. That whole line is a
+ * click target for unfolding it (buttons and the grip inside keep their own jobs).
+ */
+export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   const tone = g.operator === "OR" ? "or" : "and";
   const matchWord = g.operator === "OR" ? "ANY" : "ALL";
   const remove = isRoot ? "" : iconButton("remove-node", "Remove group", "times");
   if (g.collapsed) {
     const text = queryToText(g, ctx.catalog);
     return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
-      <div class="qb-group-head">
+      <div class="qb-group-head" data-action="toggle-collapse" title="Click to expand">
         ${isRoot ? "" : nodeGrip(g.id)}
         ${collapseButton(true)}
         <span class="qb-op-badge">${matchWord}</span>
@@ -342,7 +354,13 @@ export function wireQueryBuilder(
     if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
       return dismissNotice();
     }
+    // The grip is for dragging; a click on it must not also toggle a folded group.
+    if ((e.target as HTMLElement).closest(".qb-grip")) return;
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
+    // A drag across a folded group's line to select its text ends in a click on
+    // that line: that is not a request to unfold it. (Only the header itself,
+    // not a button of its own, is a toggle by a click anywhere on its line.)
+    if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
     const q = getState().query;
@@ -359,9 +377,13 @@ export function wireQueryBuilder(
         return onChange(updateNode(q, nodeId, { operator: "OR" }));
       case "toggle-collapse": {
         const node = findNode(q, nodeId);
-        return onChange(
-          updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }),
-        );
+        onChange(updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }));
+        // The repaint replaced the button that had focus; after a keyboard
+        // press (a click event with detail 0) put it back on the same group's
+        // (new) collapse button, as focusPart does for a condition. A mouse
+        // click (detail >= 1) needs no focus ring on the new button.
+        if (e.detail === 0) focusCollapseButton(container, nodeId);
+        return;
       }
     }
   });

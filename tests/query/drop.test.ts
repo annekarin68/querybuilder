@@ -127,7 +127,8 @@ describe("nodesForItem", () => {
   it("reports an unknown facet", () => {
     const r = nodesForItem({ type: "facet", facetId: "zzz" }, facets, catalog);
     expect(r.nodes).toEqual([]);
-    expect(r.problems[0]).toMatch(/“zzz”.*not in the loaded docs/);
+    expect(r.problems[0]).toMatch(/“zzz”.*not in the loaded data dictionary/);
+    expect(r.problems[0]).toMatch(/dictionary may be out of date/);
   });
   it("reports an unknown field", () => {
     const r = nodesForItem({ type: "field", facetId: "a", fieldId: "nope" }, facets, catalog);

@@ -55,7 +55,8 @@ export interface DropResult {
   problems: string[];
 }
 
-const NOT_LOADED = "it is not in the loaded docs. The docs may be out of date; reload the page.";
+const NOT_LOADED =
+  "it is not in the loaded data dictionary. The dictionary may be out of date; reload the page.";
 
 function condition(over: Partial<Condition>): Condition {
   return { ...newCondition(), ...over };

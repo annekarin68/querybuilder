@@ -637,6 +637,8 @@ describe("dropping docs items", () => {
   it("with no docs loaded yet, says so instead of ignoring the drop", () => {
     const { store, app } = setup({});
     app.onAddItem({ type: "facet", facetId: "thing" });
-    expect(store.getState().dropNotice).toBe("The docs are still loading; try again in a moment.");
+    expect(store.getState().dropNotice).toBe(
+      "The data dictionary is still loading; try again in a moment.",
+    );
   });
 });

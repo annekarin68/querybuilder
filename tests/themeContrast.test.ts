@@ -34,6 +34,7 @@ const PAIRS: [string, string][] = [
   ["qb-topbar-muted", "qb-topbar"],
   ["qb-text-on-fill", "qb-and"],
   ["qb-selected-text", "qb-selected-bg"],
+  ["qb-selected-text", "qb-chip"],
   ["qb-or-text", "qb-surface"],
   ["qb-danger", "qb-surface"],
   ["qb-warn", "qb-surface"],

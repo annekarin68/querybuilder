@@ -148,12 +148,12 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   padding: 0.75rem 0 0;
   border: none;
-  border-right: 1px solid var(--qb-border);
-  background: var(--qb-surface);
-  color: var(--qb-and);
+  border-right: 1px solid var(--qb-border-strong);
+  background: var(--qb-chip);
+  color: var(--qb-selected-text);
   font-weight: 700;
   font-size: 0.75rem;
   letter-spacing: 0.06em;
@@ -165,13 +165,27 @@ body {
 }
 .qb-docs-rail .icon {
   margin: 0;
+  font-size: 1.1rem;
 }
 .qb-docs-rail:hover {
-  background: var(--qb-surface-2);
+  background: var(--qb-selected-bg);
 }
 .qb-docs-rail:focus-visible {
   outline: 2px solid var(--qb-and);
   outline-offset: -2px;
+}
+/* Folded away, the rail is the only way back to the dictionary, so it is a solid
+   green bar instead of a faint strip. */
+.qb-body.qb-docs-collapsed .qb-docs-rail {
+  background: var(--qb-and);
+  color: var(--qb-text-on-fill);
+}
+.qb-body.qb-docs-collapsed .qb-docs-rail:hover {
+  background: var(--qb-topbar-2);
+}
+.qb-body.qb-docs-collapsed .qb-docs-rail:focus-visible {
+  outline: 2px solid var(--qb-text-on-fill);
+  outline-offset: -4px;
 }
 .qb-col-docs,
 .qb-col-main,
@@ -292,6 +306,11 @@ body {
   font-weight: 400;
   white-space: nowrap;
 }
+/* In the data dictionary the counts are quieter than the "Add" buttons beside them. */
+.qb-docs .qb-count {
+  background: var(--qb-chip);
+  border-color: transparent;
+}
 .qb-icon-btn {
   display: inline-grid;
   place-items: center;
@@ -314,6 +333,13 @@ body {
 }
 .qb-icon-btn:focus-visible {
   outline: 2px solid var(--qb-and);
+}
+/* Labelled buttons need the same keyboard focus ring: the "+ Add" buttons in the
+   data dictionary and "+ Condition" / "+ Group" in the builder. */
+.ui.button.qb-add-btn:focus-visible,
+.qb-card .ui.basic.button:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 1px;
 }
 
 /* ---- Databases (src/ui/databasePicker.ts) ---- */
@@ -595,6 +621,28 @@ body {
 }
 .is-collapsed > .qb-group-head {
   flex-wrap: nowrap;
+}
+.qb-collapse-btn {
+  border: 1px solid var(--qb-border-strong);
+  background: var(--qb-surface);
+  color: var(--qb-muted);
+}
+.qb-collapse-btn:hover {
+  background: var(--qb-selected-bg);
+  color: var(--qb-selected-text);
+}
+/* A folded group opens when you click anywhere on its line. */
+.is-collapsed > .qb-group-head {
+  cursor: pointer;
+  border-radius: var(--qb-radius);
+  padding: 0.15rem 0.35rem;
+}
+.is-collapsed > .qb-group-head:hover {
+  background: var(--qb-selected-bg);
+}
+.is-collapsed > .qb-group-head:hover .qb-collapse-btn {
+  background: var(--qb-selected-bg);
+  color: var(--qb-selected-text);
 }
 
 /* One condition = one grid row. Container query: a row squeezed below ~640px
@@ -930,21 +978,13 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.1rem;
+  padding: 0.45rem 0.3rem;
   font-weight: 600;
   cursor: pointer;
   list-style: none;
 }
 .qb-doc-group > summary::-webkit-details-marker {
   display: none;
-}
-.qb-doc-group > summary::before {
-  content: "▸";
-  width: 0.8rem;
-  color: var(--qb-subtle);
-}
-.qb-doc-group[open] > summary::before {
-  content: "▾";
 }
 .qb-doc-group-name {
   flex: 1 1 auto;
@@ -1010,13 +1050,17 @@ body {
   margin: 0.4rem 0;
 }
 .qb-doc-facet > summary,
-.qb-doc-field > summary {
+.qb-doc-field > summary,
+.qb-doc-field-row {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.5rem;
-  cursor: pointer;
   list-style: none;
+}
+.qb-doc-facet > summary,
+.qb-doc-field > summary {
+  cursor: pointer;
 }
 .qb-doc-facet > summary::-webkit-details-marker,
 .qb-doc-field > summary::-webkit-details-marker {
@@ -1042,12 +1086,15 @@ body {
   border-radius: 4px;
   background: var(--qb-surface-2);
 }
-.qb-doc-field > summary {
+/* A field with nothing to open is a plain row (.qb-doc-field-row): the same
+   layout as a summary, but not clickable (no pointer cursor, no hover tint). */
+.qb-doc-field > summary,
+.qb-doc-field-row {
   flex-wrap: wrap;
 }
-.qb-doc-field.is-match > summary {
-  background: var(--qb-selected-bg);
-  border-radius: 4px;
+.qb-chevron-spacer {
+  flex: 0 0 auto;
+  width: 1em;
 }
 .qb-doc-field-name {
   font-size: 0.85rem;
@@ -1060,7 +1107,9 @@ body {
 }
 .qb-doc-field-blurb {
   flex: 1 0 100%;
-  padding-left: 1.4rem;
+  /* Lines up under the field name: the row's padding (0.5rem) + this = the name's
+     left edge (chevron + grip + their gaps; measured in the browser). */
+  padding-left: 3rem;
   font-size: 0.8rem;
   color: var(--qb-muted);
   display: -webkit-box;
@@ -1072,7 +1121,8 @@ body {
   display: none; /* the full text is in the body below */
 }
 .qb-doc-field-body {
-  padding: 0 0.6rem 0.6rem 1.9rem;
+  /* Starts at the field name's left edge (3.5rem from the row's edge, as above). */
+  padding: 0 0.6rem 0.6rem 3.5rem;
 }
 .qb-doc-values {
   display: flex;
@@ -1107,14 +1157,85 @@ body {
 .qb-grip:active {
   cursor: grabbing;
 }
-.qb-add-btn {
-  margin-left: auto;
-}
 .qb-doc-value .qb-add-btn {
   margin-left: 0;
 }
-.qb-doc-group > summary .qb-add-btn {
-  margin-left: 0;
+
+/* ---- "This row opens when you click it" ---- */
+/* The arrow in front of tag sections, facet cards and field rows. It turns a
+   quarter-turn while the row is open. */
+i.icon.qb-chevron {
+  flex: 0 0 auto;
+  margin: 0; /* i.icon.qb-chevron outranks Fomantic's own i.icon margin and width */
+  width: 1em;
+  color: var(--qb-muted);
+  transition: transform 0.15s ease;
+}
+details[open] > summary > .qb-chevron {
+  transform: rotate(90deg);
+}
+/* The rows themselves answer the pointer, so they read as clickable. */
+.qb-doc-group > summary,
+.qb-doc-facet > summary,
+.qb-doc-field > summary {
+  border-radius: var(--qb-radius);
+}
+.qb-doc-group > summary:hover,
+.qb-doc-facet > summary:hover,
+.qb-doc-field > summary:hover {
+  background: var(--qb-hover);
+}
+/* A search match keeps its green under the pointer, too. The plain row (a field
+   with nothing to open) has no hover tint, so it only needs the match colour. */
+.qb-doc-field.is-match > summary,
+.qb-doc-field.is-match > summary:hover,
+.qb-doc-field.is-match > .qb-doc-field-row {
+  background: var(--qb-selected-bg);
+  border-radius: 4px;
+}
+.qb-doc-group > summary:hover > .qb-chevron,
+.qb-doc-facet > summary:hover > .qb-chevron,
+.qb-doc-field > summary:hover > .qb-chevron {
+  color: var(--qb-selected-text);
+}
+.qb-doc-group > summary:focus-visible,
+.qb-doc-facet > summary:focus-visible,
+.qb-doc-field > summary:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  i.icon.qb-chevron {
+    transition: none;
+  }
+}
+/* The labelled "+ Add" button: a mini button, like "+ Condition" in the builder. */
+.qb-add-btn.ui.button {
+  flex: 0 0 auto;
+  /* Fomantic's own button margin would otherwise win; the auto left margin keeps
+     the button at the right edge of its row. */
+  margin: 0 0 0 auto;
+  padding: 0.5em 0.8em;
+  box-sizing: border-box; /* so min-height is the whole button, not added to its padding */
+  min-height: 24px; /* a comfortable size to hit */
+  white-space: nowrap;
+}
+.ui.mini.basic.button.qb-add-btn .icon {
+  margin-right: 0.3em;
+}
+/* In a very narrow sidebar (the column under 21rem; .qb-docs is the card inside
+   it, which has about 2rem of padding and border, hence 19rem) the word goes and
+   the "+" stays. */
+.qb-docs {
+  container-type: inline-size;
+}
+@container (max-width: 19rem) {
+  .qb-add-label {
+    display: none;
+  }
+  .ui.mini.basic.button.qb-add-btn .icon {
+    margin-right: 0;
+  }
 }
 @media (max-width: 1100px) {
   /* Narrow screens: the docs float over the page instead of squeezing the builder. */
@@ -1185,8 +1306,34 @@ body {
   background-color: var(--qb-and);
   color: var(--qb-text-on-fill);
 }
-.ui.primary.button:hover {
+/* Plain :focus (what a mouse click leaves behind) stays the resting green;
+   Fomantic would turn it blue. The rules below come later, so they win. */
+.ui.primary.button:focus {
+  background-color: var(--qb-and);
+  color: var(--qb-text-on-fill);
+}
+.ui.primary.button:hover,
+.ui.primary.button:focus-visible {
   background-color: var(--qb-topbar-2);
+  color: var(--qb-text-on-fill);
+}
+/* Keyboard focus gets a ring: the darker green alone is hard to see. */
+.ui.primary.button:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+.qb-topbar .ui.primary.button:focus-visible {
+  outline-color: var(--qb-text-on-fill);
+}
+/* The account menu is inside the top bar but is a light panel: a white ring
+   would vanish there, so it keeps the green one. */
+.qb-account-menu .ui.primary.button:focus-visible {
+  outline-color: var(--qb-and);
+}
+/* Fomantic turns a pressed primary button its own blue; keep it green. */
+.ui.primary.button:active {
+  background-color: var(--qb-topbar);
+  color: var(--qb-text-on-fill);
 }
 a {
   color: var(--qb-and);
