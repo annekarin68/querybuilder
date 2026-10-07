@@ -45,18 +45,41 @@ export function planRain(srcs: string[], random: () => number, count = DROPS): R
   }));
 }
 
+/** `promise`'s result, or `fallback` if it has not settled after `ms`. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/** How long a mascot file gets to load before it counts as unavailable. */
+const LOAD_TIMEOUT_MS = 2000;
+
 /** Resolve to the files among `srcs` that actually load (a replaced or
  *  removed mascot file must not leave broken-image icons falling). */
 function loadable(srcs: string[]): Promise<string[]> {
   return Promise.all(
-    srcs.map(
-      (src) =>
+    srcs.map((src) =>
+      withTimeout(
         new Promise<string | null>((resolve) => {
           const img = new Image();
           img.onload = () => resolve(src);
           img.onerror = () => resolve(null);
           img.src = src;
         }),
+        LOAD_TIMEOUT_MS,
+        null, // neither loaded nor failed in time: unavailable
+      ),
     ),
   ).then((all) => all.filter((s): s is string => s !== null));
 }

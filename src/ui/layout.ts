@@ -76,9 +76,16 @@ export function renderShell(root: HTMLElement): Shell {
   const rail = find<HTMLButtonElement>(".qb-docs-rail");
   const steps = find('[data-menu="views"]');
   const logo = find<HTMLImageElement>(".qb-logo");
+  // Face files that failed to load: never asked for again, so a missing file is
+  // requested once, not on every repaint.
+  const failed = new Set<string>();
   logo.addEventListener("error", () => {
-    // A missing loading.svg falls back to the normal face; never loop.
-    if (logo.getAttribute("src") !== MASCOT.neutral) logo.src = MASCOT.neutral;
+    // A missing face falls back to the normal face; never loop.
+    const src = logo.getAttribute("src");
+    if (src && src !== MASCOT.neutral) {
+      failed.add(src);
+      logo.src = MASCOT.neutral;
+    }
   });
 
   return {
@@ -98,7 +105,8 @@ export function renderShell(root: HTMLElement): Shell {
     setMascot(state) {
       logo.dataset.state = state;
       // Panels repaint often; only touch the image when the face changes.
-      if (logo.getAttribute("src") !== MASCOT[state]) logo.src = MASCOT[state];
+      const wanted = failed.has(MASCOT[state]) ? MASCOT.neutral : MASCOT[state];
+      if (logo.getAttribute("src") !== wanted) logo.src = wanted;
     },
 
     setActiveView(v) {

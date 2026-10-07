@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { fieldDropdown, NO_FIELD, noticeHtml, rowDropdown } from "../../src/ui/queryBuilder";
+import {
+  decodeFieldValue,
+  fieldDropdown,
+  NO_FIELD,
+  noticeHtml,
+  rowDropdown,
+} from "../../src/ui/queryBuilder";
 
 describe("condition row dropdowns", () => {
   // There can be many facets and fields: typing filters the list (Fomantic's
@@ -55,6 +61,13 @@ describe("field dropdown", () => {
     expect(fieldDropdown(fields, "a", false, true)).toContain('<option value="f:a" selected>');
   });
 
+  it("carries qb-field-select so the CSS can tell it from the facet and operator dropdowns", () => {
+    expect(fieldDropdown(fields, null, false, true)).toContain("qb-field-select");
+    expect(fieldDropdown(fields, "a", true, true)).toContain("qb-field-select");
+    expect(rowDropdown("facet", [], null, true)).not.toContain("qb-field-select");
+    expect(rowDropdown("operator", [], null, true)).not.toContain("qb-field-select");
+  });
+
   it("is still a labelled search dropdown, disabled until a facet is chosen", () => {
     const html = fieldDropdown(fields, null, false, false);
     expect(html).toContain('class="ui search selection dropdown');
@@ -73,5 +86,23 @@ describe("drop warning", () => {
     expect(html).toContain("Couldn&#39;t add &lt;x&gt;");
     expect(html).toContain('data-action="dismiss-notice"');
     expect(html).toContain('role="alert"');
+  });
+});
+
+describe("decodeFieldValue", () => {
+  it('reads "none" as the facet-only choice', () => {
+    expect(decodeFieldValue("none")).toEqual({ facetOnly: true, fieldId: null });
+  });
+  it("strips the field prefix once", () => {
+    expect(decodeFieldValue("f:x")).toEqual({ facetOnly: false, fieldId: "x" });
+    expect(decodeFieldValue("f:f:x")).toEqual({ facetOnly: false, fieldId: "f:x" });
+  });
+  it('a field whose id is literally "none" is a field, not the no-field choice', () => {
+    expect(decodeFieldValue("f:none")).toEqual({ facetOnly: false, fieldId: "none" });
+  });
+  it("nothing chosen gives no field and no facet-only", () => {
+    for (const empty of ["f:", "", null]) {
+      expect(decodeFieldValue(empty)).toEqual({ facetOnly: false, fieldId: null });
+    }
   });
 });

@@ -47,6 +47,7 @@ export function wireDocsResize(handle: HTMLElement): void {
   show();
 
   handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return; // only the primary button drags
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
     const left = handle.parentElement!.getBoundingClientRect().left;

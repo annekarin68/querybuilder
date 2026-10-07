@@ -111,10 +111,11 @@ function isBlank(v: unknown): boolean {
   return v === null || v === undefined || v === "";
 }
 
-/** Whether the event holds any value at all for the facet (see `rowKey`). */
+/** Whether the event holds any value at all for the facet (see `rowKey`). A
+ *  key whose value is null holds nothing, so it does not count. */
 function rowHasFacet(row: Row, facetId: string): boolean {
   const prefix = `${facetId}.`;
-  return Object.keys(row).some((k) => k.startsWith(prefix));
+  return Object.keys(row).some((k) => k.startsWith(prefix) && row[k] !== null);
 }
 
 function conditionMatches(c: RequestCondition, row: Row): boolean {

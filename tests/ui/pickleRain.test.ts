@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { createClickCounter, planRain } from "../../src/ui/pickleRain";
+import { describe, it, expect, vi } from "vitest";
+import { createClickCounter, planRain, withTimeout } from "../../src/ui/pickleRain";
 
 describe("createClickCounter", () => {
   it("fires on the fifth click within three seconds", () => {
@@ -52,5 +52,21 @@ describe("planRain", () => {
   });
   it("plans nothing when no file is available", () => {
     expect(planRain([], Math.random, 30)).toEqual([]);
+  });
+});
+
+describe("withTimeout", () => {
+  it("gives the result of a promise that settles in time", async () => {
+    await expect(withTimeout(Promise.resolve("loaded"), 50, "late")).resolves.toBe("loaded");
+  });
+  it("gives the fallback when the promise never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = withTimeout(new Promise<string>(() => {}), 2000, "late");
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(result).resolves.toBe("late");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

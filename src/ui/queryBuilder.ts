@@ -122,8 +122,21 @@ export function fieldDropdown(
   );
   const noField = `<option value="${NO_FIELD}"${facetOnly ? " selected" : ""}>— no field (facet only) —</option>`;
   // Fomantic copies the <select>'s classes onto the dropdown it builds, so
-  // `qb-no-field` lets the CSS style the shown text and the menu item.
-  return `<select class="ui search selection dropdown${facetOnly ? " qb-no-field" : ""}" data-part="field" aria-label="Field"${enabled ? "" : " disabled"}><option value="">Field…</option>${noField}${opts}</select>`;
+  // `qb-field-select` limits the "no field" styling to this dropdown (a facet
+  // or operator whose id is "none" is left alone) and `qb-no-field` styles the
+  // shown text when that choice is selected.
+  return `<select class="ui search selection dropdown qb-field-select${facetOnly ? " qb-no-field" : ""}" data-part="field" aria-label="Field"${enabled ? "" : " disabled"}><option value="">Field…</option>${noField}${opts}</select>`;
+}
+
+/** Read the Field dropdown's value (see NO_FIELD / FIELD_PREFIX): the no-field
+ *  choice, a real field's id, or nothing chosen yet. */
+export function decodeFieldValue(value: string | null): {
+  facetOnly: boolean;
+  fieldId: string | null;
+} {
+  if (value === NO_FIELD) return { facetOnly: true, fieldId: null };
+  const fieldId = value?.startsWith(FIELD_PREFIX) ? value.slice(FIELD_PREFIX.length) : "";
+  return { facetOnly: false, fieldId: fieldId || null };
 }
 
 /** Where the cursor goes after a choice in a condition row's dropdown, so a
@@ -294,12 +307,7 @@ export function wireQueryBuilder(
     if (!catalog || !cond || cond.kind !== "condition") return;
     const picked = (part: string) =>
       row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
-    // The field select holds encoded values (see NO_FIELD / FIELD_PREFIX).
-    const fieldValue = picked("field");
-    const facetOnly = fieldValue === NO_FIELD;
-    const fieldId = fieldValue?.startsWith(FIELD_PREFIX)
-      ? fieldValue.slice(FIELD_PREFIX.length)
-      : null;
+    const { facetOnly, fieldId } = decodeFieldValue(picked("field"));
     const nextPart = changedPart && picked(changedPart) ? NEXT_PART[changedPart] : undefined;
     const patch = nextCondition(
       cond,
@@ -363,10 +371,11 @@ export function wireQueryBuilder(
   };
   /** Where a drop at `el` lands: the nearest group or condition. */
   const targetOf = (el: EventTarget | null) =>
-    (el as HTMLElement | null)?.closest<HTMLElement>("[data-node-id]") ?? null;
+    el instanceof Element ? el.closest<HTMLElement>("[data-node-id]") : null;
 
   container.addEventListener("dragstart", (e) => {
-    const grip = (e.target as HTMLElement).closest<HTMLElement>("[data-node-item]");
+    if (!(e.target instanceof Element)) return; // e.g. a Text node
+    const grip = e.target.closest<HTMLElement>("[data-node-item]");
     if (!grip || !e.dataTransfer) return;
     const nodeId = grip.dataset.nodeItem!;
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type: "node", nodeId }));
@@ -378,7 +387,10 @@ export function wireQueryBuilder(
   container.addEventListener("dragover", (e) => {
     if (!isOurs(e)) return; // not ours: no drop target, the browser shows "not allowed"
     const target = targetOf(e.target);
-    if (!target) return;
+    if (!target) {
+      unmark(); // no longer over a node: clear a stale highlight
+      return;
+    }
     e.preventDefault();
     e.dataTransfer!.dropEffect = e.dataTransfer!.effectAllowed === "move" ? "move" : "copy";
     if (target !== marked) {

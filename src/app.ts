@@ -6,10 +6,12 @@ import { dropNotice, nodesForItem, type DragItem } from "./query/drop";
 import {
   addChild,
   countConditions,
+  findNode,
   insertNodes,
   moveNode,
   newCondition,
   sameSemantics,
+  updateNode,
 } from "./query/tree";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
@@ -221,6 +223,15 @@ export function createApp({ store, api, navigate }: AppDeps) {
     if (notice !== store.getState().dropNotice) store.setState({ dropNotice: notice });
   }
 
+  /** `tree` with the group `nodeId` expanded, if it is a collapsed group: so
+   *  the user sees what was just dropped into it. */
+  function openGroup(tree: Group, nodeId: string): Group {
+    const node = findNode(tree, nodeId);
+    return node?.kind === "group" && node.collapsed
+      ? updateNode(tree, nodeId, { collapsed: false })
+      : tree;
+  }
+
   /**
    * A docs item or a query node was dropped on `targetNodeId` (a group: it goes
    * at the end; a condition: just before it). Nothing is dropped silently: what
@@ -236,11 +247,12 @@ export function createApp({ store, api, navigate }: AppDeps) {
       if (item.nodeId === targetNodeId) return;
       const moved = moveNode(query, item.nodeId, targetNodeId);
       if (!moved) {
+        // (A stale or foreign node id lands here too.)
         setNotice(["A group can't be moved into itself."]);
         return;
       }
       setNotice([]);
-      onQueryChange(moved);
+      onQueryChange(openGroup(moved, targetNodeId));
       return;
     }
     if (!facets || !catalog) {
@@ -249,7 +261,8 @@ export function createApp({ store, api, navigate }: AppDeps) {
     }
     const { nodes, problems } = nodesForItem(item, facets, catalog);
     setNotice(problems);
-    if (nodes.length > 0) onQueryChange(insertNodes(query, targetNodeId, nodes));
+    if (nodes.length > 0)
+      onQueryChange(openGroup(insertNodes(query, targetNodeId, nodes), targetNodeId));
   }
 
   /** The keyboard path: "Add to query" puts the item in the root group. */

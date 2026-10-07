@@ -85,6 +85,11 @@ describe("matches", () => {
     expect(matches(facetCond("brakes", "present"), r)).toBe(false);
     expect(matches(facetCond("brakes", "absent"), r)).toBe(true);
   });
+  it("a key holding null does not count as a value for the facet", () => {
+    const r: Row = { id: 1, __db: "a", [rowKey("engine", "rpm")]: null };
+    expect(matches(facetCond("engine", "present"), r)).toBe(false);
+    expect(matches(facetCond("engine", "absent"), r)).toBe(true);
+  });
   it("a facet whose name starts with another facet's name is not confused with it", () => {
     const r: Row = { id: 1, __db: "a", [rowKey("engine_oil", "level")]: 1 };
     expect(matches(facetCond("engine", "present"), r)).toBe(false);

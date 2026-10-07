@@ -37,7 +37,7 @@ function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null)
     return `<span class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</span>`;
   });
   const more = options.length - shown.length;
-  return `<div class="qb-doc-values" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted">and ${more} more</span>` : ""}</div>`;
+  return `<div class="qb-doc-values" role="group" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted">and ${more} more</span>` : ""}</div>`;
 }
 
 function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {
@@ -200,13 +200,14 @@ export function wireDocsSidebar(
   });
   /** The drag/add data of the nearest item at or above `el`, if it parses. */
   const itemOf = (el: EventTarget | null): { node: HTMLElement; item: DragItem } | null => {
-    const node = (el as HTMLElement | null)?.closest<HTMLElement>("[data-item]");
+    const node = el instanceof Element ? el.closest<HTMLElement>("[data-item]") : null;
     const item = node ? parseDragItem(node.dataset.item!) : null;
     return node && item ? { node, item } : null;
   };
 
   container.addEventListener("dragstart", (e) => {
-    const grabbed = (e.target as HTMLElement).closest?.(".qb-grip") ? itemOf(e.target) : null;
+    const grabbed =
+      e.target instanceof Element && e.target.closest(".qb-grip") ? itemOf(e.target) : null;
     if (!grabbed || !e.dataTransfer) {
       e.preventDefault();
       return;
@@ -217,16 +218,17 @@ export function wireDocsSidebar(
   });
 
   container.addEventListener("click", (e) => {
+    if (!(e.target instanceof Element)) return;
     // A grip inside a <summary> would otherwise open/close its card.
-    if ((e.target as HTMLElement).closest(".qb-grip")) e.preventDefault();
-    const add = (e.target as HTMLElement).closest("[data-action='add-item']");
+    if (e.target.closest(".qb-grip")) e.preventDefault();
+    const add = e.target.closest("[data-action='add-item']");
     if (add) {
       e.preventDefault(); // inside a <summary>: don't also open/close the card
       const found = itemOf(add);
       if (found) onAdd(found.item);
       return;
     }
-    if (!(e.target as HTMLElement).closest("[data-action='clear-filter']")) return;
+    if (!e.target.closest("[data-action='clear-filter']")) return;
     const input = container.querySelector<HTMLInputElement>("#qb-docs-filter");
     if (!input) return;
     input.value = "";

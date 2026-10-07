@@ -530,8 +530,10 @@ describe("dropping docs items", () => {
     const outer = newGroup();
     const g = addChild(outer, outer.id, inner);
     const { store, app } = setup({ ...ready(addChild(root, root.id, g)) });
+    const before = store.getState().query;
     app.onDropItem({ type: "node", nodeId: g.id }, inner.id);
     expect(store.getState().dropNotice).toBe("A group can't be moved into itself.");
+    expect(store.getState().query).toBe(before);
   });
 
   it("dropping a node on itself does nothing quietly", () => {
@@ -541,6 +543,52 @@ describe("dropping docs items", () => {
     app.onDropItem({ type: "node", nodeId: c.id }, c.id);
     expect(store.getState().query).toBe(q);
     expect(store.getState().dropNotice).toBeNull();
+  });
+
+  describe("a collapsed target group", () => {
+    /** A root holding a collapsed, empty group; returns the group's id too. */
+    function withCollapsedGroup() {
+      const root = emptyQuery();
+      const g = newGroup();
+      const query = updateNode(addChild(root, root.id, g), g.id, { collapsed: true });
+      return { query, groupId: g.id };
+    }
+    const groupOf = (q: Group, id: string) => q.children.find((n) => n.id === id);
+
+    it("opens to show a facet dropped into it", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const { store, app } = setup({ ...ready(query) });
+      app.onDropItem({ type: "facet", facetId: "thing" }, groupId);
+      const g = groupOf(store.getState().query, groupId);
+      expect(g).toMatchObject({ collapsed: false });
+      // (A new group starts with one empty condition; the drop adds one more.)
+      expect(g?.kind === "group" && g.children).toHaveLength(2);
+    });
+
+    it("stays collapsed when the drop fails", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const { store, app } = setup({ ...ready(query) });
+      app.onDropItem({ type: "facet", facetId: "ghost" }, groupId);
+      expect(groupOf(store.getState().query, groupId)).toMatchObject({ collapsed: true });
+    });
+
+    it("opens to show a node moved into it", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const c = newCondition();
+      const withCond = addChild(query, query.id, c);
+      const { store, app } = setup({ ...ready(withCond) });
+      app.onDropItem({ type: "node", nodeId: c.id }, groupId);
+      const g = groupOf(store.getState().query, groupId);
+      expect(g).toMatchObject({ collapsed: false });
+      expect(g?.kind === "group" && g.children.at(-1)?.id).toBe(c.id);
+    });
+
+    it("stays collapsed when a move is refused", () => {
+      const { query, groupId } = withCollapsedGroup();
+      const { store, app } = setup({ ...ready(query) });
+      app.onDropItem({ type: "node", nodeId: "no-such-node" }, groupId);
+      expect(groupOf(store.getState().query, groupId)).toMatchObject({ collapsed: true });
+    });
   });
 
   it("onAddItem puts the item in the root group", () => {

@@ -638,17 +638,23 @@ body {
   white-space: nowrap;
 }
 /* The "no field" choice must never look like a real field (a field could
-   literally be named "Any field"): muted italics and a dashed outline, both in
-   the shown text and in the menu. */
-.qb-cond-grid .ui.selection.dropdown.qb-no-field {
+   literally be named "Any field"): muted italics, a dashed outline and its own
+   glyph, in the shown text and in the menu. Scoped to the Field dropdown
+   (.qb-field-select): a facet or operator with the id "none" is left alone. */
+.qb-cond-grid .ui.selection.dropdown.qb-field-select.qb-no-field {
   border-style: dashed;
 }
-.qb-cond-grid .ui.selection.dropdown.qb-no-field > .text,
-.qb-cond-grid .ui.dropdown .menu > .item[data-value="none"] {
+.qb-cond-grid .ui.selection.dropdown.qb-field-select.qb-no-field > .text,
+.qb-cond-grid .ui.dropdown.qb-field-select .menu > .item[data-value="none"] {
   font-style: italic;
   color: var(--qb-muted);
 }
-.qb-cond-grid .ui.dropdown .menu > .item[data-value="none"] {
+.qb-cond-grid .ui.selection.dropdown.qb-field-select.qb-no-field > .text::before,
+.qb-cond-grid .ui.dropdown.qb-field-select .menu > .item[data-value="none"]::before {
+  content: "\2205\00a0"; /* the empty-set sign: an inline character, nothing to fetch */
+  font-style: normal;
+}
+.qb-cond-grid .ui.dropdown.qb-field-select .menu > .item[data-value="none"] {
   border-bottom: 1px dashed var(--qb-border-strong);
 }
 .qb-value {
@@ -1113,6 +1119,7 @@ body {
     left: var(--qb-rail-w);
     z-index: 15;
     width: var(--qb-docs-w);
+    max-width: calc(100vw - var(--qb-rail-w));
     box-shadow: var(--qb-shadow);
     background: var(--qb-bg);
   }
@@ -1134,10 +1141,10 @@ body {
 .qb-condition.is-drop-before {
   box-shadow: 0 -2px 0 0 var(--qb-and);
 }
-.qb-group.is-drop-target,
-.qb-group.is-drop-target > .qb-group-head {
+.qb-group.is-drop-target {
   outline: 2px dashed var(--qb-and);
   outline-offset: 1px;
+  background: var(--qb-and-tint-strong);
 }
 .qb-notice {
   position: relative;
