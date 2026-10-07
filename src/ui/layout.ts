@@ -10,7 +10,7 @@ const VIEWS: { id: ActiveView; label: string }[] = [
 ];
 
 /**
- * What the strip along the docs' left edge offers: its arrow points the way the
+ * What the rail along the docs' left edge offers: its arrow points the way the
  * docs will move (« to fold them away, » to bring them back) and its label
  * says it in words, so it is clear what a click does in either state.
  */

@@ -871,7 +871,12 @@ the labelled buttons have a keyboard focus ring like the icon buttons.
 **Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
 user's focus to the page, so it is put back: folding the docs while focus is
 inside them moves it to the rail (`setSidebarCollapsed`), and folding or
-unfolding a group in the builder moves it to that group's collapse button.
+unfolding a group in the builder moves it to that group's collapse button, but
+only after a keyboard press (`e.detail === 0`); after a mouse click the new
+button gets no focus ring. Green buttons (`.ui.primary.button`, e.g. **Hide
+docs**, **Log in**) show a ring on `:focus-visible` (light on the dark top bar),
+and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
+colour and Fomantic's blue never shows.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
 on the tag section, facet card, field row and value chip) starts a drag, and a
@@ -914,11 +919,10 @@ a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
 right` while folded, the same arrows as the data dictionary), "Match [ALL |
 ANY] of the following", **+ Condition**, **+ Group**, ✕ (not on the root). A
 collapsed group folds to its `queryToText` summary and "N conditions", and that
-whole line is the click target for unfolding it (unless the click ends a text
-selection) (`data-action="toggle-collapse"`
+whole line is the click target for unfolding it (`data-action="toggle-collapse"`
 on the header, a pointer cursor, a hover background and the tooltip "Click to
-expand"); the grip inside it does not toggle, because a click there belongs to
-dragging. A condition row is three cascading Fomantic
+expand"), except when the click ends a text selection; the grip inside it does
+not toggle, because a click there belongs to dragging. A condition row is three cascading Fomantic
 dropdowns — **Facet**, **Field** (that facet's fields, `fieldsOfFacet`, by
 `Field.name`), **Operator** (the field's `operatorIds`) — then the value
 control from `valueControl.ts`: nothing; for **Equals** /

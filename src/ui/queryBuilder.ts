@@ -378,9 +378,11 @@ export function wireQueryBuilder(
       case "toggle-collapse": {
         const node = findNode(q, nodeId);
         onChange(updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }));
-        // The repaint replaced the button that had focus; put it back on the
-        // same group's (new) collapse button, as focusPart does for a condition.
-        focusCollapseButton(container, nodeId);
+        // The repaint replaced the button that had focus; after a keyboard
+        // press (a click event with detail 0) put it back on the same group's
+        // (new) collapse button, as focusPart does for a condition. A mouse
+        // click (detail >= 1) needs no focus ring on the new button.
+        if (e.detail === 0) focusCollapseButton(container, nodeId);
         return;
       }
     }

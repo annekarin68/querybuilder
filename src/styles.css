@@ -1056,8 +1056,11 @@ body {
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.5rem;
-  cursor: pointer;
   list-style: none;
+}
+.qb-doc-facet > summary,
+.qb-doc-field > summary {
+  cursor: pointer;
 }
 .qb-doc-facet > summary::-webkit-details-marker,
 .qb-doc-field > summary::-webkit-details-marker {
@@ -1083,13 +1086,11 @@ body {
   border-radius: 4px;
   background: var(--qb-surface-2);
 }
+/* A field with nothing to open is a plain row (.qb-doc-field-row): the same
+   layout as a summary, but not clickable (no pointer cursor, no hover tint). */
 .qb-doc-field > summary,
 .qb-doc-field-row {
   flex-wrap: wrap;
-}
-/* A field with nothing to open is a plain row: same layout, but not clickable. */
-.qb-doc-field-row {
-  cursor: default;
 }
 .qb-chevron-spacer {
   flex: 0 0 auto;
@@ -1215,6 +1216,7 @@ details[open] > summary > .qb-chevron {
      the button at the right edge of its row. */
   margin: 0 0 0 auto;
   padding: 0.5em 0.8em;
+  box-sizing: border-box; /* so min-height is the whole button, not added to its padding */
   min-height: 24px; /* a comfortable size to hit */
   white-space: nowrap;
 }
@@ -1304,10 +1306,24 @@ details[open] > summary > .qb-chevron {
   background-color: var(--qb-and);
   color: var(--qb-text-on-fill);
 }
-.ui.primary.button:hover,
+/* Plain :focus (what a mouse click leaves behind) stays the resting green;
+   Fomantic would turn it blue. The rules below come later, so they win. */
 .ui.primary.button:focus {
+  background-color: var(--qb-and);
+  color: var(--qb-text-on-fill);
+}
+.ui.primary.button:hover,
+.ui.primary.button:focus-visible {
   background-color: var(--qb-topbar-2);
   color: var(--qb-text-on-fill);
+}
+/* Keyboard focus gets a ring: the darker green alone is hard to see. */
+.ui.primary.button:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+.qb-topbar .ui.primary.button:focus-visible {
+  outline-color: var(--qb-text-on-fill);
 }
 /* Fomantic turns a pressed primary button its own blue; keep it green. */
 .ui.primary.button:active {
