@@ -66,7 +66,8 @@ sample-value chip, tag heading. Each carries a custom MIME payload
 `{type: "field", facetId, fieldId}`,
 `{type: "value", facetId, fieldId, value}` or `{type: "tag", tag}`; and a
 `text/plain` fallback. Drag data is untrusted on drop: it is parsed and
-checked against the loaded facets, and ignored if unknown.
+checked against the loaded facets. Nothing is dropped silently: see
+"Drop feedback" below.
 
 **What a drop creates** (pure function in a new `src/query/drop.ts`, unit
 tested):
@@ -84,6 +85,26 @@ shows a drop highlight. Dropping a node onto a group moves it there
 (reordering), with an insertion line between siblings. A group cannot be
 dropped into itself or its own descendants. Moves go through `tree.ts`
 (new `moveNode`, unit tested) so ids and collapse state are preserved.
+
+**Drop feedback.** Whenever a drop (or "Add to query") cannot be honoured
+in full, the user is told why, using the app's existing visible-message
+pattern (docs/ARCHITECTURE.md, "Error and loading model"): a dismissible
+`ui warning message` above the query. `AppState` gets one field,
+`dropNotice: string | null`, set by the drop handler, cleared when
+dismissed or on the next successful drop. `drop.ts` returns the nodes it
+could create plus a list of problems; it never throws on bad drag data.
+
+| Situation | Behaviour |
+|---|---|
+| Unknown facet, field or value (docs out of date, or tampered payload) | Nothing added. Message: "Couldn't add *name*: it is not in the loaded docs. The docs may be out of date; reload the page." |
+| Tag drop where some facets are unknown | The known facets are added; the message lists the ones skipped. |
+| Tag with no facets | Message: "The tag *name* has no facets." |
+| Payload isn't ours or can't be parsed | Message: "That item can't be added to a query." |
+| Group moved into itself or a descendant | Not moved. Message: "A group can't be moved into itself." |
+
+Drags from outside the app carry no `application/x-qb-item` type, so the
+builder does not offer itself as a drop target and the browser shows the
+"not allowed" cursor. That is the feedback for those.
 
 **Keyboard path:** each facet card and field row gets an "Add to query"
 button that performs the same creation into the root group. The existing
@@ -171,17 +192,30 @@ State is shown by swapping the `<img src>` from existing app state
 
 ### Easter egg
 
-Clicking the logo five times within three seconds shows a small Fomantic
-toast, "I'm Pickle Rick!". The wording lives in `src/config.ts`. Nothing
-else changes in the UI.
+Clicking the logo five times within three seconds makes it rain pickles
+for about four seconds: `logo.svg`, `disappointed.svg` and `loading.svg`
+fall from the top of the screen, mixed. They are the same replaceable
+files as above, so new artwork changes the rain too.
+
+- A fixed, full-screen overlay (`pointer-events: none`, `aria-hidden`,
+  above the page, below modals) holds about 30 `<img>` elements with
+  randomised column, size, delay, duration and spin. The fall is a CSS
+  keyframe animation; JS only creates the elements and removes the overlay
+  when the animation ends. No animation loop.
+- A second trigger while it rains is ignored. A file that fails to load
+  (removed or broken) is left out of the mix; if none load, nothing falls.
+- Under `prefers-reduced-motion` nothing falls; a small toast reads "I'm
+  Pickle Rick!" instead (wording in `src/config.ts`).
+- Lives in one small module (`src/ui/pickleRain.ts`) that `layout.ts`
+  wires to the logo. Nothing else in the UI changes.
 
 ## 7. Tests and verification
 
-- Unit: `validate` (facet-level conditions), value drops (string and number), `request` (null `fieldId`),
+- Unit: `validate` (facet-level conditions), value drops (string and number), drop problems (unknown facet/field/value, partly unknown tag, empty tag, unparseable payload, group into itself), `request` (null `fieldId`),
   `summary`, `fieldCatalog` (renamed operators), `drop.ts`, `tree.moveNode`.
 - Mock server and contract tests: `present` / `absent` for facets and fields.
 - Browser check with Playwright (needs a real `npm ci`, not a symlinked
-  `node_modules`): drag a facet, field and tag; reorder; keyboard Add.
+  `node_modules`): drag a facet, field and tag; reorder; keyboard Add; each drop-problem message appears; the rain starts after five fast clicks, ends, and does not block clicks.
 - `npm run typecheck`, `npm test`, `npm run lint`, `npm run build` (includes
   `check:offline`).
 - `docs/ARCHITECTURE.md` and `docs/CHANGELOG.md` are updated in the same
