@@ -81,7 +81,7 @@ the backend's vocabulary):
 │S │ matching events (the Run query button lives here)      │  per database)   │
 │› │                                                        │                  │
 └──┴────────────────────────────────────────────────────────┴──────────────────┘
- ↑ docs strip: shows or hides the data dictionary (« Hide docs / » Show docs; open by default, resizable, 26rem to start)
+ ↑ docs rail: shows or hides the data dictionary (« Hide docs / » Show docs; open by default, resizable, 26rem to start)
 ```
 
 - **Top bar** — app name, the workflow steps, and the account menu (login +
@@ -89,11 +89,13 @@ the backend's vocabulary):
 - **Docs rail / data dictionary** — generated from `GET /api/individuals`.
   Open by default, because dragging from it is the main way to build a query.
   It is 26rem wide to start, the user can drag its right edge to anything from
-  20rem to 40rem (remembered), and the strip down its left edge or the
-  **Hide docs** button folds it away. The strip says what a click does: its
+  20rem to 40rem (remembered), and the rail down its left edge or the
+  **Hide docs** button folds it away. The rail says what a click does: its
   arrow and its vertical label flip between « **Hide docs** and » **Show docs**
   (`docsToggle` in `layout.ts`), and the header's **Hide docs** is a solid green
-  button, so neither has to be guessed. Under 1100 px wide it floats over the page instead of
+  button, so neither has to be guessed. Folded, the rail is a solid green bar
+  (a faint strip would be easy to miss, and it is the only way back to the
+  dictionary). Under 1100 px wide the open docs float over the page instead of
   squeezing the builder. Searchable by facet and field name.
 - **Main column** — database scope, the query builder (nested ALL/ANY groups,
   any depth, collapsible), and **Matching events**: a sample of matching
@@ -827,14 +829,17 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    (x%)", then the fields.
 3. **Field rows** — name, type and a one-line blurb (`comment`, else
    `description`) in plain sight, not hidden in a hover; opened, the full
-   texts and the field's known values.
+   texts and the field's known values. A field with no comment, no description
+   and no known values has nothing to open, so it is a plain row (`is-leaf`, a
+   `<div>`, not a `<details>`): no arrow, but a spacer of the arrow's width
+   (`.qb-chevron-spacer`) so its grip and name line up with the other rows.
 4. **Value chips** — the field's pick-list (`CatalogField.options`, at most 30
    shown, the rest counted).
 
 Blank texts are `""` in the model ("Data model"), and blank parts are left
 out. The panel header has a **Hide docs** button, a one-line hint (`DOCS_HINT`:
-"Click a section, facet or field to expand it. Drag it into the query, or press
-+ Add.") and the search box (`matchDocs`: facet name, field id or name), which hides what
+"Click a section, facet or field with an arrow to expand it. Drag it into the
+query, or press + Add.") and the search box (`matchDocs`: facet name, field id or name), which hides what
 doesn't match and opens the sections that do, directly on the painted DOM (the
 one exception to "always repaint", see "The Fomantic discipline"). A facet
 card opens only when a *field* matched (`DocsMatch.openFacets`), and that
@@ -845,15 +850,28 @@ Clearing the search closes everything again.
 **Rows that open say so.** Tag sections, facet cards and field rows are native
 `<details>`, and each one starts its `<summary>` with a Fomantic `angle right`
 chevron (`.qb-chevron`) that CSS turns a quarter-turn while the row is open
-(`details[open] > summary > .qb-chevron`; no turn under `prefers-reduced-motion`).
+(`details[open] > summary > .qb-chevron`). Under `prefers-reduced-motion` the
+chevron still ends up turned; only the animation is removed. The chevron is
+decoration, so it (and the rail's icon) carries `aria-hidden="true"`: the icon
+font's stray character would otherwise end up in the row's accessible name.
 The whole summary line answers the pointer (a hover background and a
 `:focus-visible` outline), Enter and Space open it from the keyboard, and the
 **+ Add** buttons are labelled on purpose: a bare "+" reads as "expand", which
 is the opposite of what it does. A card or row gets a labelled mini button
-(**Add**, or **Add all** on a tag section) like the builder's **+ Condition**;
-the small value chips keep an icon-only "+". In a sidebar narrower than 21rem
-(a container query on `.qb-docs`) the word drops and the "+" stays. The accessible
-name (`aria-label="Add … to the query"`) is the same either way.
+(**Add**, or **Add all N** on a tag section, where N is the number of facets it
+adds, so the number cannot be mistaken for the search's match count beside it)
+like the builder's **+ Condition**; the small value chips keep an icon-only
+"+". When the sidebar column is narrower than 21rem (a container query on
+`.qb-docs`, the card inside the column, so the rule is `max-width: 19rem`) the
+word drops and the "+" stays. The accessible name (`aria-label="Add … to the
+query"`) is the same either way. In the docs, the count pills are tinted
+instead of outlined, so they are not mistaken for the buttons beside them, and
+the labelled buttons have a keyboard focus ring like the icon buttons.
+
+**Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
+user's focus to the page, so it is put back: folding the docs while focus is
+inside them moves it to the rail (`setSidebarCollapsed`), and folding or
+unfolding a group in the builder moves it to that group's collapse button.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
 on the tag section, facet card, field row and value chip) starts a drag, and a
@@ -873,7 +891,11 @@ remembered in `localStorage` (`qb:docs-width`; if storage is unavailable it
 just isn't remembered). Under 1100 px the open panel floats over the page,
 so `main.ts` starts the page with it collapsed on such a screen (before the
 first paint; `initialState` stays `false`), and Escape closes the floating
-panel while focus is inside it, returning focus to the rail button.
+panel while focus is inside it, returning focus to the rail button. A click
+anywhere outside the docs column, the rail and the **Hide docs** / **Show docs**
+buttons closes it too (also `main.ts`, same 1100 px query): the open docs cover
+the builder, and nothing else would close them. Clicks inside the docs never
+do, or **+ Add** and dragging would break.
 Nothing needed to read the dictionary is behind a hover: names, types and
 blurbs are visible text, and a `title` only labels a button or repeats a number.
 
@@ -892,7 +914,8 @@ a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
 right` while folded, the same arrows as the data dictionary), "Match [ALL |
 ANY] of the following", **+ Condition**, **+ Group**, ✕ (not on the root). A
 collapsed group folds to its `queryToText` summary and "N conditions", and that
-whole line is the click target for unfolding it (`data-action="toggle-collapse"`
+whole line is the click target for unfolding it (unless the click ends a text
+selection) (`data-action="toggle-collapse"`
 on the header, a pointer cursor, a hover background and the tooltip "Click to
 expand"); the grip inside it does not toggle, because a click there belongs to
 dragging. A condition row is three cascading Fomantic

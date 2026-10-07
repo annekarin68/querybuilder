@@ -25,12 +25,18 @@ export function dragData(item: DragItem): string {
 const grip = `<span class="qb-grip" draggable="true" aria-hidden="true"><i class="grip vertical icon"></i></span>`;
 
 /** The arrow in front of every row that opens when clicked. CSS turns it a
- *  quarter-turn while its <details> is open (styles.css, `.qb-chevron`). */
-const chevron = `<i class="angle right icon qb-chevron"></i>`;
+ *  quarter-turn while its <details> is open (styles.css, `.qb-chevron`). It is
+ *  decoration: the icon font draws a stray character that screen readers would
+ *  otherwise read out as part of the row's name. */
+const chevron = `<i class="angle right icon qb-chevron" aria-hidden="true"></i>`;
+
+/** Takes the chevron's place on a row with nothing to open, so its grip and
+ *  name line up with the rows that do have a chevron (CSS gives it the width). */
+const chevronSpacer = `<span class="qb-chevron-spacer" aria-hidden="true"></span>`;
 
 /** What the sidebar tells people about its rows, shown under the title. */
 export const DOCS_HINT =
-  "Click a section, facet or field to expand it. Drag it into the query, or press + Add.";
+  "Click a section, facet or field with an arrow to expand it. Drag it into the query, or press + Add.";
 
 /**
  * The "Add to query" button. With `text` it is a labelled button, like the
@@ -61,6 +67,20 @@ function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null)
 function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {
   const item = dragData({ type: "field", facetId: facet.id, fieldId: f.id });
   const blurb = f.comment || f.description;
+  const values = valuesHtml(facet, f.id, catalog);
+  // A field with nothing to show when opened is a plain row, not a <details>:
+  // an arrow that opens onto nothing would teach people to distrust the arrows.
+  if (!blurb && !values) {
+    return `<div class="qb-doc-field is-leaf" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
+      <div class="qb-doc-field-row">
+        ${chevronSpacer}
+        ${grip}
+        <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
+        <span class="qb-field-type">${escapeHtml(f.typeName)}</span>
+        ${addButton(f.name, "Add")}
+      </div>
+    </div>`;
+  }
   return `<details class="qb-doc-field" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
       <summary>
         ${chevron}
@@ -73,7 +93,7 @@ function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatal
       <div class="qb-doc-field-body">
         ${f.comment ? `<p class="qb-doc-comment">${escapeHtml(f.comment)}</p>` : ""}
         ${f.description ? `<p class="qb-doc-desc" title="Third-party description; may contain errors">Third-party: ${escapeHtml(f.description)}</p>` : ""}
-        ${valuesHtml(facet, f.id, catalog)}
+        ${values}
       </div>
     </details>`;
 }
@@ -118,13 +138,16 @@ export function groupHtml(
   // from its grip or + button finds the tag, not a facet.
   const tagItem = tag === UNTAGGED ? "" : ` data-item="${dragData({ type: "tag", tag })}"`;
   const tagGrip = tag === UNTAGGED ? "" : grip;
-  const tagAdd = tag === UNTAGGED ? "" : addButton(`all “${displayLabel(tag)}” facets`, "Add all");
+  const tagAdd =
+    tag === UNTAGGED
+      ? ""
+      : addButton(`all “${displayLabel(tag)}” facets`, `Add all ${facets.length}`);
   return `<details class="qb-doc-group" data-group="${escapeHtml(tag)}" data-size="${facets.length}">
       <summary${tagItem}>
         ${chevron}
         ${tagGrip}
         ${name}
-        <span class="qb-count" data-group-count>${facets.length}</span>
+        <span class="qb-count" data-group-count title="${countLabel(facets.length, "facet")}">${facets.length}</span>
         ${tagAdd}
       </summary>
       <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total, catalog)).join("")}</div>
@@ -150,7 +173,7 @@ function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
       node.open = match !== null && match.openFacets.has(node.dataset.facetId!);
     }
     const matchingFields = match?.fields.get(node.dataset.facetId!);
-    node.querySelectorAll<HTMLElement>("details.qb-doc-field").forEach((field) => {
+    node.querySelectorAll<HTMLElement>(".qb-doc-field").forEach((field) => {
       field.classList.toggle("is-match", matchingFields?.has(field.dataset.fieldId!) ?? false);
     });
   });

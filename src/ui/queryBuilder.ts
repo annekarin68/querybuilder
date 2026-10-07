@@ -30,7 +30,7 @@ import { countLabel } from "./format";
 import { readValueControl, renderValueControl } from "./valueControl";
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
-export interface BuilderCtx {
+interface BuilderCtx {
   catalog: FieldCatalog;
   facets: Facet[] | null;
   issues: Issue[];
@@ -193,6 +193,15 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
   </div>`;
 }
 
+/** Put the cursor on group `nodeId`'s fold/unfold button. */
+function focusCollapseButton(container: HTMLElement, nodeId: string): void {
+  container
+    .querySelector<HTMLElement>(
+      `[data-node-id="${CSS.escape(nodeId)}"] > .qb-group-head .qb-collapse-btn`,
+    )
+    ?.focus();
+}
+
 /**
  * The group's fold/unfold button: a bordered chevron (down while open, right
  * while folded — the same arrows the data dictionary uses), so it reads as
@@ -348,6 +357,10 @@ export function wireQueryBuilder(
     // The grip is for dragging; a click on it must not also toggle a folded group.
     if ((e.target as HTMLElement).closest(".qb-grip")) return;
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
+    // A drag across a folded group's line to select its text ends in a click on
+    // that line: that is not a request to unfold it. (Only the header itself,
+    // not a button of its own, is a toggle by a click anywhere on its line.)
+    if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
     const q = getState().query;
@@ -364,9 +377,11 @@ export function wireQueryBuilder(
         return onChange(updateNode(q, nodeId, { operator: "OR" }));
       case "toggle-collapse": {
         const node = findNode(q, nodeId);
-        return onChange(
-          updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }),
-        );
+        onChange(updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }));
+        // The repaint replaced the button that had focus; put it back on the
+        // same group's (new) collapse button, as focusPart does for a condition.
+        focusCollapseButton(container, nodeId);
+        return;
       }
     }
   });

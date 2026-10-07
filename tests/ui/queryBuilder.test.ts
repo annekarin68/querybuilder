@@ -136,9 +136,7 @@ describe("the query footer", () => {
 describe("group collapse controls", () => {
   const catalog = buildFieldCatalog([]);
   const ctx = { catalog, facets: null, issues: [] };
-  const root = emptyQuery();
   const group = { ...emptyQuery(), id: "g-inner", children: [newCondition()] };
-  const tree = addChild(root, root.id, group);
 
   it("the collapse button is a bordered chevron with an accessible state", () => {
     const open = collapseButton(false);
@@ -160,8 +158,11 @@ describe("group collapse controls", () => {
   });
 
   it("an open group's header is not itself a toggle", () => {
-    const html = groupHtml(ctx, tree.children[0] as typeof group, false);
+    const html = groupHtml(ctx, group, false);
     const head = html.slice(html.indexOf('<div class="qb-group-head'), html.indexOf("</div>"));
     expect(head).not.toContain('class="qb-group-head" data-action');
+    // the only toggle in an open header is the chevron button itself
+    expect(head.match(/data-action="toggle-collapse"/g)).toHaveLength(1);
+    expect(head).toContain('class="qb-icon-btn qb-collapse-btn" data-action="toggle-collapse"');
   });
 });
