@@ -24,8 +24,26 @@ export function dragData(item: DragItem): string {
 
 const grip = `<span class="qb-grip" draggable="true" aria-hidden="true"><i class="grip vertical icon"></i></span>`;
 
-function addButton(label: string): string {
-  return `<button type="button" class="qb-icon-btn qb-add-btn" data-action="add-item" aria-label="Add ${escapeHtml(label)} to the query" title="Add to query"><i class="plus icon"></i></button>`;
+/** The arrow in front of every row that opens when clicked. CSS turns it a
+ *  quarter-turn while its <details> is open (styles.css, `.qb-chevron`). */
+const chevron = `<i class="angle right icon qb-chevron"></i>`;
+
+/** What the sidebar tells people about its rows, shown under the title. */
+export const DOCS_HINT =
+  "Click a section, facet or field to expand it. Drag it into the query, or press + Add.";
+
+/**
+ * The "Add to query" button. With `text` it is a labelled button, like the
+ * builder's "+ Condition", so a "+" is never mistaken for "expand"; without it
+ * (the small value chips) it is icon-only. Either way `label` names it for
+ * screen readers.
+ */
+function addButton(label: string, text?: string): string {
+  const aria = `aria-label="Add ${escapeHtml(label)} to the query" title="Add to query"`;
+  if (!text) {
+    return `<button type="button" class="qb-icon-btn qb-add-btn" data-action="add-item" ${aria}><i class="plus icon"></i></button>`;
+  }
+  return `<button type="button" class="ui mini basic button qb-add-btn" data-action="add-item" ${aria}><i class="plus icon"></i><span class="qb-add-label">${escapeHtml(text)}</span></button>`;
 }
 
 function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null): string {
@@ -45,10 +63,11 @@ function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatal
   const blurb = f.comment || f.description;
   return `<details class="qb-doc-field" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
       <summary>
+        ${chevron}
         ${grip}
         <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
         <span class="qb-field-type">${escapeHtml(f.typeName)}</span>
-        ${addButton(f.name)}
+        ${addButton(f.name, "Add")}
         ${blurb ? `<span class="qb-doc-field-blurb">${escapeHtml(blurb)}</span>` : ""}
       </summary>
       <div class="qb-doc-field-body">
@@ -67,10 +86,11 @@ export function facetHtml(facet: Facet, total: number, catalog: FieldCatalog | n
   const { group, description, comment } = facet;
   return `<details class="qb-doc-facet" data-facet-id="${escapeHtml(facet.id)}" data-item="${dragData({ type: "facet", facetId: facet.id })}">
       <summary>
+        ${chevron}
         ${grip}
         <span class="qb-doc-name">${escapeHtml(facet.name)}</span>
         <span class="qb-count">${countLabel(facet.fields.length, "field")}</span>
-        ${addButton(facet.name)}
+        ${addButton(facet.name, "Add")}
       </summary>
       <div class="qb-doc-facet-body">
         ${tags}
@@ -84,7 +104,7 @@ export function facetHtml(facet: Facet, total: number, catalog: FieldCatalog | n
 }
 
 /** One collapsible section per tag (see groupByTag); `UNTAGGED` gets its own. */
-function groupHtml(
+export function groupHtml(
   tag: string,
   facets: Facet[],
   total: number,
@@ -97,12 +117,15 @@ function groupHtml(
   // The tag's own <summary> carries the data-item, so closest("[data-item]")
   // from its grip or + button finds the tag, not a facet.
   const tagItem = tag === UNTAGGED ? "" : ` data-item="${dragData({ type: "tag", tag })}"`;
-  const tagTools = tag === UNTAGGED ? "" : grip + addButton(`all “${displayLabel(tag)}” facets`);
+  const tagGrip = tag === UNTAGGED ? "" : grip;
+  const tagAdd = tag === UNTAGGED ? "" : addButton(`all “${displayLabel(tag)}” facets`, "Add all");
   return `<details class="qb-doc-group" data-group="${escapeHtml(tag)}" data-size="${facets.length}">
       <summary${tagItem}>
-        ${tagTools}
+        ${chevron}
+        ${tagGrip}
         ${name}
         <span class="qb-count" data-group-count>${facets.length}</span>
+        ${tagAdd}
       </summary>
       <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total, catalog)).join("")}</div>
     </details>`;
@@ -167,9 +190,9 @@ export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
        <h2 class="qb-card-title">
          Data dictionary
          <span class="qb-spacer"></span>
-         <button type="button" class="ui mini basic button" data-menu="toggle-sidebar" aria-expanded="true" aria-controls="qb-docs"><i class="angle double left icon"></i>Hide docs</button>
+         <button type="button" class="ui mini primary button" data-menu="toggle-sidebar" aria-expanded="true" aria-controls="qb-docs"><i class="angle double left icon"></i>Hide docs</button>
        </h2>
-       <p class="qb-docs-hint">Drag a facet, field, value or tag into the query, or use its + button.</p>
+       <p class="qb-docs-hint">${escapeHtml(DOCS_HINT)}</p>
        <div class="ui fluid small input qb-docs-search">
          <input type="text" id="qb-docs-filter" placeholder="Search facets and fields…" aria-label="Search the data dictionary" autocomplete="off" />
          <button type="button" class="qb-icon-btn qb-docs-clear" data-action="clear-filter" aria-label="Clear search" hidden><i class="times icon"></i></button>

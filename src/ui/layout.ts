@@ -9,6 +9,25 @@ const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "done", label: "Done" },
 ];
 
+/**
+ * What the strip along the docs' left edge offers: its arrow points the way the
+ * docs will move (« to fold them away, » to bring them back) and its label
+ * says it in words, so it is clear what a click does in either state.
+ */
+export function docsToggle(collapsed: boolean): { icon: string; label: string; title: string } {
+  return collapsed
+    ? {
+        icon: "angle double right",
+        label: "Show docs",
+        title: "Show the data dictionary",
+      }
+    : {
+        icon: "angle double left",
+        label: "Hide docs",
+        title: "Hide the data dictionary",
+      };
+}
+
 /** The page frame, as returned by `renderShell`. */
 export interface Shell {
   /** The container each panel paints into (see the render functions in src/ui/). */
@@ -41,6 +60,7 @@ export interface Shell {
  * and the pinned statistics column. Panels paint into the data-panel slots.
  */
 export function renderShell(root: HTMLElement): Shell {
+  const docsOpen = docsToggle(false); // the page starts with the docs open
   root.innerHTML = `
     <header class="qb-topbar">
       <span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" />Query Builder</span>
@@ -55,8 +75,8 @@ export function renderShell(root: HTMLElement): Shell {
       </div>
     </header>
     <div class="qb-body">
-      <button type="button" class="qb-docs-rail" data-menu="toggle-sidebar" aria-controls="qb-docs" aria-expanded="true" title="Hide the data dictionary">
-        <i class="book icon"></i><span>Docs</span>
+      <button type="button" class="qb-docs-rail" data-menu="toggle-sidebar" aria-controls="qb-docs" aria-expanded="true" title="${docsOpen.title}">
+        <i class="${docsOpen.icon} icon"></i><span>${docsOpen.label}</span>
       </button>
       <aside class="qb-col-docs" id="qb-docs">
         <div data-panel="docs"></div>
@@ -132,7 +152,10 @@ export function renderShell(root: HTMLElement): Shell {
     setSidebarCollapsed(collapsed) {
       body.classList.toggle("qb-docs-collapsed", collapsed);
       rail.setAttribute("aria-expanded", String(!collapsed));
-      rail.title = collapsed ? "Show the data dictionary" : "Hide the data dictionary";
+      const toggle = docsToggle(collapsed);
+      rail.title = toggle.title;
+      rail.querySelector("i")!.className = `${toggle.icon} icon`;
+      rail.querySelector("span")!.textContent = toggle.label;
     },
 
     /**

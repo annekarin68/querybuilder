@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dragData, facetHtml } from "../../src/ui/docsSidebar";
+import { DOCS_HINT, dragData, facetHtml, groupHtml } from "../../src/ui/docsSidebar";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { parseDragItem } from "../../src/query/drop";
 import type { Facet } from "../../src/model";
@@ -85,5 +85,55 @@ describe("data dictionary markup", () => {
     expect(dragData({ type: "tag", tag: 'x"y' })).toBe(
       "{&quot;type&quot;:&quot;tag&quot;,&quot;tag&quot;:&quot;x\\&quot;y&quot;}",
     );
+  });
+});
+
+describe("expand and add affordances", () => {
+  const chevron = '<i class="angle right icon qb-chevron"></i>';
+
+  it("every expandable row (facet card, field rows) shows a chevron", () => {
+    // one facet card + two field rows
+    expect(html.split(chevron)).toHaveLength(1 + 3);
+  });
+
+  it("each chevron is the first thing in its summary, before the drag grip", () => {
+    for (const m of html.matchAll(/<summary>\s*([^<]*<i[^>]*><\/i>)/g)) {
+      expect(m[1]).toContain("qb-chevron");
+    }
+  });
+
+  it("add buttons on cards and rows say 'Add'; value chips stay icon-only", () => {
+    // facet + two fields have the visible label, the two value chips don't
+    expect(html.match(/<span class="qb-add-label">Add<\/span>/g)).toHaveLength(3);
+    const chips =
+      html.match(/<span class="qb-doc-value" data-item[\s\S]*?<\/button><\/span>/g) ?? [];
+    expect(chips).toHaveLength(2);
+    for (const chip of chips) expect(chip).not.toContain("qb-add-label");
+  });
+
+  it("the accessible name of an add button is unchanged by the visible label", () => {
+    expect(html).toContain('aria-label="Add Alpha &lt;b&gt; to the query"');
+  });
+
+  it("a tag section has a chevron and an 'Add all' button after its name and count", () => {
+    const out = groupHtml("t", [facet], 100, buildFieldCatalog([facet]));
+    const summary = out.slice(out.indexOf("<summary"), out.indexOf("</summary>"));
+    expect(summary.indexOf("qb-chevron")).toBeLessThan(summary.indexOf("qb-grip"));
+    expect(summary.indexOf("qb-doc-group-name")).toBeLessThan(summary.indexOf("qb-add-btn"));
+    expect(summary).toContain('<span class="qb-add-label">Add all</span>');
+  });
+
+  it("the untagged section has a chevron but nothing to drag or add", () => {
+    const out = groupHtml("", [facet], 100, null);
+    const summary = out.slice(out.indexOf("<summary"), out.indexOf("</summary>"));
+    expect(summary).toContain("qb-chevron");
+    expect(summary).not.toContain("qb-grip");
+    expect(summary).not.toContain("qb-add-btn");
+  });
+
+  it("the hint tells people to click to expand, and what '+ Add' does", () => {
+    expect(DOCS_HINT).toMatch(/click/i);
+    expect(DOCS_HINT).toMatch(/expand/i);
+    expect(DOCS_HINT).toMatch(/\+ Add/);
   });
 });

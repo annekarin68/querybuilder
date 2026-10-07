@@ -148,12 +148,12 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   padding: 0.75rem 0 0;
   border: none;
-  border-right: 1px solid var(--qb-border);
-  background: var(--qb-surface);
-  color: var(--qb-and);
+  border-right: 1px solid var(--qb-border-strong);
+  background: var(--qb-chip);
+  color: var(--qb-selected-text);
   font-weight: 700;
   font-size: 0.75rem;
   letter-spacing: 0.06em;
@@ -165,9 +165,10 @@ body {
 }
 .qb-docs-rail .icon {
   margin: 0;
+  font-size: 1.1rem;
 }
 .qb-docs-rail:hover {
-  background: var(--qb-surface-2);
+  background: var(--qb-selected-bg);
 }
 .qb-docs-rail:focus-visible {
   outline: 2px solid var(--qb-and);
@@ -596,6 +597,23 @@ body {
 .is-collapsed > .qb-group-head {
   flex-wrap: nowrap;
 }
+.qb-collapse-btn {
+  border: 1px solid var(--qb-border-strong);
+  background: var(--qb-surface);
+  color: var(--qb-muted);
+}
+.qb-collapse-btn:hover {
+  background: var(--qb-selected-bg);
+  color: var(--qb-selected-text);
+}
+/* A folded group opens when you click anywhere on its line. */
+.is-collapsed > .qb-group-head {
+  cursor: pointer;
+  border-radius: var(--qb-radius);
+}
+.is-collapsed > .qb-group-head:hover {
+  background: var(--qb-hover);
+}
 
 /* One condition = one grid row. Container query: a row squeezed below ~640px
    (deep nesting on a small screen) moves its value + ✕ onto a second line. */
@@ -930,21 +948,13 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.1rem;
+  padding: 0.45rem 0.3rem;
   font-weight: 600;
   cursor: pointer;
   list-style: none;
 }
 .qb-doc-group > summary::-webkit-details-marker {
   display: none;
-}
-.qb-doc-group > summary::before {
-  content: "▸";
-  width: 0.8rem;
-  color: var(--qb-subtle);
-}
-.qb-doc-group[open] > summary::before {
-  content: "▾";
 }
 .qb-doc-group-name {
   flex: 1 1 auto;
@@ -1115,6 +1125,71 @@ body {
 }
 .qb-doc-group > summary .qb-add-btn {
   margin-left: 0;
+}
+
+/* ---- "This row opens when you click it" ---- */
+/* The arrow in front of tag sections, facet cards and field rows. It turns a
+   quarter-turn while the row is open. */
+.qb-chevron {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  width: 1em;
+  color: var(--qb-muted);
+  transition: transform 0.15s ease;
+}
+details[open] > summary > .qb-chevron {
+  transform: rotate(90deg);
+}
+/* The rows themselves answer the pointer, so they read as clickable. */
+.qb-doc-group > summary,
+.qb-doc-facet > summary,
+.qb-doc-field > summary {
+  border-radius: var(--qb-radius);
+}
+.qb-doc-group > summary:hover,
+.qb-doc-facet > summary:hover,
+.qb-doc-field > summary:hover {
+  background: var(--qb-hover);
+}
+.qb-doc-group > summary:hover > .qb-chevron,
+.qb-doc-facet > summary:hover > .qb-chevron,
+.qb-doc-field > summary:hover > .qb-chevron {
+  color: var(--qb-selected-text);
+}
+.qb-doc-group > summary:focus-visible,
+.qb-doc-facet > summary:focus-visible,
+.qb-doc-field > summary:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qb-chevron {
+    transition: none;
+  }
+}
+/* The labelled "+ Add" button: a mini button, like "+ Condition" in the builder. */
+.ui.mini.basic.button.qb-add-btn {
+  flex: 0 0 auto;
+  /* Fomantic's own button margin would otherwise beat .qb-add-btn's auto
+     left margin, which keeps the button at the right edge of its row. */
+  margin: 0 0 0 auto;
+  padding: 0.5em 0.8em;
+  white-space: nowrap;
+}
+.ui.mini.basic.button.qb-add-btn .icon {
+  margin-right: 0.3em;
+}
+/* In a very narrow sidebar the word goes and the "+" stays. */
+.qb-docs {
+  container-type: inline-size;
+}
+@container (max-width: 21rem) {
+  .qb-add-label {
+    display: none;
+  }
+  .ui.mini.basic.button.qb-add-btn .icon {
+    margin-right: 0;
+  }
 }
 @media (max-width: 1100px) {
   /* Narrow screens: the docs float over the page instead of squeezing the builder. */
