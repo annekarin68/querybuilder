@@ -139,16 +139,29 @@ export function replaceLoneBlankCondition(
   const next = mapTree(tree, (n) => {
     if (n.kind !== "group") return n;
     const [only] = n.children;
+    // `insertNodes` reads a group target as "at the end" and a condition target
+    // as "just before it". Here both mean "replace the blank row", so a drop on
+    // the group or on its blank row finds this same group.
     const targetsThisGroup = n.id === targetId || only?.id === targetId;
+    // (`!only` is implied by the length check; it is here so TypeScript knows.)
     if (!targetsThisGroup || n.children.length !== 1 || !only || !isBlankCondition(only)) return n;
     replaced = true;
-    return { ...n, children: nodes };
+    return { ...n, children: [...nodes] };
   }) as Group;
   return replaced ? next : null;
 }
 
 /**
- * Move `nodeId` to where a drop on `targetId` lands (see `insertNodes`).
+ * Where `nodes` land when dropped on `targetId`: in place of a lone blank row
+ * (`replaceLoneBlankCondition`), otherwise as `insertNodes` puts them. Every
+ * drop goes through here, so new items and moved nodes behave the same.
+ */
+export function placeNodes(tree: Group, targetId: string, nodes: QueryNode[]): Group {
+  return replaceLoneBlankCondition(tree, targetId, nodes) ?? insertNodes(tree, targetId, nodes);
+}
+
+/**
+ * Move `nodeId` to where a drop on `targetId` lands (see `placeNodes`).
  * Returns null when the move is impossible: an unknown id, the root, or a
  * group moved into itself or something inside it.
  */
@@ -156,5 +169,6 @@ export function moveNode(tree: Group, nodeId: string, targetId: string): Group |
   const node = findNode(tree, nodeId);
   if (!node || nodeId === tree.id || !findNode(tree, targetId)) return null;
   if (findNode(node, targetId)) return null; // target is the node itself or inside it
-  return insertNodes(removeNode(tree, nodeId), targetId, [node]);
+  // Judge the target after the node is out: taking it out can leave a lone blank row.
+  return placeNodes(removeNode(tree, nodeId), targetId, [node]);
 }

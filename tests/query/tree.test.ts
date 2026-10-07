@@ -12,6 +12,7 @@ import {
   insertNodes,
   replaceLoneBlankCondition,
   moveNode,
+  placeNodes,
 } from "../../src/query/tree";
 import type { Condition, Group } from "../../src/query/types";
 
@@ -227,6 +228,22 @@ describe("replaceLoneBlankCondition", () => {
   });
 });
 
+describe("placeNodes", () => {
+  it("replaces a lone blank row", () => {
+    const root = emptyQuery();
+    const a = newCondition();
+    const t = placeNodes(addChild(root, root.id, newCondition()), root.id, [a]);
+    expect(t.children.map((n) => n.id)).toEqual([a.id]);
+  });
+  it("otherwise inserts, like insertNodes", () => {
+    const root = emptyQuery();
+    const first = { ...newCondition(), facetId: "x" };
+    const a = newCondition();
+    const t = placeNodes(addChild(root, root.id, first), root.id, [a]);
+    expect(t.children.map((n) => n.id)).toEqual([first.id, a.id]);
+  });
+});
+
 describe("moveNode", () => {
   it("moves a condition into another group", () => {
     const root = emptyQuery();
@@ -238,6 +255,24 @@ describe("moveNode", () => {
     expect(moved.children.map((n) => n.id)).toEqual([g.id]);
     const inner = findNode(moved, g.id);
     expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
+  });
+  it("replaces the blank row of a group it is moved into", () => {
+    const root = emptyQuery();
+    const g = newGroup(); // one blank condition
+    const c = { ...newCondition(), facetId: "x" };
+    const t = addChild(addChild(root, root.id, c), root.id, g);
+    const moved = moveNode(t, c.id, g.id)!;
+    const inner = findNode(moved, g.id);
+    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
+    expect(moved.children.map((n) => n.id)).toEqual([g.id]);
+  });
+  it("replaces a blank row it is dropped on, once it is the group's only child", () => {
+    const root = emptyQuery();
+    const blank = newCondition();
+    const c = { ...newCondition(), facetId: "x" };
+    const t = addChild(addChild(root, root.id, blank), root.id, c);
+    // Taking `c` out leaves just the blank row, which `c` then replaces.
+    expect(moveNode(t, c.id, blank.id)?.children.map((n) => n.id)).toEqual([c.id]);
   });
   it("reorders before a sibling and keeps the node's data", () => {
     const root = emptyQuery();

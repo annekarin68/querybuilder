@@ -8,10 +8,9 @@ import {
   addChild,
   countConditions,
   findNode,
-  insertNodes,
   moveNode,
   newCondition,
-  replaceLoneBlankCondition,
+  placeNodes,
   sameSemantics,
   updateNode,
 } from "./query/tree";
@@ -283,10 +282,9 @@ export function createApp({ store, api, navigate }: AppDeps) {
     const { nodes, problems } = nodesForItem(item, facets, catalog);
     setNotice(problems);
     if (nodes.length === 0) return;
-    // A group holding just a blank row (the starting query, or a new "+ Group")
-    // is waiting to be filled in, so the new nodes take that row's place.
-    const replaced = replaceLoneBlankCondition(query, targetNodeId, nodes);
-    onQueryChange(openGroup(replaced ?? insertNodes(query, targetNodeId, nodes), targetNodeId));
+    // `placeNodes` puts the new nodes in place of a lone blank row (the starting
+    // query, or a new "+ Group"), else at the target like any drop.
+    onQueryChange(openGroup(placeNodes(query, targetNodeId, nodes), targetNodeId));
   }
 
   /** The keyboard path: "Add to query" puts the item in the root group (or, if

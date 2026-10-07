@@ -699,11 +699,24 @@ describe("dropping docs items", () => {
       });
     });
 
+    it("is replaced by an existing node moved into a group, which then holds only that node", () => {
+      const root = emptyQuery();
+      const g = newGroup();
+      const c = { ...newCondition(), facetId: "thing", operatorId: "present" };
+      const { store, app } = setup({ ...ready(addChild(addChild(root, root.id, c), root.id, g)) });
+      app.onDropItem({ type: "node", nodeId: c.id }, g.id);
+      const q = store.getState().query;
+      expect(q.children.map((n) => n.id)).toEqual([g.id]);
+      const inner = q.children[0];
+      expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
+    });
+
     it("stays when the drop fails", () => {
       const { store, app } = setup({ ...ready(startingQuery()) });
       app.onAddItem({ type: "facet", facetId: "ghost" });
       expect(store.getState().query.children).toHaveLength(1);
       expect(store.getState().query.children[0]).toMatchObject({ facetId: null });
+      expect(store.getState().dropNotice).toMatch(/ghost/);
     });
 
     it("stays when the user has already chosen something in it", () => {
