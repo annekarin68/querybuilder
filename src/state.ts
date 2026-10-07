@@ -55,6 +55,9 @@ export interface AppState {
   preview: PreviewState;
 
   sidebarCollapsed: boolean;
+  /** Why the last drop (or "Add to query") couldn't be done in full, shown as
+   *  a dismissible warning above the query; null when there is nothing to say. */
+  dropNotice: string | null;
 }
 
 export const initialState: AppState = {
@@ -69,8 +72,9 @@ export const initialState: AppState = {
   issues: [],
   stats: { status: "idle", results: [] },
   preview: { status: "idle" },
-  // The docs start folded into their rail so the query builder gets the width.
-  sidebarCollapsed: true,
+  // The docs are the main way to build a query, so they start open.
+  sidebarCollapsed: false,
+  dropNotice: null,
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */
