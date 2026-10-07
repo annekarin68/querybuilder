@@ -18,12 +18,12 @@ export function docsToggle(collapsed: boolean): { icon: string; label: string; t
   return collapsed
     ? {
         icon: "angle double right",
-        label: "Show docs",
+        label: "Show dictionary",
         title: "Show the data dictionary",
       }
     : {
         icon: "angle double left",
-        label: "Hide docs",
+        label: "Hide dictionary",
         title: "Hide the data dictionary",
       };
 }

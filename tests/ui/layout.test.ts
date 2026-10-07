@@ -5,7 +5,7 @@ describe("docsToggle", () => {
   it("while the docs are open, it offers to hide them", () => {
     expect(docsToggle(false)).toEqual({
       icon: "angle double left",
-      label: "Hide docs",
+      label: "Hide dictionary",
       title: "Hide the data dictionary",
     });
   });
@@ -13,7 +13,7 @@ describe("docsToggle", () => {
   it("while the docs are hidden, it offers to show them", () => {
     expect(docsToggle(true)).toEqual({
       icon: "angle double right",
-      label: "Show docs",
+      label: "Show dictionary",
       title: "Show the data dictionary",
     });
   });

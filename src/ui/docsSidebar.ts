@@ -213,7 +213,7 @@ export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
        <h2 class="qb-card-title">
          Data dictionary
          <span class="qb-spacer"></span>
-         <button type="button" class="ui mini primary button" data-menu="toggle-sidebar" aria-expanded="true" aria-controls="qb-docs"><i class="angle double left icon"></i>Hide docs</button>
+         <button type="button" class="ui mini primary button" data-menu="toggle-sidebar" aria-expanded="true" aria-controls="qb-docs"><i class="angle double left icon"></i>Hide dictionary</button>
        </h2>
        <p class="qb-docs-hint">${escapeHtml(DOCS_HINT)}</p>
        <div class="ui fluid small input qb-docs-search">

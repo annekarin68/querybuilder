@@ -276,7 +276,7 @@ export function createApp({ store, api, navigate }: AppDeps) {
       return;
     }
     if (!facets || !catalog) {
-      setNotice(["The docs are still loading; try again in a moment."]);
+      setNotice(["The data dictionary is still loading; try again in a moment."]);
       return;
     }
     const { nodes, problems } = nodesForItem(item, facets, catalog);
