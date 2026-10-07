@@ -17,6 +17,7 @@ import { store, type AppState } from "./state";
 import { renderShell } from "./ui/layout";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
+import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
@@ -51,7 +52,8 @@ shell.onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
 });
-wireDocsSidebar(panels.docs, () => store.getState().facets);
+wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
+wireDocsResize(shell.docsResizeHandle);
 wireDataPreview(panels.preview, app.runPreview);
 wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
 wireAccountMenu(panels.account, {
@@ -67,7 +69,7 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
   { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
-  { keys: ["facets", "databases"], run: (s) => renderDocsSidebar(panels.docs, s) },
+  { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
     keys: ["databases", "selectedDatabaseIds"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),

@@ -1,8 +1,10 @@
 import type { AppState } from "../state";
 import type { Database, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
-import { compact, countLabel, displayLabel, exact, fieldTitle, matchRatio } from "./format";
+import { compact, countLabel, displayLabel, exact, matchRatio } from "./format";
 import { groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
+import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
+import { findField, type FieldCatalog } from "../query/fieldCatalog";
 
 /** Total events across every loaded database — the denominator for a
  * facet's percentage. The backend sends no percentage: a Facet only carries
@@ -11,42 +13,98 @@ function totalEvents(databases: Database[] | null): number {
   return databases?.reduce((s, d) => s + d.eventCount, 0) ?? 0;
 }
 
-function facetHtml(facet: Facet, total: number): string {
+/** Most sample values shown per field; the rest are counted, not listed. */
+const MAX_VALUE_CHIPS = 30;
+
+/** The JSON for an element's `data-item` attribute (already HTML-escaped). It
+ *  is what dragging the element carries, and what its "Add to query" button adds. */
+export function dragData(item: DragItem): string {
+  return escapeHtml(JSON.stringify(item));
+}
+
+const grip = `<span class="qb-grip" draggable="true" aria-hidden="true"><i class="grip vertical icon"></i></span>`;
+
+function addButton(label: string): string {
+  return `<button type="button" class="qb-icon-btn qb-add-btn" data-action="add-item" aria-label="Add ${escapeHtml(label)} to the query" title="Add to query"><i class="plus icon"></i></button>`;
+}
+
+function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null): string {
+  const options =
+    findField(catalog ?? { facets: [], fields: [] }, facet.id, fieldId)?.options ?? [];
+  if (options.length === 0) return "";
+  const shown = options.slice(0, MAX_VALUE_CHIPS).map((value) => {
+    const item = dragData({ type: "value", facetId: facet.id, fieldId, value });
+    return `<span class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</span>`;
+  });
+  const more = options.length - shown.length;
+  return `<div class="qb-doc-values" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted">and ${more} more</span>` : ""}</div>`;
+}
+
+function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {
+  const item = dragData({ type: "field", facetId: facet.id, fieldId: f.id });
+  const blurb = f.comment || f.description;
+  return `<details class="qb-doc-field" data-item="${item}">
+      <summary>
+        ${grip}
+        <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
+        <span class="qb-field-type">${escapeHtml(f.typeName)}</span>
+        ${addButton(f.name)}
+        ${blurb ? `<span class="qb-doc-field-blurb">${escapeHtml(blurb)}</span>` : ""}
+      </summary>
+      <div class="qb-doc-field-body">
+        ${f.comment ? `<p class="qb-doc-comment">${escapeHtml(f.comment)}</p>` : ""}
+        ${f.description ? `<p class="qb-doc-desc" title="Third-party description; may contain errors">Third-party: ${escapeHtml(f.description)}</p>` : ""}
+        ${valuesHtml(facet, f.id, catalog)}
+      </div>
+    </details>`;
+}
+
+/** One facet card: a draggable header, then (when opened) its details and fields. */
+export function facetHtml(facet: Facet, total: number, catalog: FieldCatalog | null): string {
   const tags = facet.tags.length
     ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
     : "";
   const { group, description, comment } = facet;
-  const fields = facet.fields
-    .map((f) => {
-      const title = fieldTitle(f);
-      return `<span class="qb-field-chip"${title ? ` title="${escapeHtml(title)}"` : ""}><code>${escapeHtml(f.name)}</code><span class="qb-field-type">${escapeHtml(f.typeName)}</span></span>`;
-    })
-    .join("");
-  return `<div class="qb-doc-facet" data-facet-id="${escapeHtml(facet.id)}">
-      <div class="qb-doc-name">${escapeHtml(facet.name)}</div>
-      ${tags}
-      ${group ? `<p class="qb-doc-source" title="Third-party group">Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
-      ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
-      ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
-      <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">
-        In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})
-      </p>
-      <div class="qb-doc-fields">${fields}</div>
-    </div>`;
+  return `<details class="qb-doc-facet" data-facet-id="${escapeHtml(facet.id)}" data-item="${dragData({ type: "facet", facetId: facet.id })}">
+      <summary>
+        ${grip}
+        <span class="qb-doc-name">${escapeHtml(facet.name)}</span>
+        <span class="qb-count">${countLabel(facet.fields.length, "field")}</span>
+        ${addButton(facet.name)}
+      </summary>
+      <div class="qb-doc-facet-body">
+        ${tags}
+        ${group ? `<p class="qb-doc-source" title="Third-party group">Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
+        ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
+        ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
+        <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>
+        <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog)).join("")}</div>
+      </div>
+    </details>`;
 }
 
 /** One collapsible section per tag (see groupByTag); `UNTAGGED` gets its own. */
-function groupHtml(tag: string, facets: Facet[], total: number): string {
+function groupHtml(
+  tag: string,
+  facets: Facet[],
+  total: number,
+  catalog: FieldCatalog | null,
+): string {
   const name =
     tag === UNTAGGED
       ? `<span class="qb-doc-group-name qb-doc-untagged">Untagged</span>`
       : `<span class="qb-doc-group-name">${escapeHtml(displayLabel(tag))}</span>`;
+  // The tag's own <summary> carries the data-item, so closest("[data-item]")
+  // from its grip or + button finds the tag, not a facet.
+  const tagItem = tag === UNTAGGED ? "" : ` data-item="${dragData({ type: "tag", tag })}"`;
+  const tagTools = tag === UNTAGGED ? "" : grip + addButton(`all “${displayLabel(tag)}” facets`);
   return `<details class="qb-doc-group" data-group="${escapeHtml(tag)}" data-size="${facets.length}">
-      <summary>
+      <summary${tagItem}>
+        ${tagTools}
         ${name}
         <span class="qb-count" data-group-count>${facets.length}</span>
       </summary>
-      <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total)).join("")}</div>
+      <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total, catalog)).join("")}</div>
     </details>`;
 }
 
@@ -99,26 +157,32 @@ export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
        <h2 class="qb-card-title">
          Data dictionary
          <span class="qb-spacer"></span>
-         <button type="button" class="qb-icon-btn" data-menu="toggle-sidebar" aria-label="Close the data dictionary" title="Close"><i class="times icon"></i></button>
+         <button type="button" class="ui mini basic button" data-menu="toggle-sidebar" aria-expanded="true" aria-controls="qb-docs"><i class="angle double left icon"></i>Hide docs</button>
        </h2>
+       <p class="qb-docs-hint">Drag a facet, field, value or tag into the query, or use its + button.</p>
        <div class="ui fluid small input qb-docs-search">
          <input type="text" id="qb-docs-filter" placeholder="Search facets and fields…" aria-label="Search the data dictionary" autocomplete="off" />
          <button type="button" class="qb-icon-btn qb-docs-clear" data-action="clear-filter" aria-label="Clear search" hidden><i class="times icon"></i></button>
        </div>
        <p class="qb-docs-empty" hidden></p>
        <div class="qb-doc-groups">
-         ${[...groups.entries()].map(([group, facets]) => groupHtml(group, facets, total)).join("")}
+         ${[...groups.entries()].map(([group, facets]) => groupHtml(group, facets, total, state.catalog)).join("")}
        </div>
      </div>`,
   );
 }
 
 /**
- * Delegated listeners for the search box: typing filters, Escape or ✕ clears.
+ * Delegated listeners for the whole panel: typing in the search box filters
+ * (Escape or ✕ clears), grips start a drag, and "+" buttons call `onAdd`.
  * Call once at startup. `getFacets` reads the current facets when an event
  * fires, so the listeners never go stale across repaints.
  */
-export function wireDocsSidebar(container: HTMLElement, getFacets: () => Facet[] | null): void {
+export function wireDocsSidebar(
+  container: HTMLElement,
+  getFacets: () => Facet[] | null,
+  onAdd: (item: DragItem) => void,
+): void {
   const isSearch = (t: EventTarget | null): t is HTMLInputElement =>
     t instanceof HTMLInputElement && t.id === "qb-docs-filter";
   const filter = (text: string) => {
@@ -134,7 +198,34 @@ export function wireDocsSidebar(container: HTMLElement, getFacets: () => Facet[]
     e.target.value = "";
     filter("");
   });
+  /** The drag/add data of the nearest item at or above `el`, if it parses. */
+  const itemOf = (el: EventTarget | null): { node: HTMLElement; item: DragItem } | null => {
+    const node = (el as HTMLElement | null)?.closest<HTMLElement>("[data-item]");
+    const item = node ? parseDragItem(node.dataset.item!) : null;
+    return node && item ? { node, item } : null;
+  };
+
+  container.addEventListener("dragstart", (e) => {
+    const grabbed = (e.target as HTMLElement).closest?.(".qb-grip") ? itemOf(e.target) : null;
+    if (!grabbed || !e.dataTransfer) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData(DRAG_MIME, JSON.stringify(grabbed.item));
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setDragImage(grabbed.node, 12, 12);
+  });
+
   container.addEventListener("click", (e) => {
+    // A grip inside a <summary> would otherwise open/close its card.
+    if ((e.target as HTMLElement).closest(".qb-grip")) e.preventDefault();
+    const add = (e.target as HTMLElement).closest("[data-action='add-item']");
+    if (add) {
+      e.preventDefault(); // inside a <summary>: don't also open/close the card
+      const found = itemOf(add);
+      if (found) onAdd(found.item);
+      return;
+    }
     if (!(e.target as HTMLElement).closest("[data-action='clear-filter']")) return;
     const input = container.querySelector<HTMLInputElement>("#qb-docs-filter");
     if (!input) return;

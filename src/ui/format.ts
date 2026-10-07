@@ -1,4 +1,4 @@
-import type { Database, Field } from "../model";
+import type { Database } from "../model";
 
 /**
  * Display formatting shared by the panels: numbers and proportions for the
@@ -72,16 +72,6 @@ export function databaseTitle({
   description,
 }: Pick<Database, "owner" | "description">): string {
   return owner && description ? `${owner}: ${description}` : owner || description;
-}
-
-/** A field's hover text: the backend's always-correct `comment` first, then
- *  the third-party `description`, labelled so the two stay distinct. Either
- *  may be blank; "" when both are. */
-export function fieldTitle({
-  comment,
-  description,
-}: Pick<Field, "comment" | "description">): string {
-  return [comment, description && `Third-party: ${description}`].filter(Boolean).join("\n");
 }
 
 /** "1 event" / "9 events" / "12,345 events". */

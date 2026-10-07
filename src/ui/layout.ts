@@ -20,6 +20,8 @@ export interface Shell {
   };
   /** Show the Filter view, or the "Coming soon" placeholder for the other steps. */
   setActiveView(v: ActiveView): void;
+  /** The sidebar's drag handle; wire it with wireDocsResize. */
+  docsResizeHandle: HTMLElement;
   /** Fold the data dictionary into its rail, or open it. */
   setSidebarCollapsed(collapsed: boolean): void;
   /** Listen for clicks on the workflow steps and the docs toggles. Call once. */
@@ -29,7 +31,7 @@ export interface Shell {
 /**
  * The page frame, rendered once: a top bar (app name, workflow steps, account
  * area), then a docs rail + three columns — the data dictionary (collapsible,
- * starts collapsed), the main column (databases, query, matching events)
+ * open by default, resizable), the main column (databases, query, matching events)
  * and the pinned statistics column. Panels paint into the data-panel slots.
  */
 export function renderShell(root: HTMLElement): Shell {
@@ -46,11 +48,14 @@ export function renderShell(root: HTMLElement): Shell {
         <div data-panel="account"></div>
       </div>
     </header>
-    <div class="qb-body qb-docs-collapsed">
-      <button type="button" class="qb-docs-rail" data-menu="toggle-sidebar" aria-controls="qb-docs" aria-expanded="false" title="Show the data dictionary">
+    <div class="qb-body">
+      <button type="button" class="qb-docs-rail" data-menu="toggle-sidebar" aria-controls="qb-docs" aria-expanded="true" title="Hide the data dictionary">
         <i class="book icon"></i><span>Docs</span>
       </button>
-      <aside class="qb-col-docs" id="qb-docs" data-panel="docs"></aside>
+      <aside class="qb-col-docs" id="qb-docs">
+        <div data-panel="docs"></div>
+        <div class="qb-docs-resize" role="separator" aria-orientation="vertical" aria-label="Resize the data dictionary" tabindex="0"></div>
+      </aside>
       <main class="qb-col-main">
         <section data-panel="dbpicker"></section>
         <section data-panel="center"></section>
@@ -74,6 +79,8 @@ export function renderShell(root: HTMLElement): Shell {
       preview: find('[data-panel="preview"]'),
       account: find('[data-panel="account"]'),
     },
+
+    docsResizeHandle: find(".qb-docs-resize"),
 
     setActiveView(v) {
       steps.querySelectorAll<HTMLElement>("[data-view]").forEach((a) => {
@@ -113,8 +120,8 @@ export function renderShell(root: HTMLElement): Shell {
         e.preventDefault();
         handler.view(item.dataset.view as ActiveView);
       });
-      // Delegated: the rail AND the docs panel's own close button toggle the
-      // docs, and the close button is repainted with its panel, so it can't be
+      // Delegated: the rail AND the docs panel's own Hide button toggle the
+      // docs, and the Hide button is repainted with its panel, so it can't be
       // bound once.
       root.addEventListener("click", (e) => {
         if (!(e.target as HTMLElement).closest('[data-menu="toggle-sidebar"]')) return;

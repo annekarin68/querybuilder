@@ -51,7 +51,7 @@
   --qb-gap: 1rem;
   --qb-topbar-h: 48px;
   --qb-rail-w: 28px;
-  --qb-docs-w: 20rem;
+  --qb-docs-w: 26rem;
   --qb-stats-w: 15rem;
 }
 
@@ -177,8 +177,12 @@ body {
 }
 .qb-col-docs {
   flex: 0 0 var(--qb-docs-w);
-  position: sticky;
+  position: sticky; /* the resize handle positions against it */
   top: calc(var(--qb-topbar-h) + var(--qb-gap));
+}
+/* The panel scrolls, not the aside, so the resize handle stays put and
+   isn't clipped at the aside's edge. */
+.qb-col-docs > [data-panel="docs"] {
   max-height: calc(100vh - var(--qb-topbar-h) - 2 * var(--qb-gap));
   overflow-y: auto;
 }
@@ -936,19 +940,6 @@ body {
 .qb-doc-group-name {
   flex: 1 1 auto;
 }
-.qb-doc-facets {
-  padding: 0 0 0.5rem 1.3rem;
-}
-.qb-doc-facet {
-  padding: 0.5rem 0;
-  border-top: 1px dashed var(--qb-border);
-}
-.qb-doc-facet:first-child {
-  border-top: none;
-}
-.qb-doc-name {
-  font-weight: 600;
-}
 .qb-doc-tags {
   display: flex;
   flex-wrap: wrap;
@@ -977,22 +968,149 @@ body {
 .qb-doc-count {
   color: var(--qb-muted);
 }
+.qb-docs-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-muted {
+  font-size: 0.78rem;
+  color: var(--qb-muted);
+}
+.qb-docs-resize {
+  position: absolute;
+  top: 0;
+  right: -0.4rem;
+  bottom: 0;
+  width: 0.5rem;
+  cursor: col-resize;
+  touch-action: none;
+}
+.qb-docs-resize:hover,
+.qb-docs-resize:focus-visible {
+  background: var(--qb-border-strong);
+  outline: none;
+}
+.qb-doc-facets {
+  padding: 0 0 0.5rem 0.4rem;
+}
+.qb-doc-facet {
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  background: var(--qb-surface);
+  margin: 0.4rem 0;
+}
+.qb-doc-facet > summary,
+.qb-doc-field > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  list-style: none;
+}
+.qb-doc-facet > summary::-webkit-details-marker,
+.qb-doc-field > summary::-webkit-details-marker {
+  display: none;
+}
+.qb-doc-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.qb-doc-facet-body {
+  padding: 0 0.6rem 0.6rem;
+}
 .qb-doc-fields {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
 }
-.qb-field-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0 0.35rem;
+.qb-doc-field {
   border: 1px solid var(--qb-border);
   border-radius: 4px;
-  font-size: 0.78rem;
+  background: var(--qb-surface-2);
+}
+.qb-doc-field > summary {
+  flex-wrap: wrap;
+}
+.qb-doc-field-name {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 .qb-field-type {
   font-size: 0.68rem;
   text-transform: uppercase;
   color: var(--qb-subtle);
+}
+.qb-doc-field-blurb {
+  flex: 1 0 100%;
+  padding-left: 1.4rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.qb-doc-field[open] .qb-doc-field-blurb {
+  display: none; /* the full text is in the body below */
+}
+.qb-doc-field-body {
+  padding: 0 0.6rem 0.6rem 1.9rem;
+}
+.qb-doc-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+.qb-doc-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  max-width: 100%;
+  padding: 0 0.2rem;
+  border: 1px solid var(--qb-border);
+  border-radius: 4px;
+  background: var(--qb-surface);
+  font-size: 0.78rem;
+}
+.qb-doc-value-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qb-grip {
+  display: inline-flex;
+  color: var(--qb-subtle);
+  cursor: grab;
+}
+.qb-grip .icon {
+  margin: 0;
+}
+.qb-grip:active {
+  cursor: grabbing;
+}
+.qb-add-btn {
+  margin-left: auto;
+}
+.qb-doc-value .qb-add-btn {
+  margin-left: 0;
+}
+.qb-doc-group > summary .qb-add-btn {
+  margin-left: 0;
+}
+@media (max-width: 1100px) {
+  /* Narrow screens: the docs float over the page instead of squeezing the builder. */
+  .qb-body:not(.qb-docs-collapsed) .qb-col-docs {
+    position: fixed;
+    left: var(--qb-rail-w);
+    z-index: 15;
+    width: var(--qb-docs-w);
+    box-shadow: var(--qb-shadow);
+    background: var(--qb-bg);
+  }
 }

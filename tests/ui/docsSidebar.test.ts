@@ -1,0 +1,84 @@
+import { describe, it, expect } from "vitest";
+import { dragData, facetHtml } from "../../src/ui/docsSidebar";
+import { buildFieldCatalog } from "../../src/query/fieldCatalog";
+import { parseDragItem } from "../../src/query/drop";
+import type { Facet } from "../../src/model";
+
+const facet: Facet = {
+  id: "a&b",
+  name: "Alpha <b>",
+  tags: ["t"],
+  group: "",
+  comment: "backend note",
+  description: "third party note",
+  eventCount: 5,
+  fields: [
+    {
+      id: "size",
+      name: "Size",
+      typeName: "BIGINT",
+      comment: "The size",
+      description: "tp",
+      values: ["3", "7"],
+    },
+    { id: "flag", name: "Flag", typeName: "BOOLEAN", comment: "", description: "", values: [] },
+  ],
+};
+const html = facetHtml(facet, 100, buildFieldCatalog([facet]));
+
+describe("data dictionary markup", () => {
+  it("escapes names", () => {
+    expect(html).toContain("Alpha &lt;b&gt;");
+    expect(html).not.toContain("Alpha <b>");
+  });
+
+  it("every drag source carries parseable drag data, escaped for the attribute", () => {
+    const attrs = [...html.matchAll(/data-item="([^"]*)"/g)].map((m) =>
+      m[1]!
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">"),
+    );
+    const items = attrs.map((a) => parseDragItem(a));
+    expect(items.every((i) => i !== null)).toBe(true);
+    expect(items).toContainEqual({ type: "facet", facetId: "a&b" });
+    expect(items).toContainEqual({ type: "field", facetId: "a&b", fieldId: "size" });
+    expect(items).toContainEqual({ type: "value", facetId: "a&b", fieldId: "size", value: "7" });
+  });
+
+  it("only fields with a pick-list get value chips", () => {
+    expect(html.match(/qb-doc-value"/g)).toHaveLength(2);
+  });
+
+  it("shows the descriptions in the page, not in title tooltips", () => {
+    expect(html).toContain("The size");
+    expect(html).toContain("tp");
+    expect(html).not.toMatch(/title="[^"]*The size/);
+  });
+
+  it("every item has a keyboard 'Add to query' button", () => {
+    expect(html).toContain('data-action="add-item"');
+    expect(html).toContain('aria-label="Add Alpha &lt;b&gt; to the query"');
+  });
+
+  it("drag handles are draggable and hidden from screen readers", () => {
+    expect(html).toContain('class="qb-grip" draggable="true" aria-hidden="true"');
+  });
+
+  it("long value lists are capped, with a count of the rest", () => {
+    const many: Facet = {
+      ...facet,
+      fields: [{ ...facet.fields[0]!, values: Array.from({ length: 70 }, (_, i) => String(i)) }],
+    };
+    const out = facetHtml(many, 1, buildFieldCatalog([many]));
+    expect(out.match(/qb-doc-value"/g)).toHaveLength(30);
+    expect(out).toContain("and 40 more");
+  });
+
+  it("dragData round-trips through the attribute", () => {
+    expect(dragData({ type: "tag", tag: 'x"y' })).toBe(
+      "{&quot;type&quot;:&quot;tag&quot;,&quot;tag&quot;:&quot;x\\&quot;y&quot;}",
+    );
+  });
+});
