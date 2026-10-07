@@ -21,6 +21,7 @@ import {
   updateNode,
 } from "../query/tree";
 import { nextCondition } from "../query/conditionEdit";
+import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
@@ -53,6 +54,22 @@ function issuesHtml(nodeId: string, issues: Issue[]): string {
       ? `<div class="qb-invalid"><i class="exclamation circle icon"></i>${invalid}</div>`
       : "")
   );
+}
+
+/** The dismissible warning for a drop that couldn't be done in full. */
+export function noticeHtml(notice: string | null): string {
+  if (!notice) return "";
+  return `<div class="ui warning message qb-notice" role="alert">
+      <i class="close icon" data-action="dismiss-notice" role="button" tabindex="0" aria-label="Dismiss"></i>
+      <p>${escapeHtml(notice)}</p>
+    </div>`;
+}
+
+/** A node's drag handle: carries `{type: "node", nodeId}`. The id is kept in
+ *  `data-node-item` and the drag payload is built from it in the dragstart
+ *  handler, so no JSON lives in the DOM. */
+function nodeGrip(nodeId: string): string {
+  return `<span class="qb-grip" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move"><i class="grip vertical icon"></i></span>`;
 }
 
 function iconButton(action: string, label: string, icon: string, extra = ""): string {
@@ -147,12 +164,15 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
       : [];
   const operatorChoices = operators.map((o) => ({ id: o.id, name: operatorName(o, facetLevel) }));
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
-    <div class="qb-cond-grid">
-      ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
-      ${fieldDropdown(fields, c.fieldId, facetLevel, Boolean(c.facetId))}
-      ${rowDropdown("operator", operatorChoices, c.operatorId, field !== undefined || facetLevel)}
-      <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
-      ${iconButton("remove-node", "Remove condition", "times")}
+    <div class="qb-cond-row">
+      ${nodeGrip(c.id)}
+      <div class="qb-cond-grid">
+        ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
+        ${fieldDropdown(fields, c.fieldId, facetLevel, Boolean(c.facetId))}
+        ${rowDropdown("operator", operatorChoices, c.operatorId, field !== undefined || facetLevel)}
+        <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>
+        ${iconButton("remove-node", "Remove condition", "times")}
+      </div>
     </div>
     ${issuesHtml(c.id, ctx.issues)}
   </div>`;
@@ -181,6 +201,7 @@ function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
     const text = queryToText(g, ctx.catalog);
     return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
       <div class="qb-group-head">
+        ${isRoot ? "" : nodeGrip(g.id)}
         ${collapseButton(true)}
         <span class="qb-op-badge">${matchWord}</span>
         <span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>
@@ -194,6 +215,7 @@ function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head">
+      ${isRoot ? "" : nodeGrip(g.id)}
       ${collapseButton(false)}
       <span class="qb-group-label">Match</span>
       <span class="qb-logic" role="group" aria-label="Combine conditions with">
@@ -241,7 +263,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues: state.issues };
   paint(
     el,
-    `<div class="qb-card qb-query">
+    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query">
        <h2 class="qb-card-title">Query</h2>
        ${nodeHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state, state.catalog)}</div>
@@ -263,6 +285,7 @@ export function wireQueryBuilder(
   container: HTMLElement,
   getState: () => AppState,
   onChange: (next: Group) => void,
+  drops: { onDrop(item: DragItem | null, targetNodeId: string): void; onDismissNotice(): void },
 ): (state: AppState) => void {
   /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
   function handleRowChange(row: HTMLElement, changedPart?: string): void {
@@ -296,6 +319,9 @@ export function wireQueryBuilder(
   }
 
   container.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
+      return drops.onDismissNotice();
+    }
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
@@ -319,6 +345,66 @@ export function wireQueryBuilder(
       }
     }
   });
+
+  // The warning's ✕ is an icon, not a <button>, so Enter/Space need wiring.
+  container.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (!(e.target as HTMLElement).closest("[data-action='dismiss-notice']")) return;
+    e.preventDefault();
+    drops.onDismissNotice();
+  });
+
+  /** Whether the drag in progress is one of ours (seen via the data type). */
+  const isOurs = (e: DragEvent) => e.dataTransfer?.types.includes(DRAG_MIME) ?? false;
+  let marked: HTMLElement | null = null;
+  const unmark = () => {
+    marked?.classList.remove("is-drop-target", "is-drop-before");
+    marked = null;
+  };
+  /** Where a drop at `el` lands: the nearest group or condition. */
+  const targetOf = (el: EventTarget | null) =>
+    (el as HTMLElement | null)?.closest<HTMLElement>("[data-node-id]") ?? null;
+
+  container.addEventListener("dragstart", (e) => {
+    const grip = (e.target as HTMLElement).closest<HTMLElement>("[data-node-item]");
+    if (!grip || !e.dataTransfer) return;
+    const nodeId = grip.dataset.nodeItem!;
+    e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type: "node", nodeId }));
+    e.dataTransfer.effectAllowed = "move";
+    const card = grip.closest<HTMLElement>("[data-node-id]");
+    if (card) e.dataTransfer.setDragImage(card, 12, 12);
+  });
+
+  container.addEventListener("dragover", (e) => {
+    if (!isOurs(e)) return; // not ours: no drop target, the browser shows "not allowed"
+    const target = targetOf(e.target);
+    if (!target) return;
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = e.dataTransfer!.effectAllowed === "move" ? "move" : "copy";
+    if (target !== marked) {
+      unmark();
+      marked = target;
+      target.classList.add(
+        target.classList.contains("qb-condition") ? "is-drop-before" : "is-drop-target",
+      );
+    }
+  });
+
+  container.addEventListener("dragleave", (e) => {
+    if (!container.contains(e.relatedTarget as Node | null)) unmark();
+  });
+
+  container.addEventListener("drop", (e) => {
+    if (!isOurs(e)) return;
+    e.preventDefault();
+    unmark();
+    const target = targetOf(e.target);
+    if (!target) return;
+    // An unreadable payload arrives as null; the app explains it to the user.
+    drops.onDrop(parseDragItem(e.dataTransfer!.getData(DRAG_MIME)), target.dataset.nodeId!);
+  });
+
+  container.addEventListener("dragend", unmark);
 
   container.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;

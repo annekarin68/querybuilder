@@ -60,7 +60,10 @@ wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onInvalidate: app.onInvalidateCompliance,
 });
-const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange);
+const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange, {
+  onDrop: app.onDropItem,
+  onDismissNotice: app.dismissDropNotice,
+});
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
@@ -74,7 +77,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     keys: ["databases", "selectedDatabaseIds"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
-  { keys: ["catalog", "query", "issues", "facets"], run: renderQueryBuilder },
+  { keys: ["catalog", "query", "issues", "facets", "dropNotice"], run: renderQueryBuilder },
   {
     keys: ["catalog", "query", "issues", "stats", "selectedDatabaseIds", "databases"],
     run: (s) => renderStatsPanel(panels.stats, s),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fieldDropdown, NO_FIELD, rowDropdown } from "../../src/ui/queryBuilder";
+import { fieldDropdown, NO_FIELD, noticeHtml, rowDropdown } from "../../src/ui/queryBuilder";
 
 describe("condition row dropdowns", () => {
   // There can be many facets and fields: typing filters the list (Fomantic's
@@ -60,5 +60,18 @@ describe("field dropdown", () => {
     expect(html).toContain('class="ui search selection dropdown');
     expect(html).toContain('aria-label="Field"');
     expect(html).toContain(" disabled");
+  });
+});
+
+describe("drop warning", () => {
+  it("renders nothing without a notice", () => {
+    expect(noticeHtml(null)).toBe("");
+  });
+  it("renders a dismissible warning with the text escaped", () => {
+    const html = noticeHtml("Couldn't add <x>");
+    expect(html).toContain("ui warning message");
+    expect(html).toContain("Couldn&#39;t add &lt;x&gt;");
+    expect(html).toContain('data-action="dismiss-notice"');
+    expect(html).toContain('role="alert"');
   });
 });

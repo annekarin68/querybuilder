@@ -1114,3 +1114,28 @@ body {
     background: var(--qb-bg);
   }
 }
+
+/* Drag and drop in the query builder: node grips, drop markers, the warning. */
+.qb-cond-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.qb-cond-row > .qb-cond-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.qb-group-head .qb-grip {
+  margin-right: 0.2rem;
+}
+.qb-condition.is-drop-before {
+  box-shadow: 0 -2px 0 0 var(--qb-and);
+}
+.qb-group.is-drop-target,
+.qb-group.is-drop-target > .qb-group-head {
+  outline: 2px dashed var(--qb-and);
+  outline-offset: 1px;
+}
+.qb-notice {
+  position: relative;
+}
