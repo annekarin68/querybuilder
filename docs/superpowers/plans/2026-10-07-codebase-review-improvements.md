@@ -54,6 +54,12 @@ Findings: `ui.md` UI-3, UI-4, UI-5, UI-6, UI-7, UI-8, UI-9, UI-10. Files: `src/u
 
 If Task 1 already changed any of these lines, build on its result. Acceptance: tests for the pure parts, browser check of UI-3 (at ~1000 px wide) and UI-7, docs updated where behaviour is described ("Announcements", "dropNotice", dictionary search).
 
+Carried over from the Task 1 review (verify each in the code, then fix):
+
+- Deferred value commit (`src/ui/queryBuilder.ts`, the `setTimeout` in the `change` listener): a click whose press and release both land inside that tick runs its handler on the OLD query. Concrete regression: `saveQueryBeforeRedirect()` (`src/main.ts`) before login / compliance check can save a query without the just-typed value, and a fast Run is cancelled by the late commit. Fix by keeping the pending row in a variable and flushing it synchronously before `runPreview` and `saveQueryBeforeRedirect` (or a capture-phase click listener on `document`), plus a note in the ARCHITECTURE.md "known gap" paragraph. Keep it small and explain _why_.
+- `docs/ARCHITECTURE.md` (~lines 248-250): the sentence saying the dictionary filter avoids `paint()` because a repaint would lose the input's focus and caret is no longer true (`paint()` now keeps both). Give the real reason (cost per keystroke, open `<details>`, scroll position) or remove it.
+- `docs/ARCHITECTURE.md` (~line 429): "focusable by script only" for `tabindex="-1"` is inaccurate (a mouse click also focuses it); say "not in the Tab order".
+
 ## Task 3: Styles and contrast (T-1, T-5, T-6, T-10, T-11)
 
 Findings: `tooling.md` T-1, T-5, T-6, T-10, T-11. Files: `src/styles.css`, `tests/themeContrast.test.ts`, `docs/ARCHITECTURE.md` if it lists the tokens.
