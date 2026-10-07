@@ -12,8 +12,10 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import * as api from "./api/client";
+import { EASTER_EGG_TOAST, MASCOT } from "./config";
 import { createApp, errorMessage } from "./app";
 import { store, type AppState } from "./state";
+import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
 import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
@@ -24,6 +26,7 @@ import { wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
+import { createClickCounter, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
 // `app` (src/app.ts, where everything the app DOES lives) and repaints panels
@@ -45,6 +48,15 @@ const app = createApp({
 // save the in-progress query first, so it survives the round trip.
 document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest("a[data-flow-link]")) app.saveQueryBeforeRedirect();
+});
+
+// Hidden: five quick clicks on the logo make it rain pickles (instead, a toast
+// for people who prefer reduced motion).
+const logoClicked = createClickCounter();
+shell.logo.addEventListener("click", () => {
+  if (!logoClicked()) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) showToast(EASTER_EGG_TOAST);
+  else startRain(Object.values(MASCOT));
 });
 
 // Wire every panel once. The listeners are delegated to the panel containers

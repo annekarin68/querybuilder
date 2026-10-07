@@ -7,6 +7,7 @@ interface JQuery {
   dropdown(settings?: Record<string, unknown>): JQuery;
   dropdown(behavior: string, ...args: unknown[]): JQuery;
   checkbox(behavior?: string): JQuery;
+  toast(settings: Record<string, unknown>): JQuery;
 }
 
 // Our build-time settings on Vite's `import.meta.env` (the rest comes from

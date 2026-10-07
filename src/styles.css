@@ -1203,3 +1203,26 @@ a {
 .ui.selection.active.dropdown .menu {
   border-color: var(--qb-and);
 }
+
+/* Pickle rain (src/ui/pickleRain.ts): above the page, below Fomantic modals,
+   and never in the way of the mouse. */
+.qb-rain {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 900;
+}
+.qb-rain-drop {
+  position: absolute;
+  top: -80px;
+  left: var(--x);
+  width: var(--size);
+  height: var(--size);
+  animation: qb-fall var(--dur) linear var(--delay) both;
+}
+@keyframes qb-fall {
+  to {
+    transform: translateY(calc(100vh + 160px)) rotate(var(--spin));
+  }
+}
