@@ -991,7 +991,14 @@ dropdown it builds), so a facet or operator whose id is "none" is left alone.
 - **Moving nodes.** Every condition and every group but the root has a grip
   (`qb-grip`, `data-node-item`) that drags a `{type: "node"}` payload; dropping
   it on a group or condition moves it there (`moveNode`). Dropping a node on
-  itself does nothing.
+  itself does nothing. A group's grip is bigger and in the group's own colour
+  (`qb-grip-group`), and its tooltip says "Drag to move this group" (a
+  condition's says "this condition"): both grips sit at the same left edge, so a
+  user could not otherwise tell which one carries the whole group. **Decided
+  2026-10-07:** the grip stays at the left of the group header, not on the
+  AND/OR joiner (that belongs to the parent and is missing for a lone child),
+  and the header is not made draggable as a whole (it holds buttons and the
+  ALL/ANY toggle, so dragging would fight clicking).
 - **Expanding.** A drop into a *collapsed* group expands it (`openGroup` in
   `app.ts`), so the user sees what arrived. Collapsing stays display-only.
 - **Keyboard and the "+" buttons.** Every drag has a non-mouse path: the + button
