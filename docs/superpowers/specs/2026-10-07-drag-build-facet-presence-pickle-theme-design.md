@@ -50,6 +50,9 @@ Non-goals: new backend endpoints, a drag library, renamed UI copy, dark mode.
   invalid. A null `facetId` still reports "Choose a field."
 - `request.ts` (`conditionOf`): stops requiring `fieldId`; still requires
   `facetId` and `operatorId`.
+- A condition is facet-level when `facetId` is set, `fieldId` is null and
+  `operatorId` is set; choosing the no-field option sets `operatorId` to
+  `present`.
 - `summary.ts`: a facet-level condition reads "Facet name is present".
 - Mock server (`mock-server/evaluate.ts`, contract tests): evaluates
   `present` / `absent` for a facet (the event holds a values entry for
@@ -97,7 +100,7 @@ could create plus a list of problems; it never throws on bad drag data.
 | Situation | Behaviour |
 |---|---|
 | Unknown facet, field or value (docs out of date, or tampered payload) | Nothing added. Message: "Couldn't add *name*: it is not in the loaded docs. The docs may be out of date; reload the page." |
-| Tag drop where some facets are unknown | The known facets are added; the message lists the ones skipped. |
+| Tag drop | The facets carrying the tag in the loaded docs are added; a tag with none gets the "has no facets" message. |
 | Tag with no facets | Message: "The tag *name* has no facets." |
 | Payload isn't ours or can't be parsed | Message: "That item can't be added to a query." |
 | Group moved into itself or a descendant | Not moved. Message: "A group can't be moved into itself." |
@@ -118,11 +121,14 @@ The "no field" choice must never be mistakable for a field, even one
 literally named "Any field":
 - it is listed first, in its own group above a divider;
 - it reads `— no field (facet only) —` in muted italics with a dashed
-  outline and its own icon, and is excluded from search matching;
+  outline and its own icon (the distinction is visual only; Fomantic offers
+  no hook to exclude one item from search, so search exclusion is not
+  attempted);
 - once chosen, the field cell keeps the dashed, muted look, and the
   row summary reads "Facet name is present";
-- it is identified by `value=""`, never by a label, so a real field cannot
-  collide with it. A unit test covers a field named "Any field" beside it.
+- it is identified by its option value, never by a label, so a real field
+  cannot collide with it: the no-field option has `value="none"`, real
+  fields are `f:<id>`, and unset is `""`. A unit test covers a field named "Any field" beside it.
 
 Dropping a value onto a field also works for values that are numbers or
 strings only; boolean and date fields have no pick-list and so no value
@@ -146,7 +152,7 @@ patched. It replaces the small field chips and the `title` tooltips.
   carry `aria-expanded`.
 - **Facet card:** header with name, tags and event count; the field count is
   shown; activating it (click, Enter, Space) expands it (Fomantic
-  accordion).
+  native `<details>`, like the tag groups).
 - **Field row (expanded card):** full width, name, type badge, one-line
   description clamped to two lines. Activating it expands the complete
   comment, third-party description and sample-value chips.
@@ -177,7 +183,7 @@ on a deployed build):
 |---|---|
 | `favicon.svg` | browser tab icon (`index.html`) |
 | `logo.svg` | top bar, normal state |
-| `disappointed.svg` | top bar while the query has errors |
+| `disappointed.svg` | top bar while the query has invalid (red) issues |
 | `loading.svg` | top bar while results are loading (falls back to `logo.svg` if the file is removed) |
 
 Code only references these paths (listed once in `src/config.ts`).
@@ -211,15 +217,15 @@ files as above, so new artwork changes the rain too.
 
 ## 7. Tests and verification
 
-- Unit: `validate` (facet-level conditions), value drops (string and number), drop problems (unknown facet/field/value, partly unknown tag, empty tag, unparseable payload, group into itself), `request` (null `fieldId`),
+- Unit: `validate` (facet-level conditions), value drops (string and number), drop problems (unknown facet/field/value, empty tag, unparseable payload, group into itself), `request` (null `fieldId`),
   `summary`, `fieldCatalog` (renamed operators), `drop.ts`, `tree.moveNode`.
 - Mock server and contract tests: `present` / `absent` for facets and fields.
 - Browser check with Playwright (needs a real `npm ci`, not a symlinked
   `node_modules`): drag a facet, field and tag; reorder; keyboard Add; each drop-problem message appears; the rain starts after five fast clicks, ends, and does not block clicks.
 - `npm run typecheck`, `npm test`, `npm run lint`, `npm run build` (includes
   `check:offline`).
-- `docs/ARCHITECTURE.md` and `docs/CHANGELOG.md` are updated in the same
-  change (sections 7, 8, 9, 10).
+- `docs/ARCHITECTURE.md` is updated in the same change (sections 7, 8, 9,
+  10). `docs/CHANGELOG.md` is archived and no longer updated.
 
 ## 8. Open questions
 
