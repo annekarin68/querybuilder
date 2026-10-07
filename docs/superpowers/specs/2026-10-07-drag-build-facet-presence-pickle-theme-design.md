@@ -1,6 +1,6 @@
 # Drag-to-build, facet presence and the pickle theme — design
 
-Status: approved in chat on 2026-10-07, awaiting written-spec review.
+Status: approved in chat on 2026-10-07; revised the same day after review (value drops, sidebar redesign, easter egg, "no field" choice). Awaiting final spec review.
 
 ## 1. Goals
 
@@ -26,6 +26,9 @@ Non-goals: new backend endpoints, a drag library, renamed UI copy, dark mode.
 | D6 | Existing nodes can be dragged to reorder. The Add buttons stay as the keyboard path. |
 | D7 | Theme is visuals only and fully offline: local SVGs, CSS variables, system fonts. `npm run check:offline` must keep passing. |
 | D8 | The frontend sends the query as built; the backend decides what a null `fieldId` means (project rule: no rewriting of conditions). |
+| D9 | Sample field values are draggable too (string and number fields with a pick-list). |
+| D10 | The sidebar is redesigned: wider, resizable, open by default, with an obvious collapse control. |
+| D11 | The pickle mascot is a set of replaceable SVG files with fixed names. Swapping the files changes the artwork with no code change. |
 
 | Operator id | Field-level label | Facet-level label |
 |---|---|---|
@@ -57,10 +60,11 @@ Non-goals: new backend endpoints, a drag library, renamed UI copy, dark mode.
 
 ## 4. Drag and drop
 
-**Sources** (docs sidebar, `docsSidebar.ts`): facet card, field row, tag
-heading. Each carries a custom MIME payload
+**Sources** (docs sidebar, `docsSidebar.ts`): facet card, field row,
+sample-value chip, tag heading. Each carries a custom MIME payload
 (`application/x-qb-item`) holding JSON: `{type: "facet", facetId}`,
-`{type: "field", facetId, fieldId}` or `{type: "tag", tag}`; and a
+`{type: "field", facetId, fieldId}`,
+`{type: "value", facetId, fieldId, value}` or `{type: "tag", tag}`; and a
 `text/plain` fallback. Drag data is untrusted on drop: it is parsed and
 checked against the loaded facets, and ignored if unknown.
 
@@ -71,6 +75,7 @@ tested):
 |---|---|
 | Facet | `{facetId, fieldId: null, operatorId: "present"}` |
 | Field | `{facetId, fieldId, operatorId: null}`; user chooses the operator |
+| Value | `{facetId, fieldId, operatorId: "eq", value}`; a number field's value is sent as a number (normalised like `pickListFor`) |
 | Tag | one facet-level `present` condition per facet with that tag |
 
 **Targets** (`queryBuilder.ts`): the root group and every group accept
@@ -84,39 +89,95 @@ dropped into itself or its own descendants. Moves go through `tree.ts`
 button that performs the same creation into the root group. The existing
 Add condition / Add group buttons stay.
 
-**Condition row:** the Field dropdown gains an empty choice ("Any field —
-facet only"). Choosing it sets `fieldId` null and restricts the operator
-dropdown to `present` / `absent`. Operator labels follow D4.
+**Condition row:** the Field dropdown gains a "no field" choice. Choosing it
+sets `fieldId` null and restricts the operator dropdown to `present` /
+`absent`. Operator labels follow D4.
 
-## 5. Docs sidebar readability
+The "no field" choice must never be mistakable for a field, even one
+literally named "Any field":
+- it is listed first, in its own group above a divider;
+- it reads `— no field (facet only) —` in muted italics with a dashed
+  outline and its own icon, and is excluded from search matching;
+- once chosen, the field cell keeps the dashed, muted look, and the
+  row summary reads "Facet name is present";
+- it is identified by `value=""`, never by a label, so a real field cannot
+  collide with it. A unit test covers a field named "Any field" beside it.
 
-Replaces the small field chips and the `title` tooltips.
+Dropping a value onto a field also works for values that are numbers or
+strings only; boolean and date fields have no pick-list and so no value
+chips.
 
-- Within each tag group, a facet card shows its header and field count;
-  activating it (click, Enter or Space) expands it (Fomantic accordion).
-- Expanded, each field is a full-width row: name, type badge, one-line
-  description (clamped to two lines).
-- Activating a field row expands the complete comment, third-party
-  description and sample values.
-- A grip handle and `grab` cursor mark everything draggable.
+## 5. Docs sidebar redesign
+
+The sidebar becomes the main way to build a query, so it is rebuilt, not
+patched. It replaces the small field chips and the `title` tooltips.
+
+- **Layout:** a sticky search box on top; below it tag groups; each facet
+  is a card. The existing filter (`docsFilter.ts`) and tag grouping stay.
+- **Width:** 26rem by default (was 20rem), resizable by a drag handle on
+  its right edge between 20 and 40rem. The width is remembered in
+  `localStorage` (try/catch around every access; the page renders without
+  it). On narrow screens the sidebar overlays instead of squeezing the
+  builder.
+- **Open by default** (was collapsed). Collapsing must be obvious: a labelled
+  "Hide docs" button with a chevron icon in the sidebar header, and when
+  collapsed, the existing "Docs" rail stays as the way to reopen it. Both
+  carry `aria-expanded`.
+- **Facet card:** header with name, tags and event count; the field count is
+  shown; activating it (click, Enter, Space) expands it (Fomantic
+  accordion).
+- **Field row (expanded card):** full width, name, type badge, one-line
+  description clamped to two lines. Activating it expands the complete
+  comment, third-party description and sample-value chips.
+- **Drag affordance:** a grip handle and `grab` cursor on everything
+  draggable, plus an "Add to query" button on each card, row and value
+  chip for keyboard users.
 - `fieldTitle` and the `title` attributes are removed once their content is
-  visible. Search (`docsFilter.ts`) keeps working across the new markup.
+  visible.
 
-## 6. Pickle theme
+## 6. Pickle theme and mascot
 
 - Palette as CSS variables in `src/styles.css`: brine/dill greens as
   primary, a mustard-seed accent, cream background. Exact values are
   checked for text contrast (WCAG AA) during implementation.
-- Logo: inline SVG pickle in the top bar (`layout.ts`) replacing the text-only
-  brand. Favicon: `public/favicon.svg`, linked from `index.html`
-  (replacing `data:,`).
 - System fonts only; no webfont, CDN or remote image. Fomantic's own colour
   variables are overridden through CSS, not by a theme build.
-- UI text is unchanged.
+- UI text is unchanged, except the easter-egg toast below.
+- All artwork is original (a pickle with a face), not the Rick and Morty
+  character.
+
+### Replaceable mascot files
+
+The artwork lives in `public/pickle/` under fixed names, shipped as plain
+files (copied unprocessed into `dist/pickle/`, so they can even be swapped
+on a deployed build):
+
+| File | Used for |
+|---|---|
+| `favicon.svg` | browser tab icon (`index.html`) |
+| `logo.svg` | top bar, normal state |
+| `disappointed.svg` | top bar while the query has errors |
+| `loading.svg` | top bar while results are loading (falls back to `logo.svg` if the file is removed) |
+
+Code only references these paths (listed once in `src/config.ts`).
+Animations (a wobble while loading; reduced to none under
+`prefers-reduced-motion`) are CSS on the `<img>` element, not part of the
+SVG, so any replacement file animates the same way. Files may be any
+size; they are scaled to the logo's box. SVGs must be self-contained (no
+external references), which `check:offline` enforces on the build.
+
+State is shown by swapping the `<img src>` from existing app state
+(`runBlocker` / pending run), in `layout.ts`; no new state is added.
+
+### Easter egg
+
+Clicking the logo five times within three seconds shows a small Fomantic
+toast, "I'm Pickle Rick!". The wording lives in `src/config.ts`. Nothing
+else changes in the UI.
 
 ## 7. Tests and verification
 
-- Unit: `validate` (facet-level conditions), `request` (null `fieldId`),
+- Unit: `validate` (facet-level conditions), value drops (string and number), `request` (null `fieldId`),
   `summary`, `fieldCatalog` (renamed operators), `drop.ts`, `tree.moveNode`.
 - Mock server and contract tests: `present` / `absent` for facets and fields.
 - Browser check with Playwright (needs a real `npm ci`, not a symlinked
@@ -130,4 +191,4 @@ Replaces the small field chips and the `title` tooltips.
 
 None blocking. Delivered as separate commits in this order: operator
 rename and facet-level conditions (model, validation, wire, mock), then
-sidebar readability, then drag and drop, then the theme.
+sidebar redesign, then drag and drop (including values), then the theme and mascot.
