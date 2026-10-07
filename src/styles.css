@@ -1325,6 +1325,11 @@ details[open] > summary > .qb-chevron {
 .qb-topbar .ui.primary.button:focus-visible {
   outline-color: var(--qb-text-on-fill);
 }
+/* The account menu is inside the top bar but is a light panel: a white ring
+   would vanish there, so it keeps the green one. */
+.qb-account-menu .ui.primary.button:focus-visible {
+  outline-color: var(--qb-and);
+}
 /* Fomantic turns a pressed primary button its own blue; keep it green. */
 .ui.primary.button:active {
   background-color: var(--qb-topbar);

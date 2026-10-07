@@ -874,7 +874,8 @@ inside them moves it to the rail (`setSidebarCollapsed`), and folding or
 unfolding a group in the builder moves it to that group's collapse button, but
 only after a keyboard press (`e.detail === 0`); after a mouse click the new
 button gets no focus ring. Green buttons (`.ui.primary.button`, e.g. **Hide
-docs**, **Log in**) show a ring on `:focus-visible` (light on the dark top bar),
+docs**, **Log in**) show a ring on `:focus-visible` (a light ring on the dark
+top bar itself, a green one inside the light account-menu panel),
 and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
 colour and Fomantic's blue never shows.
 
