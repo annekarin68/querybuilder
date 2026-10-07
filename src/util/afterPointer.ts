@@ -23,6 +23,12 @@ export interface AfterPointer {
   run(commit: () => void): void;
   /** Tell it the pointer went up or was cancelled (`pointerup`, `pointercancel`). */
   pointerReleased(): void;
+  /** Apply everything pending NOW, in arrival order. Safe to call at any time:
+   *  the queue is emptied first, so whichever of this and a scheduled task
+   *  comes first does the work and the other finds nothing to do. Used before
+   *  a button's click is handled (the handler must see the typed value) and
+   *  when the window loses focus (the pointer-up may never arrive). */
+  flush(): void;
 }
 
 export function createAfterPointer(deps: {
@@ -30,21 +36,23 @@ export function createAfterPointer(deps: {
   /** Runs the task on a LATER macrotask (the browser's `setTimeout(task, 0)`). */
   schedule: (task: () => void) => void;
 }): AfterPointer {
-  let held: Array<() => void> = [];
+  // ONE queue, so every way of flushing sees the same pending commits.
+  let pending: Array<() => void> = [];
+  function flush(): void {
+    const commits = pending;
+    pending = [];
+    commits.forEach((commit) => commit());
+  }
   return {
     run(commit) {
-      if (deps.isPointerDown()) held.push(commit);
-      else deps.schedule(commit);
+      pending.push(commit);
+      if (!deps.isPointerDown()) deps.schedule(flush);
     },
     pointerReleased() {
-      if (held.length === 0) return;
-      // Take the list now, so a second release before the task runs cannot
-      // apply the same commits twice.
-      const commits = held;
-      held = [];
       // `pointerup` and the `click` it causes are dispatched in the same task,
       // so a later macrotask runs after the click.
-      deps.schedule(() => commits.forEach((commit) => commit()));
+      if (pending.length > 0) deps.schedule(flush);
     },
+    flush,
   };
 }

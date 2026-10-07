@@ -235,6 +235,8 @@ interface CursorSpot {
   nodeId: string;
   part: string;
   range: string | null;
+  /** Whether the dropdown's menu was open (the user's click opened it). */
+  menuOpen: boolean;
 }
 
 /**
@@ -249,19 +251,26 @@ function cursorSpot(container: HTMLElement): CursorSpot | null {
   // <select> beside it has.
   const dropdownPart = active.closest(".ui.dropdown")?.querySelector("select")?.dataset.part;
   const part = dropdownPart ?? active.dataset.part;
-  return nodeId && part ? { nodeId, part, range: active.dataset.range ?? null } : null;
+  if (!nodeId || !part) return null;
+  const menuOpen = active.closest(".ui.dropdown")?.matches(".active") ?? false;
+  return { nodeId, part, range: active.dataset.range ?? null, menuOpen };
 }
 
-/** Put the cursor back where `cursorSpot` found it, in the repainted row. */
+/**
+ * Put the cursor back where `cursorSpot` found it, in the repainted row. A
+ * dropdown only gets the cursor (Tab does not open menus, see
+ * `focusFieldDropdown`), unless its menu was open: then the user just clicked it
+ * and the repaint closed the menu under their pointer, so it is opened again.
+ */
 function restoreCursorSpot(container: HTMLElement, spot: CursorSpot): void {
-  if (spot.range) {
-    // focusPart would choose the first box, not the "to" one.
-    nodeOf(container, spot.nodeId)
-      ?.querySelector<HTMLElement>(`input[data-range="${spot.range}"]`)
-      ?.focus();
-  } else {
-    focusPart(container, spot.nodeId, spot.part);
-  }
+  const row = nodeOf(container, spot.nodeId);
+  const dropdown = spot.range ? null : dropdownOf(row, spot.part);
+  if (dropdown && spot.menuOpen) return openDropdown(dropdown);
+  const box = spot.range
+    ? row?.querySelector<HTMLElement>(`input[data-range="${spot.range}"]`)
+    : (dropdown?.querySelector<HTMLElement>("input.search") ??
+      (spot.part === "value" ? row?.querySelector<HTMLElement>(".qb-value input") : null));
+  box?.focus();
 }
 
 function conditionHtml(ctx: BuilderCtx, c: Condition, position: Position): string {
@@ -520,8 +529,9 @@ export function wireQueryBuilder(
   }
 
   // A typed value is committed later than the `change` that announced it; see
-  // the "Wiring" paragraph in docs/ARCHITECTURE.md for why. Document-wide, so
-  // a press on any button in the page counts, not only one in this panel.
+  // the "Wiring" paragraphs in docs/ARCHITECTURE.md for why. These listeners
+  // are on `document` and never removed, which is fine because
+  // wireQueryBuilder is called once at startup.
   let pointerIsDown = false;
   const afterPointer = createAfterPointer({
     isPointerDown: () => pointerIsDown,
@@ -533,7 +543,7 @@ export function wireQueryBuilder(
   };
   const listenOptions = { capture: true, passive: true };
   // Only the primary button: a right-click opens a menu and may never send the
-  // matching pointerup, which would hold every later commit for ever.
+  // matching pointerup.
   document.addEventListener(
     "pointerdown",
     (e) => {
@@ -543,6 +553,26 @@ export function wireQueryBuilder(
   );
   document.addEventListener("pointerup", pointerEnded, listenOptions);
   document.addEventListener("pointercancel", pointerEnded, listenOptions);
+  // The pointer-up can also go missing when the window loses focus (a context
+  // menu, Alt+Tab): without this a keyboard user's edits would wait for ever.
+  window.addEventListener("blur", () => {
+    pointerIsDown = false;
+    afterPointer.flush();
+  });
+  // A button must see the typed value when it reads the query, so a click on
+  // one applies the held edit first (the panels' delegated listeners survive
+  // the repaint, and the old button still answers `closest`). Not for
+  // dropdowns and checkboxes: the repaint would destroy Fomantic's handlers
+  // before they got the click, so those wait for the timeout instead.
+  document.addEventListener(
+    "click",
+    (e) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest("button, [data-action]") && !target.closest(".ui.dropdown, .ui.checkbox"))
+        afterPointer.flush();
+    },
+    listenOptions,
+  );
 
   /**
    * Commit a typed value. The patch was read when `change` fired (the row was

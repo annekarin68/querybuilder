@@ -83,4 +83,41 @@ describe("createAfterPointer", () => {
     t.runTasks();
     expect(t.log).toEqual(["held", "later"]);
   });
+
+  it("flush applies the held changes in order, and the timeout then does nothing", () => {
+    // A click on a button flushes before its handler reads the query; the
+    // timeout scheduled by the release must not apply the changes again.
+    const t = setup();
+    t.press();
+    t.afterPointer.run(t.commit("a"));
+    t.afterPointer.run(t.commit("b"));
+    t.release();
+    t.afterPointer.flush();
+    expect(t.log).toEqual(["a", "b"]);
+    t.runTasks();
+    expect(t.log).toEqual(["a", "b"]);
+  });
+
+  it("flush applies a change waiting for the next macrotask, once", () => {
+    const t = setup();
+    t.afterPointer.run(t.commit("a"));
+    t.afterPointer.flush();
+    t.runTasks();
+    expect(t.log).toEqual(["a"]);
+  });
+
+  it("flush with nothing pending does nothing", () => {
+    const t = setup();
+    t.afterPointer.flush();
+    t.runTasks();
+    expect(t.log).toEqual([]);
+  });
+
+  it("flush while the pointer is still down applies the changes (the window lost focus)", () => {
+    const t = setup();
+    t.press();
+    t.afterPointer.run(t.commit("a"));
+    t.afterPointer.flush();
+    expect(t.log).toEqual(["a"]);
+  });
 });
