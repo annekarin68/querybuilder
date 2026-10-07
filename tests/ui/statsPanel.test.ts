@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { Database, DatabaseResult } from "../../src/model";
-import { headlineHtml } from "../../src/ui/statsPanel";
+import { headlineHtml, statsPanelHtml } from "../../src/ui/statsPanel";
+import { initialState, type AppState } from "../../src/state";
+import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
+import { buildFieldCatalog } from "../../src/query/fieldCatalog";
+import { dbError, failed, ok } from "../statsFixtures";
 
 const db = (id: string, eventCount: number): Database => ({
   id,
@@ -14,19 +18,6 @@ const databases = [db("a", 1000), db("b", 1000)];
 
 const headline = (status: "loading" | "ok", results: DatabaseResult[]) =>
   headlineHtml({ status, results }, databases);
-
-const ok = (databaseId: string, matchCount: number): DatabaseResult => ({
-  databaseId,
-  status: "ok",
-  matchCount,
-  notes: [],
-});
-const failed = (databaseId: string, errors: string[] = []): DatabaseResult => ({
-  databaseId,
-  status: "failed",
-  errors,
-  notes: [],
-});
 
 describe("headlineHtml", () => {
   it("sums matches and totals over successful databases only", () => {
@@ -48,7 +39,7 @@ describe("headlineHtml", () => {
   });
 
   it("notes how many databases the total excludes when some failed", () => {
-    const html = headline("ok", [ok("a", 5), failed("b", ["timeout"])]);
+    const html = headline("ok", [ok("a", 5), failed("b", dbError(null, "timeout"))]);
     expect(html).toContain('<span class="qb-stat-big">5</span>');
     expect(html).toContain("of 1,000");
     expect(html).toContain("Excludes 1 database that failed");
@@ -57,5 +48,37 @@ describe("headlineHtml", () => {
   it("labels the headline number", () => {
     const html = headline("ok", [ok("a", 10)]);
     expect(html).toContain("matching events");
+  });
+});
+
+describe("statsPanelHtml", () => {
+  const root = emptyQuery();
+  const condition = newCondition();
+  const ready: AppState = {
+    ...initialState,
+    catalog: buildFieldCatalog([]),
+    databases,
+    selectedDatabaseIds: ["a", "b"],
+    query: addChild(root, root.id, condition),
+  };
+
+  it("keeps showing each database's errors while they block Run", () => {
+    const html = statsPanelHtml({
+      ...ready,
+      stats: {
+        status: "ok",
+        results: [ok("a", 5), failed("b", dbError(condition.id, "Too long."))],
+      },
+      serverIssues: [{ nodeId: condition.id, message: "Too long.", kind: "invalid" }],
+    });
+    expect(html).toContain("Too long.");
+    expect(html).toContain("Excludes 1 database that failed");
+    expect(html).not.toContain("qb-placeholder");
+  });
+
+  it("explains every other blocker instead of showing results", () => {
+    expect(statsPanelHtml({ ...ready, selectedDatabaseIds: [] })).toContain(
+      "Select at least one database to see statistics.",
+    );
   });
 });

@@ -131,7 +131,7 @@ describe("api client", () => {
   it("getStats streams NDJSON lines, calling onResult once per line, even split across chunks", async () => {
     const lines = [
       { label: "alpha", success: true, matchCount: 1 },
-      { label: "beta", success: false, errorMessages: ["bad query"] },
+      { label: "beta", success: false, errorMessages: [{ message: "bad query", kind: "invalid" }] },
     ];
     const ndjson = lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
     const splitAt = ndjson.indexOf("\n") + 3; // cut mid-way into the second line
@@ -141,7 +141,12 @@ describe("api client", () => {
     await getStats(query, databaseIds, (result) => received.push(result));
     expect(received).toEqual([
       { databaseId: "alpha", status: "ok", matchCount: 1, notes: [] },
-      { databaseId: "beta", status: "failed", errors: ["bad query"], notes: [] },
+      {
+        databaseId: "beta",
+        status: "failed",
+        errors: [{ message: "bad query", kind: "invalid", nodeId: null }],
+        notes: [],
+      },
     ]);
   });
 

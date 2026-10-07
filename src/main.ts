@@ -91,9 +91,20 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     keys: ["databases", "selectedDatabaseIds"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
-  { keys: ["catalog", "query", "issues", "facets", "dropNotice"], run: renderQueryBuilder },
   {
-    keys: ["catalog", "query", "issues", "stats", "selectedDatabaseIds", "databases"],
+    keys: ["catalog", "query", "issues", "serverIssues", "facets", "dropNotice"],
+    run: renderQueryBuilder,
+  },
+  {
+    keys: [
+      "catalog",
+      "query",
+      "issues",
+      "serverIssues",
+      "stats",
+      "selectedDatabaseIds",
+      "databases",
+    ],
     run: (s) => renderStatsPanel(panels.stats, s),
   },
   {
@@ -101,6 +112,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "preview",
       "query",
       "issues",
+      "serverIssues",
       "catalog",
       "selectedDatabaseIds",
       "facets",

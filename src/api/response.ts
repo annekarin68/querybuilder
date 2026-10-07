@@ -5,12 +5,14 @@ import type {
   EntrysetResponse,
   IndividualFieldResponse,
   IndividualResponse,
+  StatsErrorMessage,
   StatsResponse,
 } from "./types";
 import type { ResponseObject } from "./contract";
 import type {
   Compliance,
   Database,
+  DatabaseError,
   DatabaseResult,
   EventRecord,
   Facet,
@@ -90,6 +92,19 @@ export function toEvent(e: ResponseObject<EntrysetResponse>): EventRecord {
 }
 
 /**
+ * One item of a stats line's `errorMessages`. These decide whether Run is
+ * allowed (src/state.ts), so the item must be an object; within it, a kind
+ * this app doesn't know is "invalid" (the safe choice, as in toCompliance).
+ */
+export function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
+  return {
+    message: e.text("message") || "The server found a problem in the query.",
+    kind: e.text("kind") === "incomplete" ? "incomplete" : "invalid",
+    nodeId: e.optionalText("nodeId") || null,
+  };
+}
+
+/**
  * One line of the /stats stream. A line that claims success but carries no
  * count is treated as a failure: showing it as "0 matched" would be a guess.
  */
@@ -101,9 +116,9 @@ export function toDatabaseResult(line: ResponseObject<StatsResponse>): DatabaseR
   if (success && matchCount !== undefined) {
     return { databaseId, status: "ok", matchCount, notes };
   }
-  const errors = success
-    ? ["The server sent no count for this database."]
-    : line.optionalStrings("errorMessages");
+  const errors: DatabaseError[] = success
+    ? [{ message: "The server sent no count for this database.", kind: "invalid", nodeId: null }]
+    : line.optionalList<StatsErrorMessage>("errorMessages").map(toDatabaseError);
   return { databaseId, status: "failed", errors, notes };
 }
 

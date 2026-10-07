@@ -15,8 +15,9 @@ import type { Scalar } from "../model";
  * and not three files later as "Cannot read properties of undefined".
  *
  * There are two kinds of read:
- * - **Required**: `id`, `number`, `boolean`, `list`, `object`. The app cannot
- *   work without these. A missing or wrong value throws a `ContractError`.
+ * - **Required**: `id`, `number`, `boolean`, `list`, `optionalList`, `object`.
+ *   The app cannot work without these. A missing or wrong value throws a
+ *   `ContractError`. (`optionalList` allows a missing one.)
  * - **Display-only**: `text`, `strings` and the `optional…` reads. The app
  *   only shows these. A missing or wrong value becomes blank ("" or []) and is
  *   logged once as a console warning, so a small backend change can't take the
@@ -182,6 +183,13 @@ export class ResponseObject<T> {
   /** An object of type `U`. */
   object<U>(key: Key<T>): ResponseObject<U> {
     return new ResponseValue(this.fields[key], this.source, join(this.path, key)).object<U>();
+  }
+
+  /** Like `list`, for a key marked `?` in src/api/types.ts: [] when the key
+   *  is missing or null. A value that is there but isn't a list of objects
+   *  still throws. */
+  optionalList<U>(key: Key<T>): ResponseObject<U>[] {
+    return isAbsent(this.fields[key]) ? [] : this.list<U>(key);
   }
 
   // ---- display-only: a missing or wrong value becomes blank, with a warning

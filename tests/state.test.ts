@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createStore, initialState, runBlocker, type AppState } from "../src/state";
+import { createStore, initialState, runBlocker, type RunInputs } from "../src/state";
 import { addChild, emptyQuery, newCondition } from "../src/query/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
@@ -44,9 +44,10 @@ describe("store", () => {
 describe("runBlocker", () => {
   const catalog = buildFieldCatalog([]);
   const root = emptyQuery();
-  const ready: Pick<AppState, "catalog" | "issues" | "query" | "selectedDatabaseIds"> = {
+  const ready: RunInputs = {
     catalog,
     issues: [],
+    serverIssues: [],
     query: addChild(root, root.id, newCondition()),
     selectedDatabaseIds: ["alpha"],
   };
@@ -67,5 +68,11 @@ describe("runBlocker", () => {
         issues: [{ nodeId: "x", message: "m", kind: "incomplete" }],
       }),
     ).toBe("unfinished");
+  });
+
+  it("is 'rejected', after every other reason, when a database found a problem", () => {
+    const issue = { nodeId: "x", message: "m", kind: "invalid" as const };
+    expect(runBlocker({ ...ready, serverIssues: [issue] })).toBe("rejected");
+    expect(runBlocker({ ...ready, serverIssues: [issue], issues: [issue] })).toBe("unfinished");
   });
 });

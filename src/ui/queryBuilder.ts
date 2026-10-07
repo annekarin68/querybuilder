@@ -22,6 +22,7 @@ import {
 } from "../query/tree";
 import { nextCondition } from "../query/conditionEdit";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
+import { placeIssues } from "../query/issues";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
@@ -38,6 +39,7 @@ interface BuilderCtx {
 /**
  * Unfinished parts are quiet grey hints — the user simply isn't done yet. Only
  * an invalid query is shown in red. Both kinds still block running (validate.ts).
+ * Issues come from validate.ts and from the backend (src/query/issues.ts).
  */
 function issuesHtml(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
@@ -250,13 +252,14 @@ function nodeHtml(ctx: BuilderCtx, node: QueryNode, isRoot: boolean): string {
   return node.kind === "group" ? groupHtml(ctx, node, isRoot) : conditionHtml(ctx, node);
 }
 
-/** The query card's footer: the whole query in plain English once it is
- *  complete, otherwise how many parts still need attention. */
-function footerHtml(state: AppState, catalog: FieldCatalog): string {
-  if (countConditions(state.query) === 0) {
+/** The query card's footer: the whole query in plain English once nothing
+ *  needs attention, otherwise how many parts do. `issues` are placed
+ *  (placeIssues), so the count matches what is on screen. */
+export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog): string {
+  if (countConditions(query) === 0) {
     return `<span class="qb-muted">Add a condition to start building the query.</span>`;
   }
-  const pending = new Set(state.issues.map((i) => i.nodeId)).size;
+  const pending = new Set(issues.map((i) => i.nodeId)).size;
   if (pending > 0) {
     const what =
       pending === 1
@@ -264,7 +267,7 @@ function footerHtml(state: AppState, catalog: FieldCatalog): string {
         : `${pending} parts of the query still need`;
     return `<span class="qb-muted">${what} attention.</span>`;
   }
-  const text = queryToText(state.query, catalog);
+  const text = queryToText(query, catalog);
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
@@ -273,13 +276,15 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
     return;
   }
-  const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues: state.issues };
+  // Local issues (validate.ts) and the backend's, each on a node that is drawn.
+  const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
+  const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
   paint(
     el,
     `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1">
        <h2 class="qb-card-title">Query</h2>
        ${nodeHtml(ctx, state.query, true)}
-       <div class="qb-query-foot">${footerHtml(state, state.catalog)}</div>
+       <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
      </div>`,
   );
 }
