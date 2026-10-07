@@ -268,7 +268,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     if (notice !== store.getState().dropNotice) store.setState({ dropNotice: notice });
     // The warning's box is painted together with its text, and a screen reader
     // only speaks text that CHANGES inside a region it already knows, so the
-    // box's own role="status" is not enough: say it through the page's region.
+    // box itself is never spoken: say it through the page's region.
     // Also when the text is the same as before: it is a new refused drop.
     if (notice) announce(notice);
   }
