@@ -204,8 +204,12 @@ nothing else* — no internet. So:
    ships Lato and its icon font as local files with local `@font-face` rules,
    and has no Google Fonts `@import`. No separate font package is needed.
 4. **Guard script.** `npm run check:offline` (`scripts/check-offline.mjs`,
-   part of `npm run build` and CI) fails if any file in `dist/` contains an
-   `http://` or `https://` URL. Two exceptions, both exact: the SVG namespace
+   part of `npm run build` and CI) fails if any text file in `dist/` contains
+   an `http://`, `https://`, `ws://` or `wss://` URL, or a protocol-relative
+   one (`//host/…`) after `src=`, `href=`, `url(` or `@import`. Binary assets
+   (fonts, images) are not read. The scanning is the pure function
+   `findOffOrigin(text)`, tested in `tests/offlineCheck.test.ts`. Two
+   exceptions, both exact: the SVG namespace
    `http://www.w3.org/2000/svg` inside Fomantic's inline SVGs, and the file
    `dist/THIRD-PARTY-NOTICES.txt` (licence text, never loaded by the app).
    Some bundled code contains URLs that are never fetched — jQuery's licence
@@ -353,15 +357,21 @@ public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.sv
                        files, three named in `MASCOT`, the favicon in `index.html` ("Pickle theme and
                        mascot"). Served as-is, scanned by `check:offline`.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
-                       src/query/tree.ts), plus app.test, lintRules, docReferences, dateCases,
-                       themeContrast and noBackendDataInSrc.
-scripts/check-offline.mjs  The offline guard ("Offline-first").
+                       src/query/tree.ts), plus app.test, lintRules, docReferences, offlineCheck,
+                       dateCases, themeContrast and noBackendDataInSrc.
+scripts/check-offline.mjs  The offline guard ("Offline-first"); findOffOrigin(text) is pure and tested.
 vite.config.ts         Dev proxy of the API prefix to DEV_BACKEND_URL, the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE or DEV_BACKEND_URL is missing.
 .env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract");
                        DEV_BACKEND_URL — the backend the dev server proxies to ("Mock server").
 eslint.config.js       ESLint + the import airlocks (jQuery; src/ never imports mock-server/; only src/api/
                        imports src/api/types.ts).
-.github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main.
+.github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main (read-only token).
+package.json           Scripts and dependencies; package-lock.json pins them (`npm ci`).
+tsconfig.json          Strict TypeScript for everything `npm run typecheck` checks (src, mock-server, tests, configs).
+tsconfig.app.json      The subset that ends up in dist/ (src and vite.config.ts), used by `build:app`.
+vitest.config.ts       Vitest: tests/**/*.test.ts, Node environment (no DOM).
+.prettierrc.json       Prettier options (100 columns, double quotes, trailing commas).
+.prettierignore        What Prettier skips (docs/, README.md, build output, lock file).
 docs/
   ARCHITECTURE.md      This file.
   CHANGELOG.md         The archived design history (not updated any more).
@@ -1395,7 +1405,7 @@ file it tests, in the same place under `tests/`. The ones to know about:
 Scripts: `npm run dev` (mock + Vite), `dev:app` (Vite alone, for a real
 backend), `mock`, `build` (`typecheck`, then `build:app`), `build:app`
 (type-check the app only + bundle + `check:offline`), `preview`, `test`, `test:watch`, `typecheck`, `lint`
-(ESLint + Prettier), `check:offline`. CI (`.github/workflows/ci.yml`) runs
+(ESLint + Prettier check), `format` (Prettier, rewriting files), `check:offline`. CI (`.github/workflows/ci.yml`) runs
 typecheck, test, lint and build on every pull request and push to `main`.
 
 The mock server is a dev stand-in, so it can never stop the app from running
@@ -1406,7 +1416,10 @@ mock or the tests have drifted from `src/api/types.ts`. `build` is the full
 `typecheck` followed by `build:app`, so it still checks everything. `tests/appScripts.test.ts` keeps both
 that way.
 
-`tsconfig.json` is `strict` with `noUncheckedIndexedAccess`. ESLint is
+`tsconfig.json` is `strict` with `noUncheckedIndexedAccess`; `allowJs` lets
+`tests/offlineCheck.test.ts` import `scripts/check-offline.mjs` with its JSDoc
+types. ESLint skips `dist/`, `coverage/` and `.claude/` (other worktrees live
+there). ESLint is
 `eslint:recommended` + `typescript-eslint` recommended, plus the import
 airlocks (jQuery only in its two files; `src/` never imports `mock-server/`;
 only `src/api/` imports `src/api/types.ts`).
