@@ -18,11 +18,15 @@ export interface FocusDescription {
 
 /**
  * Make `value` safe inside a double-quoted CSS attribute selector. Only the
- * quote, the backslash and a line break can break out of the quotes;
+ * quote, the backslash and a line break (\n, \r, \f) can break out of the quotes;
  * `CSS.escape` would do more but does not exist in the Node-only tests.
  */
 export function quoteForCssString(value: string): string {
-  return value.replace(/[\\"]/g, "\\$&").replace(/\n/g, "\\a ");
+  return value
+    .replace(/[\\"]/g, "\\$&")
+    .replace(/\n/g, "\\a ")
+    .replace(/\r/g, "\\d ")
+    .replace(/\f/g, "\\c ");
 }
 
 /**
@@ -79,6 +83,19 @@ function isKeyboardFocus(el: HTMLElement): boolean {
 }
 
 /**
+ * Focus the element `selector` finds in the repainted `container`. This is a
+ * convenience: a selector the browser rejects (an id with an odd character)
+ * must never abort the repaint, so a failed lookup just restores nothing.
+ */
+function restoreFocus(container: HTMLElement, selector: string): void {
+  try {
+    container.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+  } catch {
+    // An invalid selector: leave the focus where the browser put it.
+  }
+}
+
+/**
  * Replace a panel's contents: tear down old Fomantic plugins, swap markup, init new ones.
  *
  * A repaint destroys the focused button, and the browser then drops focus to
@@ -99,7 +116,7 @@ export function paint(container: HTMLElement, html: string): void {
   destroy(container);
   container.innerHTML = html;
   activate(container);
-  if (selector) container.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+  if (selector) restoreFocus(container, selector);
 }
 
 const ENTITIES: Record<string, string> = {

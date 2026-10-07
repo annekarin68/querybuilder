@@ -262,9 +262,9 @@ and, after `activate`, focuses its replacement (`preventScroll: true`). The
 pure part is `focusSelectorFor` in `panel.ts`, which turns a plain description
 of the element (`FocusDescription`) into a CSS selector, or `null`. It knows the
 database checkboxes and All / None, the buttons inside a group or condition
-(found by `data-node-id` plus `data-action`), Run query, and the other buttons
-with a unique `data-action` (account menu, Clear search). A few things are
-deliberately **not** restored:
+(found by `data-node-id` plus `data-action`), the other buttons with a unique
+`data-action` (account menu, Clear search), and an element with an `id` (the
+Matching events card). A few things are deliberately **not** restored:
 
 - **Anything inside a Fomantic dropdown, and text or number boxes.** The query
   builder puts the cursor back there itself (`focusPart`, `focusFieldDropdown`),
@@ -277,6 +277,15 @@ deliberately **not** restored:
 - **The data dictionary's Add buttons.** They share one `data-action` and the
   same item can appear several times (a facet under each of its tags), so no
   selector can name the one that was focused.
+
+**Run query** is the one button that cannot be restored: pressing it replaces
+it with a loader and then with the results, so it no longer exists. After a
+keyboard press (`click` with `detail === 0`) `wireDataPreview` puts the cursor
+on the Matching events card instead (`#qb-preview`: `tabindex="-1"`, so not a Tab
+stop, `role="region"` and `aria-label="Matching events"`, so a screen reader
+names where the cursor went). The card is replaced by every repaint, but it has
+an `id`, so `paint()` finds it again, and the cursor stays on it until the
+results arrive. A mouse click leaves nothing focused, like the other buttons.
 
 Code that wants the cursor somewhere else (`focusCollapseButton`,
 `focusMoveButton`, the ✕ rule in "Centre — `queryBuilder.ts`", the
@@ -1219,7 +1228,9 @@ The result is a list of compact rows, one native `<details>` per event: id,
 one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default), up to 3
 tag and 2 group badges ranked by how many of the event's facets carry them
 (values in `HIDDEN_ROW_BADGES` left out), and the facet count; expanding a row
-shows the event's JSON.
+shows the event's JSON. The card is focusable (`id="qb-preview"`, see "Focus
+across a repaint"): it is where a keyboard user's cursor lands after **Run
+query**.
 
 **Decision: a list, not a grid.** Events are heterogeneous: facets as columns
 would mean 60–100+ columns for a varied sample, and events as columns stop

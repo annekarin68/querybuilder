@@ -22,6 +22,9 @@ describe("quoteForCssString", () => {
     expect(quoteForCssString('a"b')).toBe('a\\"b');
     expect(quoteForCssString("a\\b")).toBe("a\\\\b");
     expect(quoteForCssString("a\nb")).toBe("a\\a b");
+    // A carriage return and a form feed also end a CSS string, and ids come from the backend.
+    expect(quoteForCssString("a\rb")).toBe("a\\d b");
+    expect(quoteForCssString("a\fb")).toBe("a\\c b");
   });
 });
 
@@ -44,10 +47,6 @@ describe("focusSelectorFor", () => {
   it("finds a group's or condition's button by node and action", () => {
     const d = described({ data: { action: "add-condition" }, nodeId: "g1" });
     expect(focusSelectorFor(d)).toBe('[data-node-id="g1"] [data-action="add-condition"]');
-  });
-
-  it("finds the Run button", () => {
-    expect(focusSelectorFor(described({ data: { action: "run" } }))).toBe('[data-action="run"]');
   });
 
   it("finds the dictionary's Clear search button", () => {

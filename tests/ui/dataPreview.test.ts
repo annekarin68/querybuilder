@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { EventRecord, Facet } from "../../src/model";
-import { eventBadges, rowCell, rowGrid } from "../../src/ui/dataPreview";
+import { card, eventBadges, PREVIEW_CARD_ID, rowCell, rowGrid } from "../../src/ui/dataPreview";
+import { focusSelectorFor } from "../../src/ui/panel";
 
 function facet(id: string, group: string, tags: string[]): Facet {
   return {
@@ -115,5 +116,26 @@ describe("rowGrid", () => {
         { heading: "Kind", facet: "a", field: "c" },
       ]),
     ).toBe("3rem 12rem minmax(0, 10rem) minmax(0, 1fr) auto");
+  });
+});
+
+describe("card", () => {
+  it("can take focus and has a name, so Run can leave the cursor on it", () => {
+    const html = card("<p>x</p>");
+    expect(html).toContain(`id="${PREVIEW_CARD_ID}"`);
+    expect(html).toContain('tabindex="-1"');
+    expect(html).toContain('role="region"');
+    expect(html).toContain('aria-label="Matching events"');
+  });
+
+  it("is found again by paint() after a repaint, by its id", () => {
+    const selector = focusSelectorFor({
+      tagName: "DIV",
+      data: {},
+      nodeId: null,
+      id: PREVIEW_CARD_ID,
+      inDropdown: false,
+    });
+    expect(selector).toBe(`[id="${PREVIEW_CARD_ID}"]`);
   });
 });

@@ -103,10 +103,18 @@ function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: Row
     </details>`;
 }
 
-function card(body: string, count?: number): string {
+/** The card's id: `paint()` finds the card again by it after a repaint (see `wireDataPreview`). */
+export const PREVIEW_CARD_ID = "qb-preview";
+
+/**
+ * The Matching events card. It can take focus (`tabindex="-1"`, so not a Tab
+ * stop) and has a name, because it is where the cursor goes when the user
+ * presses Run: that button is replaced by a loader and then by the results.
+ */
+export function card(body: string, count?: number): string {
   const n =
     count === undefined ? "" : ` <span class="qb-card-count">· ${escapeHtml(exact(count))}</span>`;
-  return `<div class="qb-card qb-preview"><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
+  return `<div class="qb-card qb-preview" id="${PREVIEW_CARD_ID}" tabindex="-1" role="region" aria-label="Matching events"><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
 }
 
 /**
@@ -220,6 +228,12 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
 export function wireDataPreview(container: HTMLElement, onRun: () => void): void {
   container.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action='run']");
-    if (btn && !btn.disabled) onRun();
+    if (!btn || btn.disabled) return;
+    onRun();
+    // onRun has already repainted (loading) and the button is gone. Put the
+    // cursor on the card, so a keyboard user (a click with detail 0) is not
+    // dropped to the page; paint() then keeps it there through the repaint
+    // that shows the result. A mouse click needs no cursor and no focus ring.
+    if (e.detail === 0) container.querySelector<HTMLElement>(`#${PREVIEW_CARD_ID}`)?.focus();
   });
 }
