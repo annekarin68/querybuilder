@@ -1186,7 +1186,7 @@ the issue's message tells the user to do exactly that.
   together with its text, which a screen reader may not speak.
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
-  (`noticeHtml`, `role="status"`, and spoken through `announce` as well; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
+  (`noticeHtml`, which has no `role` of its own: it is inserted already holding its text, so it would never be spoken, and it is spoken through `announce` instead; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
   succeeds clears an older warning; a drop that partly succeeds still inserts
   what it can. The messages:
 

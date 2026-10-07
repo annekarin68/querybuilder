@@ -103,8 +103,9 @@ function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: Row
     </details>`;
 }
 
-/** The panel's card. It is its `data-focus-landing` (focusable by script
- *  only, tabindex -1): Run turns into a loader, then into the result, and a
+/** The panel's card. It is its `data-focus-landing` (not in the Tab
+ *  order, tabindex -1, but can be given the focus by script; a mouse click also
+ *  focuses it): Run turns into a loader, then into the result, and a
  *  keyboard user who pressed it stays in this card instead of dropping to the
  *  page (paint(), focusMemory.ts). app.ts announces what happened. */
 function card(body: string, count?: number): string {

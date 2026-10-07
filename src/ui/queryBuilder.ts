@@ -69,7 +69,7 @@ function issuesHtml(nodeId: string, issues: Issue[]): string {
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
   if (!notice) return "";
-  return `<div class="ui warning message qb-notice" role="status">
+  return `<div class="ui warning message qb-notice">
       <i class="close icon" data-action="dismiss-notice" role="button" tabindex="0" aria-label="Dismiss"></i>
       <p>${escapeHtml(notice)}</p>
     </div>`;

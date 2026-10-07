@@ -578,10 +578,12 @@ describe("dropping docs items", () => {
     app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
     app.onDropItem({ type: "node", nodeId: "gone" }, store.getState().query.id);
     app.onDropItem(null, store.getState().query.id);
-    // Only the warnings are spoken (see the next test).
-    for (const [message] of announce.mock.calls) {
-      expect(message).not.toMatch(/^(Added|Moved)/);
-    }
+    // Only the three warnings are spoken, in order (see the next test).
+    expect(announce.mock.calls).toEqual([
+      [expect.stringMatching(/^Couldn't add “ghost”: /)],
+      ["That item is no longer in the query."],
+      ["That item can't be added to a query."],
+    ]);
   });
 
   it("speaks a refused drop's warning, since its box appears with its text already in it", () => {

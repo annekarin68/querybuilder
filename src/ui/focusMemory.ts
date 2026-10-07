@@ -111,7 +111,8 @@ export function rememberFocus(container: HTMLElement): FocusMemory | null {
  *  closed <details> cannot take focus. */
 function tryFocus(el: HTMLElement | null | undefined): boolean {
   if (!el) return false;
-  el.focus();
+  // A repaint the user did not start must not scroll the page.
+  el.focus({ preventScroll: true });
   return document.activeElement === el;
 }
 
