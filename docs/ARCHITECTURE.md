@@ -273,7 +273,7 @@ src/
   app.ts               createApp({ store, api, navigate }) — everything the app DOES, with no DOM: startup
                        (+ restoring a saved query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
-                       `dismissDropNotice`). Tested with a fake API.
+                       `dismissDropNotice`), Move up / Move down (`onMoveNode`). Tested with a fake API.
   state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
@@ -296,7 +296,7 @@ src/
   query/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
-                       sameSemantics, …).
+                       moveSibling, positionOf, sameSemantics, …).
     drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
                        docs item creates, and what it couldn't), `dropNotice` — pure.
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
@@ -825,7 +825,11 @@ Dropping a facet or a tag on the builder creates such conditions.
   `insertNodes`. `moveNode` moves an existing node the same way (through
   `placeNodes`, after taking the node out) and returns `null` for a move that
   is impossible (unknown id, the root, a group into itself or something inside
-  it).
+  it). `moveSibling` is the keyboard's smaller move: it swaps a node with its
+  previous or next sibling inside the same group (`null` at an end, for the
+  root or an unknown id), and `positionOf` says where a node stands among its
+  siblings (`{index, count}`, 1-based), which the Move buttons and the spoken
+  message both use.
   `replaceLoneBlankCondition` is how a blank row gives way: when the group a
   drop lands in (the target group, or the parent of the target row) holds
   exactly one condition with nothing chosen (the starting query's seed from
@@ -1065,9 +1069,21 @@ the issue's message tells the user to do exactly that.
   `app.ts`), so the user sees what arrived. Collapsing stays display-only.
 - **Keyboard and the "+" buttons.** Every drag has a non-mouse path: the + button
   on a docs item calls `onAddItem`, which drops the item on the **root group**,
-  at its end. The + button is a real `<button>`, so Tab and Enter work. (Moving an
-  existing node is mouse-only; use the row's own dropdowns and ✕ to rebuild
-  without a mouse.)
+  at its end. The + button is a real `<button>`, so Tab and Enter work.
+  Moving an existing node has a keyboard path too: **Move up / Move down**
+  (`moveButtons`), a stacked pair of small buttons right after the node's grip
+  on every condition and every group but the root (open or folded). They swap
+  the node with its previous or next sibling (`moveSibling`) and never change
+  which group it is in; dragging does that. The first node's Up and the last
+  node's Down are disabled (not hidden), so the pair keeps its shape and a click
+  on one does nothing. `wireQueryBuilder` calls `hooks.onMove`, wired to
+  `app.onMoveNode`, which announces the result ("Moved the condition up, to
+  position 2 of 3.", `reorderedMessage` in `drop.ts`). The repaint replaces the
+  pressed button, so after a keyboard press (`click` with `detail === 0`) focus
+  goes back to the same node's same-direction button, or to its other button if
+  the node has just reached an end (`focusMoveButton`); after a mouse click it
+  stays unfocused, like the collapse button. The pair is two 1rem buttons,
+  28px, so it adds no height to a condition row or a group header.
 - **A lone blank row is replaced, not joined.** When a group's only child is a
   blank condition (the starting query's root, or a group just added with
   "+ Group"), any drop or + that creates something puts it in that row's place

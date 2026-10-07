@@ -21,6 +21,7 @@ import {
   newGroup,
   removeNode,
   updateNode,
+  type Direction,
 } from "../query/tree";
 import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
@@ -82,6 +83,29 @@ function nodeGrip(nodeId: string, kind: "group" | "condition"): string {
 
 function iconButton(action: string, label: string, icon: string, extra = ""): string {
   return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
+}
+
+/** Where a node stands among its siblings: `index` counts from 1. */
+interface Position {
+  index: number;
+  count: number;
+}
+
+/**
+ * The Move up / Move down pair: the keyboard's way to reorder a node (dragging
+ * needs a mouse). A narrow vertical stack of two small buttons next to the grip.
+ * The first node's Up and the last node's Down are `disabled` rather than
+ * hidden, so the pair keeps its shape and a screen reader says why nothing
+ * happens. `kind` ("condition" or "group") names what moves, because a page
+ * has many pairs and "Move up" alone would not say which node it is for.
+ */
+export function moveButtons(kind: "condition" | "group", position: Position): string {
+  const button = (direction: Direction, disabled: boolean) => {
+    const label = `Move ${kind} ${direction}`;
+    const title = `Move ${direction}`;
+    return `<button type="button" class="qb-icon-btn" data-action="move-${direction}" aria-label="${label}" title="${title}"${disabled ? " disabled" : ""}><i class="angle ${direction} icon"></i></button>`;
+  };
+  return `<span class="qb-move" role="group" aria-label="Move this ${kind}">${button("up", position.index <= 1)}${button("down", position.index >= position.count)}</span>`;
 }
 
 /** The condition row's plain dropdowns and their labels. The Field dropdown
@@ -202,7 +226,7 @@ function focusFieldDropdown(container: HTMLElement, nodeId: string): void {
     ?.focus();
 }
 
-function conditionHtml(ctx: BuilderCtx, c: Condition): string {
+function conditionHtml(ctx: BuilderCtx, c: Condition, position: Position): string {
   const field = findField(ctx.catalog, c.facetId, c.fieldId);
   const operator = findOperator(c.operatorId);
   const fields = fieldsOfFacet(ctx.catalog, c.facetId).map((f) => ({
@@ -226,6 +250,7 @@ function conditionHtml(ctx: BuilderCtx, c: Condition): string {
   return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
     <div class="qb-cond-row">
       ${nodeGrip(c.id, "condition")}
+      ${moveButtons("condition", position)}
       <div class="qb-cond-grid${facetLevel ? " is-facet-level" : ""}">
         ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
         ${fieldDropdown(fields, c.fieldId, isFacetTest(c) ? c.operatorId : null, Boolean(c.facetId))}
@@ -242,6 +267,24 @@ function focusCollapseButton(container: HTMLElement, nodeId: string): void {
   nodeOf(container, nodeId)
     ?.querySelector<HTMLElement>(":scope > .qb-group-head .qb-collapse-btn")
     ?.focus();
+}
+
+/**
+ * After a keyboard press on group or condition `nodeId`'s Move up / Move down
+ * button the repaint replaced it: put the cursor on the same node's button for
+ * the same `direction`, so the user can press it again to keep moving. When the
+ * node has reached an end that button is now disabled and can't take focus, so
+ * use the other one (the user can only go back the way they came).
+ */
+function focusMoveButton(container: HTMLElement, nodeId: string, direction: Direction): void {
+  const pair = nodeOf(container, nodeId)?.querySelector<HTMLElement>(
+    ":scope > .qb-cond-row > .qb-move, :scope > .qb-group-head > .qb-move",
+  );
+  const same = pair?.querySelector<HTMLButtonElement>(`[data-action="move-${direction}"]`);
+  const other = pair?.querySelector<HTMLButtonElement>(
+    `[data-action="move-${direction === "up" ? "down" : "up"}"]`,
+  );
+  (same?.disabled ? other : same)?.focus();
 }
 
 /**
@@ -262,15 +305,23 @@ export function collapseButton(collapsed: boolean): string {
  * plain-English summary and how many conditions it holds. That whole line is a
  * click target for unfolding it (buttons and the grip inside keep their own jobs).
  */
-export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
+export function groupHtml(
+  ctx: BuilderCtx,
+  g: Group,
+  isRoot: boolean,
+  position: Position | null = null,
+): string {
   const tone = g.operator === "OR" ? "or" : "and";
   const matchWord = g.operator === "OR" ? "ANY" : "ALL";
   const remove = isRoot ? "" : iconButton("remove-node", "Remove group", "times");
+  // The root has no siblings to pass, so it has no buttons.
+  const move = position ? moveButtons("group", position) : "";
   if (g.collapsed) {
     const text = queryToText(g, ctx.catalog);
     return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
       <div class="qb-group-head" data-action="toggle-collapse" title="Click to expand">
         ${isRoot ? "" : nodeGrip(g.id, "group")}
+        ${move}
         ${collapseButton(true)}
         <span class="qb-op-badge">${matchWord}</span>
         <span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>
@@ -281,10 +332,13 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
     </div>`;
   }
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
-  const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
+  const children = g.children
+    .map((child, i) => nodeHtml(ctx, child, false, { index: i + 1, count: g.children.length }))
+    .join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
     <div class="qb-group-head">
       ${isRoot ? "" : nodeGrip(g.id, "group")}
+      ${move}
       ${collapseButton(false)}
       <span class="qb-group-label">Match</span>
       <span class="qb-logic" role="group" aria-label="Combine conditions with">
@@ -302,8 +356,16 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   </div>`;
 }
 
-function nodeHtml(ctx: BuilderCtx, node: QueryNode, isRoot: boolean): string {
-  return node.kind === "group" ? groupHtml(ctx, node, isRoot) : conditionHtml(ctx, node);
+/** `position` is null only for the root, the one node with no siblings. */
+function nodeHtml(
+  ctx: BuilderCtx,
+  node: QueryNode,
+  isRoot: boolean,
+  position: Position | null,
+): string {
+  if (node.kind === "group") return groupHtml(ctx, node, isRoot, position);
+  // A condition is never the root, so it always has a position.
+  return conditionHtml(ctx, node, position!);
 }
 
 /** The query card's footer: the whole query in plain English once nothing
@@ -337,7 +399,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
     el,
     `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1">
        <h2 class="qb-card-title">Query</h2>
-       ${nodeHtml(ctx, state.query, true)}
+       ${nodeHtml(ctx, state.query, true, null)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
      </div>`,
   );
@@ -359,6 +421,8 @@ export function wireQueryBuilder(
   onChange: (next: Group) => void,
   hooks: {
     onDrop(item: DragItem | null, targetNodeId: string): void;
+    /** The Move up / Move down buttons: swap a node with its neighbour. */
+    onMove(nodeId: string, direction: Direction): void;
     onDismissNotice(): void;
     /** Say something to screen-reader users (the shell's live region). */
     announce(message: string): void;
@@ -417,6 +481,9 @@ export function wireQueryBuilder(
     if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
+    // A disabled Move button (an end of the list) must do nothing, not even
+    // toggle the folded group whose header it sits in.
+    if (btn.hasAttribute("disabled")) return;
     const q = getState().query;
     switch (btn.dataset.action) {
       case "add-condition":
@@ -429,6 +496,15 @@ export function wireQueryBuilder(
         return onChange(updateNode(q, nodeId, { operator: "AND" }));
       case "set-or":
         return onChange(updateNode(q, nodeId, { operator: "OR" }));
+      case "move-up":
+      case "move-down": {
+        const direction = btn.dataset.action === "move-up" ? "up" : "down";
+        hooks.onMove(nodeId, direction);
+        // The repaint replaced the pressed button: as for the collapse button,
+        // give the keyboard user's cursor back (a mouse click needs none).
+        if (e.detail === 0) focusMoveButton(container, nodeId, direction);
+        return;
+      }
       case "toggle-collapse": {
         const node = findNode(q, nodeId);
         onChange(updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }));

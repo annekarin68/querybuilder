@@ -5,6 +5,7 @@ import {
   collapseButton,
   footerHtml,
   groupHtml,
+  moveButtons,
   noticeHtml,
   rowDropdown,
 } from "../../src/ui/queryBuilder";
@@ -248,5 +249,59 @@ describe("node grips", () => {
 
   it("the root group has no grip: it can't be moved", () => {
     expect(groupHtml(ctx, { ...group, children: [] }, true)).not.toContain("qb-grip");
+  });
+});
+
+describe("Move up / Move down buttons", () => {
+  const catalog = buildFieldCatalog([]);
+  const ctx = { catalog, facets: null, issues: [] };
+  const [a, b, c] = [newCondition(), newCondition(), newCondition()];
+
+  /** The button with `data-action` in `html`, up to its closing tag. */
+  const button = (html: string, action: string) => {
+    const at = html.indexOf(`data-action="${action}"`);
+    return html.slice(html.lastIndexOf("<button", at), html.indexOf("</button>", at));
+  };
+
+  it("names what moves and which way, for screen readers", () => {
+    const html = moveButtons("condition", { index: 2, count: 3 });
+    expect(button(html, "move-up")).toContain('aria-label="Move condition up"');
+    expect(button(html, "move-down")).toContain('aria-label="Move condition down"');
+    expect(moveButtons("group", { index: 2, count: 3 })).toContain('aria-label="Move group up"');
+  });
+
+  it("a middle node can go either way", () => {
+    const html = moveButtons("condition", { index: 2, count: 3 });
+    expect(html).not.toContain("disabled");
+  });
+
+  it("the first node can't go up and the last can't go down", () => {
+    const first = moveButtons("condition", { index: 1, count: 3 });
+    expect(button(first, "move-up")).toContain("disabled");
+    expect(button(first, "move-down")).not.toContain("disabled");
+    const last = moveButtons("condition", { index: 3, count: 3 });
+    expect(button(last, "move-up")).not.toContain("disabled");
+    expect(button(last, "move-down")).toContain("disabled");
+  });
+
+  it("an only child has nothing to pass either way", () => {
+    const only = moveButtons("condition", { index: 1, count: 1 });
+    expect(only.match(/disabled/g)).toHaveLength(2);
+  });
+
+  it("every child of a group gets buttons that fit its place; the root gets none", () => {
+    const html = groupHtml(ctx, { ...emptyQuery(), children: [a, b, c] }, true);
+    expect(html.match(/data-action="move-up"/g)).toHaveLength(3);
+    expect(html.match(/data-action="move-down"/g)).toHaveLength(3);
+    expect(html.match(/data-action="move-up"[^>]* disabled/g)).toHaveLength(1);
+    expect(html.match(/data-action="move-down"[^>]* disabled/g)).toHaveLength(1);
+  });
+
+  it("a nested group has its own buttons, open or folded", () => {
+    const inner = { ...emptyQuery(), id: "g-inner", children: [a] };
+    const place = { index: 2, count: 3 };
+    for (const g of [inner, { ...inner, collapsed: true }]) {
+      expect(groupHtml(ctx, g, false, place)).toContain('aria-label="Move group up"');
+    }
   });
 });
