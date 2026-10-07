@@ -101,3 +101,8 @@ Findings: `api.md` API-2 … API-6 (not API-1, see rulings; for API-6 do only `t
 - Q-6: the missing `moveNode` and leap-year (1900, 2000) tests; check the mock accepts the shared date cases (`npm test` covers it).
 
 Acceptance: full pre-commit command passes; list which new tests failed first (TDD) and which only pin existing behaviour.
+
+Carried over from the Task 4 review (verify each, then fix; small):
+
+- `scripts/check-offline.mjs`: the run-only-as-script guard (`process.argv[1] === fileURLToPath(import.meta.url)`) fails OPEN when the script is started through a symlinked path: it prints nothing and exits 0 even if `dist/` leaks. Compare `realpathSync(process.argv[1])` with `fileURLToPath(import.meta.url)` (or invert so only tests opt out), and add a test or a shown manual check with a symlink. Also make the comment about `//` matches say "attributes and assignments" (it only matches after `=`).
+- `THIRD-PARTY-NOTICES.txt` line ~10: drop the one-time parenthetical "(checked by searching the built dist/assets/*.js)"; it will go stale in a licence file.
