@@ -6,8 +6,10 @@ import {
   footerHtml,
   groupHtml,
   noticeHtml,
+  queryTitleHtml,
   rowDropdown,
 } from "../../src/ui/queryBuilder";
+import { initialState, type AppState } from "../../src/state";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
 import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
 import { UNGROUP_BLOCKED_MESSAGE } from "../../src/query/tree";
@@ -325,5 +327,63 @@ describe("Group contents and Ungroup buttons", () => {
     const html = groupHtml(ctxFor(root), root.children[0] as Group, false);
     expect(html).not.toContain("group-contents");
     expect(html).not.toContain('data-action="ungroup"');
+  });
+});
+
+describe("the query card's title", () => {
+  const catalog = buildFieldCatalog([]);
+  const root = emptyQuery();
+  const query = addChild(root, root.id, newCondition());
+  const loaded: AppState = {
+    ...initialState,
+    catalog,
+    databases: [{ id: "a", name: "A", description: "", owner: "", eventCount: 1 }],
+    selectedDatabaseIds: ["a"],
+    query,
+  };
+  const opened = (name: string): AppState => ({
+    ...loaded,
+    openSaved: { id: "sq-1", name, note: "", query, databaseIds: ["a"] },
+  });
+  /** The words on screen: tags dropped, spaces collapsed. */
+  const text = (html: string) =>
+    html
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  it("says Query and offers Save… and Saved queries", () => {
+    const html = queryTitleHtml(loaded);
+    expect(text(html)).toBe("Query Save… Saved queries");
+    expect(html).toMatch(/<button[^>]*data-action="open-save-dialog"[^>]*>Save…<\/button>/);
+    expect(html).toMatch(/<button[^>]*data-action="open-saved-list"[^>]*>Saved queries<\/button>/);
+  });
+
+  it("names the open saved query", () => {
+    expect(text(queryTitleHtml(opened("Weekly")))).toContain("Query · Weekly");
+    expect(queryTitleHtml(opened("Weekly"))).not.toContain("(edited)");
+  });
+
+  it("says (edited) once the query differs from what was saved", () => {
+    const edited = { ...opened("Weekly"), query: addChild(query, root.id, newCondition()) };
+    expect(queryTitleHtml(edited)).toContain('<span class="qb-muted">(edited)</span>');
+  });
+
+  it("says (edited) once the database selection differs", () => {
+    const edited = { ...opened("Weekly"), selectedDatabaseIds: [] };
+    expect(queryTitleHtml(edited)).toContain("(edited)");
+  });
+
+  it("escapes the name", () => {
+    const html = queryTitleHtml(opened("<b>x</b>"));
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(html).not.toContain("<b>x</b>");
+  });
+
+  // Opening a saved query before start() has finished would be overwritten by
+  // start() (it sets the query and selection when it ends).
+  it("draws no buttons until the databases and the field catalog have loaded", () => {
+    expect(queryTitleHtml({ ...loaded, databases: null })).not.toContain("<button");
+    expect(queryTitleHtml({ ...loaded, catalog: null })).not.toContain("<button");
   });
 });

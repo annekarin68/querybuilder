@@ -6,6 +6,7 @@ import {
   databaseTitle,
   displayLabel,
   exact,
+  formatDate,
   formatWhen,
   matchRatio,
 } from "../../src/ui/format";
@@ -95,6 +96,16 @@ describe("formatWhen", () => {
     expect(formatWhen(undefined)).toBe("—");
     expect(formatWhen("")).toBe("—");
     expect(formatWhen("not a date")).toBe("not a date");
+  });
+});
+
+describe("formatDate", () => {
+  it("the day only, in the given locale", () => {
+    expect(formatDate("2026-10-08T09:30:00.000Z", "en-GB", "UTC")).toBe("08/10/2026");
+    expect(formatDate("2026-10-08T09:30:00.000Z", "en-US", "UTC")).toBe("10/8/2026");
+  });
+  it("the raw text when it is not a date, so nothing is hidden", () => {
+    expect(formatDate("not a date")).toBe("not a date");
   });
 });
 

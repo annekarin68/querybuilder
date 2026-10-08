@@ -26,6 +26,7 @@ const IDENTIFYING_ATTRIBUTES = [
   "data-db-deselect-failing",
   "data-range",
   "data-part",
+  "id",
   "aria-label",
 ] as const;
 

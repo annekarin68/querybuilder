@@ -80,10 +80,11 @@ the backend's vocabulary):
 │ top bar: Query Builder · 1 Filter  2 Review  3 Approval  4 Done · account ▾  │
 ├──┬────────────────────────────────────────────────────────┬──────────────────┤
 │D │ databases (pill toggles · N of M selected · All/None)  │ statistics       │
-│O │ query (nested ALL/ANY groups as coloured brackets;     │ (pinned: live    │
-│C │   plain-English summary in the footer)                 │  headline +      │
-│S │ matching events (the Run query button lives here)      │  per database)   │
-│› │                                                        │                  │
+│O │ query · name (edited)          [Save…] [Saved queries] │ (pinned: live    │
+│C │   (nested ALL/ANY groups as coloured brackets;         │  headline +      │
+│S │   plain-English summary in the footer)                 │  per database)   │
+│› │ matching events (the Run query button lives here)      │                  │
+│  │                                                        │                  │
 └──┴────────────────────────────────────────────────────────┴──────────────────┘
  ↑ dictionary rail: shows or hides the data dictionary (« Hide dictionary / » Show dictionary; open by default, resizable, 26rem to start)
 ```
@@ -121,7 +122,12 @@ the backend's vocabulary):
   `data-panel="docs"`); renaming them would only be churn, so they stay.
 - **Main column** — database scope, the query builder (nested ALL/ANY groups,
   any depth, collapsible), and **Matching events**: a sample of matching
-  events, fetched only when the user presses **Run query** in that card.
+  events, fetched only when the user presses **Run query** in that card. The
+  query card's title row shows the open saved query (`Query · <name>`, and
+  *(edited)* once it differs from what was saved) and the **Save…** and
+  **Saved queries** buttons, which open a dialog over the page ("Saved
+  queries — `savedQueries.ts`"). On a narrow card the buttons wrap under the
+  title and a long name is cut with "…".
 - **Statistics column** (right, 15rem) — sticky (above 900 px; see **Narrow
   screens** below), so it never scrolls out of view while the user builds;
   refetched live (debounced) whenever the query is complete.
@@ -389,16 +395,20 @@ src/
     panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), escapeHtml(), optionsHtml().
     focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
-    layout.ts          renderShell(root) -> Shell: the panel containers, setActiveView, setSidebarCollapsed, announce,
-                       setMascot, the sidebar's resize handle, onMenu.
+    layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries <dialog>
+                       (`savedDialog`), setActiveView, setSidebarCollapsed, announce, setMascot,
+                       the sidebar's resize handle, onMenu.
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
     pickleRain.ts      The hidden five-click pickle rain: createClickCounter, planRain, startRain.
     docsResize.ts      wireDocsResize — drag/keyboard resizing of the data dictionary, width kept in localStorage.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
-                       displayLabel, databaseTitle, countLabel, formatWhen.
+                       displayLabel, databaseTitle, countLabel, formatWhen, formatDate.
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
     databasePicker.ts  Database scope pills (render + wiring).
-    queryBuilder.ts    The query builder (wiring, drop targets, node grips; returns its render function).
+    queryBuilder.ts    The query builder (wiring, drop targets, node grips, the title row with Save… and
+                       Saved queries; returns its render function).
+    savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint (pure),
+                       renderSavedDialog (paints and opens/closes the <dialog>), wireSavedDialog.
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
     statsPanel.ts      The statistics column (render + wiring: Show, Try again).
@@ -508,7 +518,7 @@ control had focus before it repaints and focuses the same control afterwards.
 - **"The same control"** is found by what it is, not where it is: the row or
   group it sits in (`data-node-id`), its tag, and the first of these attributes
   it has: `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
-  `data-db-deselect-failing`, `data-range`, `data-part`, `aria-label` (`controlOf`). The label comes last
+  `data-db-deselect-failing`, `data-range`, `data-part`, `id`, `aria-label` (`controlOf`). The label comes last
   because it can change with the state ("Collapse group" / "Expand group"), but
   it is the only name a Fomantic dropdown's typing box has. A new control that
   should keep the focus needs one of these attributes. A text box keeps its
@@ -527,6 +537,8 @@ control had focus before it repaints and focuses the same control afterwards.
   and the
   account chip or **Log in** (after **Invalidate** or **Log out**). Cards are
   not in the Tab order (`tabindex="-1"`), but can be given the focus by script.
+  The saved-queries dialog has its own rules on top of these
+  (`focusAfterRepaint`, "Saved queries — `savedQueries.ts`").
 - **Code that moves the cursor on purpose wins**: it runs after the paint
   (`focusPart` moving on to the next dropdown, `setSidebarCollapsed`).
 - **A mouse click** focuses the button too, but the repainted one shows no
@@ -875,7 +887,9 @@ leaves the app for a full-page redirect. Their query must survive the trip:
    never sent to the backend. It is saved when Run redirects, and when the
    user clicks any link straight into a flow (the **Log in** button, **Start
    compliance check**; these carry `data-flow-link`) if the query has
-   conditions.
+   conditions. **Save…** and **Saved queries** redirect a logged-out user to
+   log in the same way (the query is saved even when blank: they asked to save
+   it), and so does a `401` from any saved-queries request ("Saved queries").
 2. **The backend redirects back to `/?resume=1`.** `main.ts` removes
    `resume=1` from the URL at once (so a refresh doesn't repeat it) and calls
    `app.start(true)`.
@@ -885,8 +899,10 @@ leaves the app for a full-page redirect. Their query must survive the trip:
    entry is untrusted (a deploy may land in between), so it is structurally
    checked, and database ids that no longer exist are dropped. The restored
    query is validated and its statistics fetched.
-4. **No automatic retry.** The user presses Run again. This keeps the flow
-   loop-free (see the decision above).
+4. **No automatic retry.** The user presses Run (or **Save…**) again. This
+   keeps the flow loop-free (see the decision above). Which saved query was
+   open is not carried over: after the trip the title says plain "Query", and
+   saving under the same name asks "Replace it?".
 
 ### Dates
 
@@ -1240,6 +1256,17 @@ drag in a Firefox-only deployment.
 
 ### Centre — `queryBuilder.ts`
 
+The card's title row (`queryTitleHtml`) says **Query**, then `· <name>` of the
+open saved query and *(edited)* once `isEdited` says the query or the database
+selection differs from what was last saved or opened, then **Save…** and
+**Saved queries** ("Saved queries — `savedQueries.ts`"). The click listener
+handles those two before it looks for a row or group, since they sit outside
+every node; `main.ts` passes `app.openSaveDialog` / `app.openSavedList` as the
+`onOpenSaveDialog` / `onOpenSavedList` hooks. The buttons are drawn only once
+`catalog` and `databases` have loaded: `start()` sets the query and the
+selection when it ends, so a saved query opened before that would be
+overwritten.
+
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
 a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
 right` while folded, the same arrows as the data dictionary), "Match [ALL |
@@ -1522,6 +1549,74 @@ error to screen readers, wherever their focus is.
 would mean 60–100+ columns for a varied sample, and events as columns stop
 fitting after 5–6. A summary list scales by scrolling vertically. The JSON
 view is a stand-in for a dedicated event viewer planned later.
+
+### Saved queries — `savedQueries.ts`
+
+The **Save…** and **Saved queries** buttons of the query card open one of two
+dialogs. Everything they do is an action in `app.ts` ("Saved queries" under
+"API contract", and the state in "State and the render loop"); this file only
+draws `savedDialog`, `save`, `savedList`, `savedConfirm` and `openSaved`.
+
+- **Save query**: **Name** (required, at most 80 characters) and **Note**
+  (optional, at most 80, hint "A few words to recognise it later"), **Save**
+  and **Cancel**. Both boxes start with the open saved query's name and note:
+  saving under the same name updates it, and an empty Note box would wipe its
+  note. While saving, **Save** shows a loader and is disabled. An error shows
+  in the dialog, which stays open. A name that belongs to another saved query
+  asks "A saved query called “…” exists. Replace it?" (**Replace** /
+  **Cancel**, in place of Save and Cancel); the boxes are read-only while
+  saving or asking, so what is asked about is what is in the box. A save that
+  works closes the dialog and is announced ("Saved “…”.").
+- **Saved queries**: newest first, one item per query with its **name, note,
+  number of databases and date** (`formatDate`, the viewer's locale, in a
+  `<time datetime>`), **Open** and **Delete**. **Decided by the maintainers
+  (2026-10-08): the list never shows the query, its summary or any facet or
+  field**, because queries can be sensitive; the note is there to help recall
+  one. **Delete** asks "Delete “…”?" in place of that item's buttons (the yes
+  is a red **Delete**); **Open**
+  over unsaved work asks "Replace the current query? Its changes are not
+  saved." (`hasUnsavedWork`). The other items keep their buttons, and pressing
+  one asks about that item instead. Loading, the empty state ("No saved
+  queries yet. Build a query and press Save…") and an error with **Try again**
+  show in the dialog. **Close** closes it.
+- **Logged out**: both buttons start the login redirect instead, the query
+  saved first ("Saved query across the login/compliance redirect").
+
+**Decision: a native `<dialog>` with `showModal()`, not Fomantic's modal.**
+The browser keeps the focus inside it, greys out and blocks the page, and
+closes it on Escape, with no plugin, so no new jQuery ("The Fomantic
+discipline"). Fomantic's CSS classes (`ui form`, `ui button`, `ui message`)
+still style its contents. The `<dialog>` is created once by `renderShell`
+(`Shell.savedDialog`, labelled by the heading inside it) and never replaced:
+`renderSavedDialog` paints its contents and calls `showModal()` or `close()`
+so that it is open exactly when `savedDialog` is not null. Escape (the
+`cancel` event, whose default is prevented) and the Cancel / Close buttons call
+`app.closeSavedDialog()`; a `close` the state did not ask for (a browser may
+close on a second Escape anyway) also tells the state, so the two never
+disagree. Its renderer is the last row of `panelRenderers`, after the query
+card.
+
+The submit listener reads the two boxes and calls `app.saveQuery`; the browser
+has already refused a blank or too long name (`required`, `maxlength`). A
+repaint (saving, an error) keeps what the user typed: `renderSavedDialog`
+reads the boxes before it paints and passes them to `savedDialogHtml`.
+
+Keyboard focus:
+
+- **Opening** puts the focus on the dialog's `data-initial-focus` control:
+  the Name box, or in the list the first **Open**, the empty-state or loading
+  text (`tabindex="-1"`), or **Try again**. When the control that had the
+  focus goes (the loader replaced by the list, Save turned into a loader), it
+  goes there again.
+- **A question** takes the focus to its yes button; cancelling it gives the
+  focus back to the item's button that asked (`focusAfterRepaint`, pure). The
+  question is a `role="group"` labelled by its text, so a screen reader reads it
+  as the focus enters. A list item's buttons share their `data-action`, so
+  `renderSavedDialog` puts the focus back on the same item's button by its
+  `data-id`; the boxes keep their caret through `paint()` (their `id`).
+- **Closing** puts the focus back on the button that opened the dialog, looked
+  up again by its `data-action`: the query card may have been repainted
+  meanwhile (opening a saved query repaints it).
 
 ---
 

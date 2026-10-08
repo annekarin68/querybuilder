@@ -1,6 +1,7 @@
 import type { ActiveView } from "../state";
 import { EASTER_EGG_MASCOT, MASCOT } from "../config";
 import type { MascotState } from "./mascot";
+import { SAVED_TITLE_ID } from "./savedQueries";
 
 const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "filter", label: "Filter" },
@@ -65,6 +66,9 @@ export interface Shell {
   };
   /** Show the Filter view, or the "Coming soon" placeholder for the other steps. */
   setActiveView(v: ActiveView): void;
+  /** The Save… / Saved queries dialog (savedQueries.ts). Never replaced: only
+   *  its contents are repainted, and it is opened and closed to match the state. */
+  savedDialog: HTMLDialogElement;
   /** The sidebar's drag handle; wire it with wireDocsResize. */
   docsResizeHandle: HTMLElement;
   /** The pickle in the top bar. */
@@ -124,6 +128,7 @@ export function renderShell(root: HTMLElement): Shell {
       <aside class="qb-col-stats" data-panel="stats"></aside>
     </div>
     <div class="qb-sr-only" role="status" aria-live="polite" data-announcer></div>
+    <dialog class="qb-dialog" data-panel="saved" aria-labelledby="${SAVED_TITLE_ID}"></dialog>
   `;
   const find = <T extends HTMLElement = HTMLElement>(selector: string) =>
     root.querySelector<T>(selector)!;
@@ -168,6 +173,8 @@ export function renderShell(root: HTMLElement): Shell {
       preview: find('[data-panel="preview"]'),
       account: find('[data-panel="account"]'),
     },
+
+    savedDialog: find<HTMLDialogElement>('[data-panel="saved"]'),
 
     docsResizeHandle: find(".qb-docs-resize"),
 

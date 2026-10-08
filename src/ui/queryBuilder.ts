@@ -37,6 +37,7 @@ import {
   type DragItem,
 } from "../query/drop";
 import { placeIssues } from "../query/issues";
+import { isEdited } from "../query/saved";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
@@ -371,6 +372,37 @@ export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog)
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
+/**
+ * The query card's title row: "Query", the open saved query's name and
+ * "(edited)" once the query or the database selection differs from what was
+ * last saved or opened, then **Save…** and **Saved queries** (docs/ARCHITECTURE.md,
+ * "Saved queries — `savedQueries.ts`").
+ *
+ * The two buttons only exist once startup has loaded the databases and the
+ * field catalog: start() sets the query and selection when it ends, so a saved
+ * query opened before that would be overwritten.
+ */
+export function queryTitleHtml(state: AppState): string {
+  const open = state.openSaved;
+  const name = open
+    ? ` <span class="qb-open-name" title="${escapeHtml(open.name)}">· ${escapeHtml(open.name)}</span>`
+    : "";
+  const edited =
+    open && isEdited(open, state.query, state.selectedDatabaseIds)
+      ? ` <span class="qb-muted">(edited)</span>`
+      : "";
+  const buttons =
+    state.catalog && state.databases
+      ? `<button type="button" class="ui mini basic button" data-action="open-save-dialog" aria-haspopup="dialog">Save…</button>
+         <button type="button" class="ui mini basic button" data-action="open-saved-list" aria-haspopup="dialog">Saved queries</button>`
+      : "";
+  return `<div class="qb-query-head">
+      <h2 class="qb-card-title">Query${name}${edited}</h2>
+      <span class="qb-spacer"></span>
+      ${buttons}
+    </div>`;
+}
+
 function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
@@ -387,7 +419,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   paint(
     el,
     `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
-       <h2 class="qb-card-title">Query</h2>
+       ${queryTitleHtml(state)}
        ${nodeHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
      </div>`,
@@ -415,6 +447,9 @@ export function wireQueryBuilder(
     onNotice(message: string): void;
     /** Say something to screen-reader users (the shell's live region). */
     announce(message: string): void;
+    /** The title's **Save…** and **Saved queries** (savedQueries.ts shows the dialogs). */
+    onOpenSaveDialog(): void;
+    onOpenSavedList(): void;
   },
 ): (state: AppState) => void {
   /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
@@ -487,6 +522,10 @@ export function wireQueryBuilder(
     // that line: that is not a request to unfold it. (Only the header itself,
     // not a button of its own, is a toggle by a click anywhere on its line.)
     if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
+    // The title's buttons sit outside every row and group, so they are
+    // handled before the node lookup below.
+    if (btn?.dataset.action === "open-save-dialog") return hooks.onOpenSaveDialog();
+    if (btn?.dataset.action === "open-saved-list") return hooks.onOpenSavedList();
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
     const q = getState().query;

@@ -26,6 +26,7 @@ import { revealNode, wireQueryBuilder } from "./ui/queryBuilder";
 import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
+import { renderSavedDialog, wireSavedDialog } from "./ui/savedQueries";
 import { createClickCounter, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
@@ -88,7 +89,10 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   onDismissNotice: app.dismissDropNotice,
   onNotice: app.showNotice,
   announce: shell.announce,
+  onOpenSaveDialog: app.openSaveDialog,
+  onOpenSavedList: app.openSavedList,
 });
+wireSavedDialog(shell.savedDialog, app);
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
@@ -107,7 +111,17 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
   {
-    keys: ["catalog", "query", "issues", "serverIssues", "facets", "dropNotice"],
+    keys: [
+      "catalog",
+      "databases",
+      "query",
+      "issues",
+      "serverIssues",
+      "facets",
+      "dropNotice",
+      "openSaved",
+      "selectedDatabaseIds",
+    ],
     run: renderQueryBuilder,
   },
   {
@@ -137,6 +151,12 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     run: (s) => renderDataPreview(panels.preview, s),
   },
   { keys: ["auth", "compliance"], run: (s) => renderAccountMenu(panels.account, s) },
+  // Last: when a dialog closes, the focus goes back to its button in the query
+  // card, which must already be repainted (opening a saved query repaints it).
+  {
+    keys: ["savedDialog", "save", "savedList", "savedConfirm", "openSaved"],
+    run: (s) => renderSavedDialog(shell.savedDialog, s),
+  },
 ];
 
 // Below this width the open docs float over the page (styles.css), so start
