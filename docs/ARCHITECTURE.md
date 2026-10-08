@@ -127,7 +127,9 @@ the backend's vocabulary):
   *(edited)* once it differs from what was saved) and the **Save…** and
   **Saved queries** buttons, which open a dialog over the page ("Saved
   queries — `savedQueries.ts`"). On a narrow card the buttons wrap under the
-  title and a long name is cut with "…".
+  title and a long name is cut with "…". A logged-out user sees the same
+  advisory note as on **Run query** under them ("You'll be asked to log in
+  first.").
 - **Statistics column** (right, 15rem) — sticky (above 900 px; see **Narrow
   screens** below), so it never scrolls out of view while the user builds;
   refetched live (debounced) whenever the query is complete.
@@ -913,6 +915,9 @@ the copy kept for it is the **pending query** (not a saved query, which is
    conditions. **Save…** and **Saved queries** redirect a logged-out user to
    log in the same way (the query is saved even when blank: they asked to save
    it), and so does a `401` from any saved-queries request ("Saved queries").
+   Both buttons warn first with the same advisory note as Run
+   (`LOGIN_FIRST_NOTE`): a redirect without a warning surprised users
+   (maintainer's decision, 2026-10-08).
 2. **The backend redirects back to `/?resume=1`.** `main.ts` removes
    `resume=1` from the URL at once (so a refresh doesn't repeat it) and calls
    `app.start(true)`.
@@ -1307,6 +1312,18 @@ every node; `main.ts` passes `app.openSaveDialog` / `app.openSavedList` as the
 selection when it ends, so a saved query opened before that would be
 overwritten.
 
+While `auth.status` is `"anonymous"` the row also draws the muted note
+`LOGIN_FIRST_NOTE` ("You'll be asked to log in first.", exported by
+`dataPreview.ts`, which shows it next to **Run query**, so the two cannot
+drift) on its own line under the title and buttons, and both buttons point at it
+with `aria-describedby` (`qb-saved-login-note`). It is advisory only, like
+Run's: the buttons still work and `app.ts` reacts to the real `401`. It is not
+drawn while `auth` is loading or authenticated, nor before the buttons exist. A
+redirect to login without a warning surprised users (maintainer's decision,
+2026-10-08). `main.ts` repaints the card when `auth` changes; the buttons keep
+the keyboard focus through that repaint (`data-action`, "Keyboard focus across
+repaints").
+
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
 a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
 right` while folded, the same arrows as the data dictionary), "Match [ALL |
@@ -1584,7 +1601,8 @@ fix it. The panel says that the query has problems, how many, and where.
 
 Owns the app's only **Run query** button: disabled with the reason when the
 query can't run; enabled with an advisory note ("You'll be asked to log in
-first.") when ready; a loader; an error with **Try again**; or the result.
+first.", the exported `LOGIN_FIRST_NOTE`, which the query card's **Save…** and
+**Saved queries** show too) when ready; a loader; an error with **Try again**; or the result.
 The result is a list of compact rows, one native `<details>` per event: id,
 one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default), up to 3
 tag and 2 group badges ranked by how many of the event's facets carry them

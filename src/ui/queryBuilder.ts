@@ -42,6 +42,7 @@ import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel } from "./format";
+import { LOGIN_FIRST_NOTE } from "./dataPreview";
 import { readValueControl, renderValueControl } from "./valueControl";
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
@@ -372,11 +373,15 @@ export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog)
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
+/** The id of the logged-out note, which both buttons point at (aria-describedby). */
+const LOGIN_NOTE_ID = "qb-saved-login-note";
+
 /**
  * The query card's title row: "Query", the open saved query's name and
  * "(edited)" once the query or the database selection differs from what was
  * last saved or opened, then **Save…** and **Saved queries** (docs/ARCHITECTURE.md,
- * "Saved queries — `savedQueries.ts`").
+ * "Saved queries — `savedQueries.ts`"). A logged-out user also gets the note
+ * "You'll be asked to log in first." under the buttons, as Run has.
  *
  * The two buttons only exist once startup has loaded the databases and the
  * field catalog: start() sets the query and selection when it ends, so a saved
@@ -391,15 +396,24 @@ export function queryTitleHtml(state: AppState): string {
     open && isEdited(open, state.query, state.selectedDatabaseIds)
       ? ` <span class="qb-muted">(edited)</span>`
       : "";
-  const buttons =
-    state.catalog && state.databases
-      ? `<button type="button" class="ui mini basic button" data-action="open-save-dialog" aria-haspopup="dialog">Save…</button>
-         <button type="button" class="ui mini basic button" data-action="open-saved-list" aria-haspopup="dialog">Saved queries</button>`
-      : "";
+  const drawn = Boolean(state.catalog && state.databases);
+  // Run says the same before it sends a logged-out user to login. A redirect
+  // without a warning surprised users (maintainer's decision, 2026-10-08).
+  // Advisory only: the buttons still work, and app.ts reacts to the real 401.
+  const warnsLogin = drawn && state.auth.status === "anonymous";
+  const describedBy = warnsLogin ? ` aria-describedby="${LOGIN_NOTE_ID}"` : "";
+  const buttons = drawn
+    ? `<button type="button" class="ui mini basic button" data-action="open-save-dialog" aria-haspopup="dialog"${describedBy}>Save…</button>
+         <button type="button" class="ui mini basic button" data-action="open-saved-list" aria-haspopup="dialog"${describedBy}>Saved queries</button>`
+    : "";
+  const note = warnsLogin
+    ? `<span class="qb-muted qb-login-note" id="${LOGIN_NOTE_ID}">${escapeHtml(LOGIN_FIRST_NOTE)}</span>`
+    : "";
   return `<div class="qb-query-head">
       <h2 class="qb-card-title">Query${name}${edited}</h2>
       <span class="qb-spacer"></span>
       ${buttons}
+      ${note}
     </div>`;
 }
 

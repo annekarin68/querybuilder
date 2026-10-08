@@ -9,6 +9,8 @@ import {
   queryTitleHtml,
   rowDropdown,
 } from "../../src/ui/queryBuilder";
+import { LOGIN_FIRST_NOTE } from "../../src/ui/dataPreview";
+import { escapeHtml } from "../../src/ui/panel";
 import { initialState, type AppState } from "../../src/state";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
 import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
@@ -378,6 +380,50 @@ describe("the query card's title", () => {
     const html = queryTitleHtml(opened("<b>x</b>"));
     expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
     expect(html).not.toContain("<b>x</b>");
+  });
+
+  // Run warns a logged-out user ("You'll be asked to log in first."); Save…
+  // and Saved queries send them to login just the same, so they say it too.
+  describe("for a logged-out user", () => {
+    const anonymous: AppState = { ...loaded, auth: { status: "anonymous" } };
+    const NOTE = "You'll be asked to log in first.";
+
+    it("says they will be asked to log in, and ties both buttons to that note", () => {
+      const html = queryTitleHtml(anonymous);
+      // `text` drops the tags and turns the entity for the apostrophe back.
+      expect(html).toMatch(/<[^>]*id="qb-saved-login-note"[^>]*>/);
+      expect(text(html).replace("&#39;", "'")).toContain(NOTE);
+      expect(html).toMatch(
+        /<button[^>]*data-action="open-save-dialog"[^>]*aria-describedby="qb-saved-login-note"/,
+      );
+      expect(html).toMatch(
+        /<button[^>]*data-action="open-saved-list"[^>]*aria-describedby="qb-saved-login-note"/,
+      );
+    });
+
+    it("uses the sentence Run shows", () => {
+      expect(LOGIN_FIRST_NOTE).toBe(NOTE);
+      expect(queryTitleHtml(anonymous)).toContain(escapeHtml(LOGIN_FIRST_NOTE));
+    });
+
+    it.each([
+      ["loading", { status: "loading" }],
+      ["authenticated", { status: "authenticated", user: { name: "U" } }],
+    ] as const)("says nothing while auth is %s", (_name, auth) => {
+      const html = queryTitleHtml({ ...loaded, auth } as AppState);
+      expect(html).not.toContain("log in");
+      expect(html).not.toContain("qb-saved-login-note");
+      expect(html).not.toContain("aria-describedby");
+      expect(html).toContain('data-action="open-save-dialog"');
+    });
+
+    it("says nothing before the buttons exist", () => {
+      for (const partial of [{ databases: null }, { catalog: null }]) {
+        const html = queryTitleHtml({ ...anonymous, ...partial });
+        expect(html).not.toContain("log in");
+        expect(html).not.toContain("qb-saved-login-note");
+      }
+    });
   });
 
   // Opening a saved query before start() has finished would be overwritten by

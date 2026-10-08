@@ -137,11 +137,16 @@ function runBlock({
   </div>`;
 }
 
+/** Said next to every button that sends a logged-out user to login: Run here,
+ *  and Save… / Saved queries in queryBuilder.ts. One constant, so they cannot
+ *  drift apart. */
+export const LOGIN_FIRST_NOTE = "You'll be asked to log in first.";
+
 /** Advisory only (docs/ARCHITECTURE.md, "Auth"): Run always attempts the
  *  request; src/app.ts reacts to the real 401/403 by redirecting into
  *  login/compliance and back. */
 function runNote(state: AppState): string {
-  if (state.auth.status === "anonymous") return "You'll be asked to log in first.";
+  if (state.auth.status === "anonymous") return LOGIN_FIRST_NOTE;
   if (state.auth.status === "authenticated" && state.compliance.status === "required") {
     return "You'll be asked to confirm compliance first.";
   }

@@ -121,6 +121,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "dropNotice",
       "openSaved",
       "selectedDatabaseIds",
+      "auth", // the Save… / Saved queries note for a logged-out user
     ],
     run: renderQueryBuilder,
   },
