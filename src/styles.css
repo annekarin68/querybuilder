@@ -96,11 +96,13 @@ body {
   font-size: 1.05rem;
   white-space: nowrap;
 }
+/* The steps neither shrink nor scroll: when the bar is tight it is the account
+   name that gives way (see .qb-account-name), never the workflow. No overflow
+   either, so a step's focus ring is not clipped at the nav's edge. */
 .qb-steps {
   display: flex;
   gap: 0.25rem;
-  min-width: 0;
-  overflow-x: auto;
+  flex: none;
 }
 .qb-step {
   display: inline-flex;
@@ -134,6 +136,16 @@ body {
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
+}
+/* A flex item cannot shrink below its content unless told so: without this
+   the account chip would keep the name's full width and push the page wider. */
+.qb-topbar-right > [data-panel="account"] {
+  min-width: 0;
+}
+/* Log in is one word: if the bar is ever too tight, overflowing beats a
+   two-line button. */
+.qb-login-btn {
+  white-space: nowrap;
 }
 
 /* ---- Body: docs rail | docs | main | stats ---- */
@@ -233,19 +245,66 @@ body {
   font-size: 1.2rem;
   color: var(--qb-muted);
 }
-/* Below the supported range (1024 px+) the stats drop under the main column. */
+/* Split-screen widths (the app supports down to 512 px, half of a 1024 px
+   screen). The stats leave their column and sit between the query and the
+   Run query card: they answer the query just built, and the user sees them
+   before the button that acts on them. The rail keeps its own column and the
+   four panels stack in the other one. `display: contents` on <main> makes its
+   sections grid items beside the stats, so `order` can put the stats between
+   them; the DOM order (stats last) is unchanged.
+
+   Coupling: this block counts the panels. The three <main> sections and the
+   stats make `repeat(4, auto)`, `grid-row: 1 / -1` makes the rail span them,
+   and `:first-child`, `[data-panel="preview"]` and the `order` values name
+   particular sections. Adding or removing a panel needs the row count and the
+   `order` values updated (the template is in src/ui/layout.ts).
+   It also relies on the 1100px rule further down making the open
+   `.qb-col-docs` `position: fixed`, so it is out of the grid's flow; without
+   that rule the docs would become a grid item and take a row. */
 @media (max-width: 900px) {
   .qb-body {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: var(--qb-rail-w) minmax(0, 1fr);
+    /* Four rows for the panels, then a spare 1fr row. The full-height rail
+       spans every row, and a grid shares a spanning item's height out among
+       the rows it spans: without a flexible row to take it, each panel's row
+       would grow by a quarter of the rail and gaps would open between panels. */
+    grid-template-rows: repeat(4, auto) 1fr;
+    padding-bottom: 0; /* the spare row's gap is the bottom margin */
+  }
+  .qb-docs-rail {
+    grid-column: 1;
+    grid-row: 1 / -1;
   }
   .qb-col-main {
-    flex-basis: calc(100% - var(--qb-rail-w) - var(--qb-gap));
+    display: contents;
+  }
+  .qb-col-main > section,
+  .qb-col-stats {
+    grid-column: 2;
+  }
+  /* <main>'s own top margin is gone with its box; the first panel keeps the gap. */
+  .qb-col-main > section:first-child {
+    margin-top: var(--qb-gap);
+  }
+  .qb-col-main > [data-panel="preview"] {
+    order: 2; /* Run query and the events come after the stats */
   }
   .qb-col-stats {
+    order: 1;
     position: static;
-    flex: 1 1 100%;
     max-height: none;
-    margin-left: calc(var(--qb-rail-w) + var(--qb-gap));
+    /* Nothing needs to scroll (no max-height), and a scroll container
+       (`overflow-y: auto` above) is left out when the grid sizes the rail's
+       spare 1fr row, which leaves blank scroll space under the last card. */
+    overflow: visible;
+    margin-top: 0; /* the grid's row gap spaces it */
+  }
+  /* Until the data dictionary has loaded the panel has no content, but an empty
+     grid item still takes a row, which would double the gap between the query
+     and Run query. */
+  .qb-col-stats:empty {
+    display: none;
   }
 }
 
@@ -427,6 +486,8 @@ body {
 .qb-account-chip:focus-visible {
   outline: 2px solid var(--qb-text-on-fill);
 }
+/* The one part of the top bar that gives way when it is tight: it shrinks, with
+   an ellipsis (the full name is its tooltip), before anything else moves. */
 .qb-account-name {
   max-width: 12rem;
   overflow: hidden;
@@ -445,6 +506,11 @@ body {
 .qb-badge .icon {
   margin: 0;
   font-size: 0.8em;
+}
+/* Only for the narrow-screen badge (see the end of this section): at full width
+   the "needed" badge is text alone, as it always was. */
+.qb-badge .qb-badge-narrow-icon {
+  display: none;
 }
 .qb-badge-ok {
   background: var(--qb-topbar-ok-bg);
@@ -497,6 +563,61 @@ body {
   margin: 0 0 0.6rem;
   font-size: 0.8rem;
   color: var(--qb-muted);
+}
+
+/* ---- Narrow top bar (docs/ARCHITECTURE.md, "Screen layout") ----
+   The app supports windows down to 512 px. At 801 px the logged-in bar with all
+   four labels still fits, but only because the name gives way: it keeps about
+   90 px, and loses a pixel for every pixel the window loses, so below about
+   760 px it would be cut to a few letters. 800 px leaves a margin for fonts
+   wider than ours. Below it the bar spends less: tighter spacing; only the
+   active step keeps its label (the others are their number, with the label as
+   hidden text and a title tooltip); the compliance badge is its icon alone
+   (same treatment). Spacing alone was tried first and is not enough: with every
+   label shown, the logged-in bar needs over 600 px at the spacing below (about
+   625 px with the widest badge text) even with the name cut to nothing, and the
+   anonymous bar only just fits at 512 px even with smaller type as well. The
+   logo and the app name stay.
+   The 800 px figure follows from the widest badge text ("Compliance needed")
+   and from the parts of the bar that do not shrink (logo, app name, step
+   labels, spacing); the 12rem cap of `.qb-account-name` only decides where the
+   name starts to shrink (about 875 px), so recheck 800 if any of those change.
+   This block comes after the account rules above so that it overrides them. */
+@media (max-width: 800px) {
+  .qb-topbar {
+    gap: 0.75rem;
+    padding: 0 0.75rem;
+  }
+  .qb-steps {
+    gap: 0.15rem;
+  }
+  .qb-step {
+    padding: 0.3rem 0.5rem;
+  }
+  .qb-account-chip {
+    padding: 0.3rem 0.6rem;
+    gap: 0.3rem;
+  }
+  .qb-badge {
+    padding: 0.15rem 0.4rem;
+  }
+  .qb-badge .qb-badge-narrow-icon {
+    display: inline-block;
+  }
+  /* Visually hidden, not display:none: it must stay in the accessible name
+     (the same rules as .qb-sr-only). */
+  .qb-step:not(.is-active) .qb-step-label,
+  .qb-badge-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
 /* ---- Query builder (src/ui/queryBuilder.ts + valueControl.ts) ---- */
@@ -686,13 +807,35 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* On a narrow row the row's three dropdowns (Facet, Field, Operator) get about
+   114px each at a 512px window. Fomantic pads a selection dropdown 1em on the
+   left and 3.2em on the right, which left only 54px for text, less than
+   "Operator…" (about 66px) and "Choose…" (about 57px) need: both were cut off
+   with an ellipsis before the user had typed anything. The arrow sits in the
+   last ~22px, so 2em on the right still keeps text clear of it. The search
+   input is laid over the dropdown and gets the same padding, so what the user
+   types lines up with the text it replaces. Wide rows (container over 640px)
+   keep Fomantic's own padding, so nothing changes there.
+   Only the grid's direct children (`>`): the Value box lives inside
+   `.qb-value`, and its multi-select ("Is any of") needs Fomantic's own padding:
+   its search input has none and is a small typing area after the tags, so
+   padding it like a row dropdown would leave no room to show what is typed. */
+@container (max-width: 640px) {
+  .qb-cond-grid > .ui.search.selection.dropdown,
+  .qb-cond-grid > .ui.search.selection.dropdown > input.search {
+    padding-left: 0.8em;
+    padding-right: 2em;
+  }
+}
 /* A whole-facet condition ("Is present") has no Operator or Value slot, so its
    row has its own, shorter template: the facet NAME takes the spare room (a
    long one was cut off beside a wide, mostly empty "Is present" box), the
    Field dropdown keeps just enough for "Is present" / "Is absent" to be read
    whole, and the ✕ is in the last column, at the row's end like the ✕ of the
-   rows above it. Wide and narrow rows alike: the narrow rule above would put
-   the ✕ on a second line, and this rule (more specific) wins over it. */
+   rows above it. Wide and narrow rows alike: the narrow-grid rule near the top of
+   this section (the first `@container (max-width: 640px)` block, which moves
+   the ✕ to row 2) would put the ✕ on a second line, and this rule (more
+   specific) wins over it. */
 .qb-cond-grid.is-facet-level {
   grid-template-columns: minmax(0, 18rem) minmax(9rem, 9.5rem) 1fr;
 }
@@ -1273,13 +1416,34 @@ details[open] > summary > .qb-chevron {
    decides from the same width when Escape and an outside click close the
    floating docs, and CSS cannot share a constant with it. */
 @media (max-width: 1100px) {
-  /* Narrow screens: the docs float over the page instead of squeezing the builder. */
+  /* Narrow screens: the docs float over the page instead of squeezing the builder.
+     The 900px grid block above relies on the open docs column being
+     `position: fixed`, which takes it out of the grid's flow: do not drop
+     `fixed`, or move this breakpoint below 900px, without updating that block. */
   .qb-body:not(.qb-docs-collapsed) .qb-col-docs {
     position: fixed;
     left: var(--qb-rail-w);
     z-index: 15;
     width: var(--qb-docs-w);
-    max-width: calc(100vw - var(--qb-rail-w));
+    /* In a window narrower than the column's width plus the rail plus one gap
+       (at the 40rem maximum: 560 + 28 + 14 = 602px; without the gap it would be
+       588px) the column is cut to fit, and it leaves one gap of the page
+       showing on its right. The gap is needed twice over: the resize handle
+       sticks out 0.4rem past the column's right edge, so with no margin most of
+       it would be off screen and could not be grabbed (at 512px only 1.4px of
+       it was on screen); and a strip of the page shows the user that the
+       dictionary floats over something, and is a click target that closes it.
+       The stored width is not changed. Percent, not `100vw`: for a fixed box
+       `100%` is the window without the page's scrollbar, and `100vw` includes
+       the scrollbar, which would eat the whole gap on a desktop browser. */
+    max-width: calc(100% - var(--qb-rail-w) - var(--qb-gap));
+    /* The gap above the column is counted twice once it is fixed: in its `top`
+       (topbar + gap) and in the `margin-top: var(--qb-gap)` it shares with the
+       other columns. Sticky, that margin only places the column in the flow;
+       fixed, it is added to `top`, so the dictionary would sit one gap too low
+       and its panel's max-height (which leaves a gap above and below) would
+       run to the window's bottom edge. */
+    margin-top: 0;
     box-shadow: var(--qb-shadow);
     background: var(--qb-bg);
   }
