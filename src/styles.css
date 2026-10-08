@@ -408,6 +408,10 @@ body {
 .qb-dbpicker .qb-card-title .ui.button {
   margin: 0;
 }
+/* All, None and Deselect failing wrap under the count on a narrow window. */
+.qb-dbpicker .qb-card-title {
+  flex-wrap: wrap;
+}
 .qb-db-pills {
   display: flex;
   flex-wrap: wrap;
@@ -455,6 +459,18 @@ body {
 .qb-db-pill input:focus-visible + span {
   outline: 2px solid var(--qb-and);
   outline-offset: 2px;
+}
+/* A selected database that failed for this query (databasePicker.ts): a danger
+   outline and icon. The text keeps the checked colours, so no new text/background
+   pair; the icon and a hidden text carry the meaning without the colour. */
+/* "input + span" matches the specificity of the checked rule above, which would
+   otherwise keep the green border. */
+.qb-db-pill.is-failed input + span {
+  border-color: var(--qb-danger);
+}
+.qb-db-pill.is-failed .icon {
+  margin: 0;
+  color: var(--qb-danger);
 }
 .qb-db-warn {
   margin: 0.5rem 0 0;

@@ -996,6 +996,22 @@ One pill per database (a native checkbox in a styled label; hover shows
 a warning-coloured "Select at least one database." and the other cards say why they are
 empty.
 
+**Failed databases.** A selected database that failed for the query on screen
+is marked on its pill: a danger-coloured outline, a "!" icon and the hidden
+text "failed for this query" (`qb-sr-only`), so the colour is not the only
+signal. Its reasons (`failedDatabases`: the errors' messages, else its notes,
+else "Failed.") are appended to the pill's tooltip on a new line, after the
+database description. Only the current results count and only selected
+databases are marked: `changeScope` empties `results` when a new query starts,
+and an unselected database is not part of this query. The picker therefore
+re-renders on `stats`.
+
+**Deselect failing (N)** sits with All / None and removes the selected failed
+databases from the selection (through `onDatabasesChange`, like any edit). It
+shows only when some, not all, selected databases failed (`deselectFailingIds`):
+deselecting every one would leave nothing to query, and then the query is the
+problem (the statistics column says so), not the databases.
+
 ### Left — `docsSidebar.ts` (data dictionary)
 
 Built from `state.facets` and `state.catalog`. It is a stack of native

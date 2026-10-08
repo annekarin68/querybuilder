@@ -103,7 +103,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
-    keys: ["databases", "selectedDatabaseIds"],
+    keys: ["databases", "selectedDatabaseIds", "stats"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
   {
