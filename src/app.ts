@@ -273,6 +273,12 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     if (notice) announce(notice);
   }
 
+  /** Show one message as the warning (and speak it): for a refusal that does
+   *  not come from a drop, such as an Ungroup that would change the query. */
+  function showNotice(message: string): void {
+    setNotice([message]);
+  }
+
   /** `tree` with the group `nodeId` expanded, if it is a collapsed group: so
    *  the user sees what was just dropped into it. */
   function openGroup(tree: Group, nodeId: string): Group {
@@ -420,6 +426,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     onDropItem,
     onAddItem,
     dismissDropNotice,
+    showNotice,
     onDatabasesChange,
     onLogout,
     onInvalidateCompliance,

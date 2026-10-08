@@ -14,6 +14,10 @@ import {
   replaceLoneBlankCondition,
   moveNode,
   placeNodes,
+  groupContents,
+  ungroupBlocker,
+  ungroup,
+  UNGROUP_BLOCKED_MESSAGE,
 } from "../../src/query/tree";
 import type { Condition, Group } from "../../src/query/types";
 
@@ -361,5 +365,102 @@ describe("moveNode", () => {
     const c = newCondition();
     const g = { ...newGroup(), children: [c] };
     expect(moveNode(addChild(root, root.id, g), g.id, c.id)).toBeNull();
+  });
+});
+
+const cond = (id: string): Condition => ({
+  kind: "condition",
+  id,
+  facetId: "f",
+  fieldId: "x",
+  operatorId: "eq",
+  value: 1,
+});
+const group = (
+  id: string,
+  operator: "AND" | "OR",
+  children: Group["children"],
+  collapsed?: boolean,
+): Group => ({
+  kind: "group",
+  id,
+  operator,
+  children,
+  ...(collapsed === undefined ? {} : { collapsed }),
+});
+
+describe("groupContents", () => {
+  it("moves every child into one new group with the same operator", () => {
+    const root = group("r", "OR", [cond("a"), cond("b")]);
+    const next = groupContents(root, "r");
+    expect(next.operator).toBe("OR");
+    expect(next.children).toHaveLength(1);
+    const inner = next.children[0] as Group;
+    expect(inner).toMatchObject({
+      kind: "group",
+      operator: "OR",
+      children: [cond("a"), cond("b")],
+    });
+    expect(inner.id).not.toBe("r");
+    expect(inner.collapsed).toBeUndefined();
+  });
+
+  it("works on a nested group and leaves the rest alone", () => {
+    const root = group("r", "AND", [cond("a"), group("g", "OR", [cond("b"), cond("c")])]);
+    const next = groupContents(root, "g");
+    expect(next.children[0]).toEqual(cond("a"));
+    const g = next.children[1] as Group;
+    expect(g.id).toBe("g");
+    expect((g.children[0] as Group).children).toEqual([cond("b"), cond("c")]);
+  });
+
+  it("returns the tree unchanged for an unknown id or a condition id", () => {
+    const root = group("r", "AND", [cond("a"), cond("b")]);
+    expect(groupContents(root, "nope")).toBe(root);
+    expect(groupContents(root, "a")).toBe(root);
+  });
+
+  it("does not change what the query means (only one more level)", () => {
+    const root = group("r", "AND", [cond("a"), cond("b")]);
+    const inner = groupContents(root, "r").children[0] as Group;
+    expect(sameSemantics({ ...inner, id: "r" }, root)).toBe(true);
+  });
+});
+
+describe("ungroupBlocker / ungroup", () => {
+  it("allows ungrouping when the group matches its parent's operator", () => {
+    const root = group("r", "AND", [
+      cond("a"),
+      group("g", "AND", [cond("b"), cond("c")]),
+      cond("d"),
+    ]);
+    expect(ungroupBlocker(root, "g")).toBeNull();
+    expect(ungroup(root, "g")!.children.map((n) => n.id)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("allows ungrouping a one-child group whatever its operator", () => {
+    const root = group("r", "AND", [group("g", "OR", [cond("b")])]);
+    expect(ungroupBlocker(root, "g")).toBeNull();
+    expect(ungroup(root, "g")!.children).toEqual([cond("b")]);
+  });
+
+  it("refuses when operators differ and the group holds more than one item", () => {
+    const root = group("r", "AND", [group("g", "OR", [cond("b"), cond("c")])]);
+    expect(ungroupBlocker(root, "g")).toBe(UNGROUP_BLOCKED_MESSAGE);
+    expect(ungroup(root, "g")).toBeNull();
+  });
+
+  it("refuses the root and unknown ids", () => {
+    const root = group("r", "AND", [cond("a")]);
+    expect(ungroupBlocker(root, "r")).not.toBeNull();
+    expect(ungroup(root, "r")).toBeNull();
+    expect(ungroup(root, "nope")).toBeNull();
+    expect(ungroupBlocker(root, "a")).not.toBeNull();
+  });
+
+  it("ungrouping a collapsed group keeps its children's own state", () => {
+    const inner = group("h", "OR", [cond("x")], true);
+    const root = group("r", "AND", [group("g", "AND", [inner, cond("b")], true)]);
+    expect(ungroup(root, "g")!.children).toEqual([inner, cond("b")]);
   });
 });

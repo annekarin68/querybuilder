@@ -17,9 +17,13 @@ import {
   addChild,
   countConditions,
   findNode,
+  groupContents,
   newCondition,
   newGroup,
   removeNode,
+  ungroup,
+  ungroupBlocker,
+  UNGROUP_BLOCKED_MESSAGE,
   updateNode,
 } from "../query/tree";
 import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
@@ -27,7 +31,9 @@ import {
   ADDED_GROUP_MESSAGE,
   addedMessage,
   DRAG_MIME,
+  groupedMessage,
   parseDragItem,
+  UNGROUPED_MESSAGE,
   type DragItem,
 } from "../query/drop";
 import { placeIssues } from "../query/issues";
@@ -42,6 +48,8 @@ interface BuilderCtx {
   catalog: FieldCatalog;
   facets: Facet[] | null;
   issues: Issue[];
+  /** The whole query: a group's Ungroup button needs its parent's ALL/ANY. */
+  query: Group;
 }
 
 /**
@@ -284,6 +292,19 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
       ${issuesHtml(g.id, ctx.issues)}
     </div>`;
   }
+  // With two or more items, "Group contents" is the way to put a sibling group
+  // next to them (e.g. to mix ALL and ANY). Ungroup is always drawn on a
+  // non-root group, but is aria-disabled with the reason when it would change
+  // what the query means: not `disabled`, so keyboard and screen-reader users
+  // can still reach the button and hear why.
+  const groupContentsButton =
+    g.children.length >= 2
+      ? `<button type="button" class="ui mini basic button" data-action="group-contents" title="Put this group's conditions and groups into a new group inside it"><i class="object group outline icon" aria-hidden="true"></i>Group contents</button>`
+      : "";
+  const blocked = isRoot ? null : ungroupBlocker(ctx.query, g.id);
+  const ungroupButton = isRoot
+    ? ""
+    : `<button type="button" class="ui mini basic button" data-action="ungroup"${blocked ? ` aria-disabled="true" title="${escapeHtml(blocked)}"` : ` title="Put this group's items into the group around it"`}><i class="object ungroup outline icon" aria-hidden="true"></i>Ungroup</button>`;
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
   const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
@@ -299,6 +320,8 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
       <span class="qb-spacer"></span>
       <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
       <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
+      ${groupContentsButton}
+      ${ungroupButton}
       ${remove}
     </div>
     ${issuesHtml(g.id, ctx.issues)}
@@ -336,7 +359,12 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   }
   // Local issues (validate.ts) and the backend's, each on a node that is drawn.
   const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
-  const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
+  const ctx: BuilderCtx = {
+    catalog: state.catalog,
+    facets: state.facets,
+    issues,
+    query: state.query,
+  };
   paint(
     el,
     `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
@@ -364,6 +392,8 @@ export function wireQueryBuilder(
   hooks: {
     onDrop(item: DragItem | null, targetNodeId: string): void;
     onDismissNotice(): void;
+    /** Show a warning above the query (a refused action, not a drop). */
+    onNotice(message: string): void;
     /** Say something to screen-reader users (the shell's live region). */
     announce(message: string): void;
   },
@@ -445,6 +475,19 @@ export function wireQueryBuilder(
       case "add-group":
         onChange(addChild(q, nodeId, newGroup()));
         return hooks.announce(ADDED_GROUP_MESSAGE);
+      case "group-contents": {
+        const node = findNode(q, nodeId);
+        onChange(groupContents(q, nodeId));
+        return hooks.announce(groupedMessage(node?.kind === "group" ? node.children.length : 0));
+      }
+      case "ungroup": {
+        const next = ungroup(q, nodeId);
+        // Refused: say why (the button is aria-disabled, not disabled, so
+        // keyboard and screen-reader users can reach it and hear the reason).
+        if (!next) return hooks.onNotice(ungroupBlocker(q, nodeId) ?? UNGROUP_BLOCKED_MESSAGE);
+        onChange(next);
+        return hooks.announce(UNGROUPED_MESSAGE);
+      }
       case "remove-node":
         return onChange(removeNode(q, nodeId));
       case "set-and":

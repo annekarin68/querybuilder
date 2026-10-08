@@ -677,6 +677,12 @@ body {
 .qb-group-head .ui.mini.button {
   margin: 0;
 }
+/* A refused action (Ungroup that would change the query) looks like Fomantic's
+ * .disabled but stays clickable and focusable, so the click can say why. */
+.qb-group-head .ui.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .qb-group-label {
   font-size: 0.85rem;
   color: var(--qb-muted);

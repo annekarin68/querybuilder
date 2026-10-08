@@ -3,9 +3,11 @@ import {
   ADDED_GROUP_MESSAGE,
   addedMessage,
   dropNotice,
+  groupedMessage,
   movedMessage,
   nodesForItem,
   parseDragItem,
+  UNGROUPED_MESSAGE,
 } from "../../src/query/drop";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import type { Condition } from "../../src/query/types";
@@ -178,5 +180,15 @@ describe("addedMessage / movedMessage (read out to screen readers)", () => {
   it("says what was moved", () => {
     expect(movedMessage("condition")).toBe("Moved the condition.");
     expect(movedMessage("group")).toBe("Moved the group.");
+  });
+});
+
+describe("groupedMessage / UNGROUPED_MESSAGE (read out to screen readers)", () => {
+  it("says how many items were grouped", () => {
+    expect(groupedMessage(1)).toBe("Grouped 1 item.");
+    expect(groupedMessage(3)).toBe("Grouped 3 items.");
+  });
+  it("says a group was dissolved", () => {
+    expect(UNGROUPED_MESSAGE).toBe("Ungrouped.");
   });
 });

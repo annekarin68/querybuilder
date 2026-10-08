@@ -139,6 +139,15 @@ export function addedMessage(count: number): string {
  *  (its "+ Condition" says `addedMessage(1)`, like the dictionary's "+"). */
 export const ADDED_GROUP_MESSAGE = "Added a group to the query.";
 
+/** What a screen reader hears after "Group contents": how many items moved
+ *  into the new inner group (the query card repaints, so nothing else says so). */
+export function groupedMessage(count: number): string {
+  return count === 1 ? "Grouped 1 item." : `Grouped ${count} items.`;
+}
+
+/** What a screen reader hears after "Ungroup". */
+export const UNGROUPED_MESSAGE = "Ungrouped.";
+
 /** What a screen reader hears after an existing node was moved. */
 export function movedMessage(kind: QueryNode["kind"]): string {
   return `Moved the ${kind}.`;

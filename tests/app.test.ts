@@ -595,6 +595,13 @@ describe("dropping docs items", () => {
     expect(announce).toHaveBeenCalledTimes(2);
   });
 
+  it("showNotice shows a message as the warning and speaks it", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.showNotice("Not allowed.");
+    expect(store.getState().dropNotice).toBe("Not allowed.");
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Not allowed.");
+  });
+
   it("a drop that fully succeeds speaks no warning", () => {
     const { store, app, announce } = setup({ ...ready(emptyQuery()), dropNotice: "old" });
     app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);

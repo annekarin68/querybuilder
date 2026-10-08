@@ -182,3 +182,67 @@ export function moveNode(tree: Group, nodeId: string, targetId: string): Group |
   // Judge the target after the node is out: taking it out can leave a lone blank row.
   return placeNodes(removeNode(tree, nodeId), targetId, [node]);
 }
+
+/**
+ * "Group contents": the group's children move into one new group, with the
+ * same ALL/ANY, which becomes the group's only child. The query means the same
+ * afterwards; the user can then add a sibling group and switch ALL/ANY.
+ * An unknown id (or a condition's) changes nothing.
+ */
+export function groupContents(tree: Group, groupId: string): Group {
+  const target = findNode(tree, groupId);
+  if (!target || target.kind !== "group") return tree;
+  return mapTree(tree, (n) =>
+    n.kind === "group" && n.id === groupId
+      ? {
+          ...n,
+          children: [{ kind: "group", id: id("g"), operator: n.operator, children: n.children }],
+        }
+      : n,
+  ) as Group;
+}
+
+export const UNGROUP_BLOCKED_MESSAGE =
+  "Ungroup works only when this group and the one around it are both ALL or both ANY, or when it holds one item.";
+
+/** The group that holds `nodeId` directly, or null (the root, or unknown). */
+function parentOf(tree: Group, nodeId: string): Group | null {
+  for (const child of tree.children) {
+    if (child.id === nodeId) return tree;
+    if (child.kind === "group") {
+      const hit = parentOf(child, nodeId);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/**
+ * Why `groupId` can't be ungrouped, or null if it can. Ungrouping must never
+ * change what the query means: that holds when the group combines its items
+ * the same way as its parent, or when it holds only one item (a one-item
+ * group means the same under ALL and ANY).
+ */
+export function ungroupBlocker(tree: Group, groupId: string): string | null {
+  if (groupId === tree.id) return "The whole query can't be ungrouped.";
+  const node = findNode(tree, groupId);
+  const parent = parentOf(tree, groupId);
+  if (!node || node.kind !== "group" || !parent) return "That group is no longer in the query.";
+  if (node.operator === parent.operator || node.children.length === 1) return null;
+  return UNGROUP_BLOCKED_MESSAGE;
+}
+
+/** Put `groupId`'s children in its place in its parent; null when `ungroupBlocker` says no. */
+export function ungroup(tree: Group, groupId: string): Group | null {
+  if (ungroupBlocker(tree, groupId) !== null) return null;
+  return mapTree(tree, (n) =>
+    n.kind === "group" && n.children.some((c) => c.id === groupId)
+      ? {
+          ...n,
+          children: n.children.flatMap((c) =>
+            c.id === groupId && c.kind === "group" ? c.children : [c],
+          ),
+        }
+      : n,
+  ) as Group;
+}

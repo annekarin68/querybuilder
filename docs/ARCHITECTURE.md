@@ -925,6 +925,14 @@ Dropping a facet or a tag on the builder creates such conditions.
   matches only events that hold every one of those facets, which can be rare.
   The maintainers chose to keep it and to switch to an ANY group only if users
   give negative feedback on this part of the application.
+- **`tree.ts`, grouping** — `groupContents` moves a group's children into one
+  new group with the same ALL/ANY, which becomes its only child (the query
+  means the same; only one level is added). `ungroup` does the reverse: it puts
+  a group's children in its place in its parent. **Neither may change what the
+  query means.** `ungroupBlocker` returns the reason `ungroup` would refuse, or
+  `null`: a group can be dissolved when it combines its items the same way as
+  its parent (both ALL or both ANY), or when it holds one item (one item means
+  the same under ALL and ANY). The root and unknown ids are refused too.
 - **`tree.ts`, placement** — `insertNodes` puts new nodes at the end of a
   target group, or just before a target condition. `placeNodes` is what every
   drop calls: it first tries `replaceLoneBlankCondition`, then falls back to
@@ -1104,7 +1112,7 @@ drag in a Firefox-only deployment.
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
 a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
 right` while folded, the same arrows as the data dictionary), "Match [ALL |
-ANY] of the following", **+ Condition**, **+ Group**, ✕ (not on the root). A
+ANY] of the following", **+ Condition**, **+ Group**, **Group contents**, **Ungroup** (not on the root; see below), ✕ (not on the root). A
 collapsed group folds to its `queryToText` summary and "N conditions", and that
 whole line is the click target for unfolding it (`data-action="toggle-collapse"`
 on the header, a pointer cursor, a hover background and the tooltip "Click to
@@ -1151,6 +1159,29 @@ blank", while a facet-level `absent` means no field holds a value. **Only
 `present` and `absent` exist at facet level.** That is why the test can live in
 the Field dropdown and the Operator slot can go; a facet-level operator that
 takes a value or has more than two options would need the Operator slot back.
+
+**Group contents and Ungroup** (header buttons of an open group, after
+**+ Group**; a folded group is one big click target for unfolding and shows
+neither). **Group contents** is drawn when the group holds two or more items;
+it wraps them in a new group with the same ALL/ANY (`groupContents`) and
+announces "Grouped N items." The user can then add a sibling group and switch
+ALL/ANY, which is the way to build `(a AND b) OR (c AND d)`. **Ungroup** is
+drawn on every group except the root. When `ungroupBlocker` says no, the button
+is `aria-disabled="true"` with the reason as its tooltip (a muted look in
+`styles.css`; not the `disabled` attribute or Fomantic's `.disabled` class,
+which would remove it from the Tab order and from the pointer): pressing it
+shows the reason as the dismissible warning above the query (`hooks.onNotice`,
+`app.showNotice`, spoken through the live region) and changes nothing. A
+successful Ungroup announces "Ungrouped." After either, `paint()` keeps the
+focus on the same control if it is still drawn, otherwise on the group's
+**+ Condition** ("Keyboard focus across repaints"). `groupHtml` reads the
+whole query (`BuilderCtx.query`) to ask `ungroupBlocker` about the parent.
+**Decided 2026-10-08:** the label is "Group contents" (not "Indent" or "Group
+children", which don't say what moves where); Ungroup is offered only when the
+meaning stays the same, since silently changing ALL/ANY would break "the
+frontend never rewrites the query"; a blocked Ungroup is shown disabled with
+the reason, not hidden, so the user learns the rule instead of wondering where
+the button went.
 
 The `<select>` values are encoded so nothing can collide: `""` is nothing
 chosen, a whole-facet test is `FACET_TEST_PREFIX` (`"op:"`) + the operator, a
