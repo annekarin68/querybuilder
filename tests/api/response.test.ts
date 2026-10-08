@@ -414,6 +414,28 @@ describe("toSavedQuery", () => {
     expect(() => toSavedQuery(broken)).toThrow(message);
   });
 
+  it.each([
+    ["no databases key", undefined, '"databases" should be a list of ids, but it is missing.'],
+    ["databases that is not a list", "alpha", '"databases" should be a list of ids'],
+    ["a blank database id", ["alpha", " "], '"databases[1]" should be non-blank text'],
+    ["a database id that is a number", ["alpha", 2], '"databases[1]" should be non-blank text'],
+  ])(
+    "throws a ContractError for %s, instead of opening with fewer databases",
+    (_l, databases, message) => {
+      const broken = readBroken<SavedQueryResponse>({ ...unfinishedResponse, databases });
+      expect(() => toSavedQuery(broken)).toThrow(ContractError);
+      expect(() => toSavedQuery(broken)).toThrow(message);
+    },
+  );
+
+  it("names the saved query's place in a list", () => {
+    const broken = new ResponseValue(
+      [unfinishedResponse, { ...unfinishedResponse, databases: ["a", null] }],
+      "GET /test",
+    ).list<SavedQueryResponse>();
+    expect(() => toSavedQuery(broken[1]!)).toThrow('"[1].databases[1]" should be non-blank text');
+  });
+
   it("throws a ContractError naming the path for a group without children", () => {
     const broken = readBroken<SavedQueryResponse>({
       ...unfinishedResponse,

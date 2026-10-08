@@ -147,7 +147,7 @@ export function toCompliance(c: ResponseObject<ComplianceStatus>): Compliance {
  * A saved query. The tree is required data (a malformed one throws a
  * ContractError naming the node, e.g. "query.children[0].kind"): loading half
  * of a user's query would be worse than saying it cannot be read. The note is
- * only shown, so a missing one becomes "". The tree comes back exactly as it
+ * only shown, so a missing one becomes ""; the database ids are required like every id. The tree comes back exactly as it
  * was saved, unfinished parts included; the backend never rewrites it.
  */
 export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery {
@@ -157,7 +157,7 @@ export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery 
     id: q.id("id"),
     name: q.id("name").trim(),
     note: q.text("note"),
-    databaseIds: q.strings("databases"),
+    databaseIds: q.ids("databases"),
     query: toSavedGroup(root),
     updatedAt: q.id("updatedAt"),
   };

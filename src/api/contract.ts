@@ -16,8 +16,8 @@ import type { SavedValue } from "./types";
  * and not three files later as "Cannot read properties of undefined".
  *
  * There are two kinds of read:
- * - **Required**: `id`, `nullableId`, `oneOf`, `savedValue`, `number`,
- *   `boolean`, `list`, `optionalList`, `object`. The app cannot work without
+ * - **Required**: `id`, `ids`, `nullableId`, `oneOf`, `savedValue`,
+ *   `number`, `boolean`, `list`, `optionalList`, `object`. The app cannot work without
  *   these. A missing or wrong value throws a
  *   `ContractError`. (`optionalList` allows a missing one.)
  * - **Display-only**: `text`, `strings` and the `optional…` reads. The app
@@ -166,6 +166,19 @@ export class ResponseObject<T> {
     const v = this.fields[key];
     if (typeof v === "string" && v.trim() !== "") return v;
     throw this.error(key, "non-blank text");
+  }
+
+  /** A list of machine ids (see `id`): every item must be non-blank text.
+   *  A missing key, a value that isn't a list, or a bad item throws; the
+   *  message names the item, e.g. `"[0].databases[1]"`. */
+  ids(key: Key<T>): string[] {
+    const v = this.fields[key];
+    const path = join(this.path, key);
+    if (!Array.isArray(v)) throw new ContractError(this.source, mismatch(path, "a list of ids", v));
+    return v.map((item, i) => {
+      if (typeof item === "string" && item.trim() !== "") return item;
+      throw new ContractError(this.source, mismatch(`${path}[${i}]`, "non-blank text", item));
+    });
   }
 
   /** Like `id`, for a machine id that may be unset: `null` when the key is

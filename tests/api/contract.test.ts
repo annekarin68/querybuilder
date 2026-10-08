@@ -117,6 +117,33 @@ describe("required reads", () => {
   });
 });
 
+describe("ids", () => {
+  it("returns the ids as sent, untrimmed, and an empty list", () => {
+    expect(thing({ tags: ["a", " b "] }).ids("tags")).toEqual(["a", " b "]);
+    expect(thing({ tags: [] }).ids("tags")).toEqual([]);
+  });
+
+  it.each([
+    ["missing", {}, '"tags" should be a list of ids, but it is missing.'],
+    ["null", { tags: null }, '"tags" should be a list of ids, but it is null.'],
+    ["not a list", { tags: "a" }, '"tags" should be a list of ids, but it is the text "a".'],
+    [
+      "a blank item",
+      { tags: ["a", " "] },
+      '"tags[1]" should be non-blank text, but it is the text " ".',
+    ],
+    [
+      "a number item",
+      { tags: ["a", 2] },
+      '"tags[1]" should be non-blank text, but it is the number 2.',
+    ],
+    ["a null item", { tags: [null] }, '"tags[0]" should be non-blank text, but it is null.'],
+  ])("%s throws, naming the place", (_what, body, message) => {
+    expect(() => thing(body).ids("tags")).toThrow(ContractError);
+    expect(() => thing(body).ids("tags")).toThrow(message);
+  });
+});
+
 describe("nullableId", () => {
   it("returns an id, and null when the key is null or left out", () => {
     expect(thing({ label: "a" }).nullableId("label")).toBe("a");

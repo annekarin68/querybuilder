@@ -669,16 +669,12 @@ the value it reads. There are two kinds:
 | Read | For | When the value is missing or wrong |
 |---|---|---|
 | `id`, `number`, `boolean`, `list`, `optionalList`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest. `optionalList` is `list` for a key marked `?` in `types.ts` (a stats line's `errorMessages`) | throws a `ContractError`; only `optionalList` accepts a missing (or `null`) value, which becomes `[]` |
+| `ids` | a list of machine ids (a saved query's `databases`) | throws a `ContractError` for a missing key, a non-list, or an item that is blank or not text; the message names the item, e.g. `"[0].databases[1]"` |
+| `nullableId` | an id that may be unset (an unfinished condition's `facetId`) | `null` and a left-out key are both `null`; a number or blank text throws |
+| `oneOf` | one of a few texts (a saved node's `kind`, a group's `operator`) | throws, and the message lists the allowed texts: `"query.children[0].kind" should be "group" or "condition", but it is the text "other".` |
+| `savedValue` | a saved condition's `value` | `null` and a left-out key are both `null`; a scalar or a list of scalars and nulls is copied as sent; anything else throws |
 | `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
 | `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` in `types.ts` | becomes `""`, `[]` or `undefined`; a warning only if the value is there but of the wrong kind |
-
-Three more required reads exist for a saved query's tree ("Saved queries"):
-`nullableId` (an id that may be `null` or left out, e.g. an unfinished
-condition's `facetId`; a number or blank text still throws), `oneOf` (one of
-a few texts, for a node's `kind` and a group's `operator`; the message lists
-them) and `savedValue` (`null` or left out, a scalar, or a list of scalars and
-nulls). All three throw a `ContractError` naming the node, e.g.
-`"query.children[0].kind" should be "group" or "condition", but it is the text "other".`
 
 A `ContractError`'s message names the request and the place in the body,
 written as it would be in JavaScript:
@@ -843,8 +839,8 @@ the rest of the app sees `Group` / `QueryNode` and the model's `SavedQuery`.
 `toSavedQueryRequest` trims name and note, drops `collapsed`, and throws only
 on a value that is not JSON scalars and nulls (a bug). `toSavedQuery` reads the
 tree strictly (a node of unknown `kind`, a missing `children` or a number as
-`facetId` is a `ContractError` naming the path) and a missing note as `""`
-with a warning. The `client.ts` functions are `listSavedQueries`,
+`facetId`, or a missing or non-text database id, is a `ContractError` naming
+the path) and a missing note as `""` with a warning. The `client.ts` functions are `listSavedQueries`,
 `createSavedQuery`, `updateSavedQuery(id, draft)` and `deleteSavedQuery(id)`;
 the id goes into the path with `encodeURIComponent`.
 
