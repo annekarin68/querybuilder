@@ -989,8 +989,16 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    and no known values has nothing to open, so it is a plain row (`is-leaf`, a
    `<div>`, not a `<details>`): no arrow, but a spacer of the arrow's width
    (`.qb-chevron-spacer`) so its grip and name line up with the other rows.
-4. **Value chips** — the field's pick-list (`CatalogField.options`, at most 30
-   shown, the rest counted).
+4. **Previously seen values** — the field's pick-list (`CatalogField.options`)
+   as a labelled block: the heading "Previously seen values (N)" (N counts all
+   known values), a hint ("Drag one or press + to add *field* equals *value*.
+   Other values may work too.", *field* being the field's name) and one row per
+   value with its grip and an icon-only + at the right edge. At most 30 rows
+   are shown (`MAX_VALUES_SHOWN`), the rest counted ("and N more"). It is a
+   list, not chips, and has no pill look, so it is not mistaken for the facet's
+   tags. **Decided 2026-10-08:** a labelled list instead of chips because users
+   took the chips for tags; the wording was chosen by the maintainers, and the
+   heading and the hint use the same words so there is one name for the thing.
 
 Blank texts are `""` in the model ("Data model"), and blank parts are left
 out. The panel header has a **Hide dictionary** button, a one-line hint (`DOCS_HINT`:
@@ -1020,7 +1028,7 @@ The whole summary line answers the pointer (a hover background and a
 is the opposite of what it does. A card or row gets a labelled mini button
 (**Add**, or **Add all N** on a tag section, where N is the number of facets it
 adds, so the number cannot be mistaken for the search's match count beside it)
-like the builder's **+ Condition**; the small value chips keep an icon-only
+like the builder's **+ Condition**; the small value rows keep an icon-only
 "+". When the sidebar column is narrower than 21rem (a container query on
 `.qb-docs`, the card inside the column, so the rule is `max-width: 19rem`) the
 word drops and the "+" stays. The accessible name (`aria-label="Add … to the
@@ -1040,7 +1048,7 @@ the light account-menu panel), and keep the resting green on plain `:focus`, so 
 colour and Fomantic's blue never shows.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
-on the tag section, facet card, field row and value chip) starts a drag, and a
+on the tag section, facet card, field row and value row) starts a drag, and a
 **+ button** ("Add to query") adds the same item without a mouse drag. Both read
 the item from the nearest element's `data-item` (JSON of a `DragItem`, built
 by `dragData`), so the two cannot disagree. Dragging sets the payload under

@@ -14,7 +14,7 @@ function totalEvents(databases: Database[] | null): number {
 }
 
 /** Most sample values shown per field; the rest are counted, not listed. */
-const MAX_VALUE_CHIPS = 30;
+const MAX_VALUES_SHOWN = 30;
 
 /** The JSON for an element's `data-item` attribute (already HTML-escaped). It
  *  is what dragging the element carries, and what its "Add to query" button adds. */
@@ -41,7 +41,7 @@ export const DOCS_HINT =
 /**
  * The "Add to query" button. With `text` it is a labelled button, like the
  * builder's "+ Condition", so a "+" is never mistaken for "expand"; without it
- * (the small value chips) it is icon-only. Either way `label` names it for
+ * (the small value rows) it is icon-only. Either way `label` names it for
  * screen readers.
  */
 function addButton(label: string, text?: string): string {
@@ -52,22 +52,37 @@ function addButton(label: string, text?: string): string {
   return `<button type="button" class="ui mini basic button qb-add-btn" data-action="add-item" ${aria}><i class="plus icon"></i><span class="qb-add-label">${escapeHtml(text)}</span></button>`;
 }
 
-function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null): string {
+/**
+ * The field's known values as a labelled list, one per row. They used to be
+ * chips, which people took for the facet's tags; a heading, a hint and rows
+ * make clear they are suggestions to add, not labels.
+ */
+function valuesHtml(
+  facet: Facet,
+  field: Facet["fields"][number],
+  catalog: FieldCatalog | null,
+): string {
   const options =
-    findField(catalog ?? { facets: [], fields: [] }, facet.id, fieldId)?.options ?? [];
+    findField(catalog ?? { facets: [], fields: [] }, facet.id, field.id)?.options ?? [];
   if (options.length === 0) return "";
-  const shown = options.slice(0, MAX_VALUE_CHIPS).map((value) => {
-    const item = dragData({ type: "value", facetId: facet.id, fieldId, value });
-    return `<span class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</span>`;
+  const shown = options.slice(0, MAX_VALUES_SHOWN).map((value) => {
+    const item = dragData({ type: "value", facetId: facet.id, fieldId: field.id, value });
+    return `<li class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</li>`;
   });
   const more = options.length - shown.length;
-  return `<div class="qb-doc-values" role="group" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted qb-doc-more">and ${more} more</span>` : ""}</div>`;
+  // The heading counts every known value, not only the shown ones.
+  return `<section class="qb-doc-values" aria-label="Previously seen values">
+      <h4 class="qb-doc-values-title">Previously seen values (${options.length})</h4>
+      <p class="qb-doc-values-hint">Drag one or press + to add <em>${escapeHtml(field.name)}</em> equals <em>value</em>. Other values may work too.</p>
+      <ul class="qb-doc-value-list">${shown.join("")}</ul>
+      ${more > 0 ? `<p class="qb-muted qb-doc-more">and ${more} more</p>` : ""}
+    </section>`;
 }
 
 function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {
   const item = dragData({ type: "field", facetId: facet.id, fieldId: f.id });
   const blurb = f.comment || f.description;
-  const values = valuesHtml(facet, f.id, catalog);
+  const values = valuesHtml(facet, f, catalog);
   // A field with nothing to show when opened is a plain row, not a <details>:
   // an arrow that opens onto nothing would teach people to distrust the arrows.
   if (!blurb && !values) {
@@ -292,7 +307,7 @@ export function wireDocsSidebar(
     const grabbed =
       e.target instanceof Element && e.target.closest(".qb-grip") ? itemOf(e.target) : null;
     if (!grabbed || !e.dataTransfer) {
-      // Only the grips drag, so a <summary> row or a value chip is never picked
+      // Only the grips drag, so a <summary> row or a value row is never picked
       // up by accident. (A side effect: selected text can't be dragged out of
       // the dictionary, e.g. into the search box.)
       e.preventDefault();

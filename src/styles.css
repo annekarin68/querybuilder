@@ -1209,7 +1209,7 @@ body {
   font-size: 0.8rem;
   color: var(--qb-muted);
 }
-/* "and N more" after a field's known values: smaller than the chips beside it. */
+/* "and N more" under a field's known values: smaller than the rows above it. */
 .qb-doc-more {
   font-size: 0.78rem;
 }
@@ -1315,27 +1315,45 @@ body {
   /* Starts at the field name's left edge (3.5rem from the row's edge, as above). */
   padding: 0 0.6rem 0.6rem 3.5rem;
 }
+/* "Previously seen values": a small labelled table, one value per row. It is
+   deliberately not pill-shaped (no rounded tinted background): the facet's tags
+   are pills, and values that looked like them were mistaken for tags. */
 .qb-doc-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.4rem;
+  margin-top: 0.6rem;
+}
+.qb-doc-values-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--qb-muted);
+}
+.qb-doc-values-hint {
+  margin: 0.15rem 0 0.3rem;
+  font-size: 0.78rem;
+  color: var(--qb-muted);
+}
+.qb-doc-value-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--qb-border);
 }
 .qb-doc-value {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.2rem;
-  max-width: 100%;
-  padding: 0 0.2rem;
-  border: 1px solid var(--qb-border);
-  border-radius: 4px;
-  background: var(--qb-surface);
-  font-size: 0.78rem;
+  gap: 0.3rem;
+  padding: 0.1rem 0.2rem;
+  border-bottom: 1px solid var(--qb-border);
+  font-size: 0.8rem;
+}
+.qb-doc-value:hover {
+  background: var(--qb-hover);
 }
 .qb-doc-value-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: monospace;
+  overflow-wrap: anywhere; /* a long value wraps instead of pushing the + out of the row */
 }
 .qb-grip {
   display: inline-flex;
@@ -1349,7 +1367,7 @@ body {
   cursor: grabbing;
 }
 .qb-doc-value .qb-add-btn {
-  margin-left: 0;
+  margin-left: auto; /* the + sits at the right edge of the row */
 }
 
 /* ---- "This row opens when you click it" ---- */
