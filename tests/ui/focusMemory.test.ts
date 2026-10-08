@@ -28,6 +28,22 @@ describe("controlOf (which control an element is, in words that survive a repain
     expect(controlOf(el("BUTTON", { "data-db-none": "" }))?.attribute).toBe("data-db-none");
   });
 
+  it("names the Deselect failing button by its marker attribute", () => {
+    expect(controlOf(el("BUTTON", { "data-db-deselect-failing": "" }))?.attribute).toBe(
+      "data-db-deselect-failing",
+    );
+  });
+
+  // The save dialog's Name and Note boxes: the caret stays where it was when
+  // the dialog repaints (saving, an error).
+  it("names a text box by its id, before its label", () => {
+    expect(controlOf(el("INPUT", { id: "x", "aria-label": "X" }))).toEqual({
+      tag: "INPUT",
+      attribute: "id",
+      value: "x",
+    });
+  });
+
   it("tells the two boxes of a range apart, though both are the value", () => {
     const from = controlOf(el("INPUT", { "data-part": "value", "data-range": "from" }));
     const to = controlOf(el("INPUT", { "data-part": "value", "data-range": "to" }));

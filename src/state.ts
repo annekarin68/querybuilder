@@ -1,7 +1,16 @@
 import type { Group, Issue } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
-import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "./model";
+import type {
+  Compliance,
+  Database,
+  DatabaseResult,
+  EventRecord,
+  Facet,
+  SavedQuery,
+  User,
+} from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
+import type { OpenSaved } from "./query/saved";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 
@@ -27,6 +36,26 @@ export type PreviewState =
   | { status: "loading" }
   | { status: "ok"; events: EventRecord[] }
   | { status: "error"; error: string };
+
+/** Which saved-queries dialog is open: "save" (name and note) or "list". */
+export type SavedDialog = null | "save" | "list";
+
+/** Saving the query on screen, as the save dialog shows it. */
+export type SaveState =
+  | { status: "idle" }
+  | { status: "saving" }
+  /** The name belongs to another saved query: ask "Replace it?" */
+  | { status: "conflict"; name: string; note: string }
+  | { status: "error"; error: string };
+
+/** The logged-in user's saved queries, newest first, as the list dialog shows them. */
+export type SavedListState =
+  | { status: "idle" | "loading" }
+  | { status: "ok"; queries: SavedQuery[] }
+  | { status: "error"; error: string };
+
+/** An action in the list waiting for the user's yes. */
+export type SavedConfirm = null | { action: "open" | "delete"; id: string };
 
 export interface AppState {
   /** The queryable fields, derived from `facets` at startup (there is
@@ -60,9 +89,25 @@ export interface AppState {
   preview: PreviewState;
 
   sidebarCollapsed: boolean;
-  /** Why the last drop (or "Add to query") couldn't be done in full, shown as
-   *  a dismissible warning above the query; null when there is nothing to say. */
+  /** A warning about the last change to the query, shown dismissible above it;
+   *  null when there is nothing to say. Named for its first use, a drop (or
+   *  "Add to query") that couldn't be done in full; it also carries a refused
+   *  Ungroup and "N saved databases no longer exist…" after opening a saved
+   *  query. */
   dropNotice: string | null;
+  /** Whether the hidden easter-egg mascot set is showing. Display only: five
+   *  clicks on the logo toggle it. It is not stored, so a reload brings back
+   *  the normal pickle (decided by the maintainers, 2026-10-08). */
+  easterEgg: boolean;
+
+  /** The saved query on screen, as it was when last opened or saved; null for a
+   *  query that was never saved. Whether the user changed it since is worked
+   *  out (`isEdited`), never stored. */
+  openSaved: OpenSaved | null;
+  savedDialog: SavedDialog;
+  save: SaveState;
+  savedList: SavedListState;
+  savedConfirm: SavedConfirm;
 }
 
 export const initialState: AppState = {
@@ -81,6 +126,12 @@ export const initialState: AppState = {
   // The docs are the main way to build a query, so they start open.
   sidebarCollapsed: false,
   dropNotice: null,
+  easterEgg: false,
+  openSaved: null,
+  savedDialog: null,
+  save: { status: "idle" },
+  savedList: { status: "idle" },
+  savedConfirm: null,
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */

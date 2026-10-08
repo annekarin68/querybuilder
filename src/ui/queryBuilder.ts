@@ -17,9 +17,13 @@ import {
   addChild,
   countConditions,
   findNode,
+  groupContents,
   newCondition,
   newGroup,
   removeNode,
+  ungroup,
+  ungroupBlocker,
+  UNGROUP_BLOCKED_MESSAGE,
   updateNode,
 } from "../query/tree";
 import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
@@ -27,14 +31,18 @@ import {
   ADDED_GROUP_MESSAGE,
   addedMessage,
   DRAG_MIME,
+  groupedMessage,
   parseDragItem,
+  UNGROUPED_MESSAGE,
   type DragItem,
 } from "../query/drop";
 import { placeIssues } from "../query/issues";
+import { isEdited } from "../query/saved";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel } from "./format";
+import { LOGIN_FIRST_NOTE } from "./dataPreview";
 import { readValueControl, renderValueControl } from "./valueControl";
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
@@ -42,6 +50,8 @@ interface BuilderCtx {
   catalog: FieldCatalog;
   facets: Facet[] | null;
   issues: Issue[];
+  /** The whole query: a group's Ungroup button needs its parent's ALL/ANY. */
+  query: Group;
 }
 
 /**
@@ -177,6 +187,20 @@ function nodeOf(container: HTMLElement, nodeId: string): HTMLElement | null {
   return container.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"]`);
 }
 
+/**
+ * Scrolls node `nodeId` into view and moves focus to it (the "Show" button of
+ * the statistics panel). A row or group is not focusable by itself, so it gets
+ * `tabindex="-1"` first: focusable by script, not a stop for the Tab key. The
+ * builder repaints on every edit, which drops the attribute with the element.
+ */
+export function revealNode(container: HTMLElement, nodeId: string): void {
+  const node = nodeOf(container, nodeId);
+  if (!node) return;
+  if (!node.hasAttribute("tabindex")) node.setAttribute("tabindex", "-1");
+  node.scrollIntoView({ block: "center" });
+  node.focus();
+}
+
 /** The `.ui.dropdown` Fomantic built from the row's `<select data-part=…>`. */
 function dropdownOf(row: HTMLElement | null, part: string): HTMLElement | null {
   return (
@@ -284,6 +308,23 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
       ${issuesHtml(g.id, ctx.issues)}
     </div>`;
   }
+  // With two or more items, "Group contents" is the way to put a sibling group
+  // next to them (e.g. to mix ALL and ANY). Ungroup is always drawn on a
+  // non-root group, but is aria-disabled with the reason when it would change
+  // what the query means: not `disabled`, so keyboard and screen-reader users
+  // can still reach the button and hear why.
+  const groupContentsButton =
+    g.children.length >= 2
+      ? `<button type="button" class="ui mini basic button" data-action="group-contents" title="Put this group's conditions and groups into a new group inside it"><i class="object group outline icon" aria-hidden="true"></i>Group contents</button>`
+      : "";
+  const blocked = isRoot ? null : ungroupBlocker(ctx.query, g.id);
+  const ungroupButton = isRoot
+    ? ""
+    : `<button type="button" class="ui mini basic button" data-action="ungroup"${blocked ? ` aria-disabled="true" title="${escapeHtml(blocked)}"` : ` title="Put this group's items into the group around it"`}><i class="object ungroup outline icon" aria-hidden="true"></i>Ungroup</button>`;
+  // The action buttons share one right-aligned box (`.qb-group-actions`): when
+  // the header is too narrow they wrap among themselves, so the ✕ stays last
+  // on the right and is never left alone at the start of a new line, where it
+  // could be mistaken for the first condition's remove button.
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
   const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
@@ -296,10 +337,13 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
         <button type="button" class="qb-logic-btn${g.operator === "OR" ? " is-on" : ""}" data-action="set-or" aria-pressed="${g.operator === "OR"}">ANY</button>
       </span>
       <span class="qb-group-label">of the following</span>
-      <span class="qb-spacer"></span>
-      <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
-      <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
-      ${remove}
+      <span class="qb-group-actions">
+        <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
+        <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
+        ${groupContentsButton}
+        ${ungroupButton}
+        ${remove}
+      </span>
     </div>
     ${issuesHtml(g.id, ctx.issues)}
     <div class="qb-children">${children}</div>
@@ -329,6 +373,50 @@ export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog)
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
+/** The id of the logged-out note, which both buttons point at (aria-describedby). */
+const LOGIN_NOTE_ID = "qb-saved-login-note";
+
+/**
+ * The query card's title row: "Query", the open saved query's name and
+ * "(edited)" once the query or the database selection differs from what was
+ * last saved or opened, then **Save…** and **Saved queries** (docs/ARCHITECTURE.md,
+ * "Saved queries — `savedQueries.ts`"). A logged-out user also gets the note
+ * "You'll be asked to log in first." under the buttons, as Run has.
+ *
+ * The two buttons only exist once startup has loaded the databases and the
+ * field catalog: start() sets the query and selection when it ends, so a saved
+ * query opened before that would be overwritten.
+ */
+export function queryTitleHtml(state: AppState): string {
+  const open = state.openSaved;
+  const name = open
+    ? ` <span class="qb-open-name" title="${escapeHtml(open.name)}">· ${escapeHtml(open.name)}</span>`
+    : "";
+  const edited =
+    open && isEdited(open, state.query, state.selectedDatabaseIds)
+      ? ` <span class="qb-muted">(edited)</span>`
+      : "";
+  const drawn = Boolean(state.catalog && state.databases);
+  // Run says the same before it sends a logged-out user to login. A redirect
+  // without a warning surprised users (maintainer's decision, 2026-10-08).
+  // Advisory only: the buttons still work, and app.ts reacts to the real 401.
+  const warnsLogin = drawn && state.auth.status === "anonymous";
+  const describedBy = warnsLogin ? ` aria-describedby="${LOGIN_NOTE_ID}"` : "";
+  const buttons = drawn
+    ? `<button type="button" class="ui mini basic button" data-action="open-save-dialog" aria-haspopup="dialog"${describedBy}>Save…</button>
+         <button type="button" class="ui mini basic button" data-action="open-saved-list" aria-haspopup="dialog"${describedBy}>Saved queries</button>`
+    : "";
+  const note = warnsLogin
+    ? `<span class="qb-muted qb-login-note" id="${LOGIN_NOTE_ID}">${escapeHtml(LOGIN_FIRST_NOTE)}</span>`
+    : "";
+  return `<div class="qb-query-head">
+      <h2 class="qb-card-title">Query${name}${edited}</h2>
+      <span class="qb-spacer"></span>
+      ${buttons}
+      ${note}
+    </div>`;
+}
+
 function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
@@ -336,11 +424,16 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   }
   // Local issues (validate.ts) and the backend's, each on a node that is drawn.
   const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
-  const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
+  const ctx: BuilderCtx = {
+    catalog: state.catalog,
+    facets: state.facets,
+    issues,
+    query: state.query,
+  };
   paint(
     el,
     `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
-       <h2 class="qb-card-title">Query</h2>
+       ${queryTitleHtml(state)}
        ${nodeHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
      </div>`,
@@ -364,8 +457,13 @@ export function wireQueryBuilder(
   hooks: {
     onDrop(item: DragItem | null, targetNodeId: string): void;
     onDismissNotice(): void;
+    /** Show a warning above the query (a refused action, not a drop). */
+    onNotice(message: string): void;
     /** Say something to screen-reader users (the shell's live region). */
     announce(message: string): void;
+    /** The title's **Save…** and **Saved queries** (savedQueries.ts shows the dialogs). */
+    onOpenSaveDialog(): void;
+    onOpenSavedList(): void;
   },
 ): (state: AppState) => void {
   /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
@@ -421,6 +519,12 @@ export function wireQueryBuilder(
     hooks.onDismissNotice();
   }
 
+  /** An action that worked clears an older warning (such as a refused Ungroup),
+   *  the way a fully successful drop does: it is not about the query any more. */
+  function clearOldNotice(): void {
+    if (getState().dropNotice) hooks.onDismissNotice();
+  }
+
   container.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
       return dismissNotice();
@@ -432,6 +536,10 @@ export function wireQueryBuilder(
     // that line: that is not a request to unfold it. (Only the header itself,
     // not a button of its own, is a toggle by a click anywhere on its line.)
     if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
+    // The title's buttons sit outside every row and group, so they are
+    // handled before the node lookup below.
+    if (btn?.dataset.action === "open-save-dialog") return hooks.onOpenSaveDialog();
+    if (btn?.dataset.action === "open-saved-list") return hooks.onOpenSavedList();
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
     const q = getState().query;
@@ -445,6 +553,24 @@ export function wireQueryBuilder(
       case "add-group":
         onChange(addChild(q, nodeId, newGroup()));
         return hooks.announce(ADDED_GROUP_MESSAGE);
+      case "group-contents": {
+        const node = findNode(q, nodeId);
+        // A click from a stale repaint (the group is gone): nothing to group,
+        // and "Grouped 0 items." would be wrong.
+        if (node?.kind !== "group") return;
+        onChange(groupContents(q, nodeId));
+        clearOldNotice();
+        return hooks.announce(groupedMessage(node.children.length));
+      }
+      case "ungroup": {
+        const next = ungroup(q, nodeId);
+        // Refused: say why (the button is aria-disabled, not disabled, so
+        // keyboard and screen-reader users can reach it and hear the reason).
+        if (!next) return hooks.onNotice(ungroupBlocker(q, nodeId) ?? UNGROUP_BLOCKED_MESSAGE);
+        onChange(next);
+        clearOldNotice();
+        return hooks.announce(UNGROUPED_MESSAGE);
+      }
       case "remove-node":
         return onChange(removeNode(q, nodeId));
       case "set-and":

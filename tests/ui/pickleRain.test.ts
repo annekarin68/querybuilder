@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { createClickCounter, planRain, withTimeout } from "../../src/ui/pickleRain";
+import {
+  createClickCounter,
+  easterEggReaction,
+  planRain,
+  withTimeout,
+} from "../../src/ui/pickleRain";
 
 describe("createClickCounter", () => {
   it("fires on the fifth click within three seconds", () => {
@@ -68,5 +73,20 @@ describe("withTimeout", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("easterEggReaction (five logo clicks toggled the mascot)", () => {
+  it("rains, on or off, for people who don't ask for reduced motion", () => {
+    expect(easterEggReaction(true, false)).toBe("rain");
+    expect(easterEggReaction(false, false)).toBe("rain");
+  });
+
+  it("shows the toast instead when turning on under reduced motion", () => {
+    expect(easterEggReaction(true, true)).toBe("toast");
+  });
+
+  it("does nothing more when turning off under reduced motion (the face changes back)", () => {
+    expect(easterEggReaction(false, true)).toBe("none");
   });
 });

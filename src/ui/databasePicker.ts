@@ -1,6 +1,75 @@
+import type { DatabaseResult } from "../model";
 import type { AppState } from "../state";
 import { escapeHtml, paint } from "./panel";
 import { databaseTitle } from "./format";
+
+/**
+ * Whether the query itself is at fault rather than the databases: every
+ * database that has answered so far failed, and each did so only with errors
+ * that point at query nodes. The builder already shows those errors where they
+ * can be fixed (and the statistics column says so), so marking every pill red
+ * and offering "Deselect failing" would only repeat them and suggest the wrong
+ * fix. One database that answered, failed for another reason (an error without
+ * a node, or only notes such as a timeout) is the database's own problem.
+ */
+export function queryIsAtFault(results: DatabaseResult[]): boolean {
+  return (
+    results.length > 0 &&
+    results.every(
+      (r) =>
+        r.status === "failed" && r.errors.length > 0 && r.errors.every((e) => e.nodeId !== null),
+    )
+  );
+}
+
+/**
+ * Each failed database's id → why it failed, in the user's words, for its
+ * pill's tooltip: its errors without a node, else its notes (a timeout, an
+ * unreachable server), else its node errors' messages (a node error that only
+ * some databases report is about that database), else "Failed.". Empty when
+ * the query is at fault (`queryIsAtFault`): then no database is marked.
+ */
+export function failedDatabases(results: DatabaseResult[]): Map<string, string[]> {
+  const failed = new Map<string, string[]>();
+  if (queryIsAtFault(results)) return failed;
+  for (const r of results) {
+    if (r.status !== "failed") continue;
+    const nodeless = r.errors.filter((e) => e.nodeId === null).map((e) => e.message);
+    const nodeErrors = r.errors.filter((e) => e.nodeId !== null).map((e) => e.message);
+    const reasons = [nodeless, r.notes, nodeErrors].find((list) => list.length > 0);
+    failed.set(r.databaseId, reasons ?? ["Failed."]);
+  }
+  return failed;
+}
+
+/**
+ * The selection without the databases that failed, for the "Deselect failing"
+ * button. null means the button must not show: nothing selected failed (nothing
+ * to do), or every selected database did. In that last case deselecting them
+ * all would leave no database, and the query itself is the likely problem, so
+ * the user should fix it rather than be offered an empty scope.
+ */
+export function deselectFailingIds(
+  selected: string[],
+  failed: ReadonlyMap<string, string[]>,
+): string[] | null {
+  const kept = selected.filter((id) => !failed.has(id));
+  return kept.length === 0 || kept.length === selected.length ? null : kept;
+}
+
+/**
+ * The selected databases that failed for the query on screen. Only the current
+ * results count: `changeScope` (src/app.ts) empties them when a new query
+ * starts, so the markers clear instead of lingering from the previous query.
+ * Only selected databases count too: an unselected one is not part of this
+ * query, so an earlier failure of it says nothing about it now (nor about
+ * whether the query is at fault).
+ */
+function currentFailures(state: AppState): Map<string, string[]> {
+  if (state.stats.status === "error") return new Map();
+  const selected = new Set(state.selectedDatabaseIds);
+  return failedDatabases(state.stats.results.filter((r) => selected.has(r.databaseId)));
+}
 
 /**
  * The database scope selector, above the query builder. Databases are
@@ -9,40 +78,52 @@ import { databaseTitle } from "./format";
  * styled label, so it needs no plugin and works from the keyboard. Changing it
  * behaves like editing the query (see onDatabasesChange in src/app.ts and
  * docs/ARCHITECTURE.md, "Correctness invariant").
+ *
+ * A selected database that failed for this query is marked on its pill (unless
+ * the query itself is at fault: `queryIsAtFault`), and "Deselect failing (N)"
+ * drops those from the selection.
  */
-export function renderDatabasePicker(el: HTMLElement, state: AppState): void {
-  if (!state.databases) {
-    paint(el, "");
-    return;
-  }
+export function databasePickerHtml(state: AppState): string {
+  if (!state.databases) return "";
   const selected = new Set(state.selectedDatabaseIds);
+  const failures = currentFailures(state);
   const pills = state.databases
     .map((d) => {
-      const title = databaseTitle(d);
-      return `<label class="qb-db-pill"${title ? ` title="${escapeHtml(title)}"` : ""}>
+      const reasons = failures.get(d.id);
+      const title = [databaseTitle(d), reasons?.join(" · ")].filter(Boolean).join("\n");
+      // The icon and the sr-only text carry the failure for people who cannot
+      // see the outline's colour. The text starts with a space, or a screen
+      // reader reads the name and "failed" as one word.
+      return `<label class="qb-db-pill${reasons ? " is-failed" : ""}"${title ? ` title="${escapeHtml(title)}"` : ""}>
         <input type="checkbox" data-db-id="${escapeHtml(d.id)}"${selected.has(d.id) ? " checked" : ""} />
-        <span>${escapeHtml(d.name)}</span>
+        <span>${reasons ? `<i class="exclamation circle icon" aria-hidden="true"></i>` : ""}${escapeHtml(d.name)}${reasons ? `<span class="qb-sr-only"> failed for this query</span>` : ""}</span>
       </label>`;
     })
     .join("");
   const none = state.selectedDatabaseIds.length === 0;
-  paint(
-    el,
-    `<div class="qb-card qb-dbpicker">
+  const kept = deselectFailingIds(state.selectedDatabaseIds, failures);
+  const deselectFailing = kept
+    ? `<button type="button" class="ui mini basic button" data-db-deselect-failing>Deselect failing (${state.selectedDatabaseIds.length - kept.length})</button>`
+    : "";
+  return `<div class="qb-card qb-dbpicker">
        <h2 class="qb-card-title">
          Databases
          <span class="qb-card-count">${selected.size} of ${state.databases.length} selected</span>
          <span class="qb-spacer"></span>
-         <button type="button" class="ui mini basic button" data-db-all>All</button>
+         ${deselectFailing}
+         <button type="button" class="ui mini basic button" data-db-all data-focus-landing>All</button>
          <button type="button" class="ui mini basic button" data-db-none>None</button>
        </h2>
        <div class="qb-db-pills">${pills}</div>
        ${none ? `<p class="qb-db-warn"><i class="exclamation triangle icon"></i>Select at least one database.</p>` : ""}
-     </div>`,
-  );
+     </div>`;
 }
 
-/** Delegated listeners for the pills and All/None. Call once at startup. */
+export function renderDatabasePicker(el: HTMLElement, state: AppState): void {
+  paint(el, databasePickerHtml(state));
+}
+
+/** Delegated listeners for the pills, All/None and Deselect failing. Call once at startup. */
 export function wireDatabasePicker(
   container: HTMLElement,
   onChange: (nextSelectedIds: string[]) => void,
@@ -62,5 +143,18 @@ export function wireDatabasePicker(
     const t = e.target as HTMLElement;
     if (t.closest("[data-db-all]")) onChange(boxes().map((b) => b.dataset.dbId!));
     else if (t.closest("[data-db-none]")) onChange([]);
+    else if (t.closest("[data-db-deselect-failing]")) {
+      // The failed pills are marked in the DOM, so the click needs no state.
+      const failing = new Map(
+        Array.from(
+          container.querySelectorAll<HTMLInputElement>(".qb-db-pill.is-failed input[data-db-id]"),
+        ).map((b) => [b.dataset.dbId!, []] as [string, string[]]),
+      );
+      const checked = boxes()
+        .filter((b) => b.checked)
+        .map((b) => b.dataset.dbId!);
+      const kept = deselectFailingIds(checked, failing);
+      if (kept) onChange(kept);
+    }
   });
 }

@@ -22,6 +22,7 @@
   --qb-selected-text: #2b5319;
   --qb-open-row: #f0efd9;
   --qb-shadow: 0 8px 24px rgba(35, 48, 31, 0.2);
+  --qb-backdrop: rgba(35, 48, 31, 0.45); /* the page behind an open dialog */
 
   --qb-topbar: #2c4a26;
   --qb-topbar-2: #44683a;
@@ -408,6 +409,10 @@ body {
 .qb-dbpicker .qb-card-title .ui.button {
   margin: 0;
 }
+/* All, None and Deselect failing wrap under the count on a narrow window. */
+.qb-dbpicker .qb-card-title {
+  flex-wrap: wrap;
+}
 .qb-db-pills {
   display: flex;
   flex-wrap: wrap;
@@ -424,7 +429,9 @@ body {
   height: 1px;
   opacity: 0;
 }
-.qb-db-pill span {
+/* "> span": only the pill itself, not the hidden "failed for this query" text
+   inside it, which must keep the .qb-sr-only rules. */
+.qb-db-pill > span {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -436,7 +443,7 @@ body {
   font-size: 0.85rem;
   user-select: none;
 }
-.qb-db-pill span::before {
+.qb-db-pill > span::before {
   content: "";
   width: 0.5rem;
   height: 0.5rem;
@@ -455,6 +462,18 @@ body {
 .qb-db-pill input:focus-visible + span {
   outline: 2px solid var(--qb-and);
   outline-offset: 2px;
+}
+/* A selected database that failed for this query (databasePicker.ts): a danger
+   outline and icon. The text keeps the checked colours, so no new text/background
+   pair; the icon and a hidden text carry the meaning without the colour. */
+/* "input + span" matches the specificity of the checked rule above, which would
+   otherwise keep the green border. */
+.qb-db-pill.is-failed input + span {
+  border-color: var(--qb-danger);
+}
+.qb-db-pill.is-failed .icon {
+  margin: 0;
+  color: var(--qb-danger);
 }
 .qb-db-warn {
   margin: 0.5rem 0 0;
@@ -677,6 +696,22 @@ body {
 .qb-group-head .ui.mini.button {
   margin: 0;
 }
+/* The header's action buttons: pushed to the right, wrapping among themselves
+   and staying right-aligned, so the group's remove button is always last. */
+.qb-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+/* A refused action (Ungroup that would change the query) looks like Fomantic's
+ * .disabled but stays clickable and focusable, so the click can say why. */
+.qb-group-head .ui.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .qb-group-label {
   font-size: 0.85rem;
   color: var(--qb-muted);
@@ -765,6 +800,15 @@ body {
 .is-collapsed > .qb-group-head:hover .qb-collapse-btn {
   background: var(--qb-selected-bg);
   color: var(--qb-selected-text);
+}
+
+/* "Show" in the statistics panel focuses a row or group by script
+   (revealNode, tabindex="-1"). A mouse click does not match :focus-visible, so
+   plain :focus is styled here: without a ring the user sees only a scroll. */
+.qb-condition[tabindex="-1"]:focus,
+.qb-group[tabindex="-1"]:focus {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
 }
 
 /* One condition = one grid row. Container query: a row squeezed below ~640px
@@ -929,6 +973,45 @@ body {
   overflow-wrap: anywhere;
   font-style: italic;
 }
+/* The card's title row: "Query · <name> (edited)", then Save… and Saved
+   queries. On a narrow card the buttons wrap under the title, and a long name
+   is cut with "…" (its full text is the tooltip). */
+.qb-query-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.qb-query-head .qb-card-title {
+  min-width: 0;
+  margin: 0;
+}
+.qb-query-head .ui.button {
+  margin: 0;
+}
+/* The user's own words keep their casing (the title is upper case). */
+.qb-open-name,
+.qb-query-head .qb-muted {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.qb-open-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qb-query-head .qb-muted {
+  flex: none;
+  font-style: italic;
+  font-weight: 400;
+}
+/* The logged-out note takes its own line under the title and buttons. */
+.qb-query-head .qb-login-note {
+  flex: 1 0 100%;
+  font-size: 0.8rem; /* as Run's note (.qb-run-note) */
+}
 
 /* ---- Statistics (src/ui/statsPanel.ts + format.ts) — must fit ~15rem ---- */
 .qb-stats .qb-card-title .ui.loader {
@@ -954,6 +1037,18 @@ body {
   margin-top: 0.35rem;
   font-size: 0.8rem;
   color: var(--qb-danger);
+}
+.qb-stat-problems {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-stat-problems .ui.button {
+  margin: 0;
 }
 .qb-bar {
   display: block;
@@ -1193,7 +1288,7 @@ body {
   font-size: 0.8rem;
   color: var(--qb-muted);
 }
-/* "and N more" after a field's known values: smaller than the chips beside it. */
+/* "and N more" under a field's known values: smaller than the rows above it. */
 .qb-doc-more {
   font-size: 0.78rem;
 }
@@ -1299,27 +1394,45 @@ body {
   /* Starts at the field name's left edge (3.5rem from the row's edge, as above). */
   padding: 0 0.6rem 0.6rem 3.5rem;
 }
+/* "Previously seen values": a small labelled table, one value per row. It is
+   deliberately not pill-shaped (no rounded tinted background): the facet's tags
+   are pills, and values that looked like them were mistaken for tags. */
 .qb-doc-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.4rem;
+  margin-top: 0.6rem;
+}
+.qb-doc-values-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--qb-muted);
+}
+.qb-doc-values-hint {
+  margin: 0.15rem 0 0.3rem;
+  font-size: 0.78rem;
+  color: var(--qb-muted);
+}
+.qb-doc-value-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--qb-border);
 }
 .qb-doc-value {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.2rem;
-  max-width: 100%;
-  padding: 0 0.2rem;
-  border: 1px solid var(--qb-border);
-  border-radius: 4px;
-  background: var(--qb-surface);
-  font-size: 0.78rem;
+  gap: 0.3rem;
+  padding: 0.1rem 0.2rem;
+  border-bottom: 1px solid var(--qb-border);
+  font-size: 0.8rem;
+}
+.qb-doc-value:hover {
+  background: var(--qb-hover);
 }
 .qb-doc-value-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: monospace;
+  overflow-wrap: anywhere; /* a long value wraps instead of pushing the + out of the row */
 }
 .qb-grip {
   display: inline-flex;
@@ -1333,7 +1446,7 @@ body {
   cursor: grabbing;
 }
 .qb-doc-value .qb-add-btn {
-  margin-left: 0;
+  margin-left: auto; /* the + sits at the right edge of the row */
 }
 
 /* ---- "This row opens when you click it" ---- */
@@ -1524,6 +1637,119 @@ details[open] > summary > .qb-chevron {
   }
 }
 
+/* ---- Saved queries dialog (src/ui/savedQueries.ts) ----
+   A native <dialog>: the browser puts it above the page, centres it and
+   draws the backdrop. Fomantic's CSS styles the form, buttons and messages
+   inside it (no Fomantic plugin). */
+.qb-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  background: var(--qb-surface);
+  color: var(--qb-text);
+  box-shadow: var(--qb-shadow);
+}
+.qb-dialog::backdrop {
+  background: var(--qb-backdrop);
+}
+.qb-dialog-title {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+}
+.qb-dialog-hint {
+  margin: 0.3rem 0 0;
+  color: var(--qb-muted);
+  font-size: 0.85rem;
+}
+/* Read-only while saving or while "Replace it?" is asked. */
+.ui.form .field input[readonly] {
+  background: var(--qb-surface-2);
+  color: var(--qb-muted);
+}
+.qb-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.qb-dialog .ui.button {
+  margin: 0;
+}
+.qb-dialog .ui.basic.button:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 1px;
+}
+/* Fomantic's red Delete only darkens on focus: add a ring a keyboard user can see. */
+.qb-dialog .ui.negative.button:focus-visible {
+  outline: 2px solid var(--qb-danger);
+  outline-offset: 2px;
+}
+/* A question ("Replace it?", "Delete …?") and its two buttons. */
+.qb-dialog-question {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.qb-dialog-question p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.qb-dialog-status {
+  margin: 0.5rem 0;
+  color: var(--qb-muted);
+}
+.qb-saved-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.qb-saved-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--qb-border);
+}
+.qb-saved-item:first-child {
+  border-top: 0;
+}
+.qb-saved-info {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+/* Names and notes are the user's own: a long word breaks rather than widening the dialog. */
+.qb-saved-name,
+.qb-saved-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.qb-saved-name {
+  font-weight: 700;
+}
+.qb-saved-meta {
+  margin: 0.15rem 0 0;
+  color: var(--qb-muted);
+  font-size: 0.85rem;
+}
+.qb-saved-actions {
+  display: flex;
+  flex: none;
+  gap: 0.4rem;
+}
+.qb-saved-item .qb-dialog-question {
+  flex: 1 1 100%;
+  margin-top: 0;
+}
+
 /* ---- Fomantic's own blue, recoloured to the pickle palette ---- */
 .ui.primary.button,
 .ui.primary.buttons .button {
@@ -1566,6 +1792,7 @@ a {
 .ui.selection.active.dropdown:hover,
 .ui.input.focus > input,
 .ui.input > input:focus,
+.ui.form input[type="text"]:focus,
 .ui.selection.dropdown:focus {
   border-color: var(--qb-and);
 }

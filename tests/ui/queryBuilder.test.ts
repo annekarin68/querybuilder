@@ -6,11 +6,16 @@ import {
   footerHtml,
   groupHtml,
   noticeHtml,
+  queryTitleHtml,
   rowDropdown,
 } from "../../src/ui/queryBuilder";
+import { LOGIN_FIRST_NOTE } from "../../src/ui/dataPreview";
+import { escapeHtml } from "../../src/ui/panel";
+import { initialState, type AppState } from "../../src/state";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
 import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
-import type { Issue } from "../../src/query/types";
+import { UNGROUP_BLOCKED_MESSAGE } from "../../src/query/tree";
+import type { Condition, Group, Issue } from "../../src/query/types";
 
 describe("condition row dropdowns", () => {
   // There can be many facets and fields: typing filters the list (Fomantic's
@@ -104,7 +109,11 @@ describe("condition row slots", () => {
   const row = (over: object) => {
     const root = emptyQuery();
     const c = { ...newCondition(), facetId: "thing", ...over };
-    return groupHtml({ catalog, facets: null, issues: [] }, { ...root, children: [c] }, true);
+    return groupHtml(
+      { catalog, facets: null, issues: [], query: root },
+      { ...root, children: [c] },
+      true,
+    );
   };
 
   it("a whole-facet condition has no Operator or Value slot: the test is the whole sentence", () => {
@@ -191,7 +200,7 @@ describe("the query footer", () => {
 
 describe("group collapse controls", () => {
   const catalog = buildFieldCatalog([]);
-  const ctx = { catalog, facets: null, issues: [] };
+  const ctx = { catalog, facets: null, issues: [], query: emptyQuery() };
   const group = { ...emptyQuery(), id: "g-inner", children: [newCondition()] };
 
   it("the collapse button is a bordered chevron with an accessible state", () => {
@@ -225,7 +234,7 @@ describe("group collapse controls", () => {
 
 describe("node grips", () => {
   const catalog = buildFieldCatalog([]);
-  const ctx = { catalog, facets: null, issues: [] };
+  const ctx = { catalog, facets: null, issues: [], query: emptyQuery() };
   const condition = newCondition();
   const group = { ...emptyQuery(), id: "g-inner", children: [condition] };
   const GROUP_GRIP = 'qb-grip qb-grip-group" draggable="true" data-node-item="g-inner"';
@@ -248,5 +257,179 @@ describe("node grips", () => {
 
   it("the root group has no grip: it can't be moved", () => {
     expect(groupHtml(ctx, { ...group, children: [] }, true)).not.toContain("qb-grip");
+  });
+});
+
+describe("Group contents and Ungroup buttons", () => {
+  const catalog = buildFieldCatalog([]);
+  const ctxFor = (query: Group) => ({ catalog, facets: null, issues: [], query });
+  const cond = (id: string): Condition => ({ ...newCondition(), id });
+  const group = (id: string, operator: "AND" | "OR", children: Group["children"]): Group => ({
+    ...emptyQuery(),
+    id,
+    operator,
+    children,
+  });
+  /** The HTML of the header of the group `id` (up to the start of its children). */
+  const headOf = (root: Group, id: string, isRoot: boolean): string => {
+    const target = isRoot ? root : (root.children.find((c) => c.id === id) as Group);
+    const html = groupHtml(ctxFor(root), target, isRoot);
+    return html.slice(0, html.indexOf('<div class="qb-children">'));
+  };
+
+  it("a group with two items offers Group contents, with a tooltip", () => {
+    const root = group("r", "AND", [cond("a"), cond("b")]);
+    const head = headOf(root, "r", true);
+    expect(head).toContain('data-action="group-contents"');
+    expect(head).toContain("Group contents</button>");
+    expect(head).toContain(
+      'title="Put this group\'s conditions and groups into a new group inside it"',
+    );
+  });
+
+  it("a group with one item offers no Group contents", () => {
+    const root = group("r", "AND", [cond("a")]);
+    expect(headOf(root, "r", true)).not.toContain("group-contents");
+  });
+
+  it("the root group never offers Ungroup", () => {
+    const root = group("r", "AND", [cond("a"), cond("b")]);
+    expect(headOf(root, "r", true)).not.toContain('data-action="ungroup"');
+  });
+
+  it("a group that matches its parent's ALL/ANY can be ungrouped", () => {
+    const root = group("r", "AND", [group("g", "AND", [cond("a"), cond("b")])]);
+    const head = headOf(root, "g", false);
+    expect(head).toContain('data-action="ungroup"');
+    expect(head).not.toContain("aria-disabled");
+  });
+
+  it("a group that would change the meaning shows Ungroup as disabled, with the reason", () => {
+    const root = group("r", "AND", [group("g", "OR", [cond("a"), cond("b")])]);
+    const head = headOf(root, "g", false);
+    expect(head).toContain('data-action="ungroup"');
+    expect(head).toContain('aria-disabled="true"');
+    expect(head).toContain(`title="${UNGROUP_BLOCKED_MESSAGE}"`);
+  });
+
+  it("the action buttons share one box and the remove button comes last in it", () => {
+    const root = group("r", "AND", [group("g", "AND", [cond("a"), cond("b")])]);
+    const head = headOf(root, "g", false);
+    const actions = head.slice(head.indexOf('<span class="qb-group-actions">'));
+    expect(actions).toContain('data-action="add-condition"');
+    expect(actions.lastIndexOf('data-action="remove-node"')).toBeGreaterThan(
+      actions.lastIndexOf('data-action="ungroup"'),
+    );
+  });
+
+  it("a folded group shows neither button", () => {
+    const root = group("r", "AND", [
+      { ...group("g", "AND", [cond("a"), cond("b")]), collapsed: true },
+    ]);
+    const html = groupHtml(ctxFor(root), root.children[0] as Group, false);
+    expect(html).not.toContain("group-contents");
+    expect(html).not.toContain('data-action="ungroup"');
+  });
+});
+
+describe("the query card's title", () => {
+  const catalog = buildFieldCatalog([]);
+  const root = emptyQuery();
+  const query = addChild(root, root.id, newCondition());
+  const loaded: AppState = {
+    ...initialState,
+    catalog,
+    databases: [{ id: "a", name: "A", description: "", owner: "", eventCount: 1 }],
+    selectedDatabaseIds: ["a"],
+    query,
+  };
+  const opened = (name: string): AppState => ({
+    ...loaded,
+    openSaved: { id: "sq-1", name, note: "", query, databaseIds: ["a"] },
+  });
+  /** The words on screen: tags dropped, spaces collapsed. */
+  const text = (html: string) =>
+    html
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  it("says Query and offers Save… and Saved queries", () => {
+    const html = queryTitleHtml(loaded);
+    expect(text(html)).toBe("Query Save… Saved queries");
+    expect(html).toMatch(/<button[^>]*data-action="open-save-dialog"[^>]*>Save…<\/button>/);
+    expect(html).toMatch(/<button[^>]*data-action="open-saved-list"[^>]*>Saved queries<\/button>/);
+  });
+
+  it("names the open saved query", () => {
+    expect(text(queryTitleHtml(opened("Weekly")))).toContain("Query · Weekly");
+    expect(queryTitleHtml(opened("Weekly"))).not.toContain("(edited)");
+  });
+
+  it("says (edited) once the query differs from what was saved", () => {
+    const edited = { ...opened("Weekly"), query: addChild(query, root.id, newCondition()) };
+    expect(queryTitleHtml(edited)).toContain('<span class="qb-muted">(edited)</span>');
+  });
+
+  it("says (edited) once the database selection differs", () => {
+    const edited = { ...opened("Weekly"), selectedDatabaseIds: [] };
+    expect(queryTitleHtml(edited)).toContain("(edited)");
+  });
+
+  it("escapes the name", () => {
+    const html = queryTitleHtml(opened("<b>x</b>"));
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(html).not.toContain("<b>x</b>");
+  });
+
+  // Run warns a logged-out user ("You'll be asked to log in first."); Save…
+  // and Saved queries send them to login just the same, so they say it too.
+  describe("for a logged-out user", () => {
+    const anonymous: AppState = { ...loaded, auth: { status: "anonymous" } };
+    const NOTE = "You'll be asked to log in first.";
+
+    it("says they will be asked to log in, and ties both buttons to that note", () => {
+      const html = queryTitleHtml(anonymous);
+      // `text` drops the tags and turns the entity for the apostrophe back.
+      expect(html).toMatch(/<[^>]*id="qb-saved-login-note"[^>]*>/);
+      expect(text(html).replace("&#39;", "'")).toContain(NOTE);
+      expect(html).toMatch(
+        /<button[^>]*data-action="open-save-dialog"[^>]*aria-describedby="qb-saved-login-note"/,
+      );
+      expect(html).toMatch(
+        /<button[^>]*data-action="open-saved-list"[^>]*aria-describedby="qb-saved-login-note"/,
+      );
+    });
+
+    it("uses the sentence Run shows", () => {
+      expect(LOGIN_FIRST_NOTE).toBe(NOTE);
+      expect(queryTitleHtml(anonymous)).toContain(escapeHtml(LOGIN_FIRST_NOTE));
+    });
+
+    it.each([
+      ["loading", { status: "loading" }],
+      ["authenticated", { status: "authenticated", user: { name: "U" } }],
+    ] as const)("says nothing while auth is %s", (_name, auth) => {
+      const html = queryTitleHtml({ ...loaded, auth } as AppState);
+      expect(html).not.toContain("log in");
+      expect(html).not.toContain("qb-saved-login-note");
+      expect(html).not.toContain("aria-describedby");
+      expect(html).toContain('data-action="open-save-dialog"');
+    });
+
+    it("says nothing before the buttons exist", () => {
+      for (const partial of [{ databases: null }, { catalog: null }]) {
+        const html = queryTitleHtml({ ...anonymous, ...partial });
+        expect(html).not.toContain("log in");
+        expect(html).not.toContain("qb-saved-login-note");
+      }
+    });
+  });
+
+  // Opening a saved query before start() has finished would be overwritten by
+  // start() (it sets the query and selection when it ends).
+  it("draws no buttons until the databases and the field catalog have loaded", () => {
+    expect(queryTitleHtml({ ...loaded, databases: null })).not.toContain("<button");
+    expect(queryTitleHtml({ ...loaded, catalog: null })).not.toContain("<button");
   });
 });

@@ -2,9 +2,9 @@
 // src/api/types.ts) before anything reads it. The body is untrusted JSON; this
 // is also a working reference for the real backend's own check.
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
+export const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
-const isScalar = (v: unknown) =>
+export const isScalar = (v: unknown) =>
   typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 const isNonEmptyString = (v: unknown) => typeof v === "string" && v !== "";
 

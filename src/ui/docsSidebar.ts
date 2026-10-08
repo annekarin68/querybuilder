@@ -14,7 +14,7 @@ function totalEvents(databases: Database[] | null): number {
 }
 
 /** Most sample values shown per field; the rest are counted, not listed. */
-const MAX_VALUE_CHIPS = 30;
+const MAX_VALUES_SHOWN = 30;
 
 /** The JSON for an element's `data-item` attribute (already HTML-escaped). It
  *  is what dragging the element carries, and what its "Add to query" button adds. */
@@ -41,7 +41,7 @@ export const DOCS_HINT =
 /**
  * The "Add to query" button. With `text` it is a labelled button, like the
  * builder's "+ Condition", so a "+" is never mistaken for "expand"; without it
- * (the small value chips) it is icon-only. Either way `label` names it for
+ * (the small value rows) it is icon-only. Either way `label` names it for
  * screen readers.
  */
 function addButton(label: string, text?: string): string {
@@ -52,22 +52,63 @@ function addButton(label: string, text?: string): string {
   return `<button type="button" class="ui mini basic button qb-add-btn" data-action="add-item" ${aria}><i class="plus icon"></i><span class="qb-add-label">${escapeHtml(text)}</span></button>`;
 }
 
-function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null): string {
-  const options =
-    findField(catalog ?? { facets: [], fields: [] }, facet.id, fieldId)?.options ?? [];
-  if (options.length === 0) return "";
-  const shown = options.slice(0, MAX_VALUE_CHIPS).map((value) => {
-    const item = dragData({ type: "value", facetId: facet.id, fieldId, value });
-    return `<span class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</span>`;
-  });
-  const more = options.length - shown.length;
-  return `<div class="qb-doc-values" role="group" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted qb-doc-more">and ${more} more</span>` : ""}</div>`;
+/** One part of an element id: letters and digits stay, every other character
+ *  becomes `_<hex code>_` (so "-" can separate the parts and two different
+ *  texts never give the same id). */
+function idPart(text: string): string {
+  return text.replace(/[^A-Za-z0-9]/g, (c) => `_${c.charCodeAt(0).toString(16)}_`);
 }
 
-function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {
+/**
+ * The id of a field's "Previously seen values" heading, which labels its
+ * block. Unique on the page: a facet is listed once per tag (`section`, the
+ * tag's key), so the same facet and field can be on screen twice.
+ */
+export function valuesHeadingId(section: string, facetId: string, fieldId: string): string {
+  return `qb-values-${idPart(section)}-${idPart(facetId)}-${idPart(fieldId)}`;
+}
+
+/**
+ * The field's known values as a labelled list, one per row. They used to be
+ * chips, which people took for the facet's tags; a heading, a hint and rows
+ * make clear they are suggestions to add, not labels.
+ */
+function valuesHtml(
+  facet: Facet,
+  field: Facet["fields"][number],
+  catalog: FieldCatalog | null,
+  section: string,
+): string {
+  const options =
+    findField(catalog ?? { facets: [], fields: [] }, facet.id, field.id)?.options ?? [];
+  if (options.length === 0) return "";
+  const shown = options.slice(0, MAX_VALUES_SHOWN).map((value) => {
+    const item = dragData({ type: "value", facetId: facet.id, fieldId: field.id, value });
+    return `<li class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</li>`;
+  });
+  const more = options.length - shown.length;
+  const headingId = valuesHeadingId(section, facet.id, field.id);
+  // The heading counts every known value, not only the shown ones. A group
+  // labelled by the heading, not a <section>: that would be a landmark, and
+  // every open field adding one more, all named alike, would clutter the
+  // landmark list. h3: the panel title is the h2.
+  return `<div class="qb-doc-values" role="group" aria-labelledby="${headingId}">
+      <h3 class="qb-doc-values-title" id="${headingId}">Previously seen values (${options.length})</h3>
+      <p class="qb-doc-values-hint">Drag one or press + to add <em>${escapeHtml(field.name)}</em> equals <em>value</em>. Other values may work too.</p>
+      <ul class="qb-doc-value-list">${shown.join("")}</ul>
+      ${more > 0 ? `<p class="qb-muted qb-doc-more">and ${more} more</p>` : ""}
+    </div>`;
+}
+
+function fieldHtml(
+  facet: Facet,
+  f: Facet["fields"][number],
+  catalog: FieldCatalog | null,
+  section: string,
+): string {
   const item = dragData({ type: "field", facetId: facet.id, fieldId: f.id });
   const blurb = f.comment || f.description;
-  const values = valuesHtml(facet, f.id, catalog);
+  const values = valuesHtml(facet, f, catalog, section);
   // A field with nothing to show when opened is a plain row, not a <details>:
   // an arrow that opens onto nothing would teach people to distrust the arrows.
   if (!blurb && !values) {
@@ -98,8 +139,15 @@ function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatal
     </details>`;
 }
 
-/** One facet card: a draggable header, then (when opened) its details and fields. */
-export function facetHtml(facet: Facet, total: number, catalog: FieldCatalog | null): string {
+/** One facet card: a draggable header, then (when opened) its details and
+ *  fields. `section`: the key of the tag section it is drawn in (see
+ *  `valuesHeadingId`). */
+export function facetHtml(
+  facet: Facet,
+  total: number,
+  catalog: FieldCatalog | null,
+  section: string,
+): string {
   const tags = facet.tags.length
     ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
     : "";
@@ -118,7 +166,7 @@ export function facetHtml(facet: Facet, total: number, catalog: FieldCatalog | n
         ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
         ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
         <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>
-        <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog)).join("")}</div>
+        <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog, section)).join("")}</div>
       </div>
     </details>`;
 }
@@ -150,7 +198,7 @@ export function groupHtml(
         <span class="qb-count" data-group-count title="${countLabel(facets.length, "facet")}">${facets.length}</span>
         ${tagAdd}
       </summary>
-      <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total, catalog)).join("")}</div>
+      <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total, catalog, tag)).join("")}</div>
     </details>`;
 }
 
@@ -292,7 +340,7 @@ export function wireDocsSidebar(
     const grabbed =
       e.target instanceof Element && e.target.closest(".qb-grip") ? itemOf(e.target) : null;
     if (!grabbed || !e.dataTransfer) {
-      // Only the grips drag, so a <summary> row or a value chip is never picked
+      // Only the grips drag, so a <summary> row or a value row is never picked
       // up by accident. (A side effect: selected text can't be dragged out of
       // the dictionary, e.g. into the search box.)
       e.preventDefault();

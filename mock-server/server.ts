@@ -12,6 +12,12 @@ import {
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { ROWS } from "./rows";
 import { queryProblem } from "./requestBody";
+import {
+  createSavedQueryStore,
+  readSavedQueryBody,
+  savedQueryIdFrom,
+  type SavedQueryAnswer,
+} from "./savedQueries";
 import type { QueryRequest, StatsErrorMessage } from "../src/api/types";
 import {
   startLogin,
@@ -175,6 +181,16 @@ async function readQueryBody(
   return { query: query as QueryRequest["query"], databases };
 }
 
+/** Sends a store's answer; a 204 has no body at all. */
+function sendAnswer(res: ServerResponse, answer: SavedQueryAnswer): void {
+  if (answer.body === undefined) {
+    res.writeHead(answer.status);
+    res.end();
+  } else {
+    sendJson(res, answer.status, answer.body);
+  }
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -248,6 +264,53 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
     .slice(0, QUERY_RESULT_CAP);
   logQueryAudit(session.user.name, session.compliance.reason);
   sendJson(res, 200, { entrysets });
+}
+
+// ---- saved queries: the logged-in user's own list --------------------------
+
+type SavedQueryStore = ReturnType<typeof createSavedQueryStore>;
+
+/** What a saved-queries handler does once it knows whose list it is. */
+type ForUser = (
+  userId: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+) => SavedQueryAnswer | null | Promise<SavedQueryAnswer | null>;
+
+/**
+ * A saved-queries route: needs a session (401 without), then runs `act` with
+ * the user's key and sends its answer. The key is the user's name: the mock
+ * has no other stable user id, so two logins of the same mock user share one
+ * list, as they would with a real backend. `act` returns null after sending a
+ * 400 itself.
+ */
+function forSessionUser(act: ForUser): Handler {
+  return async (req, res) => {
+    const session = sessionFor(req.headers.cookie);
+    if (!session) return sendJson(res, 401, { error: "Log in to use saved queries." });
+    const answer = await act(session.user.name, req, res);
+    if (answer) sendAnswer(res, answer);
+  };
+}
+
+/** Reads and checks a POST/PUT body (savedQueries.ts). For a bad body this sends the 400 itself and returns null. */
+async function readSavedQuery(req: IncomingMessage, res: ServerResponse) {
+  const checked = readSavedQueryBody(await readJson(req));
+  if (checked.ok) return checked.body;
+  sendJson(res, 400, { error: checked.error });
+  return null;
+}
+
+/** The PUT and DELETE routes of `…/saved-queries/{id}`; undefined for any other method. */
+function savedQueryIdHandler(method: string | undefined, id: string, store: SavedQueryStore) {
+  if (method === "PUT") {
+    return forSessionUser(async (userId, req, res) => {
+      const body = await readSavedQuery(req, res);
+      return body && store.update(userId, id, body);
+    });
+  }
+  if (method === "DELETE") return forSessionUser((userId) => store.remove(userId, id));
+  return undefined;
 }
 
 // ---- login: app → …/auth/login → mock IdP page → confirm → callback → app
@@ -379,13 +442,19 @@ type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | P
 
 /** Every route, keyed by "METHOD /path". Add a route here. All of them sit
  *  under `config.apiBase`, the stand-in services' pages included. */
-function routes(config: MockConfig): Record<string, Handler> {
+function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<string, Handler> {
   const api = config.apiBase;
   return {
     [`GET ${api}/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
     [`GET ${api}/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
     [`POST ${api}/stats`]: (req, res) => streamStats(req, res, config),
     [`POST ${api}/query`]: queryEvents,
+
+    [`GET ${api}/saved-queries`]: forSessionUser((userId) => savedQueries.list(userId)),
+    [`POST ${api}/saved-queries`]: forSessionUser(async (userId, req, res) => {
+      const body = await readSavedQuery(req, res);
+      return body && savedQueries.create(userId, body);
+    }),
 
     [`GET ${api}/auth/login`]: (req, res) => startLoginFlow(req, res, api),
     [`GET ${api}/mock-idp/authorize`]: (req, res, url) => showIdpPage(req, res, url, api),
@@ -408,10 +477,19 @@ function routes(config: MockConfig): Record<string, Handler> {
 
 /** The dev-only mock API. Not listening yet: call `.listen(port)`. */
 export function createMockServer(config: MockConfig) {
-  const table = routes(config);
+  // One store per server: the saved queries live as long as this instance.
+  const savedQueries = createSavedQueryStore();
+  const table = routes(config, savedQueries);
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    const handler = table[`${req.method} ${url.pathname}`];
+    // The table matches exact paths; a saved query's id is part of its path,
+    // so those routes get a second look before the 404.
+    const savedQueryId = savedQueryIdFrom(url.pathname, config.apiBase);
+    const handler =
+      table[`${req.method} ${url.pathname}`] ??
+      (savedQueryId === null
+        ? undefined
+        : savedQueryIdHandler(req.method, savedQueryId, savedQueries));
     try {
       if (handler) await handler(req, res, url);
       else sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });

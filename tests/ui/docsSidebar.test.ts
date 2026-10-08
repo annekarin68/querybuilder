@@ -5,6 +5,7 @@ import {
   escapeClosesDocs,
   facetHtml,
   groupHtml,
+  valuesHeadingId,
 } from "../../src/ui/docsSidebar";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { parseDragItem } from "../../src/query/drop";
@@ -30,7 +31,7 @@ const facet: Facet = {
     { id: "flag", name: "Flag", typeName: "BOOLEAN", comment: "", description: "", values: [] },
   ],
 };
-const html = facetHtml(facet, 100, buildFieldCatalog([facet]));
+const html = facetHtml(facet, 100, buildFieldCatalog([facet]), "t");
 
 describe("data dictionary markup", () => {
   it("escapes names", () => {
@@ -58,7 +59,7 @@ describe("data dictionary markup", () => {
     expect(html).toContain('data-field-id="flag"');
   });
 
-  it("only fields with a pick-list get value chips", () => {
+  it("only fields with a pick-list get a list of values", () => {
     expect(html.match(/qb-doc-value"/g)).toHaveLength(2);
   });
 
@@ -80,17 +81,78 @@ describe("data dictionary markup", () => {
   it("long value lists are capped, with a count of the rest", () => {
     const many: Facet = {
       ...facet,
-      fields: [{ ...facet.fields[0]!, values: Array.from({ length: 70 }, (_, i) => String(i)) }],
+      fields: [{ ...facet.fields[0]!, values: Array.from({ length: 40 }, (_, i) => String(i)) }],
     };
-    const out = facetHtml(many, 1, buildFieldCatalog([many]));
+    const out = facetHtml(many, 1, buildFieldCatalog([many]), "t");
     expect(out.match(/qb-doc-value"/g)).toHaveLength(30);
-    expect(out).toContain("and 40 more");
+    expect(out).toContain("and 10 more");
+    // The heading counts every known value, not only the shown ones.
+    expect(out).toContain("Previously seen values (40)");
   });
 
   it("dragData round-trips through the attribute", () => {
     expect(dragData({ type: "tag", tag: 'x"y' })).toBe(
       "{&quot;type&quot;:&quot;tag&quot;,&quot;tag&quot;:&quot;x\\&quot;y&quot;}",
     );
+  });
+});
+
+describe("previously seen values", () => {
+  it("an opened field with 3 known values has a labelled list with the count", () => {
+    const three: Facet = {
+      ...facet,
+      fields: [{ ...facet.fields[0]!, values: ["3", "7", "9"] }],
+    };
+    const out = facetHtml(three, 1, buildFieldCatalog([three]), "t");
+    const id = valuesHeadingId("t", "a&b", "size");
+    // A group labelled by its heading, not a <section>: one landmark per open
+    // field, all named alike, would clutter the landmark list.
+    expect(out).toContain(`<div class="qb-doc-values" role="group" aria-labelledby="${id}">`);
+    expect(out).not.toContain("<section");
+    // h3: under the panel title (h2), not skipping a level.
+    expect(out).toContain(
+      `<h3 class="qb-doc-values-title" id="${id}">Previously seen values (3)</h3>`,
+    );
+    expect(out.match(/<li class="qb-doc-value"/g)).toHaveLength(3);
+  });
+
+  it("the heading's id is safe in HTML and differs per section, facet and field", () => {
+    const id = valuesHeadingId("t", "a&b", "size");
+    expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
+    // A facet is listed under each of its tags, so the section is part of the
+    // id; otherwise two headings on the page would share it.
+    expect(valuesHeadingId("u", "a&b", "size")).not.toBe(id);
+    expect(valuesHeadingId("t", "a&b", "flag")).not.toBe(id);
+    expect(valuesHeadingId("t", "a", "b-size")).not.toBe(valuesHeadingId("t", "a-b", "size"));
+  });
+
+  it("the hint names the field (escaped) and says other values may work", () => {
+    const odd: Facet = {
+      ...facet,
+      fields: [{ ...facet.fields[0]!, name: "Size <i>", values: ["3"] }],
+    };
+    const out = facetHtml(odd, 1, buildFieldCatalog([odd]), "t");
+    expect(out).toContain(
+      "Drag one or press + to add <em>Size &lt;i&gt;</em> equals <em>value</em>. Other values may work too.",
+    );
+  });
+
+  it("each row keeps its drag payload, grip and icon-only Add button", () => {
+    const row = html.match(/<li class="qb-doc-value" data-item="([^"]*)">([\s\S]*?)<\/li>/)!;
+    expect(parseDragItem(row[1]!.replace(/&quot;/g, '"').replace(/&amp;/g, "&"))).toEqual({
+      type: "value",
+      facetId: "a&b",
+      fieldId: "size",
+      value: "3",
+    });
+    expect(row[2]).toContain('class="qb-grip" draggable="true"');
+    expect(row[2]).toContain('aria-label="Add 3 to the query"');
+  });
+
+  it("a field without known values has no heading", () => {
+    const none: Facet = { ...facet, fields: [facet.fields[1]!] };
+    const out = facetHtml(none, 1, buildFieldCatalog([none]), "t");
+    expect(out).not.toContain("Previously seen values");
   });
 });
 
@@ -162,17 +224,16 @@ describe("expand and add affordances", () => {
       ...facet,
       fields: [{ ...facet.fields[1]!, typeName: "BIGINT", values: ["3"] }],
     };
-    const out = facetHtml(f, 1, buildFieldCatalog([f]));
+    const out = facetHtml(f, 1, buildFieldCatalog([f]), "t");
     expect(out).toContain('<details class="qb-doc-field"');
   });
 
-  it("add buttons on cards and rows say 'Add'; value chips stay icon-only", () => {
-    // facet + two fields have the visible label, the two value chips don't
+  it("add buttons on cards and rows say 'Add'; value rows stay icon-only", () => {
+    // facet + two fields have the visible label, the two value rows don't
     expect(html.match(/<span class="qb-add-label">Add<\/span>/g)).toHaveLength(3);
-    const chips =
-      html.match(/<span class="qb-doc-value" data-item[\s\S]*?<\/button><\/span>/g) ?? [];
-    expect(chips).toHaveLength(2);
-    for (const chip of chips) expect(chip).not.toContain("qb-add-label");
+    const rows = html.match(/<li class="qb-doc-value" data-item[\s\S]*?<\/button><\/li>/g) ?? [];
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row).not.toContain("qb-add-label");
   });
 
   it("the accessible name of an add button is unchanged by the visible label", () => {

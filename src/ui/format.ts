@@ -92,3 +92,11 @@ export function formatWhen(iso: string | undefined, locale?: string, timeZone?: 
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short", timeZone });
 }
+
+/** The day only, in the viewer's locale ("08/10/2026" in en-GB): a saved
+ *  query's date. Unparseable → returned unchanged, so nothing is hidden. */
+export function formatDate(iso: string, locale?: string, timeZone?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(locale, { timeZone });
+}

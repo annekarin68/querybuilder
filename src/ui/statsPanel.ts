@@ -1,6 +1,7 @@
 import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../state";
 import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
+import { placeIssues } from "../query/issues";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
 /** The databases are loaded once into AppState.databases; a result only
@@ -33,19 +34,50 @@ function successRowHtml(result: Ok, db: Database | undefined): string {
   </div>`;
 }
 
+/**
+ * A failed database's row. Errors that point at a query node are shown once,
+ * in the query builder (and counted by `queryProblemsLine`), so the row only
+ * says "Not counted" for them; errors without a node can only be fixed by
+ * deselecting the database or by the service, so they stay here, in red.
+ */
 function failureRowHtml(result: Failed, db: Database | undefined): string {
   const name = db?.name ?? result.databaseId;
-  const errors = result.errors.length
-    ? messagesHtml(
-        result.errors.map((e) => e.message),
-        "qb-db-msg qb-db-error",
-      )
-    : `<span class="qb-db-msg qb-db-error">Failed.</span>`;
+  const databaseErrors = result.errors.filter((e) => e.nodeId === null);
+  let errors: string;
+  if (databaseErrors.length) {
+    errors = messagesHtml(
+      databaseErrors.map((e) => e.message),
+      "qb-db-msg qb-db-error",
+    );
+  } else if (result.errors.length) {
+    errors = `<span class="qb-db-msg">Not counted</span>`;
+  } else {
+    errors = `<span class="qb-db-msg qb-db-error">Failed.</span>`;
+  }
   return `<div class="qb-db-row is-failed">
     <span class="qb-db-name">${escapeHtml(name)}</span>
     ${errors}
     ${messagesHtml(result.notes, "qb-db-msg")}
   </div>`;
+}
+
+/**
+ * "Not counted: N problems are marked in the query." with a Show button, or
+ * "" when the databases found no problem in the query. The messages
+ * themselves are drawn in the builder, next to what is wrong, so they are not
+ * repeated here. N counts each problem once (`AppState.serverIssues`). Show
+ * names the node that is drawn for the first problem (`placeIssues`), so a
+ * problem inside a collapsed group points at that group. The node's id goes in
+ * `data-target-id`, not `data-node-id`: that attribute means "this element is
+ * a query node", and keyboard focus memory (focusMemory.ts) would take the
+ * button for one.
+ */
+export function queryProblemsLine(state: AppState): string {
+  const count = state.serverIssues.length;
+  if (count === 0) return "";
+  const first = placeIssues(state.query, state.serverIssues)[0]!;
+  const problems = count === 1 ? "1 problem is" : `${count} problems are`;
+  return `<div class="qb-stat-problems" role="note"><span>Not counted: ${problems} marked in the query.</span> <button type="button" class="ui mini basic button" data-action="show-issue" data-target-id="${escapeHtml(first.nodeId)}">Show</button></div>`;
 }
 
 /** Statistics that have (some) results: everything but the error state. */
@@ -110,12 +142,15 @@ function pendingHtml(stats: StatsWithResults, selectedCount: number): string {
   return `<div class="qb-stat-pending"><span class="ui active mini inline loader"></span>Waiting on ${countLabel(remaining, "more database", "more databases")}…</div>`;
 }
 
+/** The panel's card is its `data-focus-landing` (not in the Tab order, tabindex
+ *  -1): Try again turns into the "Counting matches…" text, and a keyboard user
+ *  who pressed it stays in this card instead of dropping to the page. */
 function card(state: AppState, body: string): string {
   // Decoration only. (An aria-label on a span without a role is not read, and
   // the panel's own text, "Counting matches…" or the headline, says what is up.)
   const busy =
     state.stats.status === "loading" ? `<span class="ui active mini inline loader"></span>` : "";
-  return `<div class="qb-card qb-stats"><h2 class="qb-card-title">Statistics${busy ? " " + busy : ""}</h2>${body}</div>`;
+  return `<div class="qb-card qb-stats" tabindex="-1" data-focus-landing><h2 class="qb-card-title">Statistics${busy ? " " + busy : ""}</h2>${body}</div>`;
 }
 
 const placeholder = (text: string) => `<p class="qb-placeholder">${escapeHtml(text)}</p>`;
@@ -140,7 +175,7 @@ export function statsPanelHtml(state: AppState): string {
   if (stats.status === "error") {
     return card(
       state,
-      `<div class="ui small negative message"><div class="header">Statistics failed</div><p>${escapeHtml(stats.error)}</p></div>`,
+      `<div class="ui small negative message"><div class="header">Couldn't get statistics</div><p>${escapeHtml(stats.error)}</p><button type="button" class="ui mini basic button" data-action="retry-stats">Try again</button></div>`,
     );
   }
   // "idle" with a complete query = the debounce before the fetch starts.
@@ -154,6 +189,7 @@ export function statsPanelHtml(state: AppState): string {
   return card(
     state,
     headlineHtml(stats, state.databases) +
+      queryProblemsLine(state) +
       perDatabaseHtml(stats.results, state.databases) +
       pendingHtml(stats, state.selectedDatabaseIds.length),
   );
@@ -161,4 +197,22 @@ export function statsPanelHtml(state: AppState): string {
 
 export function renderStatsPanel(el: HTMLElement, state: AppState): void {
   paint(el, statsPanelHtml(state));
+}
+
+/**
+ * One delegated listener for the Try again and Show buttons. Call once at
+ * startup; the buttons are redrawn with every repaint, the container is not.
+ */
+export function wireStatsPanel(
+  container: HTMLElement,
+  hooks: { onRetry(): void; onShowIssue(nodeId: string): void },
+): void {
+  container.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
+    if (!btn) return;
+    if (btn.dataset.action === "retry-stats") hooks.onRetry();
+    else if (btn.dataset.action === "show-issue" && btn.dataset.targetId) {
+      hooks.onShowIssue(btn.dataset.targetId);
+    }
+  });
 }

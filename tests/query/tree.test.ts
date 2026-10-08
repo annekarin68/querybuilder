@@ -14,8 +14,12 @@ import {
   replaceLoneBlankCondition,
   moveNode,
   placeNodes,
+  groupContents,
+  ungroupBlocker,
+  ungroup,
+  UNGROUP_BLOCKED_MESSAGE,
 } from "../../src/query/tree";
-import type { Condition, Group } from "../../src/query/types";
+import type { Condition, Group, QueryNode } from "../../src/query/types";
 
 describe("tree", () => {
   it("emptyQuery is an AND group with no children", () => {
@@ -361,5 +365,162 @@ describe("moveNode", () => {
     const c = newCondition();
     const g = { ...newGroup(), children: [c] };
     expect(moveNode(addChild(root, root.id, g), g.id, c.id)).toBeNull();
+  });
+});
+
+const cond = (id: string): Condition => ({
+  kind: "condition",
+  id,
+  facetId: "f",
+  fieldId: "x",
+  operatorId: "eq",
+  value: 1,
+});
+const group = (
+  id: string,
+  operator: "AND" | "OR",
+  children: Group["children"],
+  collapsed?: boolean,
+): Group => ({
+  kind: "group",
+  id,
+  operator,
+  children,
+  ...(collapsed === undefined ? {} : { collapsed }),
+});
+
+/**
+ * Test-only evaluator: whether `node` holds when each condition's truth is
+ * looked up by its id. AND = every child, OR = some child; an empty group
+ * counts as true. Lets the tests prove that regrouping keeps the meaning,
+ * which `sameSemantics` can't (it compares ids, and a new group has a new id).
+ */
+function matches(node: QueryNode, truth: Record<string, boolean>): boolean {
+  if (node.kind === "condition") return truth[node.id] ?? false;
+  if (node.children.length === 0) return true;
+  return node.operator === "AND"
+    ? node.children.every((c) => matches(c, truth))
+    : node.children.some((c) => matches(c, truth));
+}
+
+/** Whether `a` and `b` give the same answer for every true/false choice of `ids`. */
+function sameForAllTruths(a: QueryNode, b: QueryNode, ids: string[]): boolean {
+  for (let bits = 0; bits < 2 ** ids.length; bits++) {
+    const truth = Object.fromEntries(ids.map((id, i) => [id, Boolean((bits >> i) & 1)]));
+    if (matches(a, truth) !== matches(b, truth)) return false;
+  }
+  return true;
+}
+
+describe("groupContents", () => {
+  it("moves every child into one new group with the same operator", () => {
+    const root = group("r", "OR", [cond("a"), cond("b")]);
+    const next = groupContents(root, "r");
+    expect(next.operator).toBe("OR");
+    expect(next.children).toHaveLength(1);
+    const inner = next.children[0] as Group;
+    expect(inner).toMatchObject({
+      kind: "group",
+      operator: "OR",
+      children: [cond("a"), cond("b")],
+    });
+    expect(inner.id).not.toBe("r");
+    expect(inner.collapsed).toBeUndefined();
+  });
+
+  it("works on a nested group and leaves the rest alone", () => {
+    const root = group("r", "AND", [cond("a"), group("g", "OR", [cond("b"), cond("c")])]);
+    const next = groupContents(root, "g");
+    expect(next.children[0]).toEqual(cond("a"));
+    const g = next.children[1] as Group;
+    expect(g.id).toBe("g");
+    expect((g.children[0] as Group).children).toEqual([cond("b"), cond("c")]);
+  });
+
+  it("returns the tree unchanged for an unknown id or a condition id", () => {
+    const root = group("r", "AND", [cond("a"), cond("b")]);
+    expect(groupContents(root, "nope")).toBe(root);
+    expect(groupContents(root, "a")).toBe(root);
+  });
+});
+
+describe("regrouping never changes what the query means", () => {
+  const ids = ["a", "b", "c", "d"];
+
+  it("groupContents, on the root and on a nested group, under ALL and ANY", () => {
+    for (const outer of ["AND", "OR"] as const) {
+      for (const inner of ["AND", "OR"] as const) {
+        const root = group("r", outer, [
+          cond("a"),
+          group("g", inner, [cond("b"), cond("c")]),
+          cond("d"),
+        ]);
+        expect(sameForAllTruths(groupContents(root, "r"), root, ids)).toBe(true);
+        expect(sameForAllTruths(groupContents(root, "g"), root, ids)).toBe(true);
+      }
+    }
+  });
+
+  it("ungroup, whenever it is allowed (same operator, or one item)", () => {
+    for (const outer of ["AND", "OR"] as const) {
+      for (const inner of ["AND", "OR"] as const) {
+        const many = group("r", outer, [
+          cond("a"),
+          group("g", inner, [cond("b"), cond("c")]),
+          cond("d"),
+        ]);
+        const one = group("r", outer, [cond("a"), group("g", inner, [cond("b")]), cond("d")]);
+        for (const root of [many, one]) {
+          const next = ungroup(root, "g");
+          // Allowed exactly when the rule says so; then the meaning is kept.
+          expect(next === null).toBe(ungroupBlocker(root, "g") !== null);
+          if (next) expect(sameForAllTruths(next, root, ids)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("the evaluator can tell a changed query from a kept one (the refused ungroup would change it)", () => {
+    const root = group("r", "AND", [cond("a"), group("g", "OR", [cond("b"), cond("c")])]);
+    const naive = { ...root, children: [cond("a"), cond("b"), cond("c")] };
+    expect(sameForAllTruths(naive, root, ids)).toBe(false);
+  });
+});
+
+describe("ungroupBlocker / ungroup", () => {
+  it("allows ungrouping when the group matches its parent's operator", () => {
+    const root = group("r", "AND", [
+      cond("a"),
+      group("g", "AND", [cond("b"), cond("c")]),
+      cond("d"),
+    ]);
+    expect(ungroupBlocker(root, "g")).toBeNull();
+    expect(ungroup(root, "g")!.children.map((n) => n.id)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("allows ungrouping a one-child group whatever its operator", () => {
+    const root = group("r", "AND", [group("g", "OR", [cond("b")])]);
+    expect(ungroupBlocker(root, "g")).toBeNull();
+    expect(ungroup(root, "g")!.children).toEqual([cond("b")]);
+  });
+
+  it("refuses when operators differ and the group holds more than one item", () => {
+    const root = group("r", "AND", [group("g", "OR", [cond("b"), cond("c")])]);
+    expect(ungroupBlocker(root, "g")).toBe(UNGROUP_BLOCKED_MESSAGE);
+    expect(ungroup(root, "g")).toBeNull();
+  });
+
+  it("refuses the root and unknown ids", () => {
+    const root = group("r", "AND", [cond("a")]);
+    expect(ungroupBlocker(root, "r")).not.toBeNull();
+    expect(ungroup(root, "r")).toBeNull();
+    expect(ungroup(root, "nope")).toBeNull();
+    expect(ungroupBlocker(root, "a")).not.toBeNull();
+  });
+
+  it("ungrouping a collapsed group keeps its children's own state", () => {
+    const inner = group("h", "OR", [cond("x")], true);
+    const root = group("r", "AND", [group("g", "AND", [inner, cond("b")], true)]);
+    expect(ungroup(root, "g")!.children).toEqual([inner, cond("b")]);
   });
 });

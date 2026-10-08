@@ -12,7 +12,7 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import * as api from "./api/client";
-import { EASTER_EGG_TOAST, MASCOT } from "./config";
+import { EASTER_EGG_MASCOT, EASTER_EGG_TOAST, MASCOT } from "./config";
 import { createApp, errorMessage } from "./app";
 import { store, type AppState } from "./state";
 import { showToast } from "./ui/fomantic";
@@ -22,11 +22,12 @@ import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { escapeClosesDocs, renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
-import { wireQueryBuilder } from "./ui/queryBuilder";
-import { renderStatsPanel } from "./ui/statsPanel";
+import { revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
-import { createClickCounter, startRain } from "./ui/pickleRain";
+import { renderSavedDialog, wireSavedDialog } from "./ui/savedQueries";
+import { createClickCounter, easterEggReaction, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
 // `app` (src/app.ts, where everything the app DOES lives) and repaints panels
@@ -51,13 +52,18 @@ document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest("a[data-flow-link]")) app.saveQueryBeforeRedirect();
 });
 
-// Hidden: five quick clicks on the logo make it rain pickles (instead, a toast
-// for people who prefer reduced motion).
+// Hidden: five quick clicks on the logo switch the mascot to the easter-egg set
+// (five more switch back) and make it rain with the new set (instead, a toast
+// when switching on, for people who prefer reduced motion).
 const logoClicked = createClickCounter();
 shell.logo.addEventListener("click", () => {
   if (!logoClicked()) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) showToast(EASTER_EGG_TOAST);
-  else startRain(Object.values(MASCOT));
+  const easterEgg = !store.getState().easterEgg;
+  store.setState({ easterEgg });
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reaction = easterEggReaction(easterEgg, reduceMotion);
+  if (reaction === "rain") startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
+  else if (reaction === "toast") showToast(EASTER_EGG_TOAST);
 });
 
 // Wire every panel once. The listeners are delegated to the panel containers
@@ -70,6 +76,10 @@ wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
 wireDocsResize(shell.docsResizeHandle);
 wireDataPreview(panels.preview, app.runPreview);
 wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
+wireStatsPanel(panels.stats, {
+  onRetry: app.retryStats,
+  onShowIssue: (nodeId) => revealNode(panels.center, nodeId),
+});
 wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onInvalidate: app.onInvalidateCompliance,
@@ -77,8 +87,12 @@ wireAccountMenu(panels.account, {
 const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange, {
   onDrop: app.onDropItem,
   onDismissNotice: app.dismissDropNotice,
+  onNotice: app.showNotice,
   announce: shell.announce,
+  onOpenSaveDialog: app.openSaveDialog,
+  onOpenSavedList: app.openSavedList,
 });
+wireSavedDialog(shell.savedDialog, app);
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
@@ -86,15 +100,29 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
-  { keys: ["issues", "stats", "preview"], run: (s) => shell.setMascot(mascotFor(s)) },
+  {
+    keys: ["issues", "stats", "preview", "easterEgg"],
+    run: (s) => shell.setMascot(mascotFor(s), s.easterEgg),
+  },
   { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
-    keys: ["databases", "selectedDatabaseIds"],
+    keys: ["databases", "selectedDatabaseIds", "stats"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
   {
-    keys: ["catalog", "query", "issues", "serverIssues", "facets", "dropNotice"],
+    keys: [
+      "catalog",
+      "databases",
+      "query",
+      "issues",
+      "serverIssues",
+      "facets",
+      "dropNotice",
+      "openSaved",
+      "selectedDatabaseIds",
+      "auth", // the Save… / Saved queries note for a logged-out user
+    ],
     run: renderQueryBuilder,
   },
   {
@@ -124,6 +152,12 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     run: (s) => renderDataPreview(panels.preview, s),
   },
   { keys: ["auth", "compliance"], run: (s) => renderAccountMenu(panels.account, s) },
+  // Last: when a dialog closes, the focus goes back to its button in the query
+  // card, which must already be repainted (opening a saved query repaints it).
+  {
+    keys: ["savedDialog", "save", "savedList", "savedConfirm", "openSaved"],
+    run: (s) => renderSavedDialog(shell.savedDialog, s),
+  },
 ];
 
 // Below this width the open docs float over the page (styles.css), so start
@@ -188,9 +222,10 @@ store.subscribe((state, changed) => {
 /**
  * `?resume=1` marks a load as the direct return-hop from the login or
  * compliance callback (both redirect here) — the ONE signal that tells this
- * load to restore a saved query, as opposed to a generic revisit finding a
- * stale leftover sessionStorage entry from an abandoned attempt. Stripped
- * from the URL immediately so a manual refresh doesn't re-trigger this.
+ * load to restore the pending query (src/util/pendingQuery.ts), as opposed to
+ * a generic revisit finding a stale leftover sessionStorage entry from an
+ * abandoned attempt. Stripped from the URL immediately so a manual refresh
+ * doesn't re-trigger this.
  */
 function consumeResumeParam(): boolean {
   const url = new URL(window.location.href);

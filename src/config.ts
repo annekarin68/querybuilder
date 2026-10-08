@@ -55,5 +55,18 @@ export const MASCOT = {
   loading: "/pickle/loading.svg",
 } as const;
 
+/**
+ * The hidden second set of faces: five clicks on the logo switch to it (and
+ * five more switch back), for this page load only. Replace the files in
+ * public/pickle/ to change it. Same keys and fallbacks as `MASCOT`: a face
+ * whose file is missing falls back to this set's `neutral`, then to
+ * `MASCOT.neutral`.
+ */
+export const EASTER_EGG_MASCOT = {
+  neutral: "/pickle/egg-logo.svg",
+  disappointed: "/pickle/egg-disappointed.svg",
+  loading: "/pickle/egg-loading.svg",
+} as const;
+
 /** Shown (instead of the falling pickles) for people who prefer reduced motion. */
 export const EASTER_EGG_TOAST = "I'm Pickle Rick!";

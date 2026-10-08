@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { toQueryRequest } from "../../src/api/request";
+import { toQueryRequest, toSavedQueryRequest } from "../../src/api/request";
+import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
+import type { Group } from "../../src/query/types";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
 import type { NodePatch } from "../../src/query/tree";
 import type { RequestCondition } from "../../src/api/types";
@@ -140,5 +142,38 @@ describe("toQueryRequest", () => {
   it("still rejects a condition with no facet", () => {
     const t = oneCondition({ operatorId: "present", value: null });
     expect(() => toQueryRequest(t, ["alpha"])).toThrow(/unfinished/);
+  });
+});
+
+describe("toSavedQueryRequest", () => {
+  it("keeps every unfinished part, trims name and note, and leaves display state out", () => {
+    expect(toSavedQueryRequest(unfinishedDraft)).toEqual(unfinishedRequest);
+    expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft))).not.toContain("collapsed");
+  });
+
+  it("does not change the draft it is given", () => {
+    const before = JSON.stringify(unfinishedDraft);
+    toSavedQueryRequest(unfinishedDraft);
+    expect(JSON.stringify(unfinishedDraft)).toBe(before);
+  });
+
+  it("sends a note of only spaces as an empty note", () => {
+    expect(toSavedQueryRequest({ ...unfinishedDraft, note: "   " }).note).toBe("");
+  });
+
+  it.each([
+    ["an object", { from: 1 }],
+    ["a list holding an object", [1, {}]],
+    ["undefined", undefined],
+  ])("throws on a value that is %s", (_label, value) => {
+    const query: Group = {
+      kind: "group",
+      id: "g1",
+      operator: "AND",
+      children: [
+        { kind: "condition", id: "c1", facetId: null, fieldId: null, operatorId: null, value },
+      ],
+    };
+    expect(() => toSavedQueryRequest({ ...unfinishedDraft, query })).toThrow(/cannot be sent/);
   });
 });

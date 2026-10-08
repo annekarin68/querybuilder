@@ -1,4 +1,5 @@
 import type { Scalar } from "../model";
+import type { SavedValue } from "./types";
 
 /**
  * Checks the backend's responses against the API contract (src/api/types.ts)
@@ -15,8 +16,9 @@ import type { Scalar } from "../model";
  * and not three files later as "Cannot read properties of undefined".
  *
  * There are two kinds of read:
- * - **Required**: `id`, `number`, `boolean`, `list`, `optionalList`, `object`.
- *   The app cannot work without these. A missing or wrong value throws a
+ * - **Required**: `id`, `ids`, `nullableId`, `oneOf`, `savedValue`,
+ *   `number`, `boolean`, `list`, `optionalList`, `object`. The app cannot work without
+ *   these. A missing or wrong value throws a
  *   `ContractError`. (`optionalList` allows a missing one.)
  * - **Display-only**: `text`, `strings` and the `optional…` reads. The app
  *   only shows these. A missing or wrong value becomes blank ("" or []) and is
@@ -50,6 +52,10 @@ function isObject(v: unknown): v is JsonObject {
 /** A key the backend left out. It sends `null` for some of those. */
 function isAbsent(v: unknown): boolean {
   return v === undefined || v === null;
+}
+
+function isJsonScalar(v: unknown): v is Scalar {
+  return typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 }
 
 function shorten(s: string): string {
@@ -160,6 +166,47 @@ export class ResponseObject<T> {
     const v = this.fields[key];
     if (typeof v === "string" && v.trim() !== "") return v;
     throw this.error(key, "non-blank text");
+  }
+
+  /** A list of machine ids (see `id`): every item must be non-blank text.
+   *  A missing key, a value that isn't a list, or a bad item throws; the
+   *  message names the item, e.g. `"[0].databases[1]"`. */
+  ids(key: Key<T>): string[] {
+    const v = this.fields[key];
+    const path = join(this.path, key);
+    if (!Array.isArray(v)) throw new ContractError(this.source, mismatch(path, "a list of ids", v));
+    return v.map((item, i) => {
+      if (typeof item === "string" && item.trim() !== "") return item;
+      throw new ContractError(this.source, mismatch(`${path}[${i}]`, "non-blank text", item));
+    });
+  }
+
+  /** Like `id`, for a machine id that may be unset: `null` when the key is
+   *  `null` or left out (a JSON writer may drop nulls). Text that is blank,
+   *  or a value that isn't text, still throws. */
+  nullableId(key: Key<T>): string | null {
+    return isAbsent(this.fields[key]) ? null : this.id(key);
+  }
+
+  /** Exactly one of the texts in `allowed`: a discriminator such as a
+   *  node's `kind` or a group's `operator`. Anything else throws, and the
+   *  message lists what was expected. */
+  oneOf<V extends string>(key: Key<T>, allowed: readonly V[]): V {
+    const v = this.fields[key];
+    const match = allowed.find((a) => a === v);
+    if (match !== undefined) return match;
+    throw this.error(key, allowed.map((a) => JSON.stringify(a)).join(" or "));
+  }
+
+  /** A saved condition's value: `null` (also when left out), text, a number,
+   *  true or false, or a list of those in which an item may be `null` (an
+   *  unfinished from–to pair). It is copied exactly as sent. */
+  savedValue(key: Key<T>): SavedValue {
+    const v = this.fields[key];
+    if (isAbsent(v)) return null;
+    if (isJsonScalar(v)) return v;
+    if (Array.isArray(v) && v.every((item) => item === null || isJsonScalar(item))) return [...v];
+    throw this.error(key, "null, text, a number, true or false, or a list of those");
   }
 
   /** A number (not NaN or Infinity). */

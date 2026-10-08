@@ -12,6 +12,7 @@ import {
 } from "../../mock-server/auth";
 import { auditLogSnapshot } from "../../mock-server/audit";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
+import { unfinishedRequest } from "../savedQueryFixtures";
 
 // The mock server over real HTTP, on a free port. Deterministic: no simulated
 // failures and no streaming delay.
@@ -109,7 +110,7 @@ describe("POST /api/stats", () => {
     }
   });
 
-  it("fails every database, pointing at the condition, when a text is too long", async () => {
+  it("fails every database, pointing at the condition and its group, when a text is too long", async () => {
     const tooLong = {
       ...everyEvent,
       children: [
@@ -128,6 +129,7 @@ describe("POST /api/stats", () => {
         success: false,
         errorMessages: [
           { nodeId: "c1", kind: "invalid", message: "Text is too long (at most 100 characters)." },
+          { nodeId: "g1", kind: "incomplete", message: "Group contains no valid conditions." },
         ],
         infoMessages: [],
       })),
@@ -240,6 +242,82 @@ describe("GET /api/auth/me and /api/compliance/status", () => {
       status: "acknowledged",
       reason: "testing",
     });
+  });
+});
+
+describe("saved queries (…/saved-queries)", () => {
+  const url = `${API}/saved-queries`;
+  const send = (method: string, path: string, cookie?: string, body?: unknown) =>
+    fetch(base + path, {
+      method,
+      headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+      body: body === undefined || method === "GET" ? undefined : JSON.stringify(body),
+    });
+  const named = (name: string) => ({ ...unfinishedRequest, name });
+
+  it.each([
+    ["GET", url],
+    ["POST", url],
+    ["PUT", `${url}/sq-1`],
+    ["DELETE", `${url}/sq-1`],
+  ])("%s %s without a session is a 401", async (method, path) => {
+    const res = await send(method, path, undefined, unfinishedRequest);
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Log in to use saved queries." });
+  });
+
+  it("creates, lists, updates and deletes, answering as the contract says", async () => {
+    const cookie = loggedIn();
+    expect(await (await send("GET", url, cookie)).json()).toEqual([]);
+
+    const created = await send("POST", url, cookie, named("First"));
+    expect(created.status).toBe(201);
+    const first = await created.json();
+    expect(first).toMatchObject({ ...named("First"), id: expect.any(String) });
+    expect(new Date(first.updatedAt).toISOString()).toBe(first.updatedAt);
+
+    const listed = await (await send("GET", url, cookie)).json();
+    expect(listed).toEqual([first]);
+
+    const renamed = await send("PUT", `${url}/${first.id}`, cookie, named("Second"));
+    expect(renamed.status).toBe(200);
+    expect(await renamed.json()).toMatchObject({ id: first.id, name: "Second" });
+
+    const deleted = await send("DELETE", `${url}/${first.id}`, cookie);
+    expect(deleted.status).toBe(204);
+    expect(await deleted.text()).toBe("");
+    expect(await (await send("GET", url, cookie)).json()).toEqual([]);
+  });
+
+  it("answers 404 for an unknown id and 409 for a taken name", async () => {
+    const cookie = loggedIn();
+    expect((await send("PUT", `${url}/nope`, cookie, named("X"))).status).toBe(404);
+    expect((await send("DELETE", `${url}/nope`, cookie)).status).toBe(404);
+    await send("POST", url, cookie, named("Taken"));
+    const clash = await send("POST", url, cookie, named(" taken "));
+    expect(clash.status).toBe(409);
+    expect(await clash.json()).toEqual({ error: 'A saved query called "taken" already exists.' });
+  });
+
+  it("finds an id that needs decoding", async () => {
+    const cookie = loggedIn();
+    const res = await send("DELETE", `${url}/a%2Fb`, cookie);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "No saved query with that id." });
+  });
+
+  it("answers 400 for a malformed body, naming the problem", async () => {
+    const cookie = loggedIn();
+    const res = await send("POST", url, cookie, { ...unfinishedRequest, name: "  " });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "name must be 1 to 80 characters." });
+    const notJson = await fetch(base + url, { method: "POST", body: "{", headers: { cookie } });
+    expect(notJson.status).toBe(400);
+  });
+
+  it("does not answer other methods on an id path", async () => {
+    const res = await send("GET", `${url}/sq-1`, loggedIn());
+    expect(res.status).toBe(404);
   });
 });
 

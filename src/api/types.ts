@@ -201,3 +201,52 @@ export interface RequestCondition {
 
 export type RequestScalar = string | number | boolean;
 export type RequestValue = null | RequestScalar | RequestScalar[];
+
+// ---- saved queries (GET/POST …/saved-queries, PUT/DELETE …/saved-queries/{id}) --
+
+/**
+ * A saved query as stored by the backend: the query as the user left it,
+ * finished or not (docs/ARCHITECTURE.md, "Saved queries"). The backend checks
+ * the shape only, never the meaning. Built by `toSavedQueryRequest`
+ * (src/api/request.ts).
+ */
+export interface SavedQueryRequest {
+  /** 1–80 characters after trimming; unique per user, ignoring case. */
+  name: string;
+  /** 0–80 characters; "" for none. A few words to recognise the query by. */
+  note: string;
+  /** `DatabasesResponse.label` of each selected database. May be empty. */
+  databases: string[];
+  /** The draft tree. Its root is always a group. */
+  query: SavedGroup;
+}
+
+export interface SavedQueryResponse extends SavedQueryRequest {
+  /** Made by the server. Not a `label`: it names a user's own record, not backend data. */
+  id: string;
+  /** ISO 8601 UTC. */
+  updatedAt: string;
+}
+
+export type SavedNode = SavedGroup | SavedCondition;
+
+/** Like `RequestGroup`, but `children` may be empty. */
+export interface SavedGroup {
+  kind: "group";
+  id: string;
+  operator: "AND" | "OR";
+  children: SavedNode[];
+}
+
+/** Like `RequestCondition`, but unfinished: each of the four may be `null`. */
+export interface SavedCondition {
+  kind: "condition";
+  id: string;
+  facetId: string | null;
+  fieldId: string | null;
+  operatorId: string | null;
+  value: SavedValue;
+}
+
+/** Like `RequestValue`, but a list may hold nulls (an unfinished from–to pair). */
+export type SavedValue = null | RequestScalar | (RequestScalar | null)[];

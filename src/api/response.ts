@@ -5,6 +5,10 @@ import type {
   EntrysetResponse,
   IndividualFieldResponse,
   IndividualResponse,
+  SavedCondition,
+  SavedGroup,
+  SavedNode,
+  SavedQueryResponse,
   StatsErrorMessage,
   StatsResponse,
 } from "./types";
@@ -17,9 +21,11 @@ import type {
   EventRecord,
   Facet,
   Field,
+  SavedQuery,
   Scalar,
   User,
 } from "../model";
+import type { Condition, Group, QueryNode } from "../query/types";
 
 /**
  * Backend response → the frontend's own model (src/model.ts). client.ts runs
@@ -29,8 +35,10 @@ import type {
  *
  * Each function reads one object of a response key by key, through the checks
  * in src/api/contract.ts (docs/ARCHITECTURE.md, "Reading responses"): `id`,
- * `number`, `boolean` and `list` are required and throw a ContractError naming
- * the field; `text` and `strings` are only shown, so they fall back to blank.
+ * `ids`, `nullableId`, `oneOf`, `savedValue`, `number`, `boolean`, `list` and
+ * `object` are required and throw a ContractError naming the field (a saved
+ * query's tree and database ids are read with these); `text` and `strings` are
+ * only shown, so they fall back to blank.
  *
  * This is also where the backend's quirks are smoothed out once, instead of in
  * every panel: text may arrive padded, a facet or field may have no name, and a
@@ -134,5 +142,51 @@ export function toCompliance(c: ResponseObject<ComplianceStatus>): Compliance {
     status: "acknowledged",
     reason: c.optionalText("reason"),
     givenAt: c.optionalText("ackedAt") || null,
+  };
+}
+
+/**
+ * A saved query. The tree is required data (a malformed one throws a
+ * ContractError naming the node, e.g. "query.children[0].kind"): loading half
+ * of a user's query would be worse than saying it cannot be read. The note is
+ * only shown, so a missing one becomes ""; the database ids are required like every id. The tree comes back exactly as it
+ * was saved, unfinished parts included; the backend never rewrites it.
+ */
+export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery {
+  const root = q.object<SavedGroup>("query");
+  root.oneOf("kind", ["group"]); // a saved query's root is always a group
+  return {
+    id: q.id("id"),
+    name: q.id("name").trim(),
+    note: q.text("note"),
+    databaseIds: q.ids("databases"),
+    query: toSavedGroup(root),
+    updatedAt: q.id("updatedAt"),
+  };
+}
+
+function toSavedNode(n: ResponseObject<SavedNode>): QueryNode {
+  return n.oneOf("kind", ["group", "condition"]) === "group"
+    ? toSavedGroup(n)
+    : toSavedCondition(n);
+}
+
+function toSavedGroup(g: ResponseObject<SavedGroup>): Group {
+  return {
+    kind: "group",
+    id: g.id("id"),
+    operator: g.oneOf("operator", ["AND", "OR"]),
+    children: g.list<SavedNode>("children").map(toSavedNode),
+  };
+}
+
+function toSavedCondition(c: ResponseObject<SavedCondition>): Condition {
+  return {
+    kind: "condition",
+    id: c.id("id"),
+    facetId: c.nullableId("facetId"),
+    fieldId: c.nullableId("fieldId"),
+    operatorId: c.nullableId("operatorId"),
+    value: c.savedValue("value"),
   };
 }
