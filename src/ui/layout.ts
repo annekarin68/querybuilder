@@ -60,17 +60,24 @@ export interface Shell {
  * The page frame, rendered once: a top bar (app name, workflow steps, account
  * area), then a docs rail + three columns — the data dictionary (collapsible,
  * open by default, resizable), the main column (databases, query, matching events)
- * and the pinned statistics column. Panels paint into the data-panel slots.
+ * and the statistics column (pinned beside the main column on wide screens,
+ * between the query and Run query on narrow ones). Panels paint into the
+ * data-panel slots.
  */
 export function renderShell(root: HTMLElement): Shell {
   const openToggle = docsToggle(false); // the page starts with the docs open
+  // The narrow-screen grid in styles.css (`@media (max-width: 900px)`) counts
+  // the three <main> sections below plus the stats aside, and orders them by
+  // position and `data-panel`. Adding or removing a panel here means updating
+  // that CSS block too. (A comment cannot go inside the template: it would
+  // end up in the page.)
   root.innerHTML = `
     <header class="qb-topbar">
       <span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" />Query Builder</span>
       <nav class="qb-steps" data-menu="views" aria-label="Workflow">
         ${VIEWS.map(
           (v, i) =>
-            `<a class="qb-step${v.id === "filter" ? " is-active" : ""}" href="#" data-view="${v.id}"${v.id === "filter" ? ' aria-current="step"' : ""}><span class="qb-step-num">${i + 1}</span>${v.label}</a>`,
+            `<a class="qb-step${v.id === "filter" ? " is-active" : ""}" href="#" data-view="${v.id}" title="${v.label}"${v.id === "filter" ? ' aria-current="step"' : ""}><span class="qb-step-num">${i + 1}</span><span class="qb-step-label">${v.label}</span></a>`,
         ).join("")}
       </nav>
       <div class="qb-topbar-right">

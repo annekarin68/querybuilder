@@ -13,11 +13,15 @@ import { escapeHtml, paint } from "./panel";
  * this menu holds actions, not choices. It needs no jQuery.
  */
 function badgeHtml(state: AppState): string {
+  // On narrow screens (styles.css, "Narrow top bar") a badge shrinks to its
+  // icon and the text stays as visually hidden text. That is why the text has
+  // its own span, why both badges have an icon, and why `title` (the tooltip
+  // the icon then needs) repeats the text.
   if (state.compliance.status === "acknowledged") {
-    return `<span class="qb-badge qb-badge-ok"><i class="check icon"></i>Compliance</span>`;
+    return `<span class="qb-badge qb-badge-ok" title="Compliance"><i class="check icon"></i><span class="qb-badge-text">Compliance</span></span>`;
   }
   if (state.compliance.status === "required") {
-    return `<span class="qb-badge qb-badge-warn">Compliance needed</span>`;
+    return `<span class="qb-badge qb-badge-warn" title="Compliance needed"><i class="exclamation icon qb-badge-narrow-icon"></i><span class="qb-badge-text">Compliance needed</span></span>`;
   }
   return "";
 }
@@ -47,7 +51,7 @@ export function renderAccountMenu(el: HTMLElement, state: AppState): void {
   if (auth.status === "anonymous") {
     paint(
       el,
-      `<a href="${escapeHtml(LOGIN_URL)}" data-flow-link data-focus-landing class="ui small primary button">Log in</a>`,
+      `<a href="${escapeHtml(LOGIN_URL)}" data-flow-link data-focus-landing class="ui small primary button qb-login-btn">Log in</a>`,
     );
     return;
   }
@@ -56,7 +60,7 @@ export function renderAccountMenu(el: HTMLElement, state: AppState): void {
     `<details class="qb-account">
        <summary class="qb-account-chip" data-focus-landing>
          <i class="user circle icon"></i>
-         <span class="qb-account-name">${escapeHtml(auth.user.name)}</span>
+         <span class="qb-account-name" title="${escapeHtml(auth.user.name)}">${escapeHtml(auth.user.name)}</span>
          ${badgeHtml(state)}
          <i class="dropdown icon"></i>
        </summary>

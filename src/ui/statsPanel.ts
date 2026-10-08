@@ -147,8 +147,10 @@ export function statsPanelHtml(state: AppState): string {
   if (stats.status === "idle" || (stats.status === "loading" && stats.results.length === 0)) {
     return card(state, placeholder("Counting matches…"));
   }
-  // The headline stays on top; the per-database list follows. The whole
-  // column is sticky and scrolls internally (styles.css .qb-col-stats).
+  // The headline stays on top; the per-database list follows. Above 900 px the
+  // whole column is sticky and scrolls internally; at 900 px and below it sits
+  // in the page flow and does not scroll (styles.css .qb-col-stats and the
+  // 900px block).
   return card(
     state,
     headlineHtml(stats, state.databases) +

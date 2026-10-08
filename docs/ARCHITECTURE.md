@@ -85,7 +85,16 @@ the backend's vocabulary):
 ```
 
 - **Top bar** — app name, the workflow steps, and the account menu (login +
-  compliance acknowledgment).
+  compliance acknowledgment). The steps never shrink or scroll: when the bar is
+  tight it is the account name that is cut short (an ellipsis; the full name is
+  its tooltip). At **800 px and below** (`@media (max-width: 800px)`, "Narrow top
+  bar" in `styles.css`) the bar spends less so that it fits down to 512 px, the
+  narrowest supported window: tighter spacing; only the **active step** keeps its
+  label, the others show their number, with the label as visually hidden text and
+  a `title` tooltip (so every step keeps its accessible name); the compliance
+  badge shrinks to its icon, text hidden the same way. The logo and the app name
+  always stay. Spacing alone was tried first and is not enough: with every label
+  shown, the logged-in bar needs over 600 px even with the name cut to nothing.
 - **Data dictionary and its rail** — generated from `GET /api/individuals`.
   Open by default, because dragging from it is the main way to build a query.
   It is 26rem wide to start, the user can drag its right edge to anything from
@@ -96,7 +105,10 @@ the backend's vocabulary):
   button, so neither has to be guessed. Folded, the rail is a solid green bar
   (a faint strip would be easy to miss, and it is the only way back to the
   dictionary). Under 1100 px wide the open dictionary floats over the page instead of
-  squeezing the builder. Searchable by facet and field name.
+  squeezing the builder; in a window too narrow for its width (a remembered 40rem
+  needs about 600 px) it is cut to fit and always leaves one gap of the page
+  showing on its right, so its resize handle stays within reach (**Width** under
+  `docsSidebar.ts`, below). Searchable by facet and field name.
   **Naming (decided 2026-10-07):** users see one name, **dictionary** ("data
   dictionary" in the title, "Hide / Show dictionary" on the controls), because
   the users will understand it. An earlier version also said "docs", which
@@ -106,9 +118,23 @@ the backend's vocabulary):
 - **Main column** — database scope, the query builder (nested ALL/ANY groups,
   any depth, collapsible), and **Matching events**: a sample of matching
   events, fetched only when the user presses **Run query** in that card.
-- **Statistics column** (right, 15rem) — sticky, so it never scrolls out of
-  view while the user builds; refetched live (debounced) whenever the query
-  is complete.
+- **Statistics column** (right, 15rem) — sticky (above 900 px; see **Narrow
+  screens** below), so it never scrolls out of view while the user builds;
+  refetched live (debounced) whenever the query is complete.
+- **Narrow screens** — the app supports windows down to **512 px** wide, so it
+  works in a split screen on a 1024 px display (the top bar has its own rules at
+  800 px and below: see the **Top bar** bullet above). At 900 px and below the
+  statistics leave their column and sit **between the query and Matching
+  events**: they answer the query the user has just built, and are seen before
+  the Run query button that acts on it. (At the very top they would show
+  nothing useful before a query exists, and an always-visible panel this tall
+  would hide the query being built.)
+  The rail keeps its own column; the four panels stack in the other
+  (`@media (max-width: 900px)` in `styles.css`: a grid, with `display: contents`
+  on `<main>` and `order` on the stats and the Run query section; the stats are
+  static there and hidden while empty). The HTML order is unchanged (stats last),
+  so a screen reader still reads them after the events; the panel has no
+  controls, so keyboard focus order is not affected.
 - **Workflow steps** — `Filter | Review | Approval | Done`. Only **Filter** is
   a real view; the others show a "Coming soon" placeholder (signed off for the
   first release, issue #19).
@@ -407,7 +433,7 @@ binding its Fomantic dropdowns must always happen together.
 
 | Trigger | Effect |
 |---|---|
-| App starts | Every panel paints its loader. `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
+| App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 matching events.", "Could not load events: …"). |
@@ -920,7 +946,9 @@ Dropping a facet or a tag on the builder creates such conditions.
 Anonymous: a **Log in** button. Logged in: a chip with the user's name and a
 compliance badge that opens a native `<details>` menu with the reason and when
 it was given (+ **Invalidate**), or **Start compliance check**; then **Log
-out**. Outside clicks and Escape close it. Display-only (see "Auth").
+out**. Outside clicks and Escape close it. Display-only (see "Auth"). In a narrow
+window the chip shrinks (name with an ellipsis, badge as an icon): see "Screen
+layout".
 **Invalidate** and **Log out** change what the menu shows, and its repaint
 rebuilds it closed, so the keyboard focus goes to the chip, or to **Log in**
 ("Keyboard focus across repaints").
@@ -1025,6 +1053,37 @@ anywhere outside the docs column, the rail and the **Hide dictionary** / **Show 
 buttons closes it too (also `main.ts`, same 1100 px query): the open docs cover
 the builder, and nothing else would close them. Clicks inside the docs never
 do, or **+ Add** and dragging would break.
+
+A floating panel that is wider than the room is cut to fit. That is the case in
+a window narrower than the remembered width plus the rail plus one gap (a stored
+40rem needs about 600 px; the 20rem minimum fits at 512 px, the narrowest
+supported window). CSS does it alone
+(`max-width: calc(100% - var(--qb-rail-w) - var(--qb-gap))` in the 1100 px rule
+of `styles.css`); the stored value is not changed. The cut leaves one gap
+(14 px) of the page on the panel's right, because the resize handle sticks
+out 0.4rem past the panel's edge and would otherwise be partly off screen and
+impossible to grab with a mouse (at 512 px only 1.4 px of it was on screen).
+The strip also shows that the panel floats over something, and a click on it
+closes the panel like any click outside. It is `100%` and not `100vw` because
+`100vw` includes the page's scrollbar, which would swallow the strip on a desktop
+browser. While the panel is cut, the handle sits at the cut edge and a drag
+sets the width from the pointer, so dragging it left shrinks the panel at
+once. Left steps from the width **on screen**, not from the stored number,
+and Right steps from the stored number (`docsWidthAfterKey`: a shrinking step
+starts from the smaller of the stored width and the column's width on screen,
+measured in rem from the handle's parent; a growing step starts from the stored
+width; the result goes through `clampDocsWidth`; if the measurement is unusable
+it uses the stored width). From a stored 40rem at 512 px the column shows about
+33.6rem, so the first Left press makes it 32.6rem at once, and the stored value
+becomes 32.6rem too; Right then grows it 1rem a press up to the cut edge. Right
+never lowers the stored width: stepping it from the visible width too would
+turn a stored 40rem into 34.6rem, so a grow key would lower the remembered and
+announced width. Past the cut edge there is no room to grow into, so Right
+changes nothing on screen: the stored value goes up by 1rem a press, to 40rem at
+most (it stays 40rem if it is there already), and the next Left press shrinks the
+column right away. Where the column is not cut, the two widths are equal and a
+press moves it exactly 1rem.
+
 Nothing needed to read the dictionary is behind a hover: names, types and
 blurbs are visible text, and a `title` only labels a button or repeats a number.
 
