@@ -16,6 +16,8 @@ interface Thing {
   count?: number;
   parts: Thing[];
   extraParts?: Thing[];
+  kind: "a" | "b";
+  value: null;
 }
 
 const thing = (body: unknown) => new ResponseValue(body, "GET /api/v1/things").object<Thing>();
@@ -111,6 +113,72 @@ describe("required reads", () => {
   it("a long text is shortened in the message", () => {
     expect(() => thing({ size: "x".repeat(100) }).number("size")).toThrow(
       `it is the text "${"x".repeat(40)}…".`,
+    );
+  });
+});
+
+describe("nullableId", () => {
+  it("returns an id, and null when the key is null or left out", () => {
+    expect(thing({ label: "a" }).nullableId("label")).toBe("a");
+    expect(thing({ label: null }).nullableId("label")).toBeNull();
+    expect(thing({}).nullableId("label")).toBeNull();
+  });
+
+  it.each([
+    ["blank", { label: " " }, 'it is the text " "'],
+    ["a number", { label: 3 }, "it is the number 3"],
+  ])("%s throws", (_what, body, found) => {
+    expect(() => thing(body).nullableId("label")).toThrow(
+      `"label" should be non-blank text, but ${found}.`,
+    );
+  });
+});
+
+describe("oneOf", () => {
+  it("returns the value when it is allowed", () => {
+    expect(thing({ kind: "b" }).oneOf("kind", ["a", "b"])).toBe("b");
+  });
+
+  it.each([
+    ["missing", {}, "it is missing"],
+    ["another text", { kind: "c" }, 'it is the text "c"'],
+    ["a number", { kind: 1 }, "it is the number 1"],
+  ])("%s throws, listing what was expected", (_what, body, found) => {
+    expect(() => thing(body).oneOf("kind", ["a", "b"])).toThrow(
+      `"kind" should be "a" or "b", but ${found}.`,
+    );
+  });
+});
+
+describe("savedValue", () => {
+  it.each([
+    ["null", null],
+    ["text", "x"],
+    ["a number", 0],
+    ["false", false],
+    ["a list", [1, "b", true]],
+    ["a list with a null", [3, null]],
+    ["an empty list", []],
+  ])("accepts %s as it is", (_what, value) => {
+    expect(thing({ value }).savedValue("value")).toEqual(value);
+  });
+
+  it("reads a left-out value as null", () => {
+    expect(thing({}).savedValue("value")).toBeNull();
+  });
+
+  it("returns a copy of a list", () => {
+    const list = [1, 2];
+    expect(thing({ value: list }).savedValue("value")).not.toBe(list);
+  });
+
+  it.each([
+    ["an object", { from: 1 }],
+    ["a list holding an object", [1, {}]],
+    ["a list holding a list", [[1]]],
+  ])("%s throws", (_what, value) => {
+    expect(() => thing({ value }).savedValue("value")).toThrow(
+      '"value" should be null, text, a number, true or false, or a list of those',
     );
   });
 });

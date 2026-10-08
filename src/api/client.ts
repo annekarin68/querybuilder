@@ -5,13 +5,31 @@ import type {
   EntrysetResponse,
   EventsResponse,
   IndividualResponse,
+  SavedQueryResponse,
   StatsResponse,
 } from "./types";
-import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "../model";
+import type {
+  Compliance,
+  Database,
+  DatabaseResult,
+  EventRecord,
+  Facet,
+  SavedQuery,
+  SavedQueryDraft,
+  User,
+} from "../model";
 import type { Group } from "../query/types";
 import { ContractError, ResponseValue } from "./contract";
-import { toQueryRequest } from "./request";
-import { toCompliance, toDatabase, toDatabaseResult, toEvent, toFacet, toUser } from "./response";
+import { toQueryRequest, toSavedQueryRequest } from "./request";
+import {
+  toCompliance,
+  toDatabase,
+  toDatabaseResult,
+  toEvent,
+  toFacet,
+  toSavedQuery,
+  toUser,
+} from "./response";
 
 // The only file that calls fetch(): one function per endpoint. Every one of
 // them speaks the frontend's model (src/model.ts): request bodies are built by
@@ -139,6 +157,37 @@ export function invalidateCompliance(): Promise<void> {
   return post("/compliance/invalidate");
 }
 
+// ---- saved queries: the logged-in user's own list ---------------------------
+//
+// Each one also rejects with an ApiError of status 401 (not logged in); an
+// update or delete adds 404 (no such saved query), a create or update 409 (the
+// name is taken) and 400 (a malformed body, which is a bug on our side).
+
+export async function listSavedQueries(): Promise<SavedQuery[]> {
+  const body = await getJson("/saved-queries");
+  return body.list<SavedQueryResponse>().map(toSavedQuery);
+}
+
+export async function createSavedQuery(draft: SavedQueryDraft): Promise<SavedQuery> {
+  const body = await postJson("/saved-queries", toSavedQueryRequest(draft));
+  return toSavedQuery(body.object<SavedQueryResponse>());
+}
+
+/** Replaces the saved query `id` with `draft` (a rename included). */
+export async function updateSavedQuery(id: string, draft: SavedQueryDraft): Promise<SavedQuery> {
+  const body = await putJson(savedQueryPath(id), toSavedQueryRequest(draft));
+  return toSavedQuery(body.object<SavedQueryResponse>());
+}
+
+export function deleteSavedQuery(id: string): Promise<void> {
+  return del(savedQueryPath(id));
+}
+
+/** The id may hold any character (it is the server's), so it is encoded. */
+function savedQueryPath(id: string): string {
+  return `/saved-queries/${encodeURIComponent(id)}`;
+}
+
 // ---- how a request is sent --------------------------------------------------
 
 /** GET `path` and return its JSON body, not checked yet. */
@@ -149,6 +198,16 @@ function getJson(path: string): Promise<ResponseValue> {
 /** POST `body` as JSON to `path` and return the JSON answer, not checked yet. */
 function postJson(path: string, body: unknown, signal?: AbortSignal): Promise<ResponseValue> {
   return send("POST", path, { body, signal }, readJson);
+}
+
+/** PUT `body` as JSON to `path` and return the JSON answer, not checked yet. */
+function putJson(path: string, body: unknown): Promise<ResponseValue> {
+  return send("PUT", path, { body }, readJson);
+}
+
+/** DELETE `path`, ignoring whatever the answer's body holds. */
+function del(path: string): Promise<void> {
+  return send("DELETE", path, {}, async () => {});
 }
 
 /** POST to `path` with no body, ignoring whatever the answer's body holds. */
@@ -169,7 +228,7 @@ async function readJson(res: Response, source: string): Promise<ResponseValue> {
  * streaming reader calls `touch()` whenever data arrives, to restart the clock.
  */
 async function send<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   { body, signal }: { body?: unknown; signal?: AbortSignal },
   read: (res: Response, source: string, touch: () => void) => Promise<T>,

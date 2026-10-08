@@ -12,6 +12,8 @@
  * blank is "" (already trimmed), never missing.
  */
 
+import type { Group } from "./query/types";
+
 /** A partition of the events the query can be scoped to. */
 export interface Database {
   id: string;
@@ -117,3 +119,20 @@ export type Compliance =
       /** When the reason was given (an ISO timestamp), if the backend says. */
       givenAt: string | null;
     };
+
+/** A query the user saved (GET/POST/PUT …/saved-queries). It may be unfinished
+ *  or invalid: saving never checks what the query means. */
+export interface SavedQuery {
+  /** Made by the server (not a backend `label`); never shown to the user. */
+  id: string;
+  name: string;
+  /** A few words to recognise it by; "" when none. Never the query itself. */
+  note: string;
+  databaseIds: string[];
+  query: Group;
+  /** ISO 8601 UTC. */
+  updatedAt: string;
+}
+
+/** What is sent to save a query. */
+export type SavedQueryDraft = Omit<SavedQuery, "id" | "updatedAt">;

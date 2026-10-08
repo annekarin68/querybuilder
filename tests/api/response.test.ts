@@ -7,8 +7,12 @@ import {
   toEvent,
   toFacet,
   toField,
+  toSavedQuery,
   toUser,
 } from "../../src/api/response";
+import { toSavedQueryRequest } from "../../src/api/request";
+import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
+import type { Group } from "../../src/query/types";
 import type {
   AuthUser,
   ComplianceStatus,
@@ -16,6 +20,7 @@ import type {
   EntrysetResponse,
   IndividualFieldResponse,
   IndividualResponse,
+  SavedQueryResponse,
   StatsResponse,
 } from "../../src/api/types";
 
@@ -308,5 +313,141 @@ describe("toCompliance", () => {
     expect(toCompliance(readBroken<ComplianceStatus>({ status: "expired" }))).toEqual({
       status: "required",
     });
+  });
+});
+
+describe("toSavedQuery", () => {
+  /** The wire query with `patch` merged over its first child. */
+  const withFirstChild = (patch: Record<string, unknown>) => ({
+    ...unfinishedResponse,
+    query: {
+      ...unfinishedResponse.query,
+      children: [{ ...unfinishedResponse.query.children[0], ...patch }],
+    },
+  });
+
+  it("gives back the tree as the user left it, with database ids and no display state", () => {
+    expect(toSavedQuery(read(unfinishedResponse))).toEqual({
+      id: "sq-1",
+      name: "Slow trips",
+      note: "the ones to check",
+      databaseIds: ["alpha"],
+      query: unfinishedResponse.query,
+      updatedAt: "2026-10-08T09:30:00.000Z",
+    });
+  });
+
+  it("round-trips a draft: what is sent is what comes back", () => {
+    const sent = toSavedQueryRequest(unfinishedDraft);
+    const back = toSavedQuery(read({ ...sent, id: "sq-9", updatedAt: "2026-10-08T10:00:00Z" }));
+    expect(back).toMatchObject({
+      name: "Slow trips",
+      note: "the ones to check",
+      databaseIds: ["alpha"],
+      query: unfinishedResponse.query,
+    });
+  });
+
+  it("trims a padded name", () => {
+    expect(toSavedQuery(read({ ...unfinishedResponse, name: "  Padded " })).name).toBe("Padded");
+  });
+
+  it("a missing note shows as empty, with a warning", () => {
+    const broken = { ...unfinishedResponse, note: undefined };
+    expect(toSavedQuery(readBroken<SavedQueryResponse>(broken)).note).toBe("");
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"note" should be text'));
+  });
+
+  it.each([
+    ["a missing id", { id: undefined }, '"id" should be non-blank text, but it is missing.'],
+    ["a missing name", { name: undefined }, '"name" should be non-blank text, but it is missing.'],
+    ["a blank name", { name: "  " }, '"name" should be non-blank text'],
+    [
+      "a missing updatedAt",
+      { updatedAt: undefined },
+      '"updatedAt" should be non-blank text, but it is missing.',
+    ],
+    ["a missing query", { query: undefined }, '"query" should be an object, but it is missing.'],
+  ])("throws a ContractError for %s", (_label, patch, message) => {
+    const broken = readBroken<SavedQueryResponse>({ ...unfinishedResponse, ...patch });
+    expect(() => toSavedQuery(broken)).toThrow(ContractError);
+    expect(() => toSavedQuery(broken)).toThrow(message);
+  });
+
+  it.each([
+    [
+      "a root that is a condition",
+      { query: { ...unfinishedResponse.query, kind: "condition" } },
+      '"query.kind" should be "group"',
+    ],
+  ])("throws a ContractError for %s", (_label, patch, message) => {
+    const broken = readBroken<SavedQueryResponse>({ ...unfinishedResponse, ...patch });
+    expect(() => toSavedQuery(broken)).toThrow(message);
+  });
+
+  it.each([
+    [
+      "a kind that is neither",
+      { kind: "other" },
+      '"query.children[0].kind" should be "group" or "condition", but it is the text "other".',
+    ],
+    [
+      "a facetId that is a number",
+      { facetId: 3 },
+      '"query.children[0].facetId" should be non-blank text, but',
+    ],
+    [
+      "a missing node id",
+      { id: undefined },
+      '"query.children[0].id" should be non-blank text, but it is missing.',
+    ],
+    [
+      "an operatorId that is a list",
+      { operatorId: [] },
+      '"query.children[0].operatorId" should be non-blank text, but',
+    ],
+    ["a value that is an object", { value: { from: 1 } }, '"query.children[0].value" should be'],
+    ["a value list holding an object", { value: [1, {}] }, '"query.children[0].value" should be'],
+  ])("throws a ContractError for a node with %s", (_label, patch, message) => {
+    const broken = readBroken<SavedQueryResponse>(withFirstChild(patch));
+    expect(() => toSavedQuery(broken)).toThrow(ContractError);
+    expect(() => toSavedQuery(broken)).toThrow(message);
+  });
+
+  it("throws a ContractError naming the path for a group without children", () => {
+    const broken = readBroken<SavedQueryResponse>({
+      ...unfinishedResponse,
+      query: { ...unfinishedResponse.query, children: undefined },
+    });
+    expect(() => toSavedQuery(broken)).toThrow('"query.children" should be a list');
+  });
+
+  it("throws a ContractError for a group operator that is neither AND nor OR", () => {
+    const broken = readBroken<SavedQueryResponse>({
+      ...unfinishedResponse,
+      query: { ...unfinishedResponse.query, operator: "XOR" },
+    });
+    expect(() => toSavedQuery(broken)).toThrow('"query.operator" should be "AND" or "OR"');
+  });
+
+  it("reads a deep tree", () => {
+    const deep = {
+      ...unfinishedResponse,
+      query: {
+        kind: "group",
+        id: "g1",
+        operator: "AND",
+        children: [
+          {
+            kind: "group",
+            id: "g2",
+            operator: "OR",
+            children: [{ ...unfinishedResponse.query.children[2], id: "c9" }],
+          },
+        ],
+      },
+    };
+    const inner = toSavedQuery(readBroken<SavedQueryResponse>(deep)).query.children[0] as Group;
+    expect(inner.children[0]).toMatchObject({ id: "c9", value: [3, null] });
   });
 });

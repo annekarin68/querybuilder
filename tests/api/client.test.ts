@@ -2,21 +2,27 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   ApiError,
   COMPLIANCE_START_URL,
+  createSavedQuery,
+  deleteSavedQuery,
   getComplianceStatus,
   getDatabases,
   getFacets,
   getMe,
   getStats,
   invalidateCompliance,
+  listSavedQueries,
   LOGIN_URL,
   logout,
   REQUEST_TIMEOUT_MS,
   runQuery,
   TimeoutError,
+  updateSavedQuery,
 } from "../../src/api/client";
 import { ContractError } from "../../src/api/contract";
 import { toQueryRequest } from "../../src/api/request";
+import { toSavedQueryRequest } from "../../src/api/request";
 import type { Group } from "../../src/query/types";
+import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
 
 const query: Group = {
   kind: "group",
@@ -458,6 +464,79 @@ describe("a response that breaks the API contract", () => {
     vi.stubGlobal("fetch", mockStreamFetch(200, [JSON.stringify({ success: true }) + "\n"]));
     await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
       'POST /api/v1/stats, line 1: "label" should be non-blank text, but it is missing.',
+    );
+  });
+});
+
+describe("saved queries", () => {
+  /** What the client should send for `unfinishedDraft`. */
+  const sentBody = JSON.stringify(toSavedQueryRequest(unfinishedDraft));
+  const sentInit = (method: string) => ({
+    method,
+    signal: expect.any(AbortSignal),
+    headers: { "content-type": "application/json" },
+    body: sentBody,
+  });
+  /** The saved query in the frontend's model, as every function returns it. */
+  const saved = { id: "sq-1", updatedAt: "2026-10-08T09:30:00.000Z", name: "Slow trips" };
+
+  it("listSavedQueries GETs the list and returns it in the frontend's model", async () => {
+    const f = mockFetchOnce(200, [unfinishedResponse]);
+    vi.stubGlobal("fetch", f);
+    const out = await listSavedQueries();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
+    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("createSavedQuery POSTs the draft's wire form and returns the saved query", async () => {
+    const f = mockFetchOnce(201, unfinishedResponse);
+    vi.stubGlobal("fetch", f);
+    expect(await createSavedQuery(unfinishedDraft)).toMatchObject(saved);
+    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries", sentInit("POST"));
+  });
+
+  it("updateSavedQuery PUTs to the id's path, encoded, and returns the saved query", async () => {
+    const f = mockFetchOnce(200, unfinishedResponse);
+    vi.stubGlobal("fetch", f);
+    expect(await updateSavedQuery("a/b", unfinishedDraft)).toMatchObject(saved);
+    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries/a%2Fb", sentInit("PUT"));
+  });
+
+  it("deleteSavedQuery DELETEs the id's path, encoded, and resolves with nothing on 204", async () => {
+    const f = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", f);
+    await expect(deleteSavedQuery("a/b")).resolves.toBeUndefined();
+    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries/a%2Fb", {
+      method: "DELETE",
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("a 409 becomes an ApiError with the server's message", async () => {
+    const message = 'A saved query called "Slow trips" already exists.';
+    vi.stubGlobal("fetch", mockFetchOnce(409, { error: message }));
+    const err = await createSavedQuery(unfinishedDraft).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 409, message });
+  });
+
+  it.each([400, 401, 404])("a %i becomes an ApiError with that status", async (status) => {
+    vi.stubGlobal("fetch", mockFetchOnce(status, { error: "Nope." }));
+    await expect(updateSavedQuery("sq-1", unfinishedDraft)).rejects.toMatchObject({
+      name: "ApiError",
+      status,
+      message: "Nope.",
+    });
+  });
+
+  it("an answer that breaks the contract is a ContractError naming the field", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, [{ ...unfinishedResponse, id: undefined }]));
+    await expect(listSavedQueries()).rejects.toThrow(
+      'GET /api/v1/saved-queries: "[0].id" should be non-blank text, but it is missing.',
     );
   });
 });

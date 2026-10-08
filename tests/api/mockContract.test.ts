@@ -6,6 +6,7 @@ import type { DatabaseResult } from "../../src/model";
 import type { Condition, Group } from "../../src/query/types";
 import { createMockServer } from "../../mock-server/server";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
+import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -147,5 +148,47 @@ describe("the client reads every mock response", () => {
     expect(await client.getComplianceStatus()).toEqual({ status: "required" });
     await client.logout();
     expect(await client.getMe()).toBeNull();
+  });
+});
+
+describe("saved queries through the client", () => {
+  it("needs a session", async () => {
+    await expect(client.listSavedQueries()).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("saves a half-built query and gets it back whole", async () => {
+    logInWithCompliance();
+    expect(await client.listSavedQueries()).toEqual([]);
+
+    const created = await client.createSavedQuery(unfinishedDraft);
+    expect(created).toMatchObject({
+      name: "Slow trips",
+      note: "the ones to check",
+      databaseIds: ["alpha"],
+      query: unfinishedRequest.query,
+    });
+    expect(await client.listSavedQueries()).toEqual([created]);
+
+    const renamed = await client.updateSavedQuery(created.id, {
+      ...unfinishedDraft,
+      name: "Renamed",
+    });
+    expect(renamed).toMatchObject({ id: created.id, name: "Renamed" });
+
+    await client.deleteSavedQuery(created.id);
+    expect(await client.listSavedQueries()).toEqual([]);
+  });
+
+  it("reports a taken name as a 409 with the server's message, and an unknown id as a 404", async () => {
+    logInWithCompliance();
+    await client.createSavedQuery(unfinishedDraft);
+    await expect(client.createSavedQuery(unfinishedDraft)).rejects.toMatchObject({
+      status: 409,
+      message: 'A saved query called "Slow trips" already exists.',
+    });
+    await expect(client.deleteSavedQuery("nope")).rejects.toMatchObject({ status: 404 });
+    await expect(client.updateSavedQuery("a/b", unfinishedDraft)).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });
