@@ -308,6 +308,16 @@ describe("Group contents and Ungroup buttons", () => {
     expect(head).toContain(`title="${UNGROUP_BLOCKED_MESSAGE}"`);
   });
 
+  it("the action buttons share one box and the remove button comes last in it", () => {
+    const root = group("r", "AND", [group("g", "AND", [cond("a"), cond("b")])]);
+    const head = headOf(root, "g", false);
+    const actions = head.slice(head.indexOf('<span class="qb-group-actions">'));
+    expect(actions).toContain('data-action="add-condition"');
+    expect(actions.lastIndexOf('data-action="remove-node"')).toBeGreaterThan(
+      actions.lastIndexOf('data-action="ungroup"'),
+    );
+  });
+
   it("a folded group shows neither button", () => {
     const root = group("r", "AND", [
       { ...group("g", "AND", [cond("a"), cond("b")]), collapsed: true },

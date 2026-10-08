@@ -1112,7 +1112,11 @@ drag in a Firefox-only deployment.
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
 a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
 right` while folded, the same arrows as the data dictionary), "Match [ALL |
-ANY] of the following", **+ Condition**, **+ Group**, **Group contents**, **Ungroup** (not on the root; see below), ✕ (not on the root). A
+ANY] of the following", **+ Condition**, **+ Group**, **Group contents**, **Ungroup** (not on the root; see below), ✕ (not on the root). The
+buttons sit together in one right-aligned box (`.qb-group-actions`) that wraps
+among itself in a narrow header, so the ✕ stays last on the right and never
+ends up alone at the start of a line, where it could be taken for a condition's
+remove button. A
 collapsed group folds to its `queryToText` summary and "N conditions", and that
 whole line is the click target for unfolding it (`data-action="toggle-collapse"`
 on the header, a pointer cursor, a hover background and the tooltip "Click to
@@ -1172,7 +1176,8 @@ is `aria-disabled="true"` with the reason as its tooltip (a muted look in
 which would remove it from the Tab order and from the pointer): pressing it
 shows the reason as the dismissible warning above the query (`hooks.onNotice`,
 `app.showNotice`, spoken through the live region) and changes nothing. A
-successful Ungroup announces "Ungrouped." After either, `paint()` keeps the
+successful Group contents or Ungroup clears an older warning, as a fully
+successful drop does (`hooks.onDismissNotice`), and Ungroup announces "Ungrouped." After either, `paint()` keeps the
 focus on the same control if it is still drawn, otherwise on the group's
 **+ Condition** ("Keyboard focus across repaints"). `groupHtml` reads the
 whole query (`BuilderCtx.query`) to ask `ungroupBlocker` about the parent.

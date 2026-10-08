@@ -647,6 +647,13 @@ describe("dropping docs items", () => {
     expect(store.getState().dropNotice).toBeNull();
   });
 
+  it("a warning from showNotice is cleared again by dismissDropNotice (what a successful Group contents or Ungroup calls)", () => {
+    const { store, app } = setup({ ...ready(emptyQuery()) });
+    app.showNotice("Not allowed.");
+    app.dismissDropNotice();
+    expect(store.getState().dropNotice).toBeNull();
+  });
+
   it("dismissDropNotice clears the warning", () => {
     const { store, app } = setup({ dropNotice: "x" });
     app.dismissDropNotice();

@@ -19,7 +19,7 @@ import {
   ungroup,
   UNGROUP_BLOCKED_MESSAGE,
 } from "../../src/query/tree";
-import type { Condition, Group } from "../../src/query/types";
+import type { Condition, Group, QueryNode } from "../../src/query/types";
 
 describe("tree", () => {
   it("emptyQuery is an AND group with no children", () => {
@@ -389,6 +389,29 @@ const group = (
   ...(collapsed === undefined ? {} : { collapsed }),
 });
 
+/**
+ * Test-only evaluator: whether `node` holds when each condition's truth is
+ * looked up by its id. AND = every child, OR = some child; an empty group
+ * counts as true. Lets the tests prove that regrouping keeps the meaning,
+ * which `sameSemantics` can't (it compares ids, and a new group has a new id).
+ */
+function matches(node: QueryNode, truth: Record<string, boolean>): boolean {
+  if (node.kind === "condition") return truth[node.id] ?? false;
+  if (node.children.length === 0) return true;
+  return node.operator === "AND"
+    ? node.children.every((c) => matches(c, truth))
+    : node.children.some((c) => matches(c, truth));
+}
+
+/** Whether `a` and `b` give the same answer for every true/false choice of `ids`. */
+function sameForAllTruths(a: QueryNode, b: QueryNode, ids: string[]): boolean {
+  for (let bits = 0; bits < 2 ** ids.length; bits++) {
+    const truth = Object.fromEntries(ids.map((id, i) => [id, Boolean((bits >> i) & 1)]));
+    if (matches(a, truth) !== matches(b, truth)) return false;
+  }
+  return true;
+}
+
 describe("groupContents", () => {
   it("moves every child into one new group with the same operator", () => {
     const root = group("r", "OR", [cond("a"), cond("b")]);
@@ -419,11 +442,48 @@ describe("groupContents", () => {
     expect(groupContents(root, "nope")).toBe(root);
     expect(groupContents(root, "a")).toBe(root);
   });
+});
 
-  it("does not change what the query means (only one more level)", () => {
-    const root = group("r", "AND", [cond("a"), cond("b")]);
-    const inner = groupContents(root, "r").children[0] as Group;
-    expect(sameSemantics({ ...inner, id: "r" }, root)).toBe(true);
+describe("regrouping never changes what the query means", () => {
+  const ids = ["a", "b", "c", "d"];
+
+  it("groupContents, on the root and on a nested group, under ALL and ANY", () => {
+    for (const outer of ["AND", "OR"] as const) {
+      for (const inner of ["AND", "OR"] as const) {
+        const root = group("r", outer, [
+          cond("a"),
+          group("g", inner, [cond("b"), cond("c")]),
+          cond("d"),
+        ]);
+        expect(sameForAllTruths(groupContents(root, "r"), root, ids)).toBe(true);
+        expect(sameForAllTruths(groupContents(root, "g"), root, ids)).toBe(true);
+      }
+    }
+  });
+
+  it("ungroup, whenever it is allowed (same operator, or one item)", () => {
+    for (const outer of ["AND", "OR"] as const) {
+      for (const inner of ["AND", "OR"] as const) {
+        const many = group("r", outer, [
+          cond("a"),
+          group("g", inner, [cond("b"), cond("c")]),
+          cond("d"),
+        ]);
+        const one = group("r", outer, [cond("a"), group("g", inner, [cond("b")]), cond("d")]);
+        for (const root of [many, one]) {
+          const next = ungroup(root, "g");
+          // Allowed exactly when the rule says so; then the meaning is kept.
+          expect(next === null).toBe(ungroupBlocker(root, "g") !== null);
+          if (next) expect(sameForAllTruths(next, root, ids)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("the evaluator can tell a changed query from a kept one (the refused ungroup would change it)", () => {
+    const root = group("r", "AND", [cond("a"), group("g", "OR", [cond("b"), cond("c")])]);
+    const naive = { ...root, children: [cond("a"), cond("b"), cond("c")] };
+    expect(sameForAllTruths(naive, root, ids)).toBe(false);
   });
 });
 

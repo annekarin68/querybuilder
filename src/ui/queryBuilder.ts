@@ -305,6 +305,10 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
   const ungroupButton = isRoot
     ? ""
     : `<button type="button" class="ui mini basic button" data-action="ungroup"${blocked ? ` aria-disabled="true" title="${escapeHtml(blocked)}"` : ` title="Put this group's items into the group around it"`}><i class="object ungroup outline icon" aria-hidden="true"></i>Ungroup</button>`;
+  // The action buttons share one right-aligned box (`.qb-group-actions`): when
+  // the header is too narrow they wrap among themselves, so the ✕ stays last
+  // on the right and is never left alone at the start of a new line, where it
+  // could be mistaken for the first condition's remove button.
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
   const children = g.children.map((child) => nodeHtml(ctx, child, false)).join(joiner);
   return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
@@ -317,12 +321,13 @@ export function groupHtml(ctx: BuilderCtx, g: Group, isRoot: boolean): string {
         <button type="button" class="qb-logic-btn${g.operator === "OR" ? " is-on" : ""}" data-action="set-or" aria-pressed="${g.operator === "OR"}">ANY</button>
       </span>
       <span class="qb-group-label">of the following</span>
-      <span class="qb-spacer"></span>
-      <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
-      <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
-      ${groupContentsButton}
-      ${ungroupButton}
-      ${remove}
+      <span class="qb-group-actions">
+        <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
+        <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
+        ${groupContentsButton}
+        ${ungroupButton}
+        ${remove}
+      </span>
     </div>
     ${issuesHtml(g.id, ctx.issues)}
     <div class="qb-children">${children}</div>
@@ -451,6 +456,12 @@ export function wireQueryBuilder(
     hooks.onDismissNotice();
   }
 
+  /** An action that worked clears an older warning (such as a refused Ungroup),
+   *  the way a fully successful drop does: it is not about the query any more. */
+  function clearOldNotice(): void {
+    if (getState().dropNotice) hooks.onDismissNotice();
+  }
+
   container.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
       return dismissNotice();
@@ -478,6 +489,7 @@ export function wireQueryBuilder(
       case "group-contents": {
         const node = findNode(q, nodeId);
         onChange(groupContents(q, nodeId));
+        clearOldNotice();
         return hooks.announce(groupedMessage(node?.kind === "group" ? node.children.length : 0));
       }
       case "ungroup": {
@@ -486,6 +498,7 @@ export function wireQueryBuilder(
         // keyboard and screen-reader users can reach it and hear the reason).
         if (!next) return hooks.onNotice(ungroupBlocker(q, nodeId) ?? UNGROUP_BLOCKED_MESSAGE);
         onChange(next);
+        clearOldNotice();
         return hooks.announce(UNGROUPED_MESSAGE);
       }
       case "remove-node":
