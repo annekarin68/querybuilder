@@ -81,7 +81,7 @@ export function databasePickerHtml(state: AppState): string {
          <span class="qb-card-count">${selected.size} of ${state.databases.length} selected</span>
          <span class="qb-spacer"></span>
          ${deselectFailing}
-         <button type="button" class="ui mini basic button" data-db-all>All</button>
+         <button type="button" class="ui mini basic button" data-db-all data-focus-landing>All</button>
          <button type="button" class="ui mini basic button" data-db-none>None</button>
        </h2>
        <div class="qb-db-pills">${pills}</div>

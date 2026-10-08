@@ -23,6 +23,7 @@ const IDENTIFYING_ATTRIBUTES = [
   "data-db-id",
   "data-db-all",
   "data-db-none",
+  "data-db-deselect-failing",
   "data-range",
   "data-part",
   "aria-label",

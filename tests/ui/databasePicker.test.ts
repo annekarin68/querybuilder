@@ -62,6 +62,11 @@ describe("databasePickerHtml", () => {
     stats: { status, results },
   });
 
+  it("makes All the focus landing, so focus survives the Deselect failing button vanishing", () => {
+    const html = databasePickerHtml(base);
+    expect(html).toContain("data-db-all data-focus-landing>All</button>");
+  });
+
   it("marks a selected database that failed, with its reasons in the title", () => {
     const html = databasePickerHtml(
       withResults([ok("a", 1), failed("b", dbError(null, "Too <long>"), dbError(null, "Odd"))]),

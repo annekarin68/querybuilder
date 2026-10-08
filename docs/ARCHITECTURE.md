@@ -479,7 +479,7 @@ control had focus before it repaints and focuses the same control afterwards.
 - **"The same control"** is found by what it is, not where it is: the row or
   group it sits in (`data-node-id`), its tag, and the first of these attributes
   it has: `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
-  `data-range`, `data-part`, `aria-label` (`controlOf`). The label comes last
+  `data-db-deselect-failing`, `data-range`, `data-part`, `aria-label` (`controlOf`). The label comes last
   because it can change with the state ("Collapse group" / "Expand group"), but
   it is the only name a Fomantic dropdown's typing box has. A new control that
   should keep the focus needs one of these attributes. A text box keeps its
@@ -493,7 +493,9 @@ control had focus before it repaints and focuses the same control afterwards.
   that group, and not on a neighbour's ✕, where a second Enter would delete
   something else), the query card (after the warning's ✕), the Matching
   events card (after **Run query**, through the loader to the result), the
-  statistics card (after **Try again**), and the
+  statistics card (after **Try again**), the database picker's **All** (after
+  **Deselect failing (N)**, which disappears once the failed ones are gone),
+  and the
   account chip or **Log in** (after **Invalidate** or **Log out**). Cards are
   not in the Tab order (`tabindex="-1"`), but can be given the focus by script.
 - **Code that moves the cursor on purpose wins**: it runs after the paint
