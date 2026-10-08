@@ -120,7 +120,7 @@ export function insertNodes(tree: Group, targetId: string, nodes: QueryNode[]): 
 }
 
 /** A condition nobody has touched: nothing chosen yet (what "+ Condition" adds). */
-function isBlankCondition(node: QueryNode): boolean {
+export function isBlankCondition(node: QueryNode): boolean {
   return (
     node.kind === "condition" &&
     node.facetId === null &&

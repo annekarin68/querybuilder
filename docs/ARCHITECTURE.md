@@ -339,9 +339,10 @@ src/
   app.ts               createApp({ store, api, navigate, announce }) — everything the app DOES, with no DOM: startup
                        (+ restoring a saved query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
-                       `dismissDropNotice`), previewAnnouncement (what a screen reader hears about Run).
+                       `dismissDropNotice`), the saved-queries actions (`openSaveDialog`, `saveQuery`,
+                       `askOpenSaved`, …), previewAnnouncement (what a screen reader hears about Run).
                        Tested with a fake API.
-  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`), the
+  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`; the saved-queries keys), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
                        User, Compliance ("Data model").
@@ -365,6 +366,7 @@ src/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
                        sameSemantics, sameTree, …).
+    saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork`, `saveTarget`.
     drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
                        docs item creates, and what it couldn't), `dropNotice` — pure.
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
@@ -446,6 +448,25 @@ All state is one object, `AppState` (`src/state.ts`). Change it only with
 which keys changed. Each async part of the state — `auth`, `compliance`,
 `stats`, `preview` — is a union on `status`, so a field exists only when it
 means something (only an `"authenticated"` auth has a `user`).
+
+The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
+pure helpers in `src/query/saved.ts`):
+
+- `openSaved`: the saved query on screen as it was when last opened or saved,
+  or `null` for one never saved. Whether the user changed it since is worked out
+  by `isEdited` (folding a group is not an edit), never stored.
+- `savedDialog`: `null`, `"save"` or `"list"`: which dialog is open.
+- `save`: `idle`, `saving`, `conflict` (the name belongs to another saved query:
+  ask "Replace it?") or `error`.
+- `savedList`: the user's saved queries, newest first: `idle`, `loading`, `ok`
+  or `error`. It reloads every time the list opens and after a delete.
+- `savedConfirm`: an open or delete in the list waiting for the user's yes.
+
+Opening a saved query goes through `changeScope` and `validateQuery` like any
+edit, so the "Correctness invariant" holds. Database ids that no longer exist
+are dropped and said in `dropNotice`. A `401` from any saved-queries call
+redirects to log in like Run does (the query is saved first), as does opening
+either dialog while anonymous; another error is shown in the dialog's state.
 
 `main.ts` has one table, `panelRenderers`: for each panel, the `AppState`
 keys it reads and how to render it. One subscriber runs a panel's render

@@ -40,6 +40,16 @@ describe("store", () => {
     expect(initialState.sidebarCollapsed).toBe(false);
     expect(initialState.dropNotice).toBeNull();
   });
+
+  it("initialState has no saved query open and the saved-queries dialogs closed", () => {
+    expect(initialState).toMatchObject({
+      openSaved: null,
+      savedDialog: null,
+      save: { status: "idle" },
+      savedList: { status: "idle" },
+      savedConfirm: null,
+    });
+  });
 });
 
 describe("runBlocker", () => {
