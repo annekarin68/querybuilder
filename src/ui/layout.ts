@@ -1,5 +1,5 @@
 import type { ActiveView } from "../state";
-import { MASCOT } from "../config";
+import { EASTER_EGG_MASCOT, MASCOT } from "../config";
 import type { MascotState } from "./mascot";
 
 const VIEWS: { id: ActiveView; label: string }[] = [
@@ -8,6 +8,21 @@ const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "approval", label: "Approval" },
   { id: "done", label: "Done" },
 ];
+
+/**
+ * The file for `face`, from the easter-egg set while it is on. A file that
+ * failed to load falls back to its set's neutral face, then to the normal
+ * neutral face (which is never given up on: it is the last resort).
+ */
+export function mascotFile(
+  face: MascotState,
+  easterEgg: boolean,
+  failed: ReadonlySet<string>,
+): string {
+  const set = easterEgg ? EASTER_EGG_MASCOT : MASCOT;
+  for (const file of [set[face], set.neutral]) if (!failed.has(file)) return file;
+  return MASCOT.neutral;
+}
 
 /**
  * The app name with the pickle logo, as markup. `draggable="false"` is on the
@@ -55,7 +70,7 @@ export interface Shell {
   /** The pickle in the top bar. */
   logo: HTMLImageElement;
   /** Show the pickle with the face for `state`. */
-  setMascot(state: MascotState): void;
+  setMascot(face: MascotState, easterEgg: boolean): void;
   /** Say `message` to screen-reader users (a polite live region that is never
    *  repainted, so repeating a message is heard again). */
   announce(message: string): void;
@@ -125,12 +140,22 @@ export function renderShell(root: HTMLElement): Shell {
   // Face files that failed to load: never asked for again, so a missing file is
   // requested once, not on every repaint.
   const failed = new Set<string>();
+  // What the logo was last asked to show, so a failed file can be replaced by
+  // the right fallback for the same face and set.
+  let shownFace: MascotState = "neutral";
+  let shownEasterEgg = false;
+  const showMascot = () => {
+    // Panels repaint often; only touch the image when the file changes.
+    const wanted = mascotFile(shownFace, shownEasterEgg, failed);
+    if (logo.getAttribute("src") !== wanted) logo.src = wanted;
+  };
   logo.addEventListener("error", () => {
-    // A missing face falls back to the normal face; never loop.
+    // Never loop: the normal neutral face is never added to `failed`, and
+    // `mascotFile` always ends there.
     const src = logo.getAttribute("src");
     if (src && src !== MASCOT.neutral) {
       failed.add(src);
-      logo.src = MASCOT.neutral;
+      showMascot();
     }
   });
 
@@ -148,11 +173,11 @@ export function renderShell(root: HTMLElement): Shell {
 
     logo,
 
-    setMascot(state) {
-      logo.dataset.state = state;
-      // Panels repaint often; only touch the image when the face changes.
-      const wanted = failed.has(MASCOT[state]) ? MASCOT.neutral : MASCOT[state];
-      if (logo.getAttribute("src") !== wanted) logo.src = wanted;
+    setMascot(face, easterEgg) {
+      logo.dataset.state = face;
+      shownFace = face;
+      shownEasterEgg = easterEgg;
+      showMascot();
     },
 
     setActiveView(v) {

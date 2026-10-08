@@ -12,7 +12,7 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import * as api from "./api/client";
-import { EASTER_EGG_TOAST, MASCOT } from "./config";
+import { EASTER_EGG_MASCOT, EASTER_EGG_TOAST, MASCOT } from "./config";
 import { createApp, errorMessage } from "./app";
 import { store, type AppState } from "./state";
 import { showToast } from "./ui/fomantic";
@@ -51,13 +51,18 @@ document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest("a[data-flow-link]")) app.saveQueryBeforeRedirect();
 });
 
-// Hidden: five quick clicks on the logo make it rain pickles (instead, a toast
-// for people who prefer reduced motion).
+// Hidden: five quick clicks on the logo switch the mascot to the easter-egg set
+// (five more switch back) and make it rain with the new set (instead, a toast
+// when switching on, for people who prefer reduced motion).
 const logoClicked = createClickCounter();
 shell.logo.addEventListener("click", () => {
   if (!logoClicked()) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) showToast(EASTER_EGG_TOAST);
-  else startRain(Object.values(MASCOT));
+  const easterEgg = !store.getState().easterEgg;
+  store.setState({ easterEgg });
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduceMotion) startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
+  // Turning it off needs no toast: the face visibly changes back.
+  else if (easterEgg) showToast(EASTER_EGG_TOAST);
 });
 
 // Wire every panel once. The listeners are delegated to the panel containers
@@ -87,7 +92,10 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
-  { keys: ["issues", "stats", "preview"], run: (s) => shell.setMascot(mascotFor(s)) },
+  {
+    keys: ["issues", "stats", "preview", "easterEgg"],
+    run: (s) => shell.setMascot(mascotFor(s), s.easterEgg),
+  },
   { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {

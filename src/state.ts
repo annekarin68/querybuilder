@@ -63,6 +63,10 @@ export interface AppState {
   /** Why the last drop (or "Add to query") couldn't be done in full, shown as
    *  a dismissible warning above the query; null when there is nothing to say. */
   dropNotice: string | null;
+  /** Whether the hidden easter-egg mascot set is showing. Display only: five
+   *  clicks on the logo toggle it. It is not stored, so a reload brings back
+   *  the normal pickle (decided by the maintainers, 2026-10-08). */
+  easterEgg: boolean;
 }
 
 export const initialState: AppState = {
@@ -81,6 +85,7 @@ export const initialState: AppState = {
   // The docs are the main way to build a query, so they start open.
   sidebarCollapsed: false,
   dropNotice: null,
+  easterEgg: false,
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */

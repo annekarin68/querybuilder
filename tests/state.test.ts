@@ -34,6 +34,7 @@ describe("store", () => {
     expect(initialState.query).toMatchObject({ kind: "group", operator: "AND", children: [] });
     expect(initialState.stats.status).toBe("idle");
     expect(initialState.preview.status).toBe("idle");
+    expect(initialState.easterEgg).toBe(false);
     expect(initialState.auth.status).toBe("loading");
     expect(initialState.compliance.status).toBe("loading");
     expect(initialState.sidebarCollapsed).toBe(false);

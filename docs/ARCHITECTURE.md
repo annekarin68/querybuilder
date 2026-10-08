@@ -156,9 +156,9 @@ why the badge backgrounds are opaque). The test also checks that the green used
 to mark keyboard focus on the dictionary's resize handle stands out 3:1 from the
 page and the card (WCAG 1.4.11).
 
-The pickle is four small SVG files in `public/pickle/`, served as-is. Three of
-them are named by `MASCOT` in `src/config.ts` (`logo.svg`, `disappointed.svg`,
-`loading.svg`); the favicon is referenced from `index.html`. They are meant to
+The pickle is four small SVG files in `public/pickle/` (plus the three easter-egg
+faces below), served as-is. Three of them are named by `MASCOT` in
+`src/config.ts` (`logo.svg`, `disappointed.svg`, `loading.svg`); the favicon is referenced from `index.html`. They are meant to
 be replaced: overwrite a file with the same name and nothing else changes. Replacement SVGs must be self-contained plain SVG: export them as plain or optimised SVG with no namespaces other than `http://www.w3.org/2000/svg` (typical Inkscape or Illustrator exports add `xmlns:xlink`, `xmlns:inkscape`, `sodipodi` and `rdf` URLs, which make `npm run build`'s `check:offline` fail; nothing checks a file swapped in on an already-deployed build).
 
 | File | Where it shows |
@@ -169,19 +169,39 @@ be replaced: overwrite a file with the same name and nothing else changes. Repla
 | `loading.svg` | The top bar while statistics or Matching events are loading. It wobbles (not under reduced motion). |
 
 `mascotFor(state)` (`src/ui/mascot.ts`) picks the face from `issues`, `stats`
-and `preview`; `main.ts` repaints it when those change, and `layout.ts` only
-swaps the image when the face changes. If a face file is missing or broken, the
-logo falls back to `logo.svg` and does not ask for the bad file again.
+and `preview`; `main.ts` repaints it when those change (or when `easterEgg`
+does), and `layout.ts` only swaps the image when the file changes. The file
+comes from `mascotFile(face, easterEgg, failed)` in `layout.ts`. If a face file
+is missing or broken, the logo falls back to the neutral face of the same set
+and, if that is broken too, to `logo.svg`, and does not ask for a bad file
+again. `logo.svg` itself is never given up on, so the fallback cannot loop.
 
-**Hidden: five clicks on the logo within 3 seconds make it rain pickles**
-(`createClickCounter`, `startRain` in `src/ui/pickleRain.ts`): 30 images of
-the logo, disappointed and loading files fall from the top of the screen for a
-few seconds, as a CSS animation (`.qb-rain-drop`) on an overlay that ignores
-the mouse and is hidden from screen readers. Only files that actually load are
+**The easter-egg set.** A second, hidden set of three faces, a knockoff "Pickle
+Rick": the same pickle body with a spiky unibrow, wide eyes and a toothy grin.
+The files are `egg-logo.svg`, `egg-disappointed.svg` and `egg-loading.svg` in
+`public/pickle/`, named by `EASTER_EGG_MASCOT` in `src/config.ts` (same keys as
+`MASCOT`, so replacing them works the same way and the same SVG rules apply).
+They are original drawings made for this repo. The favicon has no egg version.
+
+**Hidden: five clicks on the logo within 3 seconds toggle the easter-egg set
+and make it rain pickles** (`createClickCounter`, `startRain` in
+`src/ui/pickleRain.ts`). The first five clicks switch the logo to the egg set
+(`AppState.easterEgg`), five more switch it back; each toggle rains with the
+**new** set. The switch is display only and not stored: a reload brings back
+the normal pickle (decided 2026-10-08). The rain is 30 images of the set's
+logo, disappointed and loading files, which fall from the top of the screen
+for a few seconds, as a CSS animation (`.qb-rain-drop`) on an overlay that
+ignores the mouse and is hidden from screen readers. Only files that actually load are
 used (each gets 2 seconds), so a replaced or removed file cannot leave
 broken-image icons falling; if none loads, nothing falls. For people who prefer
-reduced motion, nothing falls: the same five clicks show a short toast instead
-(`EASTER_EGG_TOAST` in `src/config.ts`, shown by `showToast` in `fomantic.ts`).
+reduced motion, nothing falls: turning the set on shows a short toast instead
+(`EASTER_EGG_TOAST` in `src/config.ts`, shown by `showToast` in `fomantic.ts`);
+turning it off needs no toast because the face visibly changes back.
+
+**Decided 2026-10-08:** the setting is named `EASTER_EGG_MASCOT`, not after one
+character (`RICK_MASCOT`, `PICKLE_MASCOT`): the normal mascot is a pickle too,
+and the name pairs with `EASTER_EGG_TOAST` without tying the code to a
+character.
 
 The logo is `draggable="false"` (`BRAND_HTML` in `src/ui/layout.ts`), so a
 click whose pointer moves a few pixels is not swallowed as an image drag; that
