@@ -783,6 +783,15 @@ body {
   color: var(--qb-selected-text);
 }
 
+/* "Show" in the statistics panel focuses a row or group by script
+   (revealNode, tabindex="-1"). A mouse click does not match :focus-visible, so
+   plain :focus is styled here: without a ring the user sees only a scroll. */
+.qb-condition[tabindex="-1"]:focus,
+.qb-group[tabindex="-1"]:focus {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+
 /* One condition = one grid row. Container query: a row squeezed below ~640px
    (deep nesting on a small screen) moves its value + ✕ onto a second line. */
 .qb-condition {
@@ -970,6 +979,18 @@ body {
   margin-top: 0.35rem;
   font-size: 0.8rem;
   color: var(--qb-danger);
+}
+.qb-stat-problems {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-stat-problems .ui.button {
+  margin: 0;
 }
 .qb-bar {
   display: block;

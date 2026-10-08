@@ -195,6 +195,12 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
       });
   }, STATS_DEBOUNCE_MS);
 
+  /** The "Try again" button of a failed statistics request: asks again for the
+   *  current query and scope. `refreshStats` itself checks `runBlocker`. */
+  function retryStats(): void {
+    refreshStats();
+  }
+
   /**
    * Logging out or invalidating compliance only affects Run (/api/stats is
    * anonymous), so only the preview is cancelled — and it is reset in the same
@@ -431,5 +437,6 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     onLogout,
     onInvalidateCompliance,
     saveQueryBeforeRedirect,
+    retryStats,
   };
 }

@@ -124,7 +124,13 @@ describe("the client reads every mock response", () => {
     await client.getStats(tooLong, ids, (r) => results.push(r));
     expect(results).toHaveLength(ids.length);
     for (const r of results) {
-      expect(r).toMatchObject({ status: "failed", errors: [{ nodeId: "c1", kind: "invalid" }] });
+      expect(r).toMatchObject({
+        status: "failed",
+        errors: [
+          { nodeId: "c1", kind: "invalid" },
+          { nodeId: "g1", kind: "incomplete" },
+        ],
+      });
     }
   });
 

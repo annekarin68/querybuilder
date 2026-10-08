@@ -109,7 +109,7 @@ describe("POST /api/stats", () => {
     }
   });
 
-  it("fails every database, pointing at the condition, when a text is too long", async () => {
+  it("fails every database, pointing at the condition and its group, when a text is too long", async () => {
     const tooLong = {
       ...everyEvent,
       children: [
@@ -128,6 +128,7 @@ describe("POST /api/stats", () => {
         success: false,
         errorMessages: [
           { nodeId: "c1", kind: "invalid", message: "Text is too long (at most 100 characters)." },
+          { nodeId: "g1", kind: "incomplete", message: "Group contains no valid conditions." },
         ],
         infoMessages: [],
       })),

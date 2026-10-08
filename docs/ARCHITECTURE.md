@@ -392,7 +392,7 @@ src/
     queryBuilder.ts    The query builder (wiring, drop targets, node grips; returns its render function).
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
-    statsPanel.ts      The statistics column (render).
+    statsPanel.ts      The statistics column (render + wiring: Show, Try again).
     dataPreview.ts     Matching events and the Run button (render + wiring).
     accountMenu.ts     The top-bar account menu (render + wiring).
 mock-server/           Dev-only stand-in backend — see "Mock server".
@@ -492,7 +492,8 @@ control had focus before it repaints and focuses the same control afterwards.
   group's **+ Condition** (after a row's or sub-group's ✕: the user stays in
   that group, and not on a neighbour's ✕, where a second Enter would delete
   something else), the query card (after the warning's ✕), the Matching
-  events card (after **Run query**, through the loader to the result), and the
+  events card (after **Run query**, through the loader to the result), the
+  statistics card (after **Try again**), and the
   account chip or **Log in** (after **Invalidate** or **Log out**). Cards are
   not in the Tab order (`tabindex="-1"`), but can be given the focus by script.
 - **Code that moves the cursor on purpose wins**: it runs after the paint
@@ -687,11 +688,14 @@ can never be shown as "0 matched", and carries `errors` (from
 group or condition from the request; `kind` is `"incomplete"` or `"invalid"`,
 like an `Issue` (any other kind reads as `"invalid"`). The items decide
 whether Run is allowed, so a plain-text item is a contract error; a blank
-`message` reads as "The server found a problem in the query." The panel shows
-every error's `message` in the database's row. An error with a `nodeId` is
-also an issue in the query builder: `app.ts` keeps them in
+`message` reads as "The server found a problem in the query." An error with a
+`nodeId` is shown **once, in the query builder, next to what is wrong**; the
+statistics panel only counts them ("Right — `statsPanel.ts`"). An error
+without a `nodeId` is shown in that database's row. `app.ts` keeps the
+errors with a `nodeId` in
 `AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`), once however
-many databases report them, and they block Run (`runBlocker` → `"rejected"`). A line that says `success` but has no `matchCount`
+many databases report them, and they block Run (`runBlocker` → `"rejected"`).
+A line that says `success` but has no `matchCount`
 counts as failed rather than as a made-up 0. Both carry `notes` (from
 `infoMessages`). The headline sums the successful databases only and says how
 many it excludes.
@@ -1373,9 +1377,31 @@ backend returns billions: `compact` (`1.2B`, exact value on hover),
 `matchRatio` (`62%`, `0.34%`, and `1 in 289.3M` rather than a misleading
 `0%`), `barWidth` (any nonzero match shows at least 2 px). Top to bottom: the
 headline (sum of successful databases, ratio, bar, "Excludes N databases that
-failed"), then **By database** (one row per streamed result; failures in red),
-then "Waiting on N more databases…" while loading. The backend can only return
-counts, so there are no per-field statistics.
+failed"), the query-problems line (below), then **By database** (one row per
+streamed result), then "Waiting on N more databases…" while loading. The
+backend can only return counts, so there are no per-field statistics.
+
+Each kind of error is shown once, where the person who can fix it looks:
+
+| Problem | Who fixes it | Where it is shown |
+|---|---|---|
+| Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder only; here one line, "Not counted: N problem(s) are marked in the query." (`queryProblemsLine`), with a **Show** button; each such database's row says "Not counted" in muted text |
+| Database error without a `nodeId` | the user (deselect the database) or the service | in that database's row, in red; a failed row with no error at all says "Failed." |
+| The statistics request itself failed (`ApiError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with the error and **Try again** |
+
+N is `AppState.serverIssues.length`, already de-duplicated across databases.
+**Show** carries the id `placeIssues` drew the first problem on, so a problem
+inside a collapsed group points at that group; `main.ts` wires it to
+`revealNode` (`queryBuilder.ts`), which scrolls that row or group to the
+middle of the builder and focuses it (it gets `tabindex="-1"` first, so
+script can focus it without making it a Tab stop). **Try again** calls
+`app.retryStats`, which fetches the statistics again for the current query and
+scope. `wireStatsPanel` owns both buttons with one delegated listener.
+
+**Decision: no duplication.** The maintainers asked whether the node errors
+should also be listed in the statistics. They are not: the same message in the
+builder and in every database row is noise, and only the builder lets the user
+fix it. The panel says that the query has problems, how many, and where.
 
 ### Under the query — `dataPreview.ts` (Matching events)
 
@@ -1439,7 +1465,12 @@ to a named handler function — add a route there, and a test in
   reached. A text value (or a text item in a list) longer than 100
   characters fails in every database, with an `errorMessages` item pointing
   at its condition (`queryErrors`), so the builder's backend issues can be
-  tried in dev.
+  tried in dev. A group with at least one child, **all** of whose children
+  have an error of their own, also gets
+  `{ nodeId: <group id>, kind: "incomplete", message: "Group contains no valid conditions." }`,
+  as the real backend does. It is `incomplete` so that it shows as a grey
+  hint while the condition errors that cause it stay red. An empty group gets
+  none: the frontend's own validation reports it.
 - **`/api/query`** returns the matching events themselves, at most
   `QUERY_RESULT_CAP` (25).
 - **`present` / `absent`** work at both levels (`conditionMatches` in
@@ -1486,8 +1517,11 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   aborted because they were superseded never reach a panel.
 - A database that finds a problem in the query reports it in its stats
   line, not as an HTTP error: the statistics panel shows it in that
-  database's row, and an error that points at a query node is also shown in
-  the builder and blocks Run ("Statistics lines").
+  database's row if it points at no query node; an error that points at a
+  query node is shown once, in the builder, and blocks Run ("Statistics
+  lines", "Right — `statsPanel.ts`").
+- A failed statistics request shows "Couldn't get statistics" with **Try
+  again** (`app.retryStats`).
 - Failing to load databases or facets at startup is fatal: `#app` is replaced
   by an error (`role="alert"`) and a **Reload** button that takes the focus
   (the message escaped like every
@@ -1497,7 +1531,9 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
 - Drops never fail silently: whatever a drop or "Add to query" can't do is
   explained in `AppState.dropNotice`, a dismissible warning above the query
   ("Centre — `queryBuilder.ts`" has the list).
-- No retries, no error-boundary machinery — just visible messages.
+- No automatic retries and no error-boundary machinery — just visible
+  messages. A retry happens only when the user presses **Try again** (statistics,
+  Matching events) or **Reload** (startup).
 
 ---
 

@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import type { Database, DatabaseResult } from "../../src/model";
 import { headlineHtml, statsPanelHtml } from "../../src/ui/statsPanel";
 import { initialState, type AppState } from "../../src/state";
-import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
+import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
+import { placeIssues } from "../../src/query/issues";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { dbError, failed, ok } from "../statsFixtures";
 
@@ -62,7 +63,7 @@ describe("statsPanelHtml", () => {
     query: addChild(root, root.id, condition),
   };
 
-  it("keeps showing each database's errors while they block Run", () => {
+  it("keeps showing the results, and where the problem is, while it blocks Run", () => {
     const html = statsPanelHtml({
       ...ready,
       stats: {
@@ -71,7 +72,7 @@ describe("statsPanelHtml", () => {
       },
       serverIssues: [{ nodeId: condition.id, message: "Too long.", kind: "invalid" }],
     });
-    expect(html).toContain("Too long.");
+    expect(html).toContain("Not counted: 1 problem is marked in the query.");
     expect(html).toContain("Excludes 1 database that failed");
     expect(html).not.toContain("qb-placeholder");
   });
@@ -80,5 +81,93 @@ describe("statsPanelHtml", () => {
     expect(statsPanelHtml({ ...ready, selectedDatabaseIds: [] })).toContain(
       "Select at least one database to see statistics.",
     );
+  });
+
+  describe("errors, each where they can be fixed", () => {
+    const message = "Text is too long (at most 100 characters).";
+    const issue = { nodeId: condition.id, message, kind: "invalid" as const };
+    const withNodeError = (state: Partial<AppState> = {}): AppState => ({
+      ...ready,
+      stats: {
+        status: "ok",
+        results: [
+          failed("a", dbError(condition.id, message)),
+          failed("b", dbError(condition.id, message)),
+        ],
+      },
+      serverIssues: [issue],
+      ...state,
+    });
+
+    it("shows a query problem once, as a summary with a Show button, not per database", () => {
+      const html = statsPanelHtml(withNodeError());
+      expect(html).not.toContain(message);
+      expect(html).toContain("Not counted: 1 problem is marked in the query.");
+      expect(html).toContain(
+        `<button type="button" class="ui mini basic button" data-action="show-issue" data-node-id="${condition.id}">Show</button>`,
+      );
+      expect(html.match(/Not counted<\/span>/g)).toHaveLength(2);
+    });
+
+    it("counts the problems", () => {
+      const other = { ...issue, nodeId: "other" };
+      const html = statsPanelHtml(withNodeError({ serverIssues: [issue, other] }));
+      expect(html).toContain("Not counted: 2 problems are marked in the query.");
+    });
+
+    it("keeps a database error without a node in that database's row, in red", () => {
+      const html = statsPanelHtml({
+        ...ready,
+        stats: { status: "ok", results: [ok("a", 5), failed("b", dbError(null, "Timed out."))] },
+      });
+      expect(html).toContain('<span class="qb-db-msg qb-db-error">Timed out.</span>');
+      expect(html).not.toContain("qb-stat-problems");
+      expect(html).not.toContain("Not counted");
+    });
+
+    it("shows only the node-less messages in a row that has both kinds", () => {
+      const html = statsPanelHtml(
+        withNodeError({
+          stats: {
+            status: "ok",
+            results: [
+              ok("a", 5),
+              failed("b", dbError(condition.id, message), dbError(null, "Timed out.")),
+            ],
+          },
+        }),
+      );
+      expect(html).toContain("Timed out.");
+      expect(html).not.toContain(message);
+      expect(html).toContain("Not counted: 1 problem is marked in the query.");
+    });
+
+    it("keeps 'Failed.' for a failed database that gave no error", () => {
+      const html = statsPanelHtml({
+        ...ready,
+        stats: { status: "ok", results: [ok("a", 5), failed("b")] },
+      });
+      expect(html).toContain("Failed.");
+    });
+
+    it("points Show at the collapsed group that hides the problem", () => {
+      const inner = newGroup();
+      const query = addChild(addChild(root, root.id, inner), inner.id, condition);
+      const collapsed = updateNode(query, inner.id, { collapsed: true }) as typeof query;
+      const html = statsPanelHtml(withNodeError({ query: collapsed }));
+      const placed = placeIssues(collapsed, [issue])[0]!.nodeId;
+      expect(placed).toBe(inner.id);
+      expect(html).toContain(`data-node-id="${placed}">Show</button>`);
+    });
+
+    it("offers Try again when the statistics request itself failed", () => {
+      const html = statsPanelHtml({ ...ready, stats: { status: "error", error: "<down>" } });
+      expect(html).toContain("Couldn't get statistics");
+      expect(html).toContain("&lt;down&gt;");
+      expect(html).toContain(
+        '<button type="button" class="ui mini basic button" data-action="retry-stats">Try again</button>',
+      );
+      expect(html).not.toContain("Statistics failed");
+    });
   });
 });

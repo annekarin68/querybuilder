@@ -308,12 +308,55 @@ describe("queryErrors", () => {
     const query = group(
       "AND",
       { ...cond("note", "eq", tooLong), id: "c1" },
+      cond("note", "eq", "fine"),
       {
-        ...group("OR", { ...cond("note", "in", ["ok", tooLong]), id: "c2" }),
+        ...group(
+          "OR",
+          { ...cond("note", "in", ["ok", tooLong]), id: "c2" },
+          cond("note", "eq", ""),
+        ),
         id: "g2",
       },
     );
     expect(queryErrors(query)).toEqual([problem("c1"), problem("c2")]);
+  });
+
+  const noValidConditions = (groupId: string) => ({
+    nodeId: groupId,
+    kind: "incomplete",
+    message: "Group contains no valid conditions.",
+  });
+  const bad = (id: string) => ({ ...cond("note", "eq", tooLong), id });
+  const good = (id: string) => ({ ...cond("note", "eq", "fine"), id });
+
+  it("reports a group whose every child has an error, as incomplete", () => {
+    const query = { ...group("AND", bad("c1"), bad("c2")), id: "g1" };
+    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2"), noValidConditions("g1")]);
+  });
+
+  it("does not report a group with one good child", () => {
+    const query = { ...group("OR", bad("c1"), good("c2")), id: "g1" };
+    expect(queryErrors(query)).toEqual([problem("c1")]);
+  });
+
+  it("reports an all-bad inner group but not a root that has another good child", () => {
+    const inner = { ...group("AND", bad("c1"), bad("c2")), id: "inner" };
+    const query = { ...group("AND", inner, good("c3")), id: "root" };
+    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2"), noValidConditions("inner")]);
+  });
+
+  it("reports the root too when its only child is an all-bad group", () => {
+    const inner = { ...group("AND", bad("c1")), id: "inner" };
+    const query = { ...group("AND", inner), id: "root" };
+    expect(queryErrors(query)).toEqual([
+      problem("c1"),
+      noValidConditions("inner"),
+      noValidConditions("root"),
+    ]);
+  });
+
+  it("does not report an empty group (the frontend's own validation does)", () => {
+    expect(queryErrors({ ...group("AND"), id: "g1" })).toEqual([]);
   });
 
   it("accepts text up to the limit, and values that aren't text", () => {

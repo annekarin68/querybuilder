@@ -185,6 +185,20 @@ function nodeOf(container: HTMLElement, nodeId: string): HTMLElement | null {
   return container.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"]`);
 }
 
+/**
+ * Scrolls node `nodeId` into view and moves focus to it (the "Show" button of
+ * the statistics panel). A row or group is not focusable by itself, so it gets
+ * `tabindex="-1"` first: focusable by script, not a stop for the Tab key. The
+ * builder repaints on every edit, which drops the attribute with the element.
+ */
+export function revealNode(container: HTMLElement, nodeId: string): void {
+  const node = nodeOf(container, nodeId);
+  if (!node) return;
+  if (!node.hasAttribute("tabindex")) node.setAttribute("tabindex", "-1");
+  node.scrollIntoView({ block: "center" });
+  node.focus();
+}
+
 /** The `.ui.dropdown` Fomantic built from the row's `<select data-part=…>`. */
 function dropdownOf(row: HTMLElement | null, part: string): HTMLElement | null {
   return (

@@ -22,8 +22,8 @@ import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { escapeClosesDocs, renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
-import { wireQueryBuilder } from "./ui/queryBuilder";
-import { renderStatsPanel } from "./ui/statsPanel";
+import { revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
 import { createClickCounter, startRain } from "./ui/pickleRain";
@@ -75,6 +75,10 @@ wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
 wireDocsResize(shell.docsResizeHandle);
 wireDataPreview(panels.preview, app.runPreview);
 wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
+wireStatsPanel(panels.stats, {
+  onRetry: app.retryStats,
+  onShowIssue: (nodeId) => revealNode(panels.center, nodeId),
+});
 wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onInvalidate: app.onInvalidateCompliance,

@@ -389,6 +389,27 @@ describe("statistics", () => {
     expect(store.getState().stats).toMatchObject({ status: "error", error: "down" });
   });
 
+  it("fetches again on retryStats after a failed request", async () => {
+    vi.useFakeTimers();
+    const getStats = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("down"))
+      .mockImplementation(async (_q, _ids, onLine: (l: DatabaseResult) => void) => {
+        onLine(ok("alpha", 3));
+      });
+    const { app, store } = setup(ready(), fakeApi({ getStats }));
+    app.onQueryChange(runnableQuery(5));
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    await flushPromises();
+    expect(store.getState().stats.status).toBe("error");
+
+    app.retryStats();
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    await flushPromises();
+    expect(getStats).toHaveBeenCalledTimes(2);
+    expect(store.getState().stats).toMatchObject({ status: "ok", results: [ok("alpha", 3)] });
+  });
+
   it("fetches nothing for an unfinished query", async () => {
     vi.useFakeTimers();
     const { app, api } = setup(ready());

@@ -214,13 +214,36 @@ export function scaleCount(part: number, whole: number, target: number): number 
 export const MAX_TEXT_LENGTH = 100;
 
 /**
- * The problems the mock's databases find in a query: each condition with a
- * text value (or a text item in a list) longer than MAX_TEXT_LENGTH, pointed
- * at by its `id` — the way a real backend reports a value only it can check.
+ * The problems the mock's databases find in a query, each pointed at by the
+ * `id` of its node — the way a real backend reports what only it can check:
+ *
+ * - a condition with a text value (or a text item in a list) longer than
+ *   MAX_TEXT_LENGTH (`invalid`);
+ * - a group whose every child has an error of its own (a condition's, or a
+ *   child group's own "no valid conditions"): "Group contains no valid
+ *   conditions." This mirrors the real backend. It is `incomplete`, not
+ *   `invalid`: the frontend shows it as a grey hint, while the condition
+ *   errors that cause it stay red. An empty group gets none; the frontend's
+ *   own validation reports that.
+ *
  * Empty when there are none.
  */
 export function queryErrors(node: RequestNode): StatsErrorMessage[] {
-  if (node.kind === "group") return node.children.flatMap(queryErrors);
+  if (node.kind === "group") {
+    const perChild = node.children.map(queryErrors);
+    const errors = perChild.flat();
+    const everyChildFailed =
+      node.children.length > 0 &&
+      node.children.every((child, i) => perChild[i]!.some((e) => e.nodeId === child.id));
+    if (everyChildFailed) {
+      errors.push({
+        nodeId: node.id,
+        kind: "incomplete",
+        message: "Group contains no valid conditions.",
+      });
+    }
+    return errors;
+  }
   const values = Array.isArray(node.value) ? node.value : [node.value];
   const tooLong = values.some((v) => typeof v === "string" && v.length > MAX_TEXT_LENGTH);
   if (!tooLong) return [];
