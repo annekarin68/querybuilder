@@ -486,7 +486,8 @@ Opening a saved query goes through `changeScope` and `validateQuery` like any
 edit, so the "Correctness invariant" holds. Database ids that no longer exist
 are dropped and said in `dropNotice`. A `401` from any saved-queries call
 redirects to log in like Run does (the query is saved first), as does opening
-either dialog while anonymous; another error is shown in the dialog's state.
+either dialog while anonymous (the buttons first show the same advisory note
+as Run, `LOGIN_FIRST_NOTE`: "Centre — `queryBuilder.ts`"); another error is shown in the dialog's state.
 
 `main.ts` has one table, `panelRenderers`: for each panel, the `AppState`
 keys it reads and how to render it. One subscriber runs a panel's render
@@ -1602,12 +1603,12 @@ fix it. The panel says that the query has problems, how many, and where.
 Owns the app's only **Run query** button: disabled with the reason when the
 query can't run; enabled with an advisory note ("You'll be asked to log in
 first.", the exported `LOGIN_FIRST_NOTE`, which the query card's **Save…** and
-**Saved queries** show too) when ready; a loader; an error with **Try again**; or the result.
-The result is a list of compact rows, one native `<details>` per event: id,
-one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default), up to 3
-tag and 2 group badges ranked by how many of the event's facets carry them
-(values in `HIDDEN_ROW_BADGES` left out), and the facet count; expanding a row
-shows the event's JSON.
+**Saved queries** show too) when ready; a loader; an error with **Try again**;
+or the result. The result is a list of compact rows, one native `<details>`
+per event: id, one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by
+default), up to 3 tag and 2 group badges ranked by how many of the event's
+facets carry them (values in `HIDDEN_ROW_BADGES` left out), and the facet
+count; expanding a row shows the event's JSON.
 
 Pressing **Run query** from the keyboard leaves the focus on this card (the
 button is replaced by the loader, then by the result; see "Keyboard focus
@@ -1652,8 +1653,10 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm` and `openSaved`.
   one asks about that item instead. Loading, the empty state ("No saved
   queries yet. Build a query and press Save…") and an error with **Try again**
   show in the dialog. **Close** closes it.
-- **Logged out**: both buttons start the login redirect instead, the query
-  saved first ("Saved query across the login/compliance redirect").
+- **Logged out**: both buttons first show the same advisory note as Run
+  (`LOGIN_FIRST_NOTE`, "Centre — `queryBuilder.ts`"), then start the login
+  redirect instead of opening a dialog, the query saved first ("Saved query
+  across the login/compliance redirect").
 
 **Decision: a native `<dialog>` with `showModal()`, not Fomantic's modal.**
 The browser keeps the focus inside it, greys out and blocks the page, and

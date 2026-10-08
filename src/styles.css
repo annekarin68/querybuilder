@@ -1010,7 +1010,7 @@ body {
 /* The logged-out note takes its own line under the title and buttons. */
 .qb-query-head .qb-login-note {
   flex: 1 0 100%;
-  font-size: 0.85rem;
+  font-size: 0.8rem; /* as Run's note (.qb-run-note) */
 }
 
 /* ---- Statistics (src/ui/statsPanel.ts + format.ts) — must fit ~15rem ---- */
