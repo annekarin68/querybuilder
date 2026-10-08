@@ -1490,7 +1490,7 @@ the issue's message tells the user to do exactly that.
   succeeds clears an older warning; a drop that partly succeeds still inserts
   what it can. Despite its name, the warning is not only about drops: it also
   carries a refused **Ungroup** (its reason) and, after opening a saved query,
-  "N saved databases no longer exist and were left out." (the last two rows
+  "N saved databases no longer exist and were left out." (the last three rows
   below). The messages:
 
 | Drop | Result | Warning |
@@ -1503,6 +1503,7 @@ the issue's message tells the user to do exactly that.
 | A group onto something inside itself | nothing moved | "A group can't be moved into itself." |
 | Anything before facets and catalog have loaded | nothing added | "The data dictionary is still loading; try again in a moment." |
 | **Ungroup** on a group whose ALL/ANY differs from the one around it, and which holds more than one item | nothing changed | "Ungroup works only when this group and the one around it are both ALL or both ANY, or when it holds one item." |
+| **Ungroup** pressed on a screen that is out of date (the group is no longer in the query) | nothing changed | "That group is no longer in the query." |
 | Opening a saved query whose databases no longer all exist | opened with the ones that do | "1 saved database no longer exists and was left out." / "N saved databases no longer exist and were left out." |
 
 Finding and picking in the dropdowns (settings in `fomantic.ts`, cursor
@@ -1559,7 +1560,7 @@ Each kind of error is shown once, where the person who can fix it looks:
 
 | Problem | Who fixes it | Where it is shown |
 |---|---|---|
-| Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder only; here one line, "Not counted: N problem(s) are marked in the query." (`queryProblemsLine`), with a **Show** button; each such database's row says "Not counted" in muted text |
+| Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder (when only some databases report it, those databases' pills are also marked, with the message in the tooltip: "Above the builder — `databasePicker.ts`"); here one line, "Not counted: N problem(s) are marked in the query." (`queryProblemsLine`), with a **Show** button; each such database's row says "Not counted" in muted text |
 | Database error without a `nodeId` | the user (deselect the database) or the service | in that database's row, in red; a failed row with no error at all says "Failed." |
 | The statistics request itself failed (`ApiError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with the error and **Try again** |
 
