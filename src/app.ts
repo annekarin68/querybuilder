@@ -498,14 +498,20 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   /** Send one save and show how it went. A save that succeeds is remembered
    *  even if the dialog was closed meanwhile: it did happen on the server. */
   function sendSave(name: string, note: string, send: () => Promise<SavedQuery>): void {
+    const openWhenStarted = store.getState().openSaved;
     const req = saveSlot.start();
     store.setState({ save: { status: "saving" } });
     send()
       .then((saved) => {
         const { id, query, databaseIds } = saved;
-        const patch: Partial<AppState> = {
-          openSaved: { id, name: saved.name, note: saved.note, query, databaseIds },
-        };
+        // The saved query becomes the open one only if nothing else was opened
+        // since the save started (a slow answer after the user opened another
+        // query would otherwise make the next Save overwrite this one with
+        // that other query).
+        const patch: Partial<AppState> =
+          store.getState().openSaved === openWhenStarted
+            ? { openSaved: { id, name: saved.name, note: saved.note, query, databaseIds } }
+            : {};
         // Leave the dialog alone when it was closed, or closed and reopened.
         store.setState(
           req.isStale() ? patch : { ...patch, savedDialog: null, save: { status: "idle" } },
@@ -531,6 +537,11 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   }
 
   function saveQuery(name: string, note: string): void {
+    // One save at a time: Enter in the form submits even when the button is
+    // disabled, and a second create would get a 409 against the first, asking
+    // "Replace it?" about the user's own save. (confirmReplace needs the
+    // "conflict" state, which a running save has already left.)
+    if (store.getState().save.status === "saving") return;
     const draft = draftOf(name, note);
     if (draft.name === "") {
       store.setState({ save: { status: "error", error: "Give the query a name." } });

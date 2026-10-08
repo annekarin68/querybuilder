@@ -1184,6 +1184,33 @@ describe("saved queries: saving", () => {
     expect(store.getState().save).toEqual({ status: "idle" });
   });
 
+  it("does not start a second save while one is running", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.saveQuery("Weekly", ""); // Enter pressed twice
+    expect(api.createSavedQuery).toHaveBeenCalledTimes(1);
+    slow.resolve(savedQuery("new", "Weekly"));
+    await flushPromises();
+    expect(store.getState().save).toEqual({ status: "idle" });
+    expect(store.getState().openSaved).toMatchObject({ id: "new" });
+  });
+
+  it("does not let a late save replace a query opened since", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const other = savedQuery("b", "Other");
+    const { app, store } = setup({ ...ready(emptyQuery()), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.closeSavedDialog();
+    store.setState({ savedList: { status: "ok", queries: [other] } });
+    app.askOpenSaved("b");
+    slow.resolve(savedQuery("a", "Weekly"));
+    await flushPromises();
+    expect(store.getState().openSaved).toMatchObject({ id: "b" });
+  });
+
   it("remembers a save that finished after the dialog was closed", async () => {
     const slow = deferred<SavedQuery>();
     const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
