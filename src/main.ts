@@ -27,7 +27,7 @@ import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
 import { renderSavedDialog, wireSavedDialog } from "./ui/savedQueries";
-import { createClickCounter, startRain } from "./ui/pickleRain";
+import { createClickCounter, easterEggReaction, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
 // `app` (src/app.ts, where everything the app DOES lives) and repaints panels
@@ -61,9 +61,9 @@ shell.logo.addEventListener("click", () => {
   const easterEgg = !store.getState().easterEgg;
   store.setState({ easterEgg });
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduceMotion) startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
-  // Turning it off needs no toast: the face visibly changes back.
-  else if (easterEgg) showToast(EASTER_EGG_TOAST);
+  const reaction = easterEggReaction(easterEgg, reduceMotion);
+  if (reaction === "rain") startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
+  else if (reaction === "toast") showToast(EASTER_EGG_TOAST);
 });
 
 // Wire every panel once. The listeners are delegated to the panel containers
@@ -221,9 +221,10 @@ store.subscribe((state, changed) => {
 /**
  * `?resume=1` marks a load as the direct return-hop from the login or
  * compliance callback (both redirect here) — the ONE signal that tells this
- * load to restore a saved query, as opposed to a generic revisit finding a
- * stale leftover sessionStorage entry from an abandoned attempt. Stripped
- * from the URL immediately so a manual refresh doesn't re-trigger this.
+ * load to restore the pending query (src/util/pendingQuery.ts), as opposed to
+ * a generic revisit finding a stale leftover sessionStorage entry from an
+ * abandoned attempt. Stripped from the URL immediately so a manual refresh
+ * doesn't re-trigger this.
  */
 function consumeResumeParam(): boolean {
   const url = new URL(window.location.href);

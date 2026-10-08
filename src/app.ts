@@ -381,16 +381,16 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
 
   /**
    * Load everything the app needs and set the first real state. `resumed` is
-   * true on the return hop from the login or compliance flow: only then is a
-   * saved query restored. Rejects if databases or facets can't be loaded —
-   * without them there is nothing to show.
+   * true on the return hop from the login or compliance flow: only then is the
+   * pending query (src/util/pendingQuery.ts) restored. Rejects if databases or
+   * facets can't be loaded — without them there is nothing to show.
    */
   async function start(resumed: boolean): Promise<void> {
-    // Always take (and so clear) a saved entry, even on a normal load: a stale
+    // Always take (and so clear) a pending entry, even on a normal load: a stale
     // one from an abandoned attempt must not resurface on some later, unrelated
     // return hop. Only a return hop actually uses it.
-    const saved = takePendingQuery();
-    const pending = resumed ? saved : null;
+    const taken = takePendingQuery();
+    const pending = resumed ? taken : null;
 
     const [databases, facets, user, compliance] = await Promise.all([
       api.getDatabases(),
@@ -536,6 +536,19 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     return { name: name.trim(), note: note.trim(), databaseIds: [...selectedDatabaseIds], query };
   }
 
+  /** Overwrite the saved query `id` with `draft`. If it is gone (deleted in
+   *  another tab, `404`), create it instead: the user asked to save, and an
+   *  update that can never succeed would leave the dialog stuck on "No saved
+   *  query with that id.". */
+  async function updateOrCreate(id: string, draft: SavedQueryDraft): Promise<SavedQuery> {
+    try {
+      return await api.updateSavedQuery(id, draft);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return api.createSavedQuery(draft);
+      throw err;
+    }
+  }
+
   function saveQuery(name: string, note: string): void {
     // One save at a time: Enter in the form submits even when the button is
     // disabled, and a second create would get a 409 against the first, asking
@@ -549,9 +562,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     }
     const target = saveTarget(draft.name, store.getState().openSaved);
     sendSave(draft.name, draft.note, () =>
-      target.kind === "update"
-        ? api.updateSavedQuery(target.id, draft)
-        : api.createSavedQuery(draft),
+      target.kind === "update" ? updateOrCreate(target.id, draft) : api.createSavedQuery(draft),
     );
   }
 
@@ -565,7 +576,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     sendSave(draft.name, draft.note, async () => {
       const clash = (await api.listSavedQueries()).find((q) => sameName(q.name, draft.name));
       // Deleted in the meantime (another tab): there is nothing left to replace.
-      return clash ? api.updateSavedQuery(clash.id, draft) : api.createSavedQuery(draft);
+      return clash ? updateOrCreate(clash.id, draft) : api.createSavedQuery(draft);
     });
   }
 

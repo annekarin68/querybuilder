@@ -4,15 +4,40 @@ import { escapeHtml, paint } from "./panel";
 import { databaseTitle } from "./format";
 
 /**
- * Each failed database's id → why it failed, in the user's words: its errors'
- * messages, else its notes (a timeout, an unreachable server), else "Failed.".
+ * Whether the query itself is at fault rather than the databases: every
+ * database that has answered so far failed, and each did so only with errors
+ * that point at query nodes. The builder already shows those errors where they
+ * can be fixed (and the statistics column says so), so marking every pill red
+ * and offering "Deselect failing" would only repeat them and suggest the wrong
+ * fix. One database that answered, failed for another reason (an error without
+ * a node, or only notes such as a timeout) is the database's own problem.
+ */
+export function queryIsAtFault(results: DatabaseResult[]): boolean {
+  return (
+    results.length > 0 &&
+    results.every(
+      (r) =>
+        r.status === "failed" && r.errors.length > 0 && r.errors.every((e) => e.nodeId !== null),
+    )
+  );
+}
+
+/**
+ * Each failed database's id → why it failed, in the user's words, for its
+ * pill's tooltip: its errors without a node, else its notes (a timeout, an
+ * unreachable server), else its node errors' messages (a node error that only
+ * some databases report is about that database), else "Failed.". Empty when
+ * the query is at fault (`queryIsAtFault`): then no database is marked.
  */
 export function failedDatabases(results: DatabaseResult[]): Map<string, string[]> {
   const failed = new Map<string, string[]>();
+  if (queryIsAtFault(results)) return failed;
   for (const r of results) {
     if (r.status !== "failed") continue;
-    const reasons = r.errors.length > 0 ? r.errors.map((e) => e.message) : r.notes;
-    failed.set(r.databaseId, reasons.length > 0 ? reasons : ["Failed."]);
+    const nodeless = r.errors.filter((e) => e.nodeId === null).map((e) => e.message);
+    const nodeErrors = r.errors.filter((e) => e.nodeId !== null).map((e) => e.message);
+    const reasons = [nodeless, r.notes, nodeErrors].find((list) => list.length > 0);
+    failed.set(r.databaseId, reasons ?? ["Failed."]);
   }
   return failed;
 }
@@ -33,12 +58,17 @@ export function deselectFailingIds(
 }
 
 /**
- * The databases that failed for the query on screen. Only the current results
- * count: `changeScope` (src/app.ts) empties them when a new query starts, so
- * the markers clear instead of lingering from the previous query.
+ * The selected databases that failed for the query on screen. Only the current
+ * results count: `changeScope` (src/app.ts) empties them when a new query
+ * starts, so the markers clear instead of lingering from the previous query.
+ * Only selected databases count too: an unselected one is not part of this
+ * query, so an earlier failure of it says nothing about it now (nor about
+ * whether the query is at fault).
  */
 function currentFailures(state: AppState): Map<string, string[]> {
-  return state.stats.status === "error" ? new Map() : failedDatabases(state.stats.results);
+  if (state.stats.status === "error") return new Map();
+  const selected = new Set(state.selectedDatabaseIds);
+  return failedDatabases(state.stats.results.filter((r) => selected.has(r.databaseId)));
 }
 
 /**
@@ -49,24 +79,24 @@ function currentFailures(state: AppState): Map<string, string[]> {
  * behaves like editing the query (see onDatabasesChange in src/app.ts and
  * docs/ARCHITECTURE.md, "Correctness invariant").
  *
- * A selected database that failed for this query is marked on its pill, and
- * "Deselect failing (N)" drops those from the selection.
+ * A selected database that failed for this query is marked on its pill (unless
+ * the query itself is at fault: `queryIsAtFault`), and "Deselect failing (N)"
+ * drops those from the selection.
  */
 export function databasePickerHtml(state: AppState): string {
   if (!state.databases) return "";
   const selected = new Set(state.selectedDatabaseIds);
-  // Only selected databases are marked: an unselected one is not part of this
-  // query, so an earlier failure of it says nothing about it now.
-  const failures = new Map([...currentFailures(state)].filter(([id]) => selected.has(id)));
+  const failures = currentFailures(state);
   const pills = state.databases
     .map((d) => {
       const reasons = failures.get(d.id);
       const title = [databaseTitle(d), reasons?.join(" · ")].filter(Boolean).join("\n");
       // The icon and the sr-only text carry the failure for people who cannot
-      // see the outline's colour.
+      // see the outline's colour. The text starts with a space, or a screen
+      // reader reads the name and "failed" as one word.
       return `<label class="qb-db-pill${reasons ? " is-failed" : ""}"${title ? ` title="${escapeHtml(title)}"` : ""}>
         <input type="checkbox" data-db-id="${escapeHtml(d.id)}"${selected.has(d.id) ? " checked" : ""} />
-        <span>${reasons ? `<i class="exclamation circle icon" aria-hidden="true"></i>` : ""}${escapeHtml(d.name)}${reasons ? `<span class="qb-sr-only">failed for this query</span>` : ""}</span>
+        <span>${reasons ? `<i class="exclamation circle icon" aria-hidden="true"></i>` : ""}${escapeHtml(d.name)}${reasons ? `<span class="qb-sr-only"> failed for this query</span>` : ""}</span>
       </label>`;
     })
     .join("");

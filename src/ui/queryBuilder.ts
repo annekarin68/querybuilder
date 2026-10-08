@@ -541,9 +541,12 @@ export function wireQueryBuilder(
         return hooks.announce(ADDED_GROUP_MESSAGE);
       case "group-contents": {
         const node = findNode(q, nodeId);
+        // A click from a stale repaint (the group is gone): nothing to group,
+        // and "Grouped 0 items." would be wrong.
+        if (node?.kind !== "group") return;
         onChange(groupContents(q, nodeId));
         clearOldNotice();
-        return hooks.announce(groupedMessage(node?.kind === "group" ? node.children.length : 0));
+        return hooks.announce(groupedMessage(node.children.length));
       }
       case "ungroup": {
         const next = ungroup(q, nodeId);

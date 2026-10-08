@@ -89,8 +89,11 @@ export interface AppState {
   preview: PreviewState;
 
   sidebarCollapsed: boolean;
-  /** Why the last drop (or "Add to query") couldn't be done in full, shown as
-   *  a dismissible warning above the query; null when there is nothing to say. */
+  /** A warning about the last change to the query, shown dismissible above it;
+   *  null when there is nothing to say. Named for its first use, a drop (or
+   *  "Add to query") that couldn't be done in full; it also carries a refused
+   *  Ungroup and "N saved databases no longer exist…" after opening a saved
+   *  query. */
   dropNotice: string | null;
   /** Whether the hidden easter-egg mascot set is showing. Display only: five
    *  clicks on the logo toggle it. It is not stored, so a reload brings back

@@ -35,8 +35,10 @@ import type { Condition, Group, QueryNode } from "../query/types";
  *
  * Each function reads one object of a response key by key, through the checks
  * in src/api/contract.ts (docs/ARCHITECTURE.md, "Reading responses"): `id`,
- * `number`, `boolean` and `list` are required and throw a ContractError naming
- * the field; `text` and `strings` are only shown, so they fall back to blank.
+ * `ids`, `nullableId`, `oneOf`, `savedValue`, `number`, `boolean`, `list` and
+ * `object` are required and throw a ContractError naming the field (a saved
+ * query's tree and database ids are read with these); `text` and `strings` are
+ * only shown, so they fall back to blank.
  *
  * This is also where the backend's quirks are smoothed out once, instead of in
  * every panel: text may arrive padded, a facet or field may have no name, and a

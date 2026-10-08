@@ -32,6 +32,20 @@ export function createClickCounter(
   };
 }
 
+/**
+ * What the page does once five logo clicks have toggled the easter-egg mascot
+ * (`turnedOn`: it is on now). It rains with the new set, unless the user asks
+ * for reduced motion: then turning on shows the toast instead, and turning
+ * off does nothing more, because the face visibly changes back.
+ */
+export function easterEggReaction(
+  turnedOn: boolean,
+  reduceMotion: boolean,
+): "rain" | "toast" | "none" {
+  if (!reduceMotion) return "rain";
+  return turnedOn ? "toast" : "none";
+}
+
 /** Where, how big and how fast each pickle falls. `random` returns [0, 1). */
 export function planRain(srcs: string[], random: () => number, count = DROPS): RainDrop[] {
   if (srcs.length === 0) return [];

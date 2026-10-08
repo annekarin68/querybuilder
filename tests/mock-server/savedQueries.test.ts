@@ -202,7 +202,12 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
     [
       "a database that is not a string",
       { ...unfinishedRequest, databases: ["a", 2] },
-      "databases must be a list of strings.",
+      "databases[1] must be a non-blank string.",
+    ],
+    [
+      "a blank database id",
+      { ...unfinishedRequest, databases: ["a", "  "] },
+      "databases[1] must be a non-blank string.",
     ],
     ["no query", { ...unfinishedRequest, query: undefined }, "query must be an object."],
     ["a root that is a condition", withQuery(condition), 'query.kind must be "group".'],
@@ -214,7 +219,29 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
     [
       "a node id that is a number",
       withQuery(group({ ...condition, id: 1 })),
-      "query.children[0].id must be a string.",
+      "query.children[0].id must be a non-blank string.",
+    ],
+    [
+      "a blank node id",
+      withQuery(group({ ...condition, id: " " })),
+      "query.children[0].id must be a non-blank string.",
+    ],
+    [
+      "a blank group id at the root",
+      withQuery({ ...group(), id: "" }),
+      "query.id must be a non-blank string.",
+    ],
+    [
+      "two nodes with the same id",
+      withQuery(
+        group(condition, { ...group({ ...condition, id: "c2" }, { ...condition }), id: "g2" }),
+      ),
+      'query.children[1].children[1].id "c1" is already used by another node.',
+    ],
+    [
+      "a child with its group's id",
+      withQuery(group({ ...condition, id: "g1" })),
+      'query.children[0].id "g1" is already used by another node.',
     ],
     [
       "a group operator that is neither",
@@ -228,17 +255,22 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
     ],
     [
       "a facetId that is a number",
-      withQuery(group(condition, { ...condition, facetId: 3 })),
-      "query.children[1].facetId must be a non-empty string or null.",
+      withQuery(group(condition, { ...condition, id: "c2", facetId: 3 })),
+      "query.children[1].facetId must be a non-blank string or null.",
     ],
     [
       "an operatorId that is an empty string",
       withQuery(group({ ...condition, operatorId: "" })),
-      "query.children[0].operatorId must be a non-empty string or null.",
+      "query.children[0].operatorId must be a non-blank string or null.",
+    ],
+    [
+      "a fieldId of spaces",
+      withQuery(group({ ...condition, fieldId: "  " })),
+      "query.children[0].fieldId must be a non-blank string or null.",
     ],
     [
       "a value that is an object",
-      withQuery(group(group({ ...condition, value: { from: 1 } }))),
+      withQuery(group({ ...group({ ...condition, value: { from: 1 } }), id: "g2" })),
       "query.children[0].children[0].value must be null, a string, number or boolean, or a list of them (a list may hold nulls).",
     ],
     [

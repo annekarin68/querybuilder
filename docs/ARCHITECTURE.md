@@ -206,7 +206,9 @@ used (each gets 2 seconds), so a replaced or removed file cannot leave
 broken-image icons falling; if none loads, nothing falls. For people who prefer
 reduced motion, nothing falls: turning the set on shows a short toast instead
 (`EASTER_EGG_TOAST` in `src/config.ts`, shown by `showToast` in `fomantic.ts`);
-turning it off needs no toast because the face visibly changes back.
+turning it off needs no toast because the face visibly changes back
+(`easterEggReaction(turnedOn, reduceMotion)` in `pickleRain.ts`: `"rain"`,
+`"toast"` or `"none"`, pure and tested).
 
 **Decided 2026-10-08:** the setting is named `EASTER_EGG_MASCOT`, not after one
 character (`RICK_MASCOT`, `PICKLE_MASCOT`): the normal mascot is a pickle too,
@@ -343,7 +345,7 @@ src/
                        panel once to `app`, the panelRenderers table, reads `?resume=1`, fatal-error page,
                        the five-click pickle rain.
   app.ts               createApp({ store, api, navigate, announce }) — everything the app DOES, with no DOM: startup
-                       (+ restoring a saved query), live stats, Run query and its 401/403 redirects, logout,
+                       (+ restoring the pending query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
                        `dismissDropNotice`), the saved-queries actions (`openSaveDialog`, `saveQuery`,
                        `askOpenSaved`, …), previewAnnouncement (what a screen reader hears about Run).
@@ -351,10 +353,11 @@ src/
   state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`; the saved-queries keys), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
-                       User, Compliance ("Data model").
+                       User, Compliance, SavedQuery / SavedQueryDraft ("Data model").
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data. Empty by
-                       default: HIDDEN_ROW_BADGES, ROW_COLUMNS. Also MASCOT (the pickle files) and the
-                       reduced-motion toast text.
+                       default: HIDDEN_ROW_BADGES, ROW_COLUMNS. Also MASCOT (the pickle files),
+                       EASTER_EGG_MASCOT (the easter-egg faces) and EASTER_EGG_TOAST (the
+                       reduced-motion toast text).
   setup-jquery.ts      Publishes window.jQuery before Fomantic's JS evaluates ("The bootstrap wrinkle").
   styles.css           Theme and layout on top of Fomantic; colours and sizes are tokens at the top
                        ("Pickle theme and mascot").
@@ -397,18 +400,22 @@ src/
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries <dialog>
                        (`savedDialog`), setActiveView, setSidebarCollapsed, announce, setMascot,
-                       the sidebar's resize handle, onMenu.
+                       the sidebar's resize handle, onMenu. Also BRAND_HTML (the logo, not draggable)
+                       and mascotFile (which face file to show, with its fallbacks; pure).
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
-    pickleRain.ts      The hidden five-click pickle rain: createClickCounter, planRain, startRain.
+    pickleRain.ts      The hidden five-click pickle rain: createClickCounter, easterEggReaction (rain,
+                       toast or nothing after a toggle), planRain, startRain.
     docsResize.ts      wireDocsResize — drag/keyboard resizing of the data dictionary, width kept in localStorage.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
                        displayLabel, databaseTitle, countLabel, formatWhen, formatDate.
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
-    databasePicker.ts  Database scope pills (render + wiring).
+    databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
+                       (failedDatabases, queryIsAtFault) and Deselect failing (deselectFailingIds).
     queryBuilder.ts    The query builder (wiring, drop targets, node grips, the title row with Save… and
                        Saved queries; returns its render function).
-    savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint (pure),
-                       renderSavedDialog (paints and opens/closes the <dialog>), wireSavedDialog.
+    savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint and
+                       escapeAction (pure), renderSavedDialog (paints and opens/closes the <dialog>),
+                       wireSavedDialog.
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
     statsPanel.ts      The statistics column (render + wiring: Show, Try again).
@@ -423,9 +430,10 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   savedQueries.ts      The in-memory saved-queries store and its body check ("Saved queries").
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
-public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.svg, loading.svg — replaceable
-                       files, three named in `MASCOT`, the favicon in `index.html` ("Pickle theme and
-                       mascot"). Served as-is, scanned by `check:offline`.
+public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.svg, loading.svg, and the
+                       easter-egg faces egg-logo.svg, egg-disappointed.svg, egg-loading.svg — replaceable
+                       files, named in `MASCOT` and `EASTER_EGG_MASCOT`, the favicon in `index.html`
+                       ("Pickle theme and mascot"). Served as-is, scanned by `check:offline`.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
                        src/query/tree.ts), plus app.test, lintRules, docReferences, offlineCheck,
                        dateCases, themeContrast and noBackendDataInSrc.
@@ -501,6 +509,12 @@ binding its Fomantic dropdowns must always happen together.
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 matching events.", "Could not load events: …"). |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
+| User presses **Deselect failing (N)** in the database picker | `onDatabasesChange` with the selection minus the marked databases: a database change like any other. The button and the markers go with the old results; the focus lands on **All**. |
+| User presses **Group contents** or **Ungroup** | `groupContents` / `ungroup` (`tree.ts`) → `app.onQueryChange` like any edit: the tree changes shape, so `changeScope` resets and refetches although the meaning is the same. Success clears an older `dropNotice`. A refused Ungroup changes no query: `app.showNotice` puts the reason in `dropNotice` (and announces it). |
+| User presses **Try again** in the statistics column | `app.retryStats` → the debounced stats fetch for the same query and scope; it replaces the failed request in the stats slot. Nothing else is reset. |
+| User opens a saved query (**Open**, after "Replace the current query?" if asked) | `openSavedQuery` → `changeScope` with the saved `query`, the databases that still exist, fresh `issues` and `openSaved`, and the dialog closed, in one `setState`: like any edit, so the old statistics and preview go and new ones are fetched. Databases left out are said in `dropNotice`. |
+| User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
+| Five clicks on the logo | `easterEgg` flips → only the mascot repaints (`setMascot`); the rain or toast is started by `main.ts` (`easterEggReaction`). |
 | User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (or, over a lone blank row, put in its place; a moved node too) and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
 
@@ -585,11 +599,17 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
   arrives after Run was clicked replaces the Matching events panel's content
   with the blocked Run message, like every other blocker.
 - **Stale-response guard — one rule.** `app.ts` keeps one `requestSlot()` per
-  kind (stats, preview). Every query or scope change cancels both; starting a
-  request replaces the previous one. A response, a streamed line, an error —
-  and the compliance check after a `403` — is applied only while
+  kind: stats, preview, save and the saved-queries list. Every query or scope
+  change cancels stats and preview; closing the saved-queries dialog cancels
+  save and the list (they do not depend on the query on screen). Starting a
+  request replaces the previous one of its kind. A response, a streamed line,
+  an error — and the compliance check after a `403` — is applied only while
   `req.isStale()` is false. Identity, not content, is compared, so an
-  edit-and-undo can't revive an old request.
+  edit-and-undo can't revive an old request. A save that finishes after its
+  dialog closed is still remembered (`openSaved`): it did happen on the
+  server. `deleteSaved` has no slot: a delete is not superseded by a later
+  one, so its answer is always applied (it clears `openSaved` if that query
+  was open, and reloads the list if the list is still open).
 - **Superseded requests are aborted, not just ignored** (the slot's
   `AbortController` goes through `client.ts`), so edits don't leave
   `/api/stats` streams running on the backend.
@@ -842,8 +862,9 @@ databases, a name and a short note, and open it again later. **Stored by the
 backend, per user, needing a session** (`401` without); it reads no data, so no
 compliance reason is needed. The list never shows the query itself (queries can
 be sensitive): a name and an optional note help recall it. (Not to be confused
-with "Saved query across the login/compliance redirect": that one is a
-`sessionStorage` copy of the query on screen, never sent to the backend.)
+with "Saved query across the login/compliance redirect": that one is the
+*pending query*, a `sessionStorage` copy of the query on screen, never sent to
+the backend.)
 
 `SavedQueryRequest` is `{ name, note, databases, query }`.
 
@@ -880,7 +901,9 @@ the id goes into the path with `encodeURIComponent`.
 ### Saved query across the login/compliance redirect
 
 A user who presses Run while logged out, or without a compliance reason,
-leaves the app for a full-page redirect. Their query must survive the trip:
+leaves the app for a full-page redirect. Their query must survive the trip;
+the copy kept for it is the **pending query** (not a saved query, which is
+"Saved queries"):
 
 1. **Saved** (`savePendingQuery`, `src/util/pendingQuery.ts`) to
    `sessionStorage` as `{ query, selectedDatabaseIds }` — never in a URL,
@@ -1097,13 +1120,26 @@ empty.
 
 **Failed databases.** A selected database that failed for the query on screen
 is marked on its pill: a danger-coloured outline, a "!" icon and the hidden
-text "failed for this query" (`qb-sr-only`), so the colour is not the only
-signal. Its reasons (`failedDatabases`: the errors' messages, else its notes,
-else "Failed.") are appended to the pill's tooltip on a new line, after the
-database description. Only the current results count and only selected
-databases are marked: `changeScope` empties `results` when a new query starts,
-and an unselected database is not part of this query. The picker therefore
-re-renders on `stats`.
+text " failed for this query" (`qb-sr-only`; the leading space keeps a screen
+reader from running it into the name), so the colour is not the only signal.
+Its reasons (`failedDatabases`) are appended to the pill's tooltip on a new
+line, after the database description: its errors that point at no node, else
+its notes, else its node errors' messages, else "Failed.". Only the current
+results count and only selected databases are marked: `changeScope` empties
+`results` when a new query starts, and an unselected database is not part of
+this query. The picker therefore re-renders on `stats`.
+
+**When the query is at fault, nothing is marked** (`queryIsAtFault`): every
+selected database that has answered so far failed, and only with errors that
+point at query nodes (a text value that is too long fails everywhere). Those
+errors are the query's, shown in the builder where they can be fixed, and the
+statistics column says "Not counted: …" once ("Right — `statsPanel.ts`").
+Red pills with the same message on every database would repeat them and
+suggest deselecting databases, which would not help. While answers stream in,
+the rule is checked again on each one: a database that then answers fine
+brings the markers back. A node error that only some databases report, an
+error without a node, or a failure with notes only (a timeout) is about that
+database, so it is marked.
 
 **Deselect failing (N)** sits with All / None and removes the selected failed
 databases from the selection (through `onDatabasesChange`, like any edit). It
@@ -1135,7 +1171,11 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    value with its grip and an icon-only + at the right edge. At most 30 rows
    are shown (`MAX_VALUES_SHOWN`), the rest counted ("and N more"). It is a
    list, not chips, and has no pill look, so it is not mistaken for the facet's
-   tags. **Decided 2026-10-08:** a labelled list instead of chips because users
+   tags. The block is a `role="group"` labelled by its `<h3>` heading
+   (`valuesHeadingId`: unique per tag section, facet and field, because a facet
+   is listed under each of its tags), not a `<section>`: a landmark per open
+   field, all with the same name, would clutter a screen reader's landmark list.
+   **Decided 2026-10-08:** a labelled list instead of chips because users
    took the chips for tags; the wording was chosen by the maintainers, and the
    heading and the hint use the same words so there is one name for the thing.
 
@@ -1335,9 +1375,12 @@ which would remove it from the Tab order and from the pointer): pressing it
 shows the reason as the dismissible warning above the query (`hooks.onNotice`,
 `app.showNotice`, spoken through the live region) and changes nothing. A
 successful Group contents or Ungroup clears an older warning, as a fully
-successful drop does (`hooks.onDismissNotice`), and Ungroup announces "Ungrouped." After either, `paint()` keeps the
-focus on the same control if it is still drawn, otherwise on the group's
-**+ Condition** ("Keyboard focus across repaints"). `groupHtml` reads the
+successful drop does (`hooks.onDismissNotice`), and Ungroup announces
+"Ungrouped." After either, `paint()` keeps the focus on the same control if it
+is still drawn, otherwise on a **+ Condition** ("Keyboard focus across
+repaints"): after Group contents (no longer drawn: the group now holds one
+item) the group's own; after Ungroup, whose group is gone, the one of the
+group around it. `groupHtml` reads the
 whole query (`BuilderCtx.query`) to ask `ungroupBlocker` about the parent.
 **Decided 2026-10-08:** the label is "Group contents" (not "Indent" or "Group
 children", which don't say what moves where); Ungroup is offered only when the
@@ -1445,7 +1488,10 @@ the issue's message tells the user to do exactly that.
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
   (`noticeHtml`, which has no `role` of its own: it is inserted already holding its text, so it would never be spoken, and it is spoken through `announce` instead; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
   succeeds clears an older warning; a drop that partly succeeds still inserts
-  what it can. The messages:
+  what it can. Despite its name, the warning is not only about drops: it also
+  carries a refused **Ungroup** (its reason) and, after opening a saved query,
+  "N saved databases no longer exist and were left out." (the last two rows
+  below). The messages:
 
 | Drop | Result | Warning |
 |---|---|---|
@@ -1456,6 +1502,8 @@ the issue's message tells the user to do exactly that.
 | A node that is no longer in the query (a stale drag) or the root | nothing moved | "That item is no longer in the query." |
 | A group onto something inside itself | nothing moved | "A group can't be moved into itself." |
 | Anything before facets and catalog have loaded | nothing added | "The data dictionary is still loading; try again in a moment." |
+| **Ungroup** on a group whose ALL/ANY differs from the one around it, and which holds more than one item | nothing changed | "Ungroup works only when this group and the one around it are both ALL or both ANY, or when it holds one item." |
+| Opening a saved query whose databases no longer all exist | opened with the ones that do | "1 saved database no longer exists and was left out." / "N saved databases no longer exist and were left out." |
 
 Finding and picking in the dropdowns (settings in `fomantic.ts`, cursor
 movement in `queryBuilder.ts`):
@@ -1517,7 +1565,9 @@ Each kind of error is shown once, where the person who can fix it looks:
 
 N is `AppState.serverIssues.length`, already de-duplicated across databases.
 **Show** carries the id `placeIssues` drew the first problem on, so a problem
-inside a collapsed group points at that group; `main.ts` wires it to
+inside a collapsed group points at that group. It is in `data-target-id`, not
+`data-node-id`: that one marks query nodes, and "Keyboard focus across
+repaints" would take the button for one; `main.ts` wires it to
 `revealNode` (`queryBuilder.ts`), which scrolls that row or group to the
 middle of the builder and focuses it (it gets `tabindex="-1"` first, so
 script can focus it without making it a Tab stop). **Try again** calls
@@ -1566,7 +1616,11 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm` and `openSaved`.
   asks "A saved query called “…” exists. Replace it?" (**Replace** /
   **Cancel**, in place of Save and Cancel); the boxes are read-only while
   saving or asking, so what is asked about is what is in the box. A save that
-  works closes the dialog and is announced ("Saved “…”.").
+  works closes the dialog and is announced ("Saved “…”."). A saved query that
+  was deleted elsewhere (another tab) cannot be updated: when the update
+  answers `404`, `app.ts` creates it instead (`updateOrCreate`, also used by
+  **Replace** when the query it replaces has gone), and that new one is the
+  open query from then on.
 - **Saved queries**: newest first, one item per query with its **name, note,
   number of databases and date** (`formatDate`, the viewer's locale, in a
   `<time datetime>`), **Open** and **Delete**. **Decided by the maintainers
@@ -1589,10 +1643,15 @@ discipline"). Fomantic's CSS classes (`ui form`, `ui button`, `ui message`)
 still style its contents. The `<dialog>` is created once by `renderShell`
 (`Shell.savedDialog`, labelled by the heading inside it) and never replaced:
 `renderSavedDialog` paints its contents and calls `showModal()` or `close()`
-so that it is open exactly when `savedDialog` is not null. Escape (the
-`cancel` event, whose default is prevented) and the Cancel / Close buttons call
-`app.closeSavedDialog()`; a `close` the state did not ask for (a browser may
-close on a second Escape anyway) also tells the state, so the two never
+so that it is open exactly when `savedDialog` is not null. The Cancel / Close
+buttons call `app.closeSavedDialog()`. Escape (the `cancel` event, whose
+default is prevented) does what `escapeAction` (pure) says: **while a question
+is showing it cancels the question** ("Replace it?": `app.cancelReplace`;
+"Delete “…”?" or "Replace the current query?": `app.cancelSavedAction`),
+because Escape is how a keyboard user says "no" to a question, and closing the
+dialog would throw away the name and note the user typed (or the list they were
+in); otherwise it closes the dialog. A `close` the state did not ask for (a browser
+may close on a second Escape anyway) also tells the state, so the two never
 disagree. Its renderer is the last row of `panelRenderers`, after the query
 card.
 
@@ -1682,7 +1741,11 @@ to a named handler function — add a route there, and a test in
   lost when the mock restarts; the list starts empty. The user is the session's
   user name, the only stable user identifier the mock has, so every mock login
   shares one list. The body is checked for shape only (`readSavedQueryBody`),
-  in the style of `requestBody.ts` and naming the first problem. The route
+  in the style of `requestBody.ts` and naming the first problem. Shape includes
+  what the client relies on: node ids and database ids are non-blank
+  (`toSavedQuery` reads them strictly, so one bad stored entry would make the
+  whole list unreadable), and no two nodes of one tree share an id (the builder
+  finds nodes by id). The route
   table matches exact paths, so `server.ts` gives `…/saved-queries/{id}` a
   second look (`savedQueryIdFrom`) before the 404.
 - **Login and compliance** are simulated in-process (`auth.ts`): stand-in IdP
@@ -1731,7 +1794,8 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   not fatal.
 - Drops never fail silently: whatever a drop or "Add to query" can't do is
   explained in `AppState.dropNotice`, a dismissible warning above the query
-  ("Centre — `queryBuilder.ts`" has the list).
+  ("Centre — `queryBuilder.ts`" has the list, which also holds the refused
+  Ungroup and the databases an opened saved query lost).
 - No automatic retries and no error-boundary machinery — just visible
   messages. A retry happens only when the user presses **Try again** (statistics,
   Matching events) or **Reload** (startup).
@@ -1745,7 +1809,8 @@ file it tests, in the same place under `tests/`. The ones to know about:
 
 - `tests/app.test.ts` — `createApp` with a fake API: Run and its 401/403
   redirects, stale responses, streamed statistics, logout, startup and
-  restoring a saved query. The most important behaviour lives here.
+  restoring the pending query after a redirect, saved queries. The most
+  important behaviour lives here.
 - `tests/query/` — tree (including `insertNodes` / `moveNode`), validation,
   summary, field catalog, the row cascade, dates, and `drop.test.ts` (drag
   payloads, what a drop creates, the warnings).

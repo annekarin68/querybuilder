@@ -562,7 +562,7 @@ describe("start", () => {
     await expect(app.start(false)).rejects.toThrow("down");
   });
 
-  it("after a login/compliance redirect, restores the saved query and fetches its statistics", async () => {
+  it("after a login/compliance redirect, restores the pending query and fetches its statistics", async () => {
     vi.useFakeTimers();
     const saved = runnableQuery(9);
     savePendingQuery(saved, ["beta", "no-longer-exists"]);
@@ -575,7 +575,7 @@ describe("start", () => {
     expect(api.getStats).toHaveBeenCalledTimes(1);
   });
 
-  it("a normal load ignores a leftover saved query, and clears it", async () => {
+  it("a normal load ignores a leftover pending query, and clears it", async () => {
     savePendingQuery(runnableQuery(9), ["beta"]);
     const { app, store } = setup();
     await app.start(false);
@@ -1064,6 +1064,45 @@ describe("saved queries: saving", () => {
     );
     expect(api.createSavedQuery).not.toHaveBeenCalled();
     expect(store.getState().openSaved).toMatchObject({ id: "s1" });
+  });
+
+  it("creates it again when the open query was deleted elsewhere (the update answers 404)", async () => {
+    const open = savedQuery("gone", "Weekly", { databaseIds: ["alpha", "beta"] });
+    const api = fakeApi({
+      updateSavedQuery: vi.fn(async () =>
+        Promise.reject(new ApiError(404, "No saved query with that id.")),
+      ),
+      createSavedQuery: vi.fn(async (draft: SavedQueryDraft) => savedFrom(draft, "fresh")),
+    });
+    const { app, store, announce } = setup(
+      { ...ready(), ...loggedIn, savedDialog: "save", openSaved: openFrom(open) },
+      api,
+    );
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    expect(api.updateSavedQuery).toHaveBeenCalledWith("gone", expect.anything());
+    expect(api.createSavedQuery).toHaveBeenCalledWith(expect.objectContaining({ name: "Weekly" }));
+    expect(store.getState()).toMatchObject({
+      savedDialog: null,
+      save: { status: "idle" },
+      openSaved: { id: "fresh", name: "Weekly" },
+    });
+    expect(announce).toHaveBeenCalledWith("Saved “Weekly”.");
+  });
+
+  it("still shows another failed update in the dialog", async () => {
+    const open = savedQuery("s1", "Weekly");
+    const api = fakeApi({
+      updateSavedQuery: vi.fn(async () => Promise.reject(new ApiError(500, "Broken"))),
+    });
+    const { app, store } = setup(
+      { ...ready(), ...loggedIn, savedDialog: "save", openSaved: openFrom(open) },
+      api,
+    );
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    expect(api.createSavedQuery).not.toHaveBeenCalled();
+    expect(store.getState().save).toMatchObject({ status: "error" });
   });
 
   it("creates a copy when saved under another name", async () => {

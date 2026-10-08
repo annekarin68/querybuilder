@@ -124,10 +124,17 @@ export function readSavedQueryBody(value: unknown): SavedQueryBodyCheck {
   if (trimmedNote === null || trimmedNote.length > MAX_NOTE_LENGTH) {
     return { ok: false, error: `note must be text of at most ${MAX_NOTE_LENGTH} characters.` };
   }
-  if (!Array.isArray(databases) || !databases.every((d) => typeof d === "string")) {
+  if (!Array.isArray(databases)) {
     return { ok: false, error: "databases must be a list of strings." };
   }
-  const problem = savedTreeProblem(query, "query", true);
+  // The client reads every saved query's ids strictly (a blank one is a
+  // ContractError), so one bad stored entry would hide the user's whole list:
+  // refuse it here instead.
+  const blankAt = databases.findIndex((d) => !isNonBlankString(d));
+  if (blankAt !== -1) {
+    return { ok: false, error: `databases[${blankAt}] must be a non-blank string.` };
+  }
+  const problem = savedTreeProblem(query, "query", new Set(), true);
   if (problem) return { ok: false, error: problem };
   return {
     ok: true,
@@ -146,35 +153,46 @@ const isSavedValue = (v: unknown): v is SavedValue =>
   isScalar(v) ||
   (Array.isArray(v) && v.every((item) => item === null || isScalar(item)));
 
-const isNonEmptyStringOrNull = (v: unknown) => v === null || (typeof v === "string" && v !== "");
+const isNonBlankString = (v: unknown) => typeof v === "string" && v.trim() !== "";
+const isNonBlankStringOrNull = (v: unknown) => v === null || isNonBlankString(v);
 
 /**
  * What is wrong with `node` as a SavedNode, or null if nothing is. Like
  * `queryProblem` (requestBody.ts) but for a draft: a group may be empty, and a
  * condition's ids and value may be null. `at` names the node, e.g.
- * "query.children[1]". The first problem found wins.
+ * "query.children[1]". `seenIds` collects the node ids met so far: the
+ * frontend finds nodes by id, so two with the same one would make edits land
+ * on the wrong node. The first problem found wins.
  */
-function savedTreeProblem(node: unknown, at: string, isRoot = false): string | null {
+function savedTreeProblem(
+  node: unknown,
+  at: string,
+  seenIds: Set<string>,
+  isRoot = false,
+): string | null {
   if (!isObject(node)) return `${at} must be an object.`;
   if (isRoot && node.kind !== "group") return `${at}.kind must be "group".`;
   if (node.kind !== "group" && node.kind !== "condition") {
     return `${at}.kind must be "group" or "condition".`;
   }
-  if (typeof node.id !== "string") return `${at}.id must be a string.`;
+  if (!isNonBlankString(node.id)) return `${at}.id must be a non-blank string.`;
+  const id = node.id as string;
+  if (seenIds.has(id)) return `${at}.id "${id}" is already used by another node.`;
+  seenIds.add(id);
   if (node.kind === "group") {
     if (node.operator !== "AND" && node.operator !== "OR") {
       return `${at}.operator must be "AND" or "OR".`;
     }
     if (!Array.isArray(node.children)) return `${at}.children must be a list.`;
     for (const [i, child] of (node.children as SavedNode[]).entries()) {
-      const problem = savedTreeProblem(child, `${at}.children[${i}]`);
+      const problem = savedTreeProblem(child, `${at}.children[${i}]`, seenIds);
       if (problem) return problem;
     }
     return null;
   }
   for (const key of ["facetId", "fieldId", "operatorId"] as const) {
-    if (!isNonEmptyStringOrNull(node[key]))
-      return `${at}.${key} must be a non-empty string or null.`;
+    if (!isNonBlankStringOrNull(node[key]))
+      return `${at}.${key} must be a non-blank string or null.`;
   }
   if (!isSavedValue(node.value)) {
     return `${at}.value must be null, a string, number or boolean, or a list of them (a list may hold nulls).`;

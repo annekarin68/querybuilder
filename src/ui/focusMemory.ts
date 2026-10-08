@@ -26,6 +26,9 @@ const IDENTIFYING_ATTRIBUTES = [
   "data-db-deselect-failing",
   "data-range",
   "data-part",
+  // The save dialog's text boxes have nothing else: with `id` they keep their
+  // caret across repaints. An id is unique on the page, so it never matches
+  // another control.
   "id",
   "aria-label",
 ] as const;

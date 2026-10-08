@@ -67,14 +67,17 @@ function failureRowHtml(result: Failed, db: Database | undefined): string {
  * themselves are drawn in the builder, next to what is wrong, so they are not
  * repeated here. N counts each problem once (`AppState.serverIssues`). Show
  * names the node that is drawn for the first problem (`placeIssues`), so a
- * problem inside a collapsed group points at that group.
+ * problem inside a collapsed group points at that group. The node's id goes in
+ * `data-target-id`, not `data-node-id`: that attribute means "this element is
+ * a query node", and keyboard focus memory (focusMemory.ts) would take the
+ * button for one.
  */
 export function queryProblemsLine(state: AppState): string {
   const count = state.serverIssues.length;
   if (count === 0) return "";
   const first = placeIssues(state.query, state.serverIssues)[0]!;
   const problems = count === 1 ? "1 problem is" : `${count} problems are`;
-  return `<div class="qb-stat-problems" role="note"><span>Not counted: ${problems} marked in the query.</span> <button type="button" class="ui mini basic button" data-action="show-issue" data-node-id="${escapeHtml(first.nodeId)}">Show</button></div>`;
+  return `<div class="qb-stat-problems" role="note"><span>Not counted: ${problems} marked in the query.</span> <button type="button" class="ui mini basic button" data-action="show-issue" data-target-id="${escapeHtml(first.nodeId)}">Show</button></div>`;
 }
 
 /** Statistics that have (some) results: everything but the error state. */
@@ -208,8 +211,8 @@ export function wireStatsPanel(
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
     if (!btn) return;
     if (btn.dataset.action === "retry-stats") hooks.onRetry();
-    else if (btn.dataset.action === "show-issue" && btn.dataset.nodeId) {
-      hooks.onShowIssue(btn.dataset.nodeId);
+    else if (btn.dataset.action === "show-issue" && btn.dataset.targetId) {
+      hooks.onShowIssue(btn.dataset.targetId);
     }
   });
 }

@@ -8,8 +8,9 @@ import { countLabel, formatDate } from "./format";
  * The **Save…** and **Saved queries** dialogs (docs/ARCHITECTURE.md, "Saved
  * queries — `savedQueries.ts`"). Both are drawn in ONE native `<dialog>` that
  * the shell creates once (`Shell.savedDialog`): `showModal()` keeps the focus
- * inside it, greys out the page and closes on Escape, all without a Fomantic
- * plugin (so without jQuery). Everything the dialogs do happens in app.ts;
+ * inside it, greys out the page and reports Escape (which cancels a question
+ * or closes the dialog: `escapeAction`), all without a Fomantic plugin (so
+ * without jQuery). Everything the dialogs do happens in app.ts;
  * this file only draws `savedDialog`, `save`, `savedList`, `savedConfirm` and
  * `openSaved` (the save form starts with its name and note).
  */
@@ -27,11 +28,14 @@ export interface TypedDraft {
   note: string;
 }
 
-/** A question in the dialog: its text (already escaped) and its two buttons. */
+/** A question in the dialog: its text and its two buttons. */
 interface Question {
   /** The text's element id: the group is labelled by it. */
   id: string;
-  text: string;
+  /** The question as HTML, put in as it is: whoever builds it escapes any
+   *  text from the server in it (escapeHtml). The name says so, so that a
+   *  plain string is not passed by mistake. */
+  textHtml: string;
   /** The yes button's label and `data-action`; Cancel's `data-action`. */
   yes: string;
   yesAction: string;
@@ -44,7 +48,7 @@ interface Question {
 function questionHtml(q: Question): string {
   const colour = q.destructive ? "negative" : "primary";
   return `<div class="qb-dialog-question" role="group" aria-labelledby="${q.id}">
-      <p id="${q.id}">${q.text}</p>
+      <p id="${q.id}">${q.textHtml}</p>
       <button type="button" class="ui small ${colour} button" data-action="${q.yesAction}">${q.yes}</button>
       <button type="button" class="ui small basic button" data-action="${q.cancelAction}">Cancel</button>
     </div>`;
@@ -70,7 +74,7 @@ function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
     save.status === "conflict"
       ? questionHtml({
           id: "qb-replace-question",
-          text: `A saved query called “${escapeHtml(save.name)}” exists. Replace it?`,
+          textHtml: `A saved query called “${escapeHtml(save.name)}” exists. Replace it?`,
           yes: "Replace",
           yesAction: "confirm-replace",
           cancelAction: "cancel-replace",
@@ -112,7 +116,7 @@ function savedItemHtml(q: SavedQuery, confirm: SavedConfirm, first: boolean): st
     asking === "open"
       ? questionHtml({
           id: "qb-open-question",
-          text: "Replace the current query? Its changes are not saved.",
+          textHtml: "Replace the current query? Its changes are not saved.",
           yes: "Replace",
           yesAction: "confirm-saved-action",
           cancelAction: "cancel-saved-action",
@@ -120,7 +124,7 @@ function savedItemHtml(q: SavedQuery, confirm: SavedConfirm, first: boolean): st
       : asking === "delete"
         ? questionHtml({
             id: "qb-delete-question",
-            text: `Delete “${name}”?`,
+            textHtml: `Delete “${name}”?`,
             yes: "Delete",
             yesAction: "confirm-saved-action",
             cancelAction: "cancel-saved-action",
@@ -225,6 +229,22 @@ export function focusAfterRepaint(before: DialogView | null, after: DialogView):
     return { action: was.action === "open" ? "open-saved" : "delete-saved", id: was.id };
   }
   return null;
+}
+
+/** The `data-action` that Escape runs (the same as a button's). */
+export type EscapeAction = "cancel-replace" | "cancel-saved-action" | "close-saved-dialog";
+
+/**
+ * What Escape does in the dialog. While a question is showing ("Replace it?"
+ * in the save form, "Delete “…”?" or "Replace the current query?" in the
+ * list) it cancels the question, like its Cancel button: closing the whole
+ * dialog would throw away the name and note the user typed (or the list they
+ * were in). Otherwise it closes the dialog.
+ */
+export function escapeAction(view: DialogView): EscapeAction {
+  if (view.savedDialog === "save" && view.save.status === "conflict") return "cancel-replace";
+  if (view.savedDialog === "list" && view.savedConfirm) return "cancel-saved-action";
+  return "close-saved-dialog";
 }
 
 // ---- The browser part (needs a DOM, so it is checked in a browser) --------
@@ -365,11 +385,16 @@ export function wireSavedDialog(dialog: HTMLDialogElement, app: SavedDialogActio
     if (typed) app.saveQuery(typed.name, typed.note);
   });
 
-  // Escape. The state closes the dialog, not the browser, so the two never
-  // disagree.
+  // Escape. The state decides what happens (`escapeAction`: cancel the
+  // question on screen, or close the dialog), not the browser, so the two
+  // never disagree.
   dialog.addEventListener("cancel", (e) => {
     e.preventDefault();
-    app.closeSavedDialog();
+    const view = shown.get(dialog);
+    const action = view ? escapeAction(view) : "close-saved-dialog";
+    if (action === "cancel-replace") app.cancelReplace();
+    else if (action === "cancel-saved-action") app.cancelSavedAction();
+    else app.closeSavedDialog();
   });
 
   // A close the state did not ask for (a browser may close the dialog on a

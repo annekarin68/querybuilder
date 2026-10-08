@@ -429,7 +429,9 @@ body {
   height: 1px;
   opacity: 0;
 }
-.qb-db-pill span {
+/* "> span": only the pill itself, not the hidden "failed for this query" text
+   inside it, which must keep the .qb-sr-only rules. */
+.qb-db-pill > span {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -441,7 +443,7 @@ body {
   font-size: 0.85rem;
   user-select: none;
 }
-.qb-db-pill span::before {
+.qb-db-pill > span::before {
   content: "";
   width: 0.5rem;
   height: 0.5rem;

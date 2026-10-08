@@ -17,20 +17,52 @@ const db = (id: string, description = ""): Database => ({
 });
 
 describe("failedDatabases", () => {
-  it("maps each failed database to its reasons: errors first, then notes, then 'Failed.'", () => {
+  it("maps each failed database to its reasons: errors without a node, then notes, then node errors, then 'Failed.'", () => {
     const results: DatabaseResult[] = [
       ok("a", 1),
-      { ...failed("b", dbError("c1", "Too long")), notes: ["n"] },
-      { ...failed("c"), notes: ["Could not be reached."] },
-      failed("d"),
+      { ...failed("b", dbError(null, "Too long"), dbError("c1", "Bad value")), notes: ["n"] },
+      { ...failed("c", dbError("c1", "Bad value")), notes: ["Could not be reached."] },
+      failed("d", dbError("c1", "Bad value")),
+      failed("e"),
     ];
     expect(failedDatabases(results)).toEqual(
       new Map([
         ["b", ["Too long"]],
         ["c", ["Could not be reached."]],
-        ["d", ["Failed."]],
+        ["d", ["Bad value"]],
+        ["e", ["Failed."]],
       ]),
     );
+  });
+
+  it("marks none when every database answered failed only because of query nodes", () => {
+    // The query is at fault, not the databases: the builder shows the
+    // problems, so a red pill on every database would only repeat them.
+    const results = [
+      failed("a", dbError("c1", "Too long")),
+      failed("b", dbError("c1", "Too long")),
+    ];
+    expect(failedDatabases(results)).toEqual(new Map());
+  });
+
+  it("marks the failed ones when a node error is reported by only some databases", () => {
+    const results = [ok("a", 1), failed("b", dbError("c1", "Too long"))];
+    expect(failedDatabases(results)).toEqual(new Map([["b", ["Too long"]]]));
+  });
+
+  it("marks a database whose error points at no node, even when every one failed", () => {
+    const results = [failed("a", dbError("c1", "Too long")), failed("b", dbError(null, "Down"))];
+    expect(failedDatabases(results)).toEqual(
+      new Map([
+        ["a", ["Too long"]],
+        ["b", ["Down"]],
+      ]),
+    );
+  });
+
+  it("marks a database that failed without any error (a timeout), even when every one failed", () => {
+    const results = [failed("a", dbError("c1")), { ...failed("b"), notes: ["Timed out."] }];
+    expect([...failedDatabases(results).keys()]).toEqual(["a", "b"]);
   });
 });
 
@@ -76,7 +108,7 @@ describe("databasePickerHtml", () => {
     // The description stays; the reasons follow on a new line, escaped.
     expect(pillB).toContain('title="Second &lt;one&gt;\nToo &lt;long&gt; · Odd"');
     expect(pillB).toContain('<i class="exclamation circle icon" aria-hidden="true"></i>');
-    expect(pillB).toContain('<span class="qb-sr-only">failed for this query</span>');
+    expect(pillB).toContain('<span class="qb-sr-only"> failed for this query</span>');
     const pillA = html.split("<label").find((p) => p.includes('data-db-id="a"'))!;
     expect(pillA).not.toContain("is-failed");
     expect(pillA).not.toContain("failed for this query");
@@ -104,6 +136,15 @@ describe("databasePickerHtml", () => {
 
   it("marks nothing while a new query is loading and has no results yet", () => {
     expect(databasePickerHtml(withResults([], "loading"))).not.toContain("is-failed");
+  });
+
+  it("marks nothing when every selected database failed only because of the query", () => {
+    const html = databasePickerHtml(
+      withResults([failed("a", dbError("c1", "Too long")), failed("b", dbError("c1", "Too long"))]),
+    );
+    expect(html).not.toContain("is-failed");
+    expect(html).not.toContain("Too long");
+    expect(html).not.toContain("data-db-deselect-failing");
   });
 
   it("offers 'Deselect failing (N)' only when some, not all, selected databases failed", () => {

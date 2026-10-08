@@ -50,7 +50,7 @@ function isQueryNode(v: unknown): v is QueryNode {
 }
 
 /**
- * Reads and clears the saved query, if any. A missing key, a storage error,
+ * Reads and clears the pending query, if any. A missing key, a storage error,
  * corrupted JSON, and a structurally invalid entry are all treated the same:
  * nothing to restore. The root must be a group — the query builder's root is
  * always one.

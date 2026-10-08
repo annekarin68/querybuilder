@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { focusAfterRepaint, savedDialogHtml } from "../../src/ui/savedQueries";
+import { escapeAction, focusAfterRepaint, savedDialogHtml } from "../../src/ui/savedQueries";
 import { initialState, type AppState } from "../../src/state";
 import type { SavedQuery } from "../../src/model";
 import { unfinishedDraft } from "../savedQueryFixtures";
@@ -252,5 +252,31 @@ describe("focusAfterRepaint (where the keyboard focus goes)", () => {
 
   it("otherwise leaves it where paint() put it", () => {
     expect(focusAfterRepaint(saveDialog(), saveDialog({ save: { status: "saving" } }))).toBeNull();
+  });
+});
+
+describe("escapeAction (what Escape does)", () => {
+  it("cancels the 'Replace it?' question, keeping the dialog and what was typed", () => {
+    expect(escapeAction(saveDialog({ save: { status: "conflict", name: "W", note: "" } }))).toBe(
+      "cancel-replace",
+    );
+  });
+
+  it("cancels a question in the list ('Delete …?' or 'Replace the current query?')", () => {
+    expect(escapeAction(listDialog({ savedConfirm: { action: "delete", id: "sq-1" } }))).toBe(
+      "cancel-saved-action",
+    );
+    expect(escapeAction(listDialog({ savedConfirm: { action: "open", id: "sq-1" } }))).toBe(
+      "cancel-saved-action",
+    );
+  });
+
+  it("closes the dialog when no question is showing", () => {
+    expect(escapeAction(saveDialog())).toBe("close-saved-dialog");
+    expect(escapeAction(saveDialog({ save: { status: "saving" } }))).toBe("close-saved-dialog");
+    expect(escapeAction(saveDialog({ save: { status: "error", error: "x" } }))).toBe(
+      "close-saved-dialog",
+    );
+    expect(escapeAction(listDialog())).toBe("close-saved-dialog");
   });
 });

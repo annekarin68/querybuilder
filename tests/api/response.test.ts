@@ -13,6 +13,8 @@ import {
 import { toSavedQueryRequest } from "../../src/api/request";
 import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
 import type { Group } from "../../src/query/types";
+import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
+import { isEdited, type OpenSaved } from "../../src/query/saved";
 import type {
   AuthUser,
   ComplianceStatus,
@@ -344,8 +346,62 @@ describe("toSavedQuery", () => {
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedResponse.query,
     });
+    // toEqual, not toMatchObject: a key added on the way (or one left in, like
+    // the draft's `collapsed`) must fail the test.
+    expect(back.query).toEqual(unfinishedResponse.query);
+  });
+
+  it("opening what was just saved is not an edit (the real conversions, both ways)", () => {
+    // Built with the builder's own helpers, in the order the builder writes
+    // keys: isEdited compares trees with sameSemantics, which compares JSON
+    // text, so a conversion that wrote the keys in another order would make
+    // every opened query look edited.
+    const root = emptyQuery();
+    const facetLevel = { ...newCondition(), facetId: "thing", operatorId: "present" };
+    const between = { ...newCondition(), facetId: "thing", fieldId: "size", operatorId: "between" };
+    const folded = { ...newGroup(), operator: "OR" as const };
+    let query = addChild(root, root.id, facetLevel);
+    query = addChild(query, root.id, folded);
+    query = addChild(query, folded.id, between);
+    query = updateNode(query, between.id, { value: [3, 7] });
+    query = updateNode(query, folded.id, { collapsed: true });
+    const draft = { name: "Trips", note: "", databaseIds: ["alpha", "beta"], query };
+
+    const answer = { ...toSavedQueryRequest(draft), id: "sq-1", updatedAt: "2026-10-08T10:00:00Z" };
+    // Through JSON text, as it travels.
+    const saved = toSavedQuery(read<SavedQueryResponse>(JSON.parse(JSON.stringify(answer))));
+    const open: OpenSaved = {
+      id: saved.id,
+      name: saved.name,
+      note: saved.note,
+      query: saved.query,
+      databaseIds: saved.databaseIds,
+    };
+    expect(isEdited(open, query, ["beta", "alpha"])).toBe(false);
+  });
+
+  it("ignores keys it does not know, on the saved query and on its nodes", () => {
+    const withExtras = {
+      ...unfinishedResponse,
+      extra: "from a newer backend",
+      query: {
+        ...unfinishedResponse.query,
+        collapsed: true,
+        extra: 1,
+        children: unfinishedResponse.query.children.map((child) => ({
+          ...child,
+          collapsed: false,
+          extra: "x",
+        })),
+      },
+    };
+    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras))).toEqual(
+      toSavedQuery(read(unfinishedResponse)),
+    );
+    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras)).query).toEqual(
+      unfinishedResponse.query,
+    );
   });
 
   it("trims a padded name", () => {

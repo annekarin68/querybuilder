@@ -104,8 +104,11 @@ describe("statsPanelHtml", () => {
       expect(html).not.toContain(message);
       expect(html).toContain("Not counted: 1 problem is marked in the query.");
       expect(html).toContain(
-        `<button type="button" class="ui mini basic button" data-action="show-issue" data-node-id="${condition.id}">Show</button>`,
+        `<button type="button" class="ui mini basic button" data-action="show-issue" data-target-id="${condition.id}">Show</button>`,
       );
+      // Not data-node-id: that marks query nodes, and focus memory would take
+      // the button for one (closest("[data-node-id]")).
+      expect(html).not.toContain("data-node-id");
       expect(html.match(/Not counted<\/span>/g)).toHaveLength(2);
     });
 
@@ -157,7 +160,7 @@ describe("statsPanelHtml", () => {
       const html = statsPanelHtml(withNodeError({ query: collapsed }));
       const placed = placeIssues(collapsed, [issue])[0]!.nodeId;
       expect(placed).toBe(inner.id);
-      expect(html).toContain(`data-node-id="${placed}">Show</button>`);
+      expect(html).toContain(`data-target-id="${placed}">Show</button>`);
     });
 
     it("offers Try again when the statistics request itself failed", () => {
