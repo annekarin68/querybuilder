@@ -183,6 +183,10 @@ broken-image icons falling; if none loads, nothing falls. For people who prefer
 reduced motion, nothing falls: the same five clicks show a short toast instead
 (`EASTER_EGG_TOAST` in `src/config.ts`, shown by `showToast` in `fomantic.ts`).
 
+The logo is `draggable="false"` (`BRAND_HTML` in `src/ui/layout.ts`), so a
+click whose pointer moves a few pixels is not swallowed as an image drag; that
+is why the rain used to work only in some browsers, or only with a steady hand.
+
 ### Non-goals (for now)
 
 - The Review / Approval / Done views. Tabs exist; content does not.

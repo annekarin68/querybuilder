@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { docsToggle } from "../../src/ui/layout";
+import { BRAND_HTML, docsToggle } from "../../src/ui/layout";
 
 describe("docsToggle", () => {
   it("while the docs are open, it offers to hide them", () => {
@@ -16,5 +16,11 @@ describe("docsToggle", () => {
       label: "Show dictionary",
       title: "Show the data dictionary",
     });
+  });
+});
+
+describe("BRAND_HTML", () => {
+  it("the logo cannot be dragged, so a click that moves a few pixels still counts", () => {
+    expect(BRAND_HTML).toMatch(/<img class="qb-logo"[^>]*draggable="false"/);
   });
 });

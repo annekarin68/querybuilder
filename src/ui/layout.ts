@@ -10,6 +10,15 @@ const VIEWS: { id: ActiveView; label: string }[] = [
 ];
 
 /**
+ * The app name with the pickle logo, as markup. `draggable="false"` is on the
+ * logo for the pickle rain's sake: a browser turns a click whose pointer moves
+ * a few pixels over a draggable image into an image drag, and the click is
+ * lost (Chromium from 4 px, Firefox from 6 px), so five quick clicks rarely
+ * all counted.
+ */
+export const BRAND_HTML = `<span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" draggable="false" />Query Builder</span>`;
+
+/**
  * What the rail along the docs' left edge offers: its arrow points the way the
  * docs will move (« to fold them away, » to bring them back) and its label
  * says it in words, so it is clear what a click does in either state.
@@ -73,7 +82,7 @@ export function renderShell(root: HTMLElement): Shell {
   // end up in the page.)
   root.innerHTML = `
     <header class="qb-topbar">
-      <span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" />Query Builder</span>
+      ${BRAND_HTML}
       <nav class="qb-steps" data-menu="views" aria-label="Workflow">
         ${VIEWS.map(
           (v, i) =>
