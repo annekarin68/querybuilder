@@ -155,8 +155,8 @@ condition errors that cause it are still red.)
 **Statistics panel (`src/ui/statsPanel.ts`):**
 
 - Node errors are not repeated per database. If any result has errors with a
-  `nodeId`, one line under the headline: "Not counted: N problem(s) in the
-  query are marked in the query." with a **Show** button that scrolls the first
+  `nodeId`, one line under the headline: "Not counted: N problem(s) are
+  marked in the query." with a **Show** button that scrolls the first
   marked issue into view and moves focus to it. N = `state.serverIssues.length`
   (already de-duplicated). Each such database's row says "Not counted".
 - Errors without `nodeId` stay in that database's row, in red (unchanged).
