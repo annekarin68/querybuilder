@@ -8,11 +8,26 @@ import type { Group, QueryNode } from "../query/types";
  * page and back, a Back from those pages, and a reopened tab. Not to be
  * confused with a *saved* query, which the user names and the server stores.
  *
- * sessionStorage only: this tab's own, gone when the tab is closed for good,
- * so a query is never left behind on a shared machine; and never sent to the
- * backend or put in a redirect URL.
+ * sessionStorage only: this tab's own, and never sent to the backend or put
+ * in a redirect URL. It is gone when the tab is closed for good, except that a
+ * browser restoring its last session ("Continue where you left off") brings it
+ * back with the tabs. So Log out forgets it (`forgetKeptQuery`): on a shared
+ * machine, logging out is what hands the browser over.
  */
 const KEY = "qb:kept-query";
+
+/** Where the build before the rename (2026-10-13) kept it. A tab open across
+ *  that deploy, out on the login page, comes back with its query only here,
+ *  so it is still read. Remove once no such tab can be left. */
+const OLD_KEY = "qb:pending-query";
+
+/** The Restored notice above the query, and what a screen reader hears when a
+ *  page load brings the query back (`app.start`). */
+export const RESTORED_MESSAGE = "Restored the query you were building.";
+
+/** What a screen reader hears after the notice's Start fresh: the notice and
+ *  the query it was about are gone, and nothing else on screen says so. */
+export const STARTED_FRESH_MESSAGE = "Started a fresh query.";
 
 export interface KeptQuery {
   query: Group;
@@ -31,6 +46,16 @@ export function keepQuery(query: Group, selectedDatabaseIds: string[]): void {
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Remove the copy (and one an older build kept), so no page load brings it back. */
+export function forgetKeptQuery(): void {
+  try {
+    sessionStorage.removeItem(KEY);
+    sessionStorage.removeItem(OLD_KEY);
+  } catch {
+    // Storage unavailable: then nothing was kept either.
+  }
 }
 
 /**
@@ -63,7 +88,7 @@ function isQueryNode(v: unknown): v is QueryNode {
  */
 export function readKeptQuery(): KeptQuery | null {
   try {
-    const raw = sessionStorage.getItem(KEY);
+    const raw = sessionStorage.getItem(KEY) ?? sessionStorage.getItem(OLD_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (

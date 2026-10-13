@@ -13,7 +13,7 @@ import {
   rowDropdown,
 } from "../../src/ui/queryBuilder";
 import { initialState, type AppState } from "../../src/state";
-import { RESTORED_MESSAGE } from "../../src/app";
+import { RESTORED_MESSAGE } from "../../src/util/keptQuery";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
 import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
 import { UNGROUP_BLOCKED_MESSAGE } from "../../src/query/tree";

@@ -45,7 +45,7 @@ import {
   shouldFlushBeforeClick,
   type ClickTargetDescription,
 } from "../util/afterPointer";
-import { RESTORED_MESSAGE } from "../app";
+import { RESTORED_MESSAGE } from "../util/keptQuery";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel, hoverTitle } from "./format";

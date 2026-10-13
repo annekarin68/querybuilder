@@ -400,7 +400,7 @@ src/
                        actions (`openSaveDialog`, `saveQuery`,
                        `askOpenSaved`, …), previewAnnouncement (what a screen reader hears about Run).
                        Tested with a fake API.
-  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; the saved-queries keys), the
+  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; `restoredNotice`; the saved-queries keys), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
                        User, Compliance, SavedQuery / SavedQueryDraft ("Data model").
@@ -566,7 +566,7 @@ pure helpers in `src/query/saved.ts`):
 Opening a saved query goes through `changeScope` and `validateQuery` like any
 edit, so the "Correctness invariant" holds. Database ids that no longer exist
 are dropped and said in `dropNotice`. A `401` from any saved-queries call
-redirects to log in like Run does (the query is saved first), while opening
+redirects to log in like Run does (the query is kept first), while opening
 either dialog anonymously asks first whether to log in (`mayUseSavedQueries`,
 "Saved queries — `savedQueries.ts`"); another error is shown in the dialog's
 state (`save`, `savedList`; a failed delete in `savedListNotice`, so the list
@@ -599,7 +599,7 @@ binding its Fomantic dropdowns must always happen together.
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User presses **Deselect failing (N)** in the database picker | `onDatabasesChange` with the selection minus the marked databases: a database change like any other. The button and the markers go with the old results; the focus lands on **All**. |
 | User presses **Group contents** or **Ungroup** | `groupContents` / `ungroup` (`tree.ts`) → `app.onQueryChange` like any edit: the tree changes shape, so `changeScope` resets and refetches although the meaning is the same. Success clears an older `dropNotice`. A refused Ungroup changes no query: `app.showNotice` puts the reason in `dropNotice` (and announces it). |
-| User presses **Start fresh** in the Restored notice | `app.startFresh` → `changeScope` with the starting query (one blank row), every database and fresh `issues`: like any edit, so `restoredNotice` goes and the kept query is now the blank start, which the next load won't bring back. |
+| User presses **Start fresh** in the Restored notice | `app.startFresh` → `changeScope` with the starting query (one blank row), every database, fresh `issues` and no `openSaved`, then "Started a fresh query." is announced: like any edit, so `restoredNotice` goes and the kept query is now the blank start, which the next load won't bring back. |
 | User presses **Try again** in the statistics column | `app.retryStats` → the debounced stats fetch for the same query and scope; it replaces the failed request in the stats slot. Nothing else is reset. |
 | User opens a saved query (**Open**, after "Replace the current query?" if asked) | `openSavedQuery` → `changeScope` with the saved `query`, the databases that still exist, fresh `issues` and `openSaved`, and the dialog closed, in one `setState`: like any edit, so the old statistics and preview go and new ones are fetched. Databases left out are said in `dropNotice`. |
 | User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `savedListNotice`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
@@ -1058,10 +1058,17 @@ query on a reload (#69).
    leaves, so leaving never depends on the subscription. Never in a URL, never
    sent to the backend. `sessionStorage` belongs to the tab: it survives a
    reload and "reopen closed tab", and is gone once the tab is closed for good,
-   so no query is left behind on a shared machine (queries can be sensitive),
-   and no age limit is needed. Leaving for the login flow from the **Save…** /
-   **Saved queries** dialog of a logged-out user, or after a `401` from any
-   saved-queries request, works the same ("Saved queries"). A redirect without
+   so no age limit is needed. One exception: a browser that restores its last
+   session ("Continue where you left off") brings it back with the tabs. So
+   **Log out forgets it** (`forgetKeptQuery`; maintainers, 2026-10-13): on a
+   shared machine logging out is what hands the browser over, and queries can
+   be sensitive. The query stays on screen after Log out (building on
+   anonymously is fine), and a later edit is kept again, as new work. A value
+   still being typed is committed only when its box loses the focus, so a
+   reload with the caret still in the box loses that one value. Leaving for
+   the login flow from the **Save…** / **Saved queries** dialog of a
+   logged-out user, or after a `401` from any saved-queries request, works the
+   same ("Saved queries"). A redirect without
    a warning surprised users (2026-10-08); a note always above the builder read
    as if building a query needed a login (2026-10-13), so the question is
    asked when the button is pressed.
@@ -1077,7 +1084,8 @@ query on a reload (#69).
      row is not worth a notice). Then the **Restored notice** above the query
      card says "Restored the query you were building." (`RESTORED_MESSAGE`,
      also spoken through `announce`) and offers **Start fresh** (the empty
-     starting query with every database, `app.startFresh`) and a ✕
+     starting query with every database and no saved query open,
+     `app.startFresh`, which says "Started a fresh query.") and a ✕
      (`dismissRestoredNotice`). It is `AppState.restoredNotice`, an
      information message (`restoredNoticeHtml`), not a warning, and it goes
      away with the first edit (`changeScope`): editing means carrying on.
@@ -1086,8 +1094,12 @@ query on a reload (#69).
      query on screen shows better than any summary what came back.
 
    Either way the entry is untrusted (a deploy may land in between), so it is
-   structurally checked, database ids that no longer exist are dropped, and the
-   restored query is validated and its statistics fetched. A load that fails
+   structurally checked, and the restored query is validated and its
+   statistics fetched. Database ids that no longer exist are dropped and said
+   in `dropNotice` ("2 selected databases no longer exist and were left out.",
+   as opening a saved query does). The build before the rename kept it under
+   `qb:pending-query`, which is still read, so a tab that was out on the login
+   page during that deploy gets its query back. A load that fails
    (databases or facets can't be loaded) sets no state, so the copy is still
    there for the next try.
 4. **No automatic retry.** The user presses Run (or **Save…**) again. This
@@ -1519,6 +1531,14 @@ every node; `main.ts` passes `app.openSaveDialog` / `app.openSavedList` as the
 `catalog` and `databases` have loaded: `start()` sets the query and the
 selection when it ends, so a saved query opened before that would be
 overwritten.
+
+Above the card, before the drop warning, sits the **Restored notice**
+(`restoredNoticeHtml`, while `AppState.restoredNotice` is true): "Restored the
+query you were building." with **Start fresh** and a ✕, two real buttons that
+the click listener also handles before the node lookup (the
+`onStartFresh` / `onDismissRestored` hooks, wired to `app.startFresh` and
+`app.dismissRestoredNotice`). See "Saved query across the login/compliance
+redirect".
 
 A logged-out user's press on either button opens the login question in the
 saved-queries dialog ("Saved queries — `savedQueries.ts`"); the title row draws
@@ -2037,7 +2057,7 @@ contract", and the state in "State and the render loop"); this file only draws
   queries" / "Log in to see saved queries", "… You'll leave this page to log in
   and come back here; the query you are building is kept.", **Log in** (focused
   and described by the explanation, `aria-describedby`; `app.logInToSave`, which
-  serves both login dialogs, the query is saved first: "Saved query across the
+  serves both login dialogs, the query is kept first: "Saved query across the
   login/compliance redirect") and **Cancel**. Escape closes it; closing returns
   the focus to the button that opened it.
 

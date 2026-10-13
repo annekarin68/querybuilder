@@ -78,7 +78,7 @@ export interface ClickTargetDescription {
 /**
  * Whether a held edit must be applied BEFORE this click is handled: true for
  * anything that acts on the query when clicked, so it sees the typed value.
- * That includes links, because a link that saves the query and then leaves the
+ * That includes links, because a link that keeps the query and then leaves the
  * page (Log in) would otherwise save it without the value.
  *
  * False inside a Fomantic dropdown or checkbox: the repaint destroys Fomantic's

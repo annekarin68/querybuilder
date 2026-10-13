@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  createApp,
-  previewAnnouncement,
-  RESTORED_MESSAGE,
-  STATS_DEBOUNCE_MS,
-  type AppApi,
-} from "../src/app";
+import { createApp, previewAnnouncement, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
 import type {
   Database,
@@ -21,7 +15,12 @@ import type { Group } from "../src/query/types";
 import type { OpenSaved } from "../src/query/saved";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
-import { keepQuery, readKeptQuery } from "../src/util/keptQuery";
+import {
+  keepQuery,
+  readKeptQuery,
+  RESTORED_MESSAGE,
+  STARTED_FRESH_MESSAGE,
+} from "../src/util/keptQuery";
 import { dbError, failed, ok } from "./statsFixtures";
 
 // ---- fixtures -------------------------------------------------------------
@@ -627,6 +626,28 @@ describe("logging out and invalidating compliance", () => {
     expect(showError).toHaveBeenCalledWith("Couldn't invalidate the compliance reason. Try again.");
   });
 
+  // A browser that restores its last session brings sessionStorage back, so
+  // the copy would outlive the user on a shared machine (maintainers,
+  // 2026-10-13). The query stays on screen: building on anonymously is fine.
+  it("a successful logout forgets the kept query but leaves the query on screen", async () => {
+    const { app, store } = setup(signedIn);
+    keepQuery(store.getState().query, ["alpha"]);
+    const onScreen = store.getState().query;
+    app.onLogout();
+    await flushPromises();
+    expect(readKeptQuery()).toBeNull();
+    expect(store.getState().query).toBe(onScreen);
+  });
+
+  it("a failed logout keeps the kept query", async () => {
+    const api = fakeApi({ logout: vi.fn(async () => Promise.reject(new ApiError(500, "x"))) });
+    const { app, store } = setup(signedIn, api);
+    keepQuery(store.getState().query, ["alpha"]);
+    app.onLogout();
+    await flushPromises();
+    expect(readKeptQuery()).not.toBeNull();
+  });
+
   it("a successful logout signs out and clears compliance", async () => {
     const { app, store } = setup(signedIn);
     app.onLogout();
@@ -693,9 +714,13 @@ describe("start", () => {
     expect(store.getState().query).toEqual(kept);
     expect(store.getState().selectedDatabaseIds).toEqual(["beta"]);
     expect(store.getState().issues).toEqual([]);
-    // The user expects their query back after logging in: nothing to say.
+    // The user expects their query back after logging in: no Restored notice.
+    // (The database that no longer exists is still said: that is news.)
     expect(store.getState().restoredNotice).toBe(false);
-    expect(announce).not.toHaveBeenCalled();
+    expect(announce).not.toHaveBeenCalledWith(RESTORED_MESSAGE);
+    expect(store.getState().dropNotice).toBe(
+      "1 selected database no longer exists and was left out.",
+    );
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).toHaveBeenCalledTimes(1);
   });
@@ -723,6 +748,44 @@ describe("start", () => {
     expect(store.getState().query).not.toEqual(blank); // a fresh seed
     expect(store.getState().restoredNotice).toBe(false);
     expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("on the return hop, restores even a copy in which nothing was chosen", async () => {
+    const blank = addChild(emptyQuery(), emptyQuery().id, newCondition());
+    keepQuery(blank, ["beta"]);
+    const { app, store } = setup();
+    await app.start(true);
+    expect(store.getState().query).toEqual(blank);
+    expect(store.getState().selectedDatabaseIds).toEqual(["beta"]);
+  });
+
+  it("says which databases from before no longer exist", async () => {
+    keepQuery(runnableQuery(9), ["beta", "gone-1", "gone-2"]);
+    const { app, store } = setup();
+    await app.start(false);
+    expect(store.getState().selectedDatabaseIds).toEqual(["beta"]);
+    expect(store.getState().dropNotice).toBe(
+      "2 selected databases no longer exist and were left out.",
+    );
+  });
+
+  it("restores a query whose databases are all gone, with none selected, and says so", async () => {
+    keepQuery(runnableQuery(9), ["gone"]);
+    const { app, store } = setup();
+    await app.start(false);
+    expect(store.getState().selectedDatabaseIds).toEqual([]);
+    expect(store.getState().dropNotice).toBe(
+      "1 selected database no longer exists and was left out.",
+    );
+  });
+
+  it("a load that fails leaves the kept query for the next try", async () => {
+    const kept = runnableQuery(9);
+    keepQuery(kept, ["beta"]);
+    const api = fakeApi({ getFacets: vi.fn(async () => Promise.reject(new Error("down"))) });
+    const { app } = setup({}, api);
+    await expect(app.start(false)).rejects.toThrow("down");
+    expect(readKeptQuery()).toEqual({ query: kept, selectedDatabaseIds: ["beta"] });
   });
 
   it("keeps the first state at once, so a reload straight away finds it", async () => {
@@ -765,6 +828,19 @@ describe("the Restored notice", () => {
     expect(s.stats).toEqual({ status: "idle", results: [] });
     // What is kept now is the blank start, which a reload won't bring back.
     expect(readKeptQuery()?.query).toEqual(s.query);
+  });
+
+  // A save while the notice is up sets `openSaved` without an edit, so the
+  // notice is still there: a fresh start must not stay tied to that saved query.
+  it("Start fresh forgets which saved query was open, and says what happened", () => {
+    const { app, store, announce } = setup({
+      ...ready(),
+      restoredNotice: true,
+      openSaved: openFrom(savedQuery("sq-1", "Weekly")),
+    });
+    app.startFresh();
+    expect(store.getState().openSaved).toBeNull();
+    expect(announce).toHaveBeenCalledWith(STARTED_FRESH_MESSAGE);
   });
 
   it("the ✕ only hides it; the query stays", () => {

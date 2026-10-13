@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { isWorthRestoring, keepQuery, readKeptQuery } from "../../src/util/keptQuery";
+import {
+  forgetKeptQuery,
+  isWorthRestoring,
+  keepQuery,
+  readKeptQuery,
+} from "../../src/util/keptQuery";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
 
 function createMemoryStorage(): Storage {
@@ -38,6 +43,34 @@ describe("keptQuery", () => {
     keepQuery(emptyQuery(), ["alpha"]);
     readKeptQuery();
     expect(readKeptQuery()).not.toBeNull();
+  });
+
+  it("forgetKeptQuery removes the copy", () => {
+    keepQuery(emptyQuery(), ["alpha"]);
+    forgetKeptQuery();
+    expect(readKeptQuery()).toBeNull();
+  });
+
+  // A tab open across the deploy that left for the login page under the old
+  // build wrote the old key: its return hop must still find the query.
+  it("reads a copy the previous build wrote under its old key", () => {
+    const query = emptyQuery();
+    sessionStorage.setItem(
+      "qb:pending-query",
+      JSON.stringify({ query, selectedDatabaseIds: ["a"] }),
+    );
+    expect(readKeptQuery()).toEqual({ query, selectedDatabaseIds: ["a"] });
+  });
+
+  it("prefers the current key, and forgetting removes the old one too", () => {
+    keepQuery(emptyQuery(), ["new"]);
+    sessionStorage.setItem(
+      "qb:pending-query",
+      JSON.stringify({ query: emptyQuery(), selectedDatabaseIds: ["old"] }),
+    );
+    expect(readKeptQuery()?.selectedDatabaseIds).toEqual(["new"]);
+    forgetKeptQuery();
+    expect(readKeptQuery()).toBeNull();
   });
 
   it("a newer copy replaces the older one", () => {

@@ -39,7 +39,14 @@ import {
 } from "./state";
 import { debounce } from "./util/debounce";
 import { pageOf } from "./util/paging";
-import { isWorthRestoring, keepQuery, readKeptQuery } from "./util/keptQuery";
+import {
+  forgetKeptQuery,
+  isWorthRestoring,
+  keepQuery,
+  readKeptQuery,
+  RESTORED_MESSAGE,
+  STARTED_FRESH_MESSAGE,
+} from "./util/keptQuery";
 import { requestSlot } from "./util/requestSlot";
 
 /**
@@ -86,9 +93,23 @@ export interface AppDeps {
 /** How long the query must stay unchanged before statistics are fetched. */
 export const STATS_DEBOUNCE_MS = 400;
 
-/** The Restored notice above the query, and what a screen reader hears when
- *  a page load brings the query back (see `start`). */
-export const RESTORED_MESSAGE = "Restored the query you were building.";
+/** The query a first visit starts with, and Start fresh puts back: one
+ *  blank row, so the user can begin by choosing a facet. */
+function startingQuery(): Group {
+  const root = emptyQuery();
+  return addChild(root, root.id, newCondition());
+}
+
+/** The warning for databases a saved or kept selection named that no longer
+ *  exist (they were left out): none, or one sentence. */
+function goneDatabasesMessage(count: number, which: "saved" | "selected"): string[] {
+  if (count === 0) return [];
+  return [
+    count === 1
+      ? `1 ${which} database no longer exists and was left out.`
+      : `${count} ${which} databases no longer exist and were left out.`,
+  ];
+}
 
 /**
  * What a screen reader hears when Run query's panel changes: it repaints out of
@@ -160,7 +181,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   /**
    * Run query. It always attempts the request and reacts to what comes back: a
    * 401 (not logged in) or 403 (logged in, some requirement unmet — e.g.
-   * compliance) saves the query and navigates into the matching flow.
+   * compliance) keeps the query and navigates into the matching flow.
    *
    * Only ever do this from a call triggered by an explicit user gesture (a Run
    * click). Never wrap it around an automatically-fired request such as
@@ -266,6 +287,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
         // Compliance is piggybacked on the session server-side, so it's gone too
         // once the session ends — reset the local display state to match.
         store.setState({ auth: { status: "anonymous" }, compliance: { status: "required" } });
+        // A browser that restores its last session would bring the kept query
+        // back for whoever opens it next: logging out hands the browser over.
+        // The query stays on screen (building on anonymously is fine); a later
+        // edit is kept again, as new work.
+        forgetKeptQuery();
       })
       .catch((err) => {
         console.error("Logout failed:", err);
@@ -425,19 +451,21 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     changeScope({ selectedDatabaseIds: nextIds });
   }
 
-  /** The Restored notice's **Start fresh**: the empty starting query (one
-   *  blank row) with every database, as on a first visit. It goes through
-   *  `changeScope` like any edit, which also hides the notice. */
+  /** The Restored notice's **Start fresh**: the starting query with every
+   *  database, as on a first visit. It goes through `changeScope` like any
+   *  edit, which also hides the notice. Not tied to a saved query either: a
+   *  save while the notice was up set `openSaved` without hiding it. */
   function startFresh(): void {
     const { databases, catalog } = store.getState();
-    const root = emptyQuery();
-    const query = addChild(root, root.id, newCondition());
+    const query = startingQuery();
     changeScope({
       query,
       selectedDatabaseIds: (databases ?? []).map((d) => d.id),
       issues: catalog ? validateQuery(query, catalog) : [],
+      openSaved: null,
       dropNotice: null,
     });
+    announce(STARTED_FRESH_MESSAGE);
   }
 
   /** The Restored notice's ✕: hide it and keep the restored query. */
@@ -480,18 +508,19 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
 
     const catalog = buildFieldCatalog(facets);
     // A restored query replaces the normal seed (one empty condition).
-    const initial = store.getState().query;
-    const query = pending ? pending.query : addChild(initial, initial.id, newCondition());
+    const query = pending ? pending.query : startingQuery();
+    // A restored selection may name databases that no longer exist (it can
+    // outlive a backend change): keep only the ones this load knows, and say
+    // which went. Otherwise every database is selected by default.
+    const selectedDatabaseIds = pending
+      ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.id === id))
+      : databases.map((d) => d.id);
+    const gone = pending ? pending.selectedDatabaseIds.length - selectedDatabaseIds.length : 0;
     store.setState({
       catalog,
       databases,
       facets,
-      // A restored selection may name databases that no longer exist (it can
-      // outlive a backend change) — keep only ones this load actually knows.
-      // Otherwise every database is selected by default.
-      selectedDatabaseIds: pending
-        ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.id === id))
-        : databases.map((d) => d.id),
+      selectedDatabaseIds,
       query,
       // The seed bypasses onQueryChange, so validate here — otherwise Run
       // would be enabled on the empty seeded condition.
@@ -501,6 +530,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       restoredNotice: showRestored,
     });
     if (showRestored) announce(RESTORED_MESSAGE);
+    setNotice(goneDatabasesMessage(gone, "selected"));
     // Fetch a restored query's statistics now, as any in-app edit would (an
     // unfinished one fetches nothing). The empty seed has nothing runnable yet.
     if (pending) refreshStats();
@@ -511,7 +541,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   // `savedListNotice`; everything they do happens here.
 
   /** A saved-query request failed. A 401 means there is no session: redirect
-   *  like Run does (the query is saved first). Anything else is shown by `show`. */
+   *  like Run does (the query is kept first). Anything else is shown by `show`. */
   function savedCallFailed(err: unknown, show: (error: string) => void): void {
     if (err instanceof ApiError && err.status === 401) return redirectInto(LOGIN_URL);
     console.error("Saved queries request failed:", err);
@@ -705,15 +735,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       savedListNotice: null,
     });
     announce(`Opened “${saved.name}”.`);
-    setNotice(
-      left === 0
-        ? []
-        : [
-            left === 1
-              ? "1 saved database no longer exists and was left out."
-              : `${left} saved databases no longer exist and were left out.`,
-          ],
-    );
+    setNotice(goneDatabasesMessage(left, "saved"));
   }
 
   function askOpenSaved(id: string): void {
