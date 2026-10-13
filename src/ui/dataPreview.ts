@@ -3,7 +3,7 @@ import { FIRST_COLUMNS } from "../config";
 import { pageOf } from "../util/paging";
 import { escapeHtml, paint } from "./panel";
 import { exact } from "./format";
-import { eventTableHtml, pagingHtml, tableColumns } from "./eventTable";
+import { eventTableHtml, pagingHtml, scrollAfterRepaint, tableColumns } from "./eventTable";
 
 /**
  * How many events the Run query panel promises. The backend decides the real
@@ -22,10 +22,8 @@ export function idleMessage(locale?: string): string {
  *  focuses it): Run turns into a loader, then into the result, and a
  *  keyboard user who pressed it stays in this card instead of dropping to the
  *  page (paint(), focusMemory.ts). app.ts announces what happened. */
-function card(body: string, count?: number): string {
-  const n =
-    count === undefined ? "" : ` <span class="qb-card-count">· ${escapeHtml(exact(count))}</span>`;
-  return `<div class="qb-card qb-preview" tabindex="-1" data-focus-landing><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
+function card(body: string): string {
+  return `<div class="qb-card qb-preview" tabindex="-1" data-focus-landing><h2 class="qb-card-title">Matching events</h2>${body}</div>`;
 }
 
 /**
@@ -74,6 +72,32 @@ const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
   unfinished: "Finish the query to run it.",
   rejected: "A database found a problem in the query (shown above). Change the query to run it.",
 };
+
+// ---- Keeping the table's scroll position (needs a DOM, so it is checked in a browser) ----
+
+/** Which page of the table each panel last painted: a repaint of the same
+ *  page keeps the scroll position, another page starts at the top. */
+const shownPage = new WeakMap<HTMLElement, number>();
+
+/** The scroll box's offsets now, or null when no table is on screen. */
+function scrollOf(el: HTMLElement): { left: number; top: number } | null {
+  const box = el.querySelector<HTMLElement>(".qb-et-scroll");
+  return box ? { left: box.scrollLeft, top: box.scrollTop } : null;
+}
+
+/** Put the new scroll box where `scrollAfterRepaint` says. paint() has
+ *  replaced the old box, so without this every repaint would jump to the top left. */
+function restoreScroll(
+  el: HTMLElement,
+  before: { left: number; top: number } | null,
+  samePage: boolean,
+): void {
+  const box = el.querySelector<HTMLElement>(".qb-et-scroll");
+  if (!box) return;
+  const { left, top } = scrollAfterRepaint(before, samePage);
+  box.scrollLeft = left;
+  box.scrollTop = top;
+}
 
 export function renderDataPreview(el: HTMLElement, state: AppState): void {
   const p = state.preview;
@@ -126,7 +150,7 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
   }
   const { events } = p;
   if (events.length === 0) {
-    paint(el, card(`<p class="qb-placeholder">No events match this query.</p>`, 0));
+    paint(el, card(`<p class="qb-placeholder">No events match this query.</p>`));
     return;
   }
   // One page of the results as a table: columns from the whole sample, so
@@ -134,7 +158,12 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
   // `dataPreview.ts` (Matching events)").
   const page = pageOf(events.length, p.page);
   const columns = tableColumns(events, state.facets ?? [], FIRST_COLUMNS);
-  paint(el, card(pagingHtml(page) + eventTableHtml(events, columns, page), events.length));
+  // The paging line already says how many results there are, so the title
+  // carries no count of its own.
+  const before = scrollOf(el);
+  paint(el, card(pagingHtml(page) + eventTableHtml(events, columns, page)));
+  restoreScroll(el, before, shownPage.get(el) === p.page);
+  shownPage.set(el, p.page);
 }
 
 /** One delegated listener for the card's buttons: Run / Try again, Previous /
@@ -145,7 +174,8 @@ export function wireDataPreview(
 ): void {
   container.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
-    if (!btn || btn.disabled) return;
+    // aria-disabled: the paging buttons at the ends stay focusable (eventTable.ts).
+    if (!btn || btn.disabled || btn.getAttribute("aria-disabled") === "true") return;
     const action = btn.dataset.action;
     if (action === "run") hooks.onRun();
     else if (action === "previous-event-page" || action === "next-event-page") {

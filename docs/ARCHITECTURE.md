@@ -495,8 +495,9 @@ which keys changed. Each async part of the state — `auth`, `compliance`,
 means something (only an `"authenticated"` auth has a `user`; only an `"ok"`
 preview has `events` and `page`, the 0-based page of them on screen).
 `openEventId` is the event whose JSON dialog is open (an id of the results on
-screen) or `null`; it is reset together with `preview`, so the dialog never
-shows a result that is gone.
+screen) or `null`; it is reset together with `preview` (a query or database change, or a new run),
+and `openEventOf` is also null while `runBlocker` blocks Run, so the dialog
+never shows a result that is gone or hidden.
 
 The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
 pure helpers in `src/query/saved.ts`):
@@ -548,8 +549,8 @@ binding its Fomantic dropdowns must always happen together.
 | App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
-| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 matching events.", "Could not load events: …"). |
-| User presses **Previous** / **Next** in the Matching events card | `app.showEventPage(page)` → `preview.page` (clamped by `pageOf`; the same page is a no-op), announced ("Showing results 101 to 200 of 1,987."). Only the preview panel repaints; the focus stays on the pressed button (its own `data-action`). |
+| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
+| User presses **Previous** / **Next** in the Matching events card | `app.showEventPage(page)` → `preview.page` (clamped by `pageOf`; the same page is a no-op), announced ("Showing results 101 to 200 of 1,987.", numbers in the viewer's format). Only the preview panel repaints; the focus stays on the pressed button (its own `data-action`). At the ends the button is `aria-disabled="true"`, not `disabled`, so it keeps the focus; its click does nothing. |
 | User presses an event's id in the Matching events table | `app.openEvent(id)` → `openEventId` (only an id of the results on screen), `app.closeEvent()` clears it. |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User presses **Deselect failing (N)** in the database picker | `onDatabasesChange` with the selection minus the marked databases: a database change like any other. The button and the markers go with the old results; the focus lands on **All**. |
@@ -1780,29 +1781,44 @@ be asked to log in first.", `LOGIN_FIRST_NOTE`) when ready; a loader; an error w
 or the result. The result is a **table**, one row per event, in pages of 100
 (`src/util/paging.ts`):
 
-- **Paging line:** "Results 101–200 of 1,987" with **Previous** / **Next**;
-  with 100 results or fewer, just "42 results" and no buttons. "Results" is the
+- **Paging line:** "Results 101–200 of 1,987" with **Previous** / **Next**
+  (`aria-disabled` on the first / last page: still focusable, muted in
+  `styles.css`, the click handler ignores it); with 100 results or fewer, just
+  "42 results" and no buttons. The card's title is just "Matching events": the
+  paging line already gives the count. "Results" is the
   one word for the returned sample, here and in the column headers, so nobody
   reads a count as a total across all databases.
 - **Scroll box:** both directions, at most 70% of the window high, focusable
   (`role="region"`, labelled) so it scrolls from the keyboard. The header row
   is `position: sticky` at the top and the id column at the left (the corner
   above both), with opaque backgrounds: a value never loses its header.
+  The box is rebuilt by every repaint of the panel (collapsing a builder group,
+  a login, … also repaint it), so `renderDataPreview` reads its scroll offsets
+  before `paint` and restores them after (`scrollAfterRepaint`): both on the
+  same page, only the sideways one after Previous / Next, so a user who follows
+  one facet across pages keeps its column and every page starts at its first row.
   `border-collapse` is `separate` because collapsed borders do not travel with
   sticky cells, and the table is `width: max-content` because a table wider
   than its box would otherwise squeeze every column to its narrowest word.
 - **Columns:** the event id first (the first 8 characters, all of it in the
-  tooltip; a button that opens the event's JSON, `openEventId`), then one
+  tooltip; a button that opens the event's JSON, `openEventId`; its accessible
+  name is its visible text, and one hidden sentence after the table, "Opens this
+  result's JSON.", describes it for all rows via `aria-describedby`), then one
   column per facet that **any** result of the sample holds, so the columns do
-  not change while paging (`tableColumns`). Order: the facets of
+  not change while paging (`tableColumns`; ties are broken in code order, not
+  `localeCompare`, so the columns are the same on every machine). Order: the facets of
   `FIRST_COLUMNS` (`src/config.ts`; none by default), then by facet number
   (`Facet.number`, the backend's `id_number`), then facets the dictionary does
-  not know, by label. A header names the facet and says "in 12 of 1,987
+  not know, by id. A header names the facet and says "in 12 of 1,987
   results" (over the whole sample; information only, it does not order).
 - **Cells:** empty when the result lacks the facet; otherwise one boxed set per
   occurrence, each a `<dl>` of `field name: value` in the dictionary's field
   order (fields the dictionary does not know come after, by key; `cellSets`),
-  all in a `<ul>`. Several occurrences stay separate boxes, so a value is only
+  all in a `<ul role="list">` (`list-style: none` makes Safari drop the list
+  semantics). A cell is as wide as its widest block, 8rem at least and 16rem at
+  most: the cap is on the blocks inside the cell (`.qb-et-sets`, the header's
+  texts), because CSS does not define `max-width` for table cells and Firefox
+  ignores it. Several occurrences stay separate boxes, so a value is only
   read together with its own occurrence's. Values wrap; a set with no values
   shows "—". Every lookup by a backend id uses `Object.hasOwn`, because ids are
   backend data and may be names such as "constructor".
@@ -1810,13 +1826,14 @@ or the result. The result is a **table**, one row per event, in pages of 100
   headers, the id cell is the row's `<th scope="row">`).
 - **Event JSON dialog** (`eventDialog.ts`): an id opens that result's JSON in
   a native `<dialog>` (title "Event" plus the short id, the whole id, then the
-  JSON in a focusable, scrolling `<pre>`). It is built like the saved-queries
+  JSON in a focusable, scrolling `<pre role="region">`, which makes its label heard). It is built like the saved-queries
   dialog: created once by the shell (`Shell.eventDialog`), painted from the
   state (`openEventId`, `openEventOf`) and opened or closed to match it. The
   focus starts on **Close**; **Close**, Escape and any other close tell the
-  state (`app.closeEvent`) and the focus goes back to that result's id button.
-  The dialog closes by itself when the result is no longer on screen (a new
-  run, another query or database). An expanded row was rejected: it would sit
+  state (`app.closeEvent`) and the focus goes back to that result's id button
+  (or to the card when the table is gone). The dialog closes by itself when
+  the result is no longer on screen (a new run, another query or database, or
+  a late statistics line that blocks Run). An expanded row was rejected: it would sit
   far off to the left inside the wide, sideways-scrolled table. The dialog is
   where the later Event viewer can plug in.
 

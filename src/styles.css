@@ -1197,6 +1197,12 @@ body {
 .qb-et-paging .ui.button {
   margin: 0;
 }
+/* Previous on the first page, Next on the last: looks like Fomantic's
+ * .disabled but stays focusable (the same pattern as the group's Ungroup). */
+.qb-et-paging .ui.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .qb-et-scroll {
   max-height: 70vh;
   overflow: auto;
@@ -1225,9 +1231,11 @@ body {
   text-align: left;
   vertical-align: top;
 }
+/* A cell is as wide as its widest block, at least 8rem. The 16rem cap sits on
+   the blocks inside the cells (below), not on the td: CSS does not define
+   max-width for table cells, and Firefox ignores it. */
 .qb-et td {
   min-width: 8rem;
-  max-width: 16rem;
   overflow-wrap: anywhere;
 }
 .qb-et thead th {
@@ -1247,10 +1255,14 @@ body {
 }
 .qb-et-facet {
   display: block;
+  max-width: 16rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 .qb-et-count {
   display: block;
+  max-width: 16rem;
+  overflow-wrap: anywhere;
   font-weight: 400;
   font-size: 0.72rem;
   color: var(--qb-muted);
@@ -1273,6 +1285,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  max-width: 16rem;
   margin: 0;
   padding: 0;
   list-style: none;

@@ -4,6 +4,7 @@ import {
   cellSets,
   eventTableHtml,
   pagingHtml,
+  scrollAfterRepaint,
   shortId,
   tableColumns,
 } from "../../src/ui/eventTable";
@@ -64,6 +65,13 @@ describe("tableColumns", () => {
     const tied = [facet("y", 5), facet("x", 5)];
     const inEventOrder = [event("e", { y: [{ k: 1 }], x: [{ k: 1 }] })];
     expect(tableColumns(inEventOrder, tied, []).map((c) => c.facetId)).toEqual(["x", "y"]);
+  });
+
+  // Plain `<` comparison, not localeCompare: the order must not depend on the
+  // viewer's language ("B" < "a" in code order; most locales put "a" first).
+  it("breaks ties in code order, the same on every machine", () => {
+    const upperLower = [event("e", { b: [{ k: 1 }], B: [{ k: 1 }], a: [{ k: 1 }] })];
+    expect(tableColumns(upperLower, [], []).map((c) => c.facetId)).toEqual(["B", "a", "b"]);
   });
 
   it("gives no column to a FIRST_COLUMNS facet that no result holds", () => {
@@ -169,13 +177,20 @@ describe("eventTableHtml", () => {
 
   it("makes each row's id cell its row header, holding the button that opens its JSON", () => {
     expect(html).toContain(
-      '<th scope="row" class="qb-et-id"><button type="button" class="qb-et-id-btn" data-action="open-event" data-event-id="e1" aria-label="Show event e1 as JSON" title="Event e1">#e1</button></th>',
+      '<th scope="row" class="qb-et-id"><button type="button" class="qb-et-id-btn" data-action="open-event" data-event-id="e1" aria-describedby="qb-et-id-hint" title="Event e1">#e1</button></th>',
     );
+  });
+
+  it("names the id button by its visible text and explains it once, outside the table", () => {
+    expect(html).not.toContain('aria-label="Show event');
+    const hint = '<span id="qb-et-id-hint" class="qb-sr-only">Opens this result\'s JSON.</span>';
+    expect(html.split(hint)).toHaveLength(2);
+    expect(html.indexOf(hint)).toBeGreaterThan(html.indexOf("</table>"));
   });
 
   it("draws each occurrence as its own set", () => {
     expect(html).toContain(
-      '<ul class="qb-et-sets"><li><dl class="qb-et-set"><dt>pos name</dt><dd>right</dd><dt>val name</dt><dd>2.2</dd></dl></li><li><dl class="qb-et-set"><dt>pos name</dt><dd>left</dd><dt>val name</dt><dd>1.1</dd></dl></li></ul>',
+      '<ul class="qb-et-sets" role="list"><li><dl class="qb-et-set"><dt>pos name</dt><dd>right</dd><dt>val name</dt><dd>2.2</dd></dl></li><li><dl class="qb-et-set"><dt>pos name</dt><dd>left</dd><dt>val name</dt><dd>1.1</dd></dl></li></ul>',
     );
   });
 
@@ -217,8 +232,25 @@ describe("pagingHtml", () => {
     expect(html).toContain('data-action="next-event-page" data-page="2">Next</button>');
   });
 
-  it("disables Previous on the first page and Next on the last", () => {
-    expect(pagingHtml(pageOf(150, 0))).toContain('data-page="-1" disabled>Previous');
-    expect(pagingHtml(pageOf(150, 1))).toContain('data-page="2" disabled>Next');
+  // aria-disabled, not disabled: a disabled button drops the keyboard focus
+  // when the user presses Next on the last page.
+  it("marks Previous on the first page and Next on the last as aria-disabled", () => {
+    expect(pagingHtml(pageOf(150, 0))).toContain('data-page="-1" aria-disabled="true">Previous');
+    expect(pagingHtml(pageOf(150, 1))).toContain('data-page="2" aria-disabled="true">Next');
+    expect(pagingHtml(pageOf(150, 0))).not.toContain(" disabled");
+    expect(pagingHtml(pageOf(150, 0))).toContain('data-page="1">Next');
+  });
+});
+
+describe("scrollAfterRepaint", () => {
+  it("restores both offsets when the same page is repainted", () => {
+    expect(scrollAfterRepaint({ left: 120, top: 300 }, true)).toEqual({ left: 120, top: 300 });
+  });
+  it("keeps the sideways offset but starts at the top on another page", () => {
+    expect(scrollAfterRepaint({ left: 120, top: 300 }, false)).toEqual({ left: 120, top: 0 });
+  });
+  it("starts at 0,0 when there was no table before", () => {
+    expect(scrollAfterRepaint(null, true)).toEqual({ left: 0, top: 0 });
+    expect(scrollAfterRepaint(null, false)).toEqual({ left: 0, top: 0 });
   });
 });

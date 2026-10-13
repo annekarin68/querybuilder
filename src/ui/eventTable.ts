@@ -18,6 +18,8 @@ export interface FacetColumn {
   resultCount: number;
   /** The facet's fields in dictionary order. Empty for an unknown facet. */
   fields: { id: string; name: string }[];
+  /** The ids of `fields`, built once per column (not once per cell) for `cellSets`. */
+  knownFieldIds: Set<string>;
 }
 
 /** One field value inside a set. */
@@ -30,6 +32,12 @@ export interface CellEntry {
  *  tooltip and the event's JSON show the whole id. */
 export function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+}
+
+/** Ids in code order (plain `<`), not `localeCompare`: the columns must come
+ *  out the same on every machine, whatever language the viewer's browser uses. */
+function compareIds(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**
@@ -61,18 +69,20 @@ export function tableColumns(
     const na = byId.get(a)?.number;
     const nb = byId.get(b)?.number;
     // Equal numbers (a backend quirk) fall back to the id, so the order never depends on event order.
-    if (na !== undefined && nb !== undefined) return na - nb || a.localeCompare(b);
+    if (na !== undefined && nb !== undefined) return na - nb || compareIds(a, b);
     if (na !== undefined) return -1; // a known facet before an unknown one
     if (nb !== undefined) return 1;
-    return a.localeCompare(b);
+    return compareIds(a, b);
   });
   return ids.map((id) => {
     const facet = byId.get(id);
+    const fields = facet ? facet.fields.map((f) => ({ id: f.id, name: f.name })) : [];
     return {
       facetId: id,
       name: facet?.name ?? id,
       resultCount: counts.get(id) ?? 0,
-      fields: facet ? facet.fields.map((f) => ({ id: f.id, name: f.name })) : [],
+      fields,
+      knownFieldIds: new Set(fields.map((f) => f.id)),
     };
   });
 }
@@ -86,7 +96,6 @@ export function tableColumns(
  * as sent (`null` never reaches here: toEvent drops it).
  */
 export function cellSets(event: EventRecord, column: FacetColumn): CellEntry[][] {
-  const known = new Set(column.fields.map((f) => f.id));
   // Checked with hasOwn: a plain `??` would take a built-in such as
   // "constructor" from Object.prototype for an event that lacks the facet.
   const occurrences = Object.hasOwn(event.values, column.facetId)
@@ -101,7 +110,7 @@ export function cellSets(event: EventRecord, column: FacetColumn): CellEntry[][]
       .filter((f) => Object.hasOwn(occurrence, f.id))
       .map((f) => ({ name: f.name, value: String(occurrence[f.id]) })),
     ...Object.keys(occurrence)
-      .filter((key) => !known.has(key))
+      .filter((key) => !column.knownFieldIds.has(key))
       .sort()
       .map((key) => ({ name: key, value: String(occurrence[key]) })),
   ]);
@@ -109,15 +118,21 @@ export function cellSets(event: EventRecord, column: FacetColumn): CellEntry[][]
 
 /** One cell: nothing when the result lacks the facet; otherwise one set per
  *  occurrence, each a small definition list, all in a list, so a screen
- *  reader reads them as separate sets too. */
+ *  reader reads them as separate sets too. `role="list"` because
+ *  `list-style: none` (styles.css) makes Safari / VoiceOver drop the list. */
 function cellHtml(sets: CellEntry[][]): string {
   if (sets.length === 0) return "";
   const setHtml = (set: CellEntry[]) =>
     set.length === 0
       ? `<span class="qb-et-empty">—</span>`
       : `<dl class="qb-et-set">${set.map((e) => `<dt>${escapeHtml(e.name)}</dt><dd>${escapeHtml(e.value)}</dd>`).join("")}</dl>`;
-  return `<ul class="qb-et-sets">${sets.map((set) => `<li>${setHtml(set)}</li>`).join("")}</ul>`;
+  return `<ul class="qb-et-sets" role="list">${sets.map((set) => `<li>${setHtml(set)}</li>`).join("")}</ul>`;
 }
+
+/** The one hidden sentence every id button points to (`aria-describedby`):
+ *  the button's name is its visible text (#6f1c2a9e…), so what it does is a
+ *  description, said once instead of once per row. */
+const ID_HINT_ID = "qb-et-id-hint";
 
 /**
  * The table for one page of the results, in its scroll box. The header row
@@ -148,10 +163,10 @@ export function eventTableHtml(
       const id = escapeHtml(e.id);
       const short = escapeHtml(shortId(e.id));
       const cells = columns.map((c) => `<td>${cellHtml(cellSets(e, c))}</td>`).join("");
-      return `<tr><th scope="row" class="qb-et-id"><button type="button" class="qb-et-id-btn" data-action="open-event" data-event-id="${id}" aria-label="Show event ${short} as JSON" title="Event ${id}">#${short}</button></th>${cells}</tr>`;
+      return `<tr><th scope="row" class="qb-et-id"><button type="button" class="qb-et-id-btn" data-action="open-event" data-event-id="${id}" aria-describedby="${ID_HINT_ID}" title="Event ${id}">#${short}</button></th>${cells}</tr>`;
     })
     .join("");
-  return `<div class="qb-et-scroll" tabindex="0" role="region" aria-label="Matching events table"><table class="qb-et"><caption class="qb-sr-only">${caption}</caption><thead><tr><th scope="col" class="qb-et-id">Event</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="qb-et-scroll" tabindex="0" role="region" aria-label="Matching events table"><table class="qb-et"><caption class="qb-sr-only">${caption}</caption><thead><tr><th scope="col" class="qb-et-id">Event</th>${head}</tr></thead><tbody>${rows}</tbody></table></div><span id="${ID_HINT_ID}" class="qb-sr-only">Opens this result's JSON.</span>`;
 }
 
 /**
@@ -165,11 +180,31 @@ export function pagingHtml(page: Page, locale?: string): string {
   if (page.pageCount === 1) {
     return `<p class="qb-et-paging">${countLabel(page.total, "result", "results", locale)}</p>`;
   }
-  const first = page.page === 0 ? " disabled" : "";
-  const last = page.page === page.pageCount - 1 ? " disabled" : "";
+  // aria-disabled, not disabled: the button stays focusable, so pressing Next
+  // on the last page does not throw the keyboard focus out of the card
+  // (the click handler in dataPreview.ts ignores it).
+  const first = page.page === 0 ? ' aria-disabled="true"' : "";
+  const last = page.page === page.pageCount - 1 ? ' aria-disabled="true"' : "";
   return `<div class="qb-et-paging">
     <span>Results ${exact(page.from, locale)}–${exact(page.to, locale)} of ${exact(page.total, locale)}</span>
     <button type="button" class="ui mini basic button" data-action="previous-event-page" data-page="${page.page - 1}"${first}>Previous</button>
     <button type="button" class="ui mini basic button" data-action="next-event-page" data-page="${page.page + 1}"${last}>Next</button>
   </div>`;
+}
+
+/**
+ * Where the table's scroll box should be after a repaint. The box is rebuilt
+ * on every repaint of the panel (a collapsed builder group, a login, … also
+ * repaint it), which would send it back to the top left. On the page that was
+ * on screen both offsets are kept; on another page only the sideways one, so
+ * a user who follows one facet across pages keeps their column in view and
+ * every page starts at its first row (maintainers, 2026-10-13).
+ * `before` is null when no table was on screen.
+ */
+export function scrollAfterRepaint(
+  before: { left: number; top: number } | null,
+  samePage: boolean,
+): { left: number; top: number } {
+  if (!before) return { left: 0, top: 0 };
+  return { left: before.left, top: samePage ? before.top : 0 };
 }
