@@ -2,6 +2,7 @@
 // merely publishes the global for Fomantic). See docs/ARCHITECTURE.md,
 // "The Fomantic discipline".
 import $ from "jquery";
+import { hoverTitle } from "./format";
 
 /**
  * Settings for every dropdown. A search dropdown shows only the items
@@ -38,8 +39,9 @@ const FREE_ENTRY_DROPDOWN = { ...DROPDOWN, allowAdditions: true, delimiter: "\u0
  * - Its typing box (`input.search`) is what has the keyboard focus, and it has
  *   no accessible name, so a screen reader says only "edit text". Give it the
  *   <select>'s aria-label.
- * - The shown choice is cut off with "…" when it is longer than the dropdown.
- *   Put its full text in a `title` on what the pointer is over (see showFullChoice).
+ * - The shown choice, and in a multi-select each chosen label, is cut off with
+ *   "…" when it is longer than the dropdown. showFullChoice puts the full text
+ *   in a `title` on what the pointer is over, and removes it from a placeholder.
  */
 function describeDropdown(node: HTMLElement): void {
   // `node` was the <select> carrying the `ui dropdown` classes; Fomantic wraps
@@ -63,18 +65,21 @@ function describeDropdown(node: HTMLElement): void {
  */
 function showFullChoice(node: HTMLElement): void {
   const shown = node.querySelector<HTMLElement>(":scope > .text");
-  const placeholder = !shown || shown.classList.contains("default");
-  const title = placeholder ? "" : (shown.textContent ?? "").trim();
-  for (const el of [shown, node.querySelector<HTMLElement>(":scope > input.search")]) {
-    if (!el) continue;
-    if (title) el.title = title;
-    else el.removeAttribute("title");
-  }
+  const title = hoverTitle(shown?.textContent, !shown || shown.classList.contains("default"));
+  setTitle(shown, title);
+  setTitle(node.querySelector<HTMLElement>(":scope > input.search"), title);
   node.querySelectorAll<HTMLElement>(":scope > a.ui.label").forEach((label) => {
     // The shown text, not data-value: Fomantic stores data-value HTML-escaped
     // (`"` becomes the literal `&quot;`), while the label shows it decoded.
-    label.title = (label.textContent ?? "").trim();
+    setTitle(label, hoverTitle(label.textContent));
   });
+}
+
+/** Set `el`'s title, or remove the attribute for null (`hoverTitle`). */
+function setTitle(el: HTMLElement | null, title: string | null): void {
+  if (!el) return;
+  if (title) el.title = title;
+  else el.removeAttribute("title");
 }
 
 export function activate(container: HTMLElement): void {

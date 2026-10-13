@@ -43,7 +43,7 @@ export const MASCOT = {
  *   and name the company in `label`.
  */
 export const TEXT_SOURCES = {
-  ours: { logo: "/pickle/logo.svg", label: "Our description" },
+  ours: { logo: MASCOT.neutral, label: "Our description" },
   thirdParty: {
     logo: "/sources/third-party.svg",
     label: "Third-party text; may contain errors",

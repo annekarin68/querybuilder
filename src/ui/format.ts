@@ -100,3 +100,14 @@ export function formatDate(iso: string, locale?: string, timeZone?: string): str
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(locale, { timeZone });
 }
+
+/**
+ * The hover title that shows the full text of a dropdown's choice or a value
+ * box, which is cut off with "…" when it is longer than the box: the text,
+ * trimmed. null means "no title attribute at all": there is nothing to show,
+ * or the text is only a placeholder ("Choose…"), which is not a choice.
+ */
+export function hoverTitle(text: string | null | undefined, placeholder = false): string | null {
+  const trimmed = (text ?? "").trim();
+  return placeholder || trimmed === "" ? null : trimmed;
+}

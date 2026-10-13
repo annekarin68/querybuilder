@@ -8,6 +8,7 @@ import {
 import { UTC_TIMESTAMP_HINT } from "../query/dates";
 import { isBlankValue } from "../query/validate";
 import { escapeHtml, optionsHtml } from "./panel";
+import { hoverTitle } from "./format";
 
 /**
  * The value control(s) for a condition row, chosen by the operator × the
@@ -59,7 +60,8 @@ function scalarInput(field: CatalogField, current: unknown, attrs: string): stri
   const text = current === null || current === undefined ? "" : String(current);
   // A long value is cut off by the box: hovering shows all of it. The builder
   // keeps the title in step while the user types (wireQueryBuilder).
-  const title = text ? ` title="${escapeHtml(text)}"` : "";
+  const full = hoverTitle(text);
+  const title = full ? ` title="${escapeHtml(full)}"` : "";
   return `<div class="ui input"><input type="${type}" data-part="value" ${attrs}${extra}${title} value="${escapeHtml(text)}" /></div>`;
 }
 

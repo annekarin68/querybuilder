@@ -136,7 +136,13 @@ export function dropNotice(problems: string[]): string | null {
 /** What a screen reader hears after new conditions were added. The query card
  *  repaints on every change, so nothing there says that something happened. */
 export function addedMessage(count: number): string {
-  return `Added ${count} ${count === 1 ? "condition" : "conditions"} to the query.`;
+  return `Added ${conditionCount(count)} to the query.`;
+}
+
+/** "1 condition", "3 conditions". (Not ui/format's countLabel: the query
+ *  layer does not import from the UI.) */
+function conditionCount(count: number): string {
+  return `${count} ${count === 1 ? "condition" : "conditions"}`;
 }
 
 /** What a screen reader hears after a drop or "+" added `nodes`: a tag's group
@@ -144,7 +150,7 @@ export function addedMessage(count: number): string {
 export function addedNodesMessage(nodes: QueryNode[]): string {
   const [only] = nodes;
   if (nodes.length === 1 && only?.kind === "group") {
-    return `Added a group of ${countConditions(only)} conditions to the query.`;
+    return `Added a group of ${conditionCount(countConditions(only))} to the query.`;
   }
   return addedMessage(nodes.length);
 }

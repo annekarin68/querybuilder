@@ -11,7 +11,7 @@ import {
   UNGROUPED_MESSAGE,
 } from "../../src/query/drop";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { newCondition } from "../../src/query/tree";
+import { newCondition, newGroup } from "../../src/query/tree";
 import type { Condition } from "../../src/query/types";
 import type { Facet } from "../../src/model";
 
@@ -151,6 +151,12 @@ describe("nodesForItem", () => {
     expect(addedNodesMessage([newCondition(), newCondition()])).toBe(
       "Added 2 conditions to the query.",
     );
+  });
+  // Unreachable today (a tag group always holds two or more), but the
+  // sentence must stay right if that changes.
+  it("says 'condition', not 'conditions', for a group of one", () => {
+    const one = { ...newGroup(), children: [newCondition()] };
+    expect(addedNodesMessage([one])).toBe("Added a group of 1 condition to the query.");
   });
   it("reports an unknown facet", () => {
     const r = nodesForItem({ type: "facet", facetId: "zzz" }, facets, catalog);

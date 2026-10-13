@@ -41,7 +41,7 @@ import { isEdited } from "../query/saved";
 import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
-import { countLabel } from "./format";
+import { countLabel, hoverTitle } from "./format";
 import { readValueControl, renderValueControl } from "./valueControl";
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
@@ -649,10 +649,14 @@ export function wireQueryBuilder(
 
   // The hover title of a value box follows what is typed: the box is only
   // repainted when the value is committed (on change), and until then the
-  // title would show the old value.
+  // title would show the old value. An emptied box loses the attribute, as a
+  // box rendered empty has none.
   container.addEventListener("input", (e) => {
     const box = e.target;
-    if (box instanceof HTMLInputElement && box.dataset.part === "value") box.title = box.value;
+    if (!(box instanceof HTMLInputElement) || box.dataset.part !== "value") return;
+    const title = hoverTitle(box.value);
+    if (title) box.title = title;
+    else box.removeAttribute("title");
   });
 
   container.addEventListener("change", (e) => {

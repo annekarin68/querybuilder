@@ -324,6 +324,8 @@ state. The hazard is contained in one file and one helper:
   (the typing box lies on top of the text, so the pointer is always over it),
   never on a placeholder, and one on each chosen label of a multi-select, so a
   name cut off with "…" can be read on hover (kept in step on every change).
+  What the title says is `hoverTitle` (`format.ts`, pure): the text, trimmed,
+  or no attribute at all; a condition's value box uses it too.
 - **`src/ui/panel.ts`** — `paint(container, html)`: `destroy`, swap
   `innerHTML`, `activate`. The only way a panel updates its DOM.
 
@@ -428,7 +430,7 @@ src/
                        toast or nothing after a toggle), planRain, startRain.
     docsResize.ts      wireDocsResize — drag/keyboard resizing of the data dictionary, width kept in localStorage.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
-                       displayLabel, databaseTitle, countLabel, formatWhen, formatDate.
+                       displayLabel, databaseTitle, countLabel, formatWhen, formatDate, hoverTitle.
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
@@ -1167,7 +1169,9 @@ condition).
   2026-10-13). `app.ts` stores the result in `AppState.serverIssues`.
   `placeIssues` moves an issue to a node that is drawn: the outermost
   collapsed group around a hidden node, or the root group for an id the query
-  doesn't have. Issues that end up the same on one node are kept once.
+  doesn't have. Issues that end up the same on one node are kept once; if
+  one of them came from the server, the one kept is marked `fromServer`, so
+  it is still drawn as the server's.
 - **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet
   clears field, operator and value; a new field clears operator and value; an
   operator change that alters the arity resets the value instead of reading
@@ -1841,7 +1845,8 @@ or the result. The result is a **table**, one row per event, in pages of 100
   only the JSON scrolls, never the dialog as well. It is built like the saved-queries
   dialog: created once by the shell (`Shell.eventDialog`), painted from the
   state (`openEventId`, `openEventOf`) and opened or closed to match it. The
-  focus starts on **Close**; **Close**, Escape and any other close tell the
+  focus starts on **Close**. While the same result stays open the dialog is
+  not repainted, which would send the JSON back to its top. **Close**, Escape and any other close tell the
   state (`app.closeEvent`) and the focus goes back to that result's id button
   (or to the card when the table is gone). The dialog closes by itself when
   the result is no longer on screen (a new run, another query or database, or
