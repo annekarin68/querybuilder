@@ -1576,6 +1576,21 @@ describe("saved queries: deleting", () => {
     expect(reopening.store.getState().savedListNotice).toBeNull();
   });
 
+  it("a delete that fails after the dialog was closed leaves no notice behind", async () => {
+    const answer = deferred<void>();
+    const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
+    const { app, store } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    app.closeSavedDialog();
+    answer.reject(new ApiError(503, "down"));
+    await flushPromises();
+    expect(store.getState().savedListNotice).toBeNull();
+  });
+
   it("a 401 on delete redirects to log in", async () => {
     const api = fakeApi({
       deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(401, "no"))),
