@@ -29,6 +29,9 @@ const PAIRS: [string, string][] = [
   ["qb-muted", "qb-surface"],
   ["qb-muted", "qb-bg"],
   ["qb-subtle", "qb-surface"],
+  // A field row's background: its "More:" hint and its text sit on it.
+  ["qb-subtle", "qb-surface-2"],
+  ["qb-muted", "qb-surface-2"],
   ["qb-text-on-fill", "qb-topbar"],
   ["qb-topbar-text", "qb-topbar"],
   ["qb-topbar-muted", "qb-topbar"],

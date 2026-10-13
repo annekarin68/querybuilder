@@ -1407,6 +1407,28 @@ body {
 .qb-doc-field[open] .qb-doc-field-blurb {
   display: none; /* the full text is in the body below */
 }
+/* A plain field row's only text, in full: nothing is hidden behind an arrow,
+   so nothing may be cut off either. Same indent as the blurb. */
+.qb-doc-field-text {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  padding-left: 3rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+  overflow-wrap: anywhere;
+}
+/* What opening a field adds ("More: 12 previously seen values"): says that the
+   arrow shows something new. Gone once the row is open. */
+.qb-doc-field-more {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  padding-left: 3rem;
+  font-size: 0.72rem;
+  color: var(--qb-subtle);
+}
+.qb-doc-field[open] .qb-doc-field-more {
+  display: none;
+}
 .qb-doc-field-body {
   /* Starts at the field name's left edge (3.5rem from the row's edge, as above). */
   padding: 0 0.6rem 0.6rem 3.5rem;

@@ -2,6 +2,7 @@ import type { AppState } from "../state";
 import type { Database, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { compact, countLabel, displayLabel, exact, matchRatio } from "./format";
+import { fieldPreview } from "./docsField";
 import { filterStatus, groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { TEXT_SOURCES, type TextSource } from "../config";
@@ -88,11 +89,9 @@ export function valuesHeadingId(section: string, facetId: string, fieldId: strin
 function valuesHtml(
   facet: Facet,
   field: Facet["fields"][number],
-  catalog: FieldCatalog | null,
+  options: string[],
   section: string,
 ): string {
-  const options =
-    findField(catalog ?? { facets: [], fields: [] }, facet.id, field.id)?.options ?? [];
   if (options.length === 0) return "";
   const shown = options.slice(0, MAX_VALUES_SHOWN).map((value) => {
     const item = dragData({ type: "value", facetId: facet.id, fieldId: field.id, value });
@@ -119,34 +118,36 @@ function fieldHtml(
   section: string,
 ): string {
   const item = dragData({ type: "field", facetId: facet.id, fieldId: f.id });
-  const blurb = f.comment || f.description;
-  const values = valuesHtml(facet, f, catalog, section);
-  // A field with nothing to show when opened is a plain row, not a <details>:
-  // an arrow that opens onto nothing would teach people to distrust the arrows.
-  if (!blurb && !values) {
-    return `<div class="qb-doc-field is-leaf" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
-      <div class="qb-doc-field-row">
-        ${chevronSpacer}
+  const options = findField(catalog ?? { facets: [], fields: [] }, facet.id, f.id)?.options ?? [];
+  const { text, more } = fieldPreview(f, options.length);
+  const textHtml = (cls: string) =>
+    text ? `<span class="${cls}">${sourceLogo(text.source)}${escapeHtml(text.body)}</span>` : "";
+  const head = `
         ${grip}
         <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
         <span class="qb-field-type">${escapeHtml(f.typeName)}</span>
-        ${addButton(f.name, "Add")}
+        ${addButton(f.name, "Add")}`;
+  // Nothing more to see when opened: a plain row, not a <details>, showing
+  // its text in full. An arrow that opens onto the same text again taught
+  // users to distrust the arrows (2026-10-13).
+  if (more.length === 0) {
+    return `<div class="qb-doc-field is-leaf" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
+      <div class="qb-doc-field-row">
+        ${chevronSpacer}${head}
+        ${textHtml("qb-doc-field-text")}
       </div>
     </div>`;
   }
   return `<details class="qb-doc-field" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
       <summary>
-        ${chevron}
-        ${grip}
-        <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
-        <span class="qb-field-type">${escapeHtml(f.typeName)}</span>
-        ${addButton(f.name, "Add")}
-        ${blurb ? `<span class="qb-doc-field-blurb">${escapeHtml(blurb)}</span>` : ""}
+        ${chevron}${head}
+        ${textHtml("qb-doc-field-blurb")}
+        <span class="qb-doc-field-more">More: ${escapeHtml(more.join(" · "))}</span>
       </summary>
       <div class="qb-doc-field-body">
         ${f.comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(f.comment)}</p>` : ""}
         ${f.description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(f.description)}</p>` : ""}
-        ${values}
+        ${valuesHtml(facet, f, options, section)}
       </div>
     </details>`;
 }

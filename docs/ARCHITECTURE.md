@@ -423,6 +423,7 @@ src/
     savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint and
                        escapeAction (pure), renderSavedDialog (paints and opens/closes the <dialog>),
                        wireSavedDialog.
+    docsField.ts       fieldPreview — what a dictionary field row shows closed, and what opening adds (pure).
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
     statsPanel.ts      The statistics column (render + wiring: Show, Try again).
@@ -1180,15 +1181,21 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    third-party group (if not blank), `comment` and `description`, each starting
    with a small logo saying who wrote it (`TEXT_SOURCES`, below), and "In N
    events (x%)", then the fields.
-3. **Field rows** — name, type and a one-line blurb (`comment`, else
-   `description`) in plain sight, not hidden in a hover; opened, the full
-   texts and the field's known values. A field with no comment, no description
-   and no known values has nothing to open, so it is a plain row (`is-leaf`, a
-   `<div>`, not a `<details>`): no arrow, but a spacer of the arrow's width
-   (`.qb-chevron-spacer`) so its grip and name line up with the other rows.
-   The one-line blurb stays inside its row at every width: it sets
-   `box-sizing: border-box` itself, because everything inside a `<details>`
-   inherits `content-box` (the browser's own box around the content is not
+3. **Field rows** — name, type and our comment (else the third party's
+   description), with the source's logo, in plain sight. A row opens only when
+   opening shows something new (`fieldPreview`, `docsField.ts`): a second text,
+   or known values. Then its closed line is cut to two lines and followed by
+   what opening adds ("More: third-party description · 12 previously seen
+   values"); opened, it shows both texts and the known values. A field with one
+   text and no known values is a plain row (`is-leaf`, a `<div>`, not a
+   `<details>`) that shows that text in full, wrapped, with no arrow but a
+   spacer of the arrow's width (`.qb-chevron-spacer`) so its grip and name line
+   up with the other rows. **Decided 2026-10-13:** users kept opening fields
+   only to read the same short text again; no character limit is used, because
+   how much fits depends on the dictionary's width.
+   The two-line blurb, the plain row's text and the "More:" line stay inside
+   their row at every width: each sets `box-sizing: border-box` itself, because
+   everything inside a `<details>` inherits `content-box` (the browser's own box around the content is not
    matched by Fomantic's reset), so its 100% width would otherwise be added
    to its indent. A long word breaks (`overflow-wrap: anywhere`).
 4. **Previously seen values** — the field's pick-list (`CatalogField.options`)
