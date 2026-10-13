@@ -427,7 +427,7 @@ src/
     docsField.ts       fieldPreview — what a dictionary field row shows closed, and what opening adds (pure).
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
-    statsPanel.ts      The statistics column (render + wiring: Show, Try again).
+    statsPanel.ts      The statistics column (render + wiring: Show problem, Try again).
     dataPreview.ts     Matching events and the Run button (render + wiring).
     accountMenu.ts     The top-bar account menu (render + wiring).
 mock-server/           Dev-only stand-in backend — see "Mock server".
@@ -691,6 +691,25 @@ comments, `/api/stats` and the like are short for `{prefix}/stats`.
 
 A body that isn't a well-formed `QueryRequest` is answered with `400`.
 
+**Not yet confirmed by the backend (2026-10-13).** The frontend implements the
+shapes below as proposed, and asks the backend team to confirm or correct them:
+
+- `GET /users/me`: the spelling of the keys (`sub` or `user_id`,
+  `preferred_username` or `username`), and whether login, callback and logout
+  stay under `/auth`.
+- `POST /filter/execute`: snake_case or camelCase for the whole API; what the
+  `values` list means (one object per occurrence of the facet in the event?) and
+  whether a facet can appear twice in `items`; null versus missing values; a
+  `truncated` flag (or a total) for the capped result; an optional database on
+  each event; the same `QueryRequest` body and the same `401` / `403` as before.
+- Whether some `403` reasons must be shown to users. Today the GUI never shows
+  the server's text (a `403` shows the plain `userMessage` text; the server's
+  words go to the console).
+
+Until the answers come, the proposed shapes stay. If an answer differs, only
+`src/api/` (`types.ts`, `response.ts`) and the mock server change; the rest of
+the app uses the model ("Data model").
+
 ### Data model
 
 `src/model.ts` is the frontend's own description of its data — `Database`,
@@ -726,7 +745,6 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **A statistics line** becomes a `DatabaseResult` that is either `"ok"`
   (with a `matchCount`) or `"failed"` (with `errors`, each a `DatabaseError`:
   `message`, `kind`, and the `nodeId` it points at or `null`): see below.
-
 - **An event's id** is a GUID (text); its values are kept per occurrence,
   because the backend may list a facet more than once in one event.
 - **A missing name.** A database or facet with a blank `name` shows its id.
@@ -792,8 +810,9 @@ like an `Issue` (any other kind reads as `"invalid"`). The items decide
 whether Run is allowed, so a plain-text item is a contract error; a blank
 `message` reads as "The server found a problem in the query." An error with a
 `nodeId` is shown **once, in the query builder, next to what is wrong**; the
-statistics panel only counts them ("Right — `statsPanel.ts`"). An error
-without a `nodeId` is shown in that database's row. `app.ts` keeps the
+statistics panel only offers **Show problem**, which jumps to it ("Right —
+`statsPanel.ts`"). An error without a `nodeId` makes that database's row a red
+bar whose tooltip and `aria-label` give the reason. `app.ts` keeps the
 errors with a `nodeId` in
 `AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`), once however
 many databases report them, and they block Run (`runBlocker` → `"rejected"`).
@@ -862,7 +881,8 @@ about auth. Run always attempts the request and `app.ts` reacts to the answer:
 - `403` → a `403` only means "some requirement is unmet", and compliance may
   not be the only one (a user may not be allowed a database). So `app.ts`
   first asks `GET /api/compliance/status`: if it says `"required"`, save the
-  query and go to the compliance flow; otherwise show the `403`'s message.
+  query and go to the compliance flow; otherwise show the plain `userMessage`
+  text for a `403` (the server's text goes to the console only).
   Redirecting on every `403` would send such a user round in circles.
 - **Decision: only a click may redirect.** This reaction must only ever wrap a
   request the user started (Run). Never wrap an automatic one such as the
@@ -1055,7 +1075,9 @@ the value is `null`. A facet with nothing else chosen is not facet-level, just
 unfinished: the row's explicit whole-facet test, picked in the Field dropdown,
 is what sets the operator ("Centre — `queryBuilder.ts`"), so the two states can
 be told apart.
-Dropping a facet or a tag on the builder creates such conditions.
+Dropping a facet on the builder creates such a condition; dropping a tag creates
+one ALL group of them, one per facet carrying the tag (a single facet: just the
+condition).
 
 - **`tree.ts`** — pure and immutable: every edit is "read `state.query`, call
   one `tree.ts` function, write the new tree back". `sameSemantics` tells a
@@ -1212,10 +1234,13 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    only to read the same short text again; no character limit is used, because
    how much fits depends on the dictionary's width.
    The two-line blurb, the plain row's text and the "More:" line stay inside
-   their row at every width: each sets `box-sizing: border-box` itself, because
-   everything inside a `<details>` inherits `content-box` (the browser's own box around the content is not
-   matched by Fomantic's reset), so its 100% width would otherwise be added
-   to its indent. A long word breaks (`overflow-wrap: anywhere`).
+   their row at every width. **Rule: an element inside a `<details>` body that
+   has `width: 100%` plus padding needs `box-sizing: border-box` itself.** The
+   cause: the `<details>` content wrapper (`::details-content`) is not matched
+   by Fomantic's `* { box-sizing: inherit }` reset, so its descendants fall
+   back to `content-box` (observed in Chromium) and the 100% width would
+   otherwise be added to the indent. A long word breaks (`overflow-wrap:
+   anywhere`).
 4. **Previously seen values** — the field's pick-list (`CatalogField.options`)
    as a labelled block: the heading "Previously seen values (N)" (N counts all
    known values), a hint ("Drag one or press + to add *field* equals *value*.
@@ -1654,6 +1679,10 @@ script can focus it without making it a Tab stop). **Try again** calls
 `app.retryStats`, which fetches the statistics again for the current query and
 scope. `wireStatsPanel` owns both buttons with one delegated listener.
 
+A failed database's row does not show its `notes` as text any more (they are
+part of `failureReasons`, so they are in the tooltip and the label); a
+successful database's row still prints its notes under the bar.
+
 **Decision: no duplication.** The maintainers asked whether the node errors
 should also be listed in the statistics. They are not: the same message in the
 builder and in every database row is noise, and only the builder lets the user
@@ -1891,9 +1920,10 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   page's live region, so it is `AppState.savedListNotice`, shown in the dialog.
   Deleting a saved query that is already gone (`404`) counts as deleted.
 - A database that finds a problem in the query reports it in its stats
-  line, not as an HTTP error: the statistics panel shows it in that
-  database's row if it points at no query node; an error that points at a
-  query node is shown once, in the builder, and blocks Run ("Statistics
+  line, not as an HTTP error: the statistics panel shows it as that
+  database's red bar (reason in its tooltip and label) if it points at no query
+  node; an error that points at a query node is shown once, in the builder
+  (the panel offers **Show problem**), and blocks Run ("Statistics
   lines", "Right — `statsPanel.ts`").
 - A failed statistics request shows "Couldn't get statistics" with **Try
   again** (`app.retryStats`).
