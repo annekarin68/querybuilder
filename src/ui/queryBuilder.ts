@@ -568,7 +568,7 @@ export function wireQueryBuilder(
    * back in that dropdown, so its menu is opened again.
    */
   function commitTypedValue(row: HTMLElement): void {
-    const menuWasOpen = document.activeElement?.closest(".ui.dropdown.active") != null;
+    const menuWasOpen = Boolean(document.activeElement?.closest(".ui.dropdown.active"));
     handleRowChange(row);
     const dropdown = document.activeElement?.closest<HTMLElement>(".ui.dropdown");
     if (menuWasOpen && dropdown && container.contains(dropdown)) openDropdown(dropdown);
@@ -576,8 +576,9 @@ export function wireQueryBuilder(
 
   // A typed value is committed later than the `change` that announced it, at
   // the moment `afterPointer` picks (src/util/afterPointer.ts says why; so does
-  // "Centre — `queryBuilder.ts`" in docs/ARCHITECTURE.md). These listeners are on `document`
-  // and never removed, which is fine because wireQueryBuilder is called once.
+  // "Centre — `queryBuilder.ts`" in docs/ARCHITECTURE.md). These listeners are
+  // on `document` and never removed, which is fine because wireQueryBuilder is
+  // called once.
   let pointerIsDown = false;
   const afterPointer = createAfterPointer({
     isPointerDown: () => pointerIsDown,
