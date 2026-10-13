@@ -45,6 +45,7 @@ import {
   shouldFlushBeforeClick,
   type ClickTargetDescription,
 } from "../util/afterPointer";
+import { RESTORED_MESSAGE } from "../util/keptQuery";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel, hoverTitle } from "./format";
@@ -95,6 +96,22 @@ export function noticeHtml(notice: string | null): string {
   return `<div class="ui warning message qb-notice">
       <i class="close icon" data-action="dismiss-notice" role="button" tabindex="0" aria-label="Dismiss"></i>
       <p>${escapeHtml(notice)}</p>
+    </div>`;
+}
+
+/**
+ * The notice that this page load brought the query back (a reload, a Back
+ * from the login page: `restoredNotice`, set by `app.start`). Information, not
+ * a warning, with **Start fresh** and a ✕, both real buttons. It has no
+ * live-region role: `app.start` already says the same words through
+ * `announce`, and a role would read them twice.
+ */
+export function restoredNoticeHtml(restored: boolean): string {
+  if (!restored) return "";
+  return `<div class="ui info message qb-restored">
+      <p>${escapeHtml(RESTORED_MESSAGE)}</p>
+      <button type="button" class="ui mini basic button" data-action="start-fresh">Start fresh</button>
+      <button type="button" class="qb-icon-btn" data-action="dismiss-restored" aria-label="Dismiss" title="Dismiss"><i class="close icon"></i></button>
     </div>`;
 }
 
@@ -492,7 +509,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   };
   paint(
     el,
-    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
+    `${restoredNoticeHtml(state.restoredNotice)}${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
        ${queryTitleHtml(state)}
        ${nodeHtml(ctx, state.query, true, null)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
@@ -526,6 +543,9 @@ export function wireQueryBuilder(
     /** The title's **Save…** and **Saved queries** (savedQueries.ts shows the dialogs). */
     onOpenSaveDialog(): void;
     onOpenSavedList(): void;
+    /** The Restored notice's **Start fresh** and ✕. */
+    onStartFresh(): void;
+    onDismissRestored(): void;
   },
 ): (state: AppState) => void {
   /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
@@ -644,10 +664,12 @@ export function wireQueryBuilder(
     // that line: that is not a request to unfold it. (Only the header itself,
     // not a button of its own, is a toggle by a click anywhere on its line.)
     if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
-    // The title's buttons sit outside every row and group, so they are
-    // handled before the node lookup below.
+    // The title's buttons and the Restored notice's sit outside every row and
+    // group, so they are handled before the node lookup below.
     if (btn?.dataset.action === "open-save-dialog") return hooks.onOpenSaveDialog();
     if (btn?.dataset.action === "open-saved-list") return hooks.onOpenSavedList();
+    if (btn?.dataset.action === "start-fresh") return hooks.onStartFresh();
+    if (btn?.dataset.action === "dismiss-restored") return hooks.onDismissRestored();
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
     // An unavailable Move button (an end of the list) must do nothing, not even

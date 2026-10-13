@@ -54,12 +54,6 @@ const app = createApp({
   },
 });
 
-// Links straight into the login or compliance flow (marked data-flow-link)
-// save the in-progress query first, so it survives the round trip.
-document.addEventListener("click", (e) => {
-  if ((e.target as HTMLElement).closest("a[data-flow-link]")) app.saveQueryBeforeRedirect();
-});
-
 // Hidden: five quick clicks on the logo switch the mascot to the easter-egg set
 // (five more switch back) and make it rain with the new set (instead, a toast
 // when switching on, for people who prefer reduced motion).
@@ -104,6 +98,8 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   announce: shell.announce,
   onOpenSaveDialog: app.openSaveDialog,
   onOpenSavedList: app.openSavedList,
+  onStartFresh: app.startFresh,
+  onDismissRestored: app.dismissRestoredNotice,
 });
 wireSavedDialog(shell.savedDialog, app);
 wireEventDialog(shell.eventDialog, app.closeEvent);
@@ -133,6 +129,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "serverIssues",
       "facets",
       "dropNotice",
+      "restoredNotice",
       "openSaved",
       "selectedDatabaseIds",
     ],
@@ -249,11 +246,11 @@ store.subscribe((state, changed) => {
 
 /**
  * `?resume=1` marks a load as the direct return-hop from the login or
- * compliance callback (both redirect here) — the ONE signal that tells this
- * load to restore the pending query (src/util/pendingQuery.ts), as opposed to
- * a generic revisit finding a stale leftover sessionStorage entry from an
- * abandoned attempt. Stripped from the URL immediately so a manual refresh
- * doesn't re-trigger this.
+ * compliance callback (both redirect here). Such a load restores the kept
+ * query (src/util/keptQuery.ts) whatever it holds and without the Restored
+ * notice; any other load restores it only if something was chosen in it, and
+ * says so (`app.start`). Stripped from the URL immediately, so a manual
+ * refresh counts as an ordinary reload.
  */
 function consumeResumeParam(): boolean {
   const url = new URL(window.location.href);
@@ -274,8 +271,9 @@ function consumeResumeParam(): boolean {
 function showFatalError(err: unknown): void {
   console.error("Could not load the app:", err);
   const { message, action } = startupFailure(err);
-  // Log in is a plain link, without data-flow-link: there is no query on
-  // screen to keep for the return trip.
+  // Log in is a plain link. Nothing was on screen yet, so the kept query (if
+  // the tab has one) is still the one from before, and the return trip
+  // restores it.
   const button =
     action === "log-in"
       ? `<a class="ui primary button" href="${escapeHtml(api.LOGIN_URL)}" data-fatal-action>Log in</a>`

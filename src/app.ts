@@ -14,7 +14,7 @@ import {
 } from "./query/drop";
 import {
   addChild,
-  countConditions,
+  emptyQuery,
   findNode,
   moveNode,
   moveSibling,
@@ -39,7 +39,14 @@ import {
 } from "./state";
 import { debounce } from "./util/debounce";
 import { pageOf } from "./util/paging";
-import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
+import {
+  forgetKeptQuery,
+  isWorthRestoring,
+  keepQuery,
+  readKeptQuery,
+  RESTORED_MESSAGE,
+  STARTED_FRESH_MESSAGE,
+} from "./util/keptQuery";
 import { requestSlot } from "./util/requestSlot";
 
 /**
@@ -85,6 +92,24 @@ export interface AppDeps {
 
 /** How long the query must stay unchanged before statistics are fetched. */
 export const STATS_DEBOUNCE_MS = 400;
+
+/** The query a first visit starts with, and Start fresh puts back: one
+ *  blank row, so the user can begin by choosing a facet. */
+function startingQuery(): Group {
+  const root = emptyQuery();
+  return addChild(root, root.id, newCondition());
+}
+
+/** The warning for databases a saved or kept selection named that no longer
+ *  exist (they were left out): none, or one sentence. */
+function goneDatabasesMessage(count: number, which: "saved" | "selected"): string[] {
+  if (count === 0) return [];
+  return [
+    count === 1
+      ? `1 ${which} database no longer exists and was left out.`
+      : `${count} ${which} databases no longer exist and were left out.`,
+  ];
+}
 
 /**
  * What a screen reader hears when Run query's panel changes: it repaints out of
@@ -135,17 +160,28 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     }
   }
 
-  /** Save the query (it survives the page load) and leave for `url`. */
+  // The kept query (src/util/keptQuery.ts): every change to the query or the
+  // database selection is copied at once, so the next page load in this tab
+  // finds what was on screen.
+  store.subscribe((state, changed) => {
+    if (changed.has("query") || changed.has("selectedDatabaseIds")) {
+      keepQuery(state.query, state.selectedDatabaseIds);
+    }
+  });
+
+  /** Leave for `url`; the next page load restores the kept query. The copy
+   *  is already current (see the `store.subscribe` above); it is written once
+   *  more here so that leaving never depends on that. */
   function redirectInto(url: string): void {
     const s = store.getState();
-    savePendingQuery(s.query, s.selectedDatabaseIds);
+    keepQuery(s.query, s.selectedDatabaseIds);
     navigate(url);
   }
 
   /**
    * Run query. It always attempts the request and reacts to what comes back: a
    * 401 (not logged in) or 403 (logged in, some requirement unmet — e.g.
-   * compliance) saves the query and navigates into the matching flow.
+   * compliance) keeps the query and navigates into the matching flow.
    *
    * Only ever do this from a call triggered by an explicit user gesture (a Run
    * click). Never wrap it around an automatically-fired request such as
@@ -251,6 +287,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
         // Compliance is piggybacked on the session server-side, so it's gone too
         // once the session ends — reset the local display state to match.
         store.setState({ auth: { status: "anonymous" }, compliance: { status: "required" } });
+        // A browser that restores its last session would bring the kept query
+        // back for whoever opens it next: logging out hands the browser over.
+        // The query stays on screen (building on anonymously is fine); a later
+        // edit is kept again, as new work.
+        forgetKeptQuery();
       })
       .catch((err) => {
         console.error("Logout failed:", err);
@@ -281,6 +322,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     statsSlot.cancel();
     previewSlot.cancel();
     store.setState({
+      // An edit means the user carries on with the restored query (or a fresh
+      // one): the Restored notice has nothing left to offer.
+      restoredNotice: false,
       ...patch,
       stats: { status: "idle", results: [] },
       serverIssues: [],
@@ -407,29 +451,43 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     changeScope({ selectedDatabaseIds: nextIds });
   }
 
-  /**
-   * Any link that navigates straight into the login or compliance flow (the
-   * account menu, the Matching events card's notes) must save the in-progress
-   * query first, not just Run's own redirect — otherwise a user who follows
-   * the on-screen guidance loses their query.
-   */
-  function saveQueryBeforeRedirect(): void {
-    const s = store.getState();
-    if (countConditions(s.query) > 0) savePendingQuery(s.query, s.selectedDatabaseIds);
+  /** The Restored notice's **Start fresh**: the starting query with every
+   *  database, as on a first visit. It goes through `changeScope` like any
+   *  edit, which also hides the notice. Not tied to a saved query either: a
+   *  save while the notice was up set `openSaved` without hiding it. */
+  function startFresh(): void {
+    const { databases, catalog } = store.getState();
+    const query = startingQuery();
+    changeScope({
+      query,
+      selectedDatabaseIds: (databases ?? []).map((d) => d.id),
+      issues: catalog ? validateQuery(query, catalog) : [],
+      openSaved: null,
+      dropNotice: null,
+    });
+    announce(STARTED_FRESH_MESSAGE);
+  }
+
+  /** The Restored notice's ✕: hide it and keep the restored query. */
+  function dismissRestoredNotice(): void {
+    store.setState({ restoredNotice: false });
   }
 
   /**
-   * Load everything the app needs and set the first real state. `resumed` is
-   * true on the return hop from the login or compliance flow: only then is the
-   * pending query (src/util/pendingQuery.ts) restored. Rejects if databases or
-   * facets can't be loaded — without them there is nothing to show.
+   * Load everything the app needs and set the first real state, restoring the
+   * kept query (src/util/keptQuery.ts) if there is one worth restoring.
+   * `resumed` is true on the return hop from the login or compliance flow.
+   * Rejects if databases or facets can't be loaded — without them there is
+   * nothing to show (and the kept query stays for the next try).
    */
   async function start(resumed: boolean): Promise<void> {
-    // Always take (and so clear) a pending entry, even on a normal load: a stale
-    // one from an abandoned attempt must not resurface on some later, unrelated
-    // return hop. Only a return hop actually uses it.
-    const taken = takePendingQuery();
-    const pending = resumed ? taken : null;
+    const kept = readKeptQuery();
+    // After logging in the user expects their query back, so it is restored
+    // whatever it holds, without a word. On any other load (a reload, a Back
+    // from the login page, a reopened tab) it is restored only if something
+    // was chosen in it, and the Restored notice offers Start fresh.
+    const pending = kept && (resumed || isWorthRestoring(kept.query)) ? kept : null;
+    const showRestored = pending !== null && !resumed;
 
     const [databases, facets, user, compliance] = await Promise.all([
       api.getDatabases(),
@@ -450,27 +508,31 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
 
     const catalog = buildFieldCatalog(facets);
     // A restored query replaces the normal seed (one empty condition).
-    const initial = store.getState().query;
-    const query = pending ? pending.query : addChild(initial, initial.id, newCondition());
+    const query = pending ? pending.query : startingQuery();
+    // A restored selection may name databases that no longer exist (it can
+    // outlive a backend change): keep only the ones this load knows, and say
+    // which went. Otherwise every database is selected by default.
+    const selectedDatabaseIds = pending
+      ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.id === id))
+      : databases.map((d) => d.id);
+    const gone = pending ? pending.selectedDatabaseIds.length - selectedDatabaseIds.length : 0;
     store.setState({
       catalog,
       databases,
       facets,
-      // A restored selection may name databases that no longer exist (it can
-      // outlive a backend change) — keep only ones this load actually knows.
-      // Otherwise every database is selected by default.
-      selectedDatabaseIds: pending
-        ? pending.selectedDatabaseIds.filter((id) => databases.some((d) => d.id === id))
-        : databases.map((d) => d.id),
+      selectedDatabaseIds,
       query,
       // The seed bypasses onQueryChange, so validate here — otherwise Run
       // would be enabled on the empty seeded condition.
       issues: validateQuery(query, catalog),
       auth: user ? { status: "authenticated", user } : { status: "anonymous" },
       compliance,
+      restoredNotice: showRestored,
     });
-    // A restored query is already complete, so fetch its statistics now, as
-    // any in-app edit would. The empty seed has nothing runnable yet.
+    if (showRestored) announce(RESTORED_MESSAGE);
+    setNotice(goneDatabasesMessage(gone, "selected"));
+    // Fetch a restored query's statistics now, as any in-app edit would (an
+    // unfinished one fetches nothing). The empty seed has nothing runnable yet.
     if (pending) refreshStats();
   }
 
@@ -479,7 +541,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   // `savedListNotice`; everything they do happens here.
 
   /** A saved-query request failed. A 401 means there is no session: redirect
-   *  like Run does (the query is saved first). Anything else is shown by `show`. */
+   *  like Run does (the query is kept first). Anything else is shown by `show`. */
   function savedCallFailed(err: unknown, show: (error: string) => void): void {
     if (err instanceof ApiError && err.status === 401) return redirectInto(LOGIN_URL);
     console.error("Saved queries request failed:", err);
@@ -673,15 +735,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       savedListNotice: null,
     });
     announce(`Opened “${saved.name}”.`);
-    setNotice(
-      left === 0
-        ? []
-        : [
-            left === 1
-              ? "1 saved database no longer exists and was left out."
-              : `${left} saved databases no longer exist and were left out.`,
-          ],
-    );
+    setNotice(goneDatabasesMessage(left, "saved"));
   }
 
   function askOpenSaved(id: string): void {
@@ -787,7 +841,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onDatabasesChange,
     onLogout,
     onInvalidateCompliance,
-    saveQueryBeforeRedirect,
+    startFresh,
+    dismissRestoredNotice,
     retryStats,
     openSaveDialog,
     openSavedList,
