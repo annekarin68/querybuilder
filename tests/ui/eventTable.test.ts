@@ -45,6 +45,20 @@ describe("tableColumns", () => {
     expect(tableColumns(events, facets, ["b"]).map((c) => c.facetId)).toEqual(["b", "a", "zz"]);
   });
 
+  it("keeps several FIRST_COLUMNS facets in their listed order, even against facet number", () => {
+    expect(tableColumns(events, facets, ["b", "a"]).map((c) => c.facetId)).toEqual([
+      "b",
+      "a",
+      "zz",
+    ]);
+  });
+
+  it("orders known facets with the same number by id, whatever the event order", () => {
+    const tied = [facet("y", 5), facet("x", 5)];
+    const inEventOrder = [event("e", { y: [{ k: 1 }], x: [{ k: 1 }] })];
+    expect(tableColumns(inEventOrder, tied, []).map((c) => c.facetId)).toEqual(["x", "y"]);
+  });
+
   it("gives no column to a FIRST_COLUMNS facet that no result holds", () => {
     expect(tableColumns(events, facets, ["c", "b"]).map((c) => c.facetId)).toEqual([
       "b",
@@ -104,6 +118,11 @@ describe("cellSets", () => {
 
   it("keeps an occurrence with no values as an empty set", () => {
     expect(cellSets(event("e", { a: [{}] }), a!)).toEqual([[]]);
+  });
+
+  it("is empty, not an error, for a facet named like a built-in property that the result lacks", () => {
+    const col = tableColumns([event("e1", { constructor: [{ k: 1 }] })], facets, [])[0]!;
+    expect(cellSets(event("e2", { a: [{ pos: "p" }] }), col)).toEqual([]);
   });
 
   it("treats a field named like a built-in object property as missing when absent", () => {

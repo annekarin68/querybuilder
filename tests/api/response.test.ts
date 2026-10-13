@@ -210,6 +210,11 @@ describe("toEvent", () => {
     });
   });
 
+  it("reads a facet named like a built-in property", () => {
+    const body = { id: "e1", items: [{ facet_label: "constructor", values: [{ k: 1 }] }] };
+    expect(toEvent(read<EventResponse>(body)).values).toEqual({ constructor: [{ k: 1 }] });
+  });
+
   it("throws a ContractError when the id is missing", () => {
     expect(() => toEvent(readBroken<EventResponse>({ items: [] }))).toThrow('"id"');
   });

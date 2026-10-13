@@ -57,7 +57,8 @@ export function tableColumns(
     if (listed(a) !== listed(b)) return listed(a) - listed(b);
     const na = byId.get(a)?.number;
     const nb = byId.get(b)?.number;
-    if (na !== undefined && nb !== undefined) return na - nb;
+    // Equal numbers (a backend quirk) fall back to the id, so the order never depends on event order.
+    if (na !== undefined && nb !== undefined) return na - nb || a.localeCompare(b);
     if (na !== undefined) return -1; // a known facet before an unknown one
     if (nb !== undefined) return 1;
     return a.localeCompare(b);
@@ -83,7 +84,12 @@ export function tableColumns(
  */
 export function cellSets(event: EventRecord, column: FacetColumn): CellEntry[][] {
   const known = new Set(column.fields.map((f) => f.id));
-  return (event.values[column.facetId] ?? []).map((occurrence) => [
+  // Checked with hasOwn: a plain `??` would take a built-in such as
+  // "constructor" from Object.prototype for an event that lacks the facet.
+  const occurrences = Object.hasOwn(event.values, column.facetId)
+    ? event.values[column.facetId]!
+    : [];
+  return occurrences.map((occurrence) => [
     // `in` would also find names every object inherits ("constructor",
     // "toString"), so a field with such an id would show JavaScript internals
     // instead of being treated as missing. Object.hasOwn checks only the
