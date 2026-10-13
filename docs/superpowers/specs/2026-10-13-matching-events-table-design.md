@@ -27,9 +27,11 @@ alignment, a data-grid library is a large dependency that fights `paint()`).
 
 After **Run query**, the Matching events card shows:
 
-- **"Events 101–200 of 1,987"** with **Previous** / **Next**. Pages hold **100
-  rows**. With 100 events or fewer the line just says "42 events" and there
-  are no paging buttons.
+- **"Results 101–200 of 1,987"** with **Previous** / **Next**. Pages hold
+  **100 rows**. With 100 results or fewer the line just says "42 results" and
+  there are no paging buttons. **"Results"** is the one word for the returned
+  sample, in this line and in the column headers, so nobody reads a count as a
+  total across all databases (maintainers, 2026-10-13).
 - **A scroll box** (both directions, at most about 70% of the window high)
   holding the table. Its **header row is sticky**: it stays visible while the
   user scrolls down, and moves sideways together with its columns, so a value
@@ -44,10 +46,11 @@ After **Run query**, the Matching events card shows:
      (`src/config.ts`, in that order), then the rest by **facet number
      ascending** (the backend's `id_number`); a facet that is in an event but
      not in the data dictionary comes last, by its label.
-- **Header cell:** the facet's name, and under it, small and muted, **"in N
-  events"** (N counted over the whole sample), so a mostly empty column is
-  recognised at once. The count is information only; it does not decide the
-  order.
+- **Header cell:** the facet's name, and under it, small and muted, **"in 12 of
+  1,987 results"** (counted over the whole sample, not only the current page),
+  so a mostly empty column is recognised at once and the count is clearly
+  about the sample, not about all databases. The count is information only; it
+  does not decide the order.
 - **Cell:** empty when the event lacks the facet. Otherwise **one boxed set per
   occurrence** of the facet in the event, each set listing `field: value`
   lines, e.g. `position: right` / `value: 2.2`. Several occurrences are separate
@@ -78,7 +81,7 @@ database change ("Correctness invariant").
   of `{ name, value }` in the column's field order, unknown keys after, `null`
   dropped.
 - `pageOf(total, page, size)` → the clamped page and its row range (`from`,
-  `to`, `pageCount`) for "Events 101–200 of 1,987".
+  `to`, `pageCount`) for "Results 101–200 of 1,987".
 - `eventTableHtml(events, columns, page)` → the table's HTML string (everything
   escaped), like every other panel.
 
@@ -95,7 +98,7 @@ keys.
 - `openEventId: string | null`: the event whose JSON dialog is open.
 
 **Actions (`src/app.ts`):** `showEventPage(page)` (clamps; announces "Showing
-events 101 to 200 of 1,987."), `openEvent(id)`, `closeEvent()`.
+results 101 to 200 of 1,987."), `openEvent(id)`, `closeEvent()`.
 
 **Dialog:** a second native `<dialog>` created once by `renderShell`, painted
 by a small `renderEventDialog` (heading "Event 6f1c2a9e…", the event's JSON in
@@ -152,7 +155,8 @@ cells, painted once per page change. The sticky header and column are CSS only.
   facets last; only occurring facets; counts over the whole sample),
   `cellSets` (dictionary field order, unknown keys after, occurrences kept
   apart, `null` dropped, empty set), `pageOf` (bounds, clamping, totals),
-  `eventTableHtml` (escaping, sets as separate `<dl>`s, header counts, caption,
+  `eventTableHtml` (escaping, sets as separate `<dl>`s, header counts worded "in
+  N of M results", caption,
   row headers), `toFacet` (`number` from `id_number`), `app` (`showEventPage`
   clamps and announces; a new run and a query edit reset the page;
   `openEvent` / `closeEvent`).
