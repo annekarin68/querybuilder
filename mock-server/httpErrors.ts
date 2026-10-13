@@ -3,7 +3,7 @@
  * the frontend copes when the backend fails (docs/ARCHITECTURE.md, "Mock
  * server"). The variable holds rules separated by commas:
  *
- *     MOCK_HTTP_ERRORS="POST /saved-queries=500, GET /databases=502:html"
+ *     MOCK_HTTP_ERRORS="POST /saved-queries=500, GET /documentation/databases=502:html"
  *
  * Each rule is `METHOD PATH=STATUS`. PATH is below the API prefix
  * ("/saved-queries", not "/api/v1/saved-queries"). `*` as METHOD or PATH

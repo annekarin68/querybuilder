@@ -63,7 +63,7 @@ const SEEDS: DatabaseSeed[] = [
 
 const TOTAL_ENTRYSETS = SEEDS.reduce((s, d) => s + d.totalEntrysets, 0);
 
-/** Every field here is the wire contract, so GET /api/databases sends this as-is. */
+/** Every field here is the wire contract, so GET /api/documentation/databases sends this as-is. */
 export const DATABASES: DatabasesResponse[] = SEEDS.map((s) => ({
   ...s,
   percentageOfTotal: (s.totalEntrysets / TOTAL_ENTRYSETS) * 100,

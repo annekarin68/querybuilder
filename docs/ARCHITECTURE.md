@@ -1938,7 +1938,7 @@ Besides `.env`, three environment variables, read by `index.ts`:
 |---|---|---|
 | `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/filter/validate` lines that simulate an unreachable database. `0` turns it off. |
 | `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/filter/validate` line. `0` = no pause. |
-| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /saved-queries=500, GET /databases=502:html"`. |
+| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /saved-queries=500, GET /documentation/databases=502:html"`. |
 
 The sample data is **fictional** vehicle telemetry, and the real backend's
 data differs — which is why `src/` must never name it (`src/config.ts` holds
