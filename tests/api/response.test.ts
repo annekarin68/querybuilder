@@ -215,6 +215,37 @@ describe("toEvent", () => {
     expect(toEvent(read<EventResponse>(body)).values).toEqual({ constructor: [{ k: 1 }] });
   });
 
+  it("merges a facet listed twice that is named like a built-in property", () => {
+    const body = {
+      id: "e1",
+      items: [
+        { facet_label: "constructor", values: [{ k: 1 }] },
+        { facet_label: "constructor", values: [{ k: 2 }] },
+      ],
+    };
+    expect(toEvent(read<EventResponse>(body)).values).toEqual({
+      constructor: [{ k: 1 }, { k: 2 }],
+    });
+  });
+
+  // A plain object can't hold "__proto__" as an ordinary key: assigning it
+  // changes the object's prototype instead, and the facet would vanish.
+  it('keeps a facet whose id is "__proto__"', () => {
+    const body = { id: "e1", items: [{ facet_label: "__proto__", values: [{ k: 1 }] }] };
+    const { values } = toEvent(read<EventResponse>(body));
+    expect(Object.keys(values)).toEqual(["__proto__"]);
+    expect(Object.getOwnPropertyDescriptor(values, "__proto__")?.value).toEqual([{ k: 1 }]);
+  });
+
+  it('keeps a field whose id is "__proto__"', () => {
+    // JSON.parse, as for a real response: a literal { __proto__: 5 } would set the prototype.
+    const occurrence: unknown = JSON.parse('{"__proto__": 5, "size": 7}');
+    const body = { id: "e1", items: [{ facet_label: "thing", values: [occurrence] }] };
+    const [first] = toEvent(readBroken<EventResponse>(body)).values.thing!;
+    expect(Object.keys(first!)).toEqual(["__proto__", "size"]);
+    expect(Object.getOwnPropertyDescriptor(first, "__proto__")?.value).toBe(5);
+  });
+
   it("throws a ContractError when the id is missing", () => {
     expect(() => toEvent(readBroken<EventResponse>({ items: [] }))).toThrow('"id"');
   });

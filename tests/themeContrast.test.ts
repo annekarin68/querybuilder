@@ -77,6 +77,9 @@ const GRAPHICS: [string, string][] = [
   ["qb-and", "qb-track"],
   ["qb-danger", "qb-track"],
   ["qb-danger", "qb-surface"],
+  // A failed bar is striped, so "failed" is not told by colour alone: its two
+  // stripe colours must be told apart from each other.
+  ["qb-danger", "qb-danger-stripe"],
 ];
 
 describe("statistics bars", () => {

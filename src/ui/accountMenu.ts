@@ -85,21 +85,33 @@ export function wireAccountMenu(
   container: HTMLElement,
   handlers: { onLogout(): void; onInvalidate(): void },
 ): void {
-  container.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    if (t.closest("[data-action='logout']")) handlers.onLogout();
-    else if (t.closest("[data-action='invalidate-compliance']")) handlers.onInvalidate();
-  });
   // A <details> menu doesn't close itself on an outside click or on Escape.
   const openMenu = () => container.querySelector<HTMLDetailsElement>("details.qb-account[open]");
+  /** Close the menu and put the focus on its chip, as Escape does. */
+  const closeMenu = () => {
+    const menu = openMenu();
+    menu?.removeAttribute("open");
+    menu?.querySelector<HTMLElement>("summary.qb-account-chip")?.focus();
+  };
+  container.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const logout = t.closest("[data-action='logout']");
+    const invalidate = t.closest("[data-action='invalidate-compliance']");
+    if (!logout && !invalidate) return;
+    // Closed before the request: a failure is shown as a toast at the top
+    // right, which would otherwise cover the open menu. A success repaints the
+    // menu closed anyway.
+    closeMenu();
+    if (logout) handlers.onLogout();
+    else handlers.onInvalidate();
+  });
   document.addEventListener("click", (e) => {
     if (!container.contains(e.target as Node)) openMenu()?.removeAttribute("open");
   });
   document.addEventListener("keydown", (e) => {
     const menu = openMenu();
     if (e.key !== "Escape" || !menu) return;
-    const focusWasInMenu = menu.contains(document.activeElement);
-    menu.removeAttribute("open");
-    if (focusWasInMenu) menu.querySelector<HTMLElement>("summary.qb-account-chip")?.focus();
+    if (menu.contains(document.activeElement)) closeMenu();
+    else menu.removeAttribute("open");
   });
 }

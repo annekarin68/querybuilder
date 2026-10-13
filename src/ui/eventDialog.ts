@@ -1,6 +1,6 @@
 import { runBlocker, type AppState, type RunInputs } from "../state";
 import type { EventRecord } from "../model";
-import { escapeHtml, paint } from "./panel";
+import { dialogBody, escapeHtml, paint } from "./panel";
 import { shortId } from "./eventTable";
 
 /**
@@ -50,7 +50,7 @@ export function renderEventDialog(dialog: HTMLDialogElement, state: AppState): v
   if (!event) {
     shownId.delete(dialog);
     if (dialog.open) dialog.close();
-    paint(dialog, "");
+    paint(dialogBody(dialog), "");
     // The table may have been repainted meanwhile, so the button is looked up again.
     if (before) {
       const doc = dialog.ownerDocument;
@@ -64,7 +64,7 @@ export function renderEventDialog(dialog: HTMLDialogElement, state: AppState): v
     return;
   }
   shownId.set(dialog, event.id);
-  paint(dialog, eventDialogHtml(event));
+  paint(dialogBody(dialog), eventDialogHtml(event));
   if (!dialog.open) dialog.showModal();
   if (before !== event.id) dialog.querySelector<HTMLElement>("[data-initial-focus]")?.focus();
 }

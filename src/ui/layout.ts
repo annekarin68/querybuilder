@@ -79,13 +79,22 @@ export interface Shell {
   /** Show the pickle with the face for `state`. */
   setMascot(face: MascotState, easterEgg: boolean): void;
   /** Say `message` to screen-reader users (a polite live region that is never
-   *  repainted, so repeating a message is heard again). */
+   *  repainted, so repeating a message is heard again). While a dialog is
+   *  open, its own region speaks: a modal dialog makes the page's one inert. */
   announce(message: string): void;
   /** Fold the data dictionary into its rail, or open it. */
   setSidebarCollapsed(collapsed: boolean): void;
   /** Listen for clicks on the workflow steps and the docs toggles. Call once. */
   onMenu(handler: { view(v: ActiveView): void; toggleSidebar(): void }): void;
 }
+
+/**
+ * What each shell `<dialog>` holds: the body its panel paints (`dialogBody`)
+ * and, beside it, the dialog's own live region. A modal dialog makes the rest
+ * of the page inert, so the page's region would not be heard while one is
+ * open; and a region inside the body would be wiped by every repaint.
+ */
+const DIALOG_INSIDE = `<div class="qb-dialog-body" data-dialog-body></div><div class="qb-sr-only" role="status" aria-live="polite" data-dialog-announcer></div>`;
 
 /**
  * The page frame, rendered once: a top bar (app name, workflow steps, account
@@ -131,8 +140,8 @@ export function renderShell(root: HTMLElement): Shell {
       <aside class="qb-col-stats" data-panel="stats"></aside>
     </div>
     <div class="qb-sr-only" role="status" aria-live="polite" data-announcer></div>
-    <dialog class="qb-dialog" data-panel="saved" aria-labelledby="${SAVED_TITLE_ID}"></dialog>
-    <dialog class="qb-dialog qb-event-dialog" data-panel="event" aria-labelledby="${EVENT_TITLE_ID}"></dialog>
+    <dialog class="qb-dialog" data-panel="saved" aria-labelledby="${SAVED_TITLE_ID}">${DIALOG_INSIDE}</dialog>
+    <dialog class="qb-dialog qb-event-dialog" data-panel="event" aria-labelledby="${EVENT_TITLE_ID}">${DIALOG_INSIDE}</dialog>
   `;
   const find = <T extends HTMLElement = HTMLElement>(selector: string) =>
     root.querySelector<T>(selector)!;
@@ -144,6 +153,9 @@ export function renderShell(root: HTMLElement): Shell {
   const steps = find('[data-menu="views"]');
   const logo = find<HTMLImageElement>(".qb-logo");
   const announcer = find("[data-announcer]");
+  /** Where `announce` speaks: the open dialog's region, else the page's. */
+  const liveRegion = () =>
+    root.querySelector<HTMLElement>("dialog[open] [data-dialog-announcer]") ?? announcer;
   /** Messages for the live region, collected until it is filled (see `announce`). */
   let waiting: string[] = [];
   // Face files that failed to load: never asked for again, so a missing file is
@@ -218,10 +230,14 @@ export function renderShell(root: HTMLElement): Shell {
       // Messages sent while it waits are read together, in order: a drop that
       // is only partly done says what it could not do and what it did, and the
       // second text would otherwise replace the first before it was spoken.
+      // The region is picked when the text goes in, 50 ms later: a dialog may
+      // have opened or closed by then.
       if (waiting.length === 0) {
-        announcer.textContent = "";
+        for (const region of root.querySelectorAll("[data-announcer], [data-dialog-announcer]")) {
+          region.textContent = "";
+        }
         setTimeout(() => {
-          announcer.textContent = waiting.join(" ");
+          liveRegion().textContent = waiting.join(" ");
           waiting = [];
         }, 50);
       }

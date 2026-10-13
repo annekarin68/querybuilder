@@ -1,7 +1,7 @@
 import type { AppState, SavedConfirm } from "../state";
 import type { SavedQuery } from "../model";
 import type { createApp } from "../app";
-import { escapeHtml, paint } from "./panel";
+import { dialogBody, escapeHtml, paint } from "./panel";
 import { countLabel, formatDate } from "./format";
 
 /**
@@ -345,7 +345,7 @@ function focusFirstControl(dialog: HTMLDialogElement): void {
 /**
  * Paint the dialog from the state and open or close it to match
  * `state.savedDialog`. The `<dialog>` itself is never replaced, only its
- * contents (paint()).
+ * body (paint(), dialogBody()).
  */
 export function renderSavedDialog(dialog: HTMLDialogElement, state: AppState): void {
   const before = shown.get(dialog) ?? null;
@@ -360,7 +360,7 @@ export function renderSavedDialog(dialog: HTMLDialogElement, state: AppState): v
     // Closed by the state: the close listener sees `shown` say null and does
     // nothing more.
     if (dialog.open) dialog.close();
-    paint(dialog, "");
+    paint(dialogBody(dialog), "");
     // The opener may have been repainted since (the query card repaints on
     // every edit, and opening a saved query is one), so it is looked up again.
     if (before?.savedDialog) {
@@ -373,7 +373,7 @@ export function renderSavedDialog(dialog: HTMLDialogElement, state: AppState): v
   // opened has no form yet, so it starts from the open saved query.
   const typed = before?.savedDialog === "save" ? readTyped(dialog) : null;
   const itemButton = focusedItemButton(dialog);
-  paint(dialog, savedDialogHtml(state, typed));
+  paint(dialogBody(dialog), savedDialogHtml(state, typed));
   if (!dialog.open) dialog.showModal();
 
   const target = focusAfterRepaint(before, view) ?? itemButton;

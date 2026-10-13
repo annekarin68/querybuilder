@@ -1894,11 +1894,21 @@ details[open] > summary > .qb-chevron {
 }
 
 /* The event JSON dialog (src/ui/eventDialog.ts): wider than the saved-queries
-   one, the JSON scrolls inside it. */
+   one, the JSON scrolls inside it. A column whose JSON shrinks to what is left
+   of the dialog's max-height: on a short window, the JSON scrolls, not the
+   dialog too (two scroll bars). Only while [open]: display: flex on a closed
+   <dialog> would show it. */
 .qb-event-dialog {
   width: min(48rem, calc(100vw - 2rem));
 }
+.qb-event-dialog[open],
+.qb-event-dialog .qb-dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .qb-event-json {
+  min-height: 4rem;
   max-height: 60vh;
   margin: 0.5rem 0 0;
   padding: 0.75rem;
@@ -1911,6 +1921,13 @@ details[open] > summary > .qb-chevron {
 .qb-event-json:focus-visible {
   outline: 2px solid var(--qb-and);
   outline-offset: 2px;
+}
+
+/* Toasts (showToast in src/ui/fomantic.ts) start below the top bar, not on
+   it: there a failed Log out or Invalidate covered the account chip, which
+   then has the keyboard focus, or the open account menu. */
+.ui.toast-container.top.right {
+  top: calc(var(--qb-topbar-h) + 0.5rem);
 }
 
 /* ---- Fomantic's own blue, recoloured to the pickle palette ---- */

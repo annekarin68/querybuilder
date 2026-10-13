@@ -80,6 +80,16 @@ function mismatch(path: string, expected: string, v: unknown): string {
   return `${where} should be ${expected}, but ${whatIs(v)}.`;
 }
 
+/**
+ * Sets `obj[key] = value` for a key that comes from the backend. A plain
+ * assignment goes wrong for the key "__proto__": it changes the object's
+ * prototype instead of adding the key, so the value would silently vanish.
+ * defineProperty always adds an ordinary key.
+ */
+export function setOwnKey<V>(obj: Record<string, V>, key: string, value: V): void {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 /** The path of `key` inside the object at `path`: "[3]" + "fields" → "[3].fields". */
 function join(path: string, key: string): string {
   return path ? `${path}.${key}` : key;
@@ -290,8 +300,11 @@ export class ResponseObject<T> {
   scalars(): Record<string, Scalar> {
     const out: Record<string, Scalar> = {};
     for (const [key, v] of Object.entries(this.fields)) {
-      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") out[key] = v;
-      else if (v !== null) this.warn(join(this.path, key), "text, a number, true or false", v);
+      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        setOwnKey(out, key, v);
+      } else if (v !== null) {
+        this.warn(join(this.path, key), "text, a number, true or false", v);
+      }
     }
     return out;
   }
