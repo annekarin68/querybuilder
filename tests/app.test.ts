@@ -938,6 +938,24 @@ describe("dropping docs items", () => {
     expect(store.getState().query.children[0]).toMatchObject({ facetId: "thing", fieldId: "size" });
   });
 
+  it("Add all on a tag puts one ALL group at the end of the root and says so", () => {
+    const tagged: Facet[] = [
+      { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
+      { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
+    ];
+    const { app, store, announce } = setup({
+      ...ready(),
+      facets: tagged,
+      catalog: buildFieldCatalog(tagged),
+    });
+    const before = store.getState().query.children.length;
+    app.onAddItem({ type: "tag", tag: "t" });
+    const { children } = store.getState().query;
+    expect(children).toHaveLength(before + 1);
+    expect(children.at(-1)).toMatchObject({ kind: "group", operator: "AND" });
+    expect(announce).toHaveBeenCalledWith("Added a group of 2 conditions to the query.");
+  });
+
   it("with no docs loaded yet, says so instead of ignoring the drop", () => {
     const { store, app } = setup({});
     app.onAddItem({ type: "facet", facetId: "thing" });

@@ -3,6 +3,7 @@ import {
   emptyQuery,
   newCondition,
   newGroup,
+  groupOf,
   addChild,
   updateNode,
   removeNode,
@@ -522,5 +523,16 @@ describe("ungroupBlocker / ungroup", () => {
     const inner = group("h", "OR", [cond("x")], true);
     const root = group("r", "AND", [group("g", "AND", [inner, cond("b")], true)]);
     expect(ungroup(root, "g")!.children).toEqual([inner, cond("b")]);
+  });
+});
+
+describe("groupOf", () => {
+  it("makes a new open ALL group around the given nodes, with its own id", () => {
+    const a = newCondition();
+    const b = newCondition();
+    const g = groupOf([a, b]);
+    expect(g).toMatchObject({ kind: "group", operator: "AND", children: [a, b] });
+    expect(g.collapsed).toBeUndefined();
+    expect(groupOf([a]).id).not.toBe(g.id);
   });
 });

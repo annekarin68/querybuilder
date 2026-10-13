@@ -4,7 +4,13 @@ import { userMessage } from "./api/errorText";
 import type { Compliance, DatabaseResult, SavedQuery, SavedQueryDraft } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
 import { serverIssues } from "./query/issues";
-import { addedMessage, dropNotice, movedMessage, nodesForItem, type DragItem } from "./query/drop";
+import {
+  addedNodesMessage,
+  dropNotice,
+  movedMessage,
+  nodesForItem,
+  type DragItem,
+} from "./query/drop";
 import {
   addChild,
   countConditions,
@@ -349,11 +355,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     // `placeNodes` puts the new nodes in place of a lone blank row (the starting
     // query, or a new "+ Group"), else at the target like any drop.
     onQueryChange(openGroup(placeNodes(query, targetNodeId, nodes), targetNodeId));
-    announce(addedMessage(nodes.length));
+    announce(addedNodesMessage(nodes));
   }
 
   /** The keyboard path: "Add to query" puts the item in the root group (or, if
-   *  that holds just a blank row, in its place). */
+   *  that holds just a blank row, in its place); a tag's facets arrive as one group. */
   function onAddItem(item: DragItem): void {
     onDropItem(item, store.getState().query.id);
   }

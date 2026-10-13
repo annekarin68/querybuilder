@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   ADDED_GROUP_MESSAGE,
   addedMessage,
+  addedNodesMessage,
   dropNotice,
   groupedMessage,
   movedMessage,
@@ -10,6 +11,7 @@ import {
   UNGROUPED_MESSAGE,
 } from "../../src/query/drop";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
+import { newCondition } from "../../src/query/tree";
 import type { Condition } from "../../src/query/types";
 import type { Facet } from "../../src/model";
 
@@ -124,14 +126,30 @@ describe("nodesForItem", () => {
     );
     expect(conds(r)[0]).toMatchObject({ operatorId: "eq", value: 3 });
   });
-  it("a tag becomes one 'present' per facet carrying it", () => {
+  it("a tag with several facets becomes one ALL group of 'present' conditions", () => {
     const r = nodesForItem({ type: "tag", tag: "t1" }, facets, catalog);
-    expect(conds(r).map((c) => c.facetId)).toEqual(["a", "b"]);
     expect(r.problems).toEqual([]);
+    expect(r.nodes).toHaveLength(1);
+    const group = r.nodes[0]!;
+    if (group.kind !== "group") throw new Error("expected a group");
+    expect(group.operator).toBe("AND");
+    expect(conds({ nodes: group.children }).map((c) => [c.facetId, c.operatorId])).toEqual([
+      ["a", "present"],
+      ["b", "present"],
+    ]);
+    expect(new Set(group.children.map((c) => c.id)).size).toBe(2);
   });
-  it("every created condition has its own id", () => {
-    const ids = conds(nodesForItem({ type: "tag", tag: "t1" }, facets, catalog)).map((c) => c.id);
-    expect(new Set(ids).size).toBe(2);
+  it("a tag with one facet adds just that condition", () => {
+    const withSolo = [...facets, facet("solo", ["only"])];
+    const r = nodesForItem({ type: "tag", tag: "only" }, withSolo, buildFieldCatalog(withSolo));
+    expect(conds(r).map((c) => c.facetId)).toEqual(["solo"]);
+  });
+  it("says a group was added, and how many conditions it holds", () => {
+    const r = nodesForItem({ type: "tag", tag: "t1" }, facets, catalog);
+    expect(addedNodesMessage(r.nodes)).toBe("Added a group of 2 conditions to the query.");
+    expect(addedNodesMessage([newCondition(), newCondition()])).toBe(
+      "Added 2 conditions to the query.",
+    );
   });
   it("reports an unknown facet", () => {
     const r = nodesForItem({ type: "facet", facetId: "zzz" }, facets, catalog);

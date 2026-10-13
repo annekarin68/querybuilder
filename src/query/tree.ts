@@ -1,4 +1,4 @@
-import type { Condition, Group, QueryNode } from "./types";
+import type { Condition, Group, LogicalOperator, QueryNode } from "./types";
 
 export type NodePatch = Partial<Pick<Condition, "facetId" | "fieldId" | "operatorId" | "value">> &
   Partial<Pick<Group, "operator" | "collapsed">>;
@@ -29,6 +29,12 @@ export function newCondition(): Condition {
  *  its last condition is removed — validate.ts reports that case. */
 export function newGroup(): Group {
   return { kind: "group", id: id("g"), operator: "AND", children: [newCondition()] };
+}
+
+/** A new, open group holding `children`: how a tag's facets arrive ("Add
+ *  all"), so a misplaced or unwanted "Add all" is moved or removed in one go. */
+export function groupOf(children: QueryNode[], operator: LogicalOperator = "AND"): Group {
+  return { kind: "group", id: id("g"), operator, children };
 }
 
 /** Return a copy of `node` with `fn` applied to every node in the tree (post-order). */

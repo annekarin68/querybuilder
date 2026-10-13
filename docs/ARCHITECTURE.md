@@ -382,10 +382,10 @@ src/
   query/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
-                       sameSemantics, sameTree, …).
+                       groupOf, sameSemantics, sameTree, …).
     saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork`, `saveTarget`.
     drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
-                       docs item creates, and what it couldn't), `dropNotice` — pure.
+                       docs item creates, and what it couldn't), `dropNotice`, `addedNodesMessage` — pure.
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator,
                        isFacetLevel, isFacetTest (a well-formed whole-facet test).
@@ -1094,13 +1094,16 @@ Dropping a facet or a tag on the builder creates such conditions.
   which says what a dropped dictionary item creates. A facet becomes a facet-level
   `present`; a field becomes a condition with that field chosen and nothing
   else; a value becomes `field eq value` (a number field's value goes out as a
-  number); a tag becomes one facet-level `present` per facet carrying it. What
+  number); a tag becomes one new ALL group holding a facet-level `present` per facet
+  carrying it (just the condition when only one facet carries it). What
   can't be created comes back as `problems`, in words for the user.
-  **Tag drops and "Add all N" are ANDed on purpose (decided 2026-10-07).** The
-  new conditions land in the receiving group, so under ALL (the default) a query
-  matches only events that hold every one of those facets, which can be rare.
-  The maintainers chose to keep it and to switch to an ANY group only if users
-  give negative feedback on this part of the application.
+  **Tag drops and "Add all N" arrive as one ALL group (decided 2026-10-13).**
+  Users complained about removing a dozen rows one by one after a misplaced
+  "Add all", so the facets now arrive in their own group (`groupOf`), which can
+  be moved, ungrouped or removed in one go. It stays ALL (decided 2026-10-07,
+  confirmed 2026-10-13): a query then matches only events that hold every one of
+  those facets, which can be rare (in the mock, often none). Switching the group
+  to ANY is one click.
 - **`tree.ts`, grouping** — `groupContents` moves a group's children into one
   new group with the same ALL/ANY, which becomes its only child (the query
   means the same; only one level is added). `ungroup` does the reverse: it puts
@@ -1515,7 +1518,7 @@ the issue's message tells the user to do exactly that.
   on a docs item calls `onAddItem`, which drops the item on the **root group**,
   at its end. The + button is a real `<button>`, so Tab and Enter work. (Moving an
   existing node is mouse-only; use the row's own dropdowns and ✕ to rebuild
-  without a mouse.)
+  without a mouse.) A tag's **Add all N** adds its group the same way.
 - **A lone blank row is replaced, not joined.** When a group's only child is a
   blank condition (the starting query's root, or a group just added with
   "+ Group"), any drop or + that creates something puts it in that row's place
@@ -1531,7 +1534,8 @@ the issue's message tells the user to do exactly that.
   gives `wireQueryBuilder` `announce`, see "The Field dropdown's two kinds of
   choice"). After a drop or move
   that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
-  the query.", "Moved the group.", the words in `drop.ts`). A move that leaves
+  the query.", "Added a group of 12 conditions to the query." from
+  `addedNodesMessage`, "Moved the group.", the words in `drop.ts`). A move that leaves
   the tree identical (`sameTree`: the last row dropped on its own group) changes
   nothing and announces nothing. The builder's own
   **+ Condition** and **+ Group** say "Added 1 condition to the query." and

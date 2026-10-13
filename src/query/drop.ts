@@ -1,6 +1,6 @@
 import type { Facet } from "../model";
 import { findField, type FieldCatalog } from "./fieldCatalog";
-import { newCondition } from "./tree";
+import { countConditions, groupOf, newCondition } from "./tree";
 import type { Condition, QueryNode } from "./types";
 
 /** The drag-and-drop data type our own drags carry. Drags from elsewhere
@@ -119,7 +119,11 @@ export function nodesForItem(
       if (tagged.length === 0) {
         return { nodes: [], problems: [`The tag “${item.tag}” has no facets.`] };
       }
-      return { nodes: tagged.map((f) => facetPresent(f.id)), problems: [] };
+      const conditions = tagged.map((f) => facetPresent(f.id));
+      // Two or more facets arrive as one ALL group, so a misplaced "Add all"
+      // is dragged or removed in one go instead of row by row (users' request,
+      // 2026-10-13; ALL kept by the maintainers). One facet needs no group.
+      return { nodes: conditions.length > 1 ? [groupOf(conditions)] : conditions, problems: [] };
     }
   }
 }
@@ -133,6 +137,16 @@ export function dropNotice(problems: string[]): string | null {
  *  repaints on every change, so nothing there says that something happened. */
 export function addedMessage(count: number): string {
   return `Added ${count} ${count === 1 ? "condition" : "conditions"} to the query.`;
+}
+
+/** What a screen reader hears after a drop or "+" added `nodes`: a tag's group
+ *  says what it holds, anything else counts its conditions. */
+export function addedNodesMessage(nodes: QueryNode[]): string {
+  const [only] = nodes;
+  if (nodes.length === 1 && only?.kind === "group") {
+    return `Added a group of ${countConditions(only)} conditions to the query.`;
+  }
+  return addedMessage(nodes.length);
 }
 
 /** What a screen reader hears after the query builder's own "+ Group" button
