@@ -170,10 +170,19 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     keys: ["savedDialog", "save", "savedList", "savedConfirm", "savedListNotice", "openSaved"],
     run: (s) => renderSavedDialog(shell.savedDialog, s),
   },
-  // After the saved dialog, so that closing focuses an id button that is
-  // already repainted.
+  // After the preview row, which repaints the id buttons that closing this
+  // dialog gives the focus to. `issues` and `serverIssues` are what can block
+  // Run (and so hide the table) while `preview` stays "ok": see openEventOf.
   {
-    keys: ["openEventId", "preview"],
+    keys: [
+      "openEventId",
+      "preview",
+      "catalog",
+      "selectedDatabaseIds",
+      "query",
+      "issues",
+      "serverIssues",
+    ],
     run: (s) => renderEventDialog(shell.eventDialog, s),
   },
 ];

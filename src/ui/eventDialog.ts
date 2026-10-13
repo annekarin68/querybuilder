@@ -1,4 +1,4 @@
-import type { AppState } from "../state";
+import { runBlocker, type AppState, type RunInputs } from "../state";
 import type { EventRecord } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { shortId } from "./eventTable";
@@ -17,10 +17,14 @@ import { shortId } from "./eventTable";
 export const EVENT_TITLE_ID = "qb-event-title";
 
 /** The open result, or null: none is open, or it is not among the results
- *  on screen any more. */
-export function openEventOf(state: Pick<AppState, "openEventId" | "preview">): EventRecord | null {
+ *  on screen any more. While Run is blocked the table is replaced by the
+ *  blocked message (a late statistics line can reject the query although
+ *  `preview` is still "ok"), so no result is on screen then either. */
+export function openEventOf(
+  state: Pick<AppState, "openEventId" | "preview"> & RunInputs,
+): EventRecord | null {
   const { openEventId, preview } = state;
-  if (openEventId === null || preview.status !== "ok") return null;
+  if (openEventId === null || preview.status !== "ok" || runBlocker(state) !== null) return null;
   return preview.events.find((e) => e.id === openEventId) ?? null;
 }
 
@@ -28,7 +32,7 @@ export function eventDialogHtml(event: EventRecord | null): string {
   if (!event) return "";
   return `<h2 class="qb-dialog-title" id="${EVENT_TITLE_ID}">Event ${escapeHtml(shortId(event.id))}</h2>
     <p class="qb-dialog-hint">${escapeHtml(event.id)}</p>
-    <pre class="qb-event-json" tabindex="0" aria-label="The event as JSON">${escapeHtml(JSON.stringify(event, null, 2))}</pre>
+    <pre class="qb-event-json" tabindex="0" role="region" aria-label="The event as JSON">${escapeHtml(JSON.stringify(event, null, 2))}</pre>
     <div class="qb-dialog-actions">
       <button type="button" class="ui small basic button" data-action="close-event" data-initial-focus>Close</button>
     </div>`;
@@ -49,9 +53,13 @@ export function renderEventDialog(dialog: HTMLDialogElement, state: AppState): v
     paint(dialog, "");
     // The table may have been repainted meanwhile, so the button is looked up again.
     if (before) {
-      dialog.ownerDocument
-        .querySelector<HTMLElement>(`[data-event-id="${CSS.escape(before)}"]`)
-        ?.focus();
+      const doc = dialog.ownerDocument;
+      // The id button is gone when the results are (a blocked Run replaced
+      // the table): the card is the nearest place to land.
+      (
+        doc.querySelector<HTMLElement>(`[data-event-id="${CSS.escape(before)}"]`) ??
+        doc.querySelector<HTMLElement>(".qb-preview[data-focus-landing]")
+      )?.focus();
     }
     return;
   }
