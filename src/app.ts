@@ -27,6 +27,7 @@ import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
 import { runBlocker, type AppState, type PreviewState, type StatsState, type Store } from "./state";
 import { debounce } from "./util/debounce";
+import { pageOf } from "./util/paging";
 import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
 import { requestSlot } from "./util/requestSlot";
 
@@ -157,7 +158,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     api
       .runQuery(state.query, state.selectedDatabaseIds, req.signal)
       .then((events) => {
-        if (!req.isStale()) show({ status: "ok", events });
+        if (!req.isStale()) show({ status: "ok", events, page: 0 });
       })
       .catch(async (err) => {
         if (req.isStale()) return;
@@ -225,7 +226,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
    */
   function resetPreview(): void {
     previewSlot.cancel();
-    store.setState({ preview: { status: "idle" } });
+    // The dialog shows one of the results being reset.
+    store.setState({ preview: { status: "idle" }, openEventId: null });
   }
 
   function onLogout(): void {
@@ -270,6 +272,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       stats: { status: "idle", results: [] },
       serverIssues: [],
       preview: { status: "idle" },
+      openEventId: null, // the dialog shows one of the results being reset
     });
     refreshStats();
   }
@@ -706,9 +709,37 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     store.setState({ savedConfirm: null });
   }
 
+  /** Show page `page` of the results (clamped to the pages that exist) and
+   *  say which results are on screen: the table repaints out of sight of a
+   *  screen-reader user. */
+  function showEventPage(page: number): void {
+    const { preview } = store.getState();
+    if (preview.status !== "ok") return;
+    const shown = pageOf(preview.events.length, page);
+    if (shown.page === preview.page) return;
+    store.setState({ preview: { ...preview, page: shown.page } });
+    announce(`Showing results ${shown.from} to ${shown.to} of ${shown.total}.`);
+  }
+
+  /** Open the JSON dialog of a result on screen (an id from an older run,
+   *  clicked on a stale screen, opens nothing). */
+  function openEvent(id: string): void {
+    const { preview } = store.getState();
+    if (preview.status === "ok" && preview.events.some((e) => e.id === id)) {
+      store.setState({ openEventId: id });
+    }
+  }
+
+  function closeEvent(): void {
+    if (store.getState().openEventId !== null) store.setState({ openEventId: null });
+  }
+
   return {
     start,
     runPreview,
+    showEventPage,
+    openEvent,
+    closeEvent,
     onQueryChange,
     onDropItem,
     onAddItem,

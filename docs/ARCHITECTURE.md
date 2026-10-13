@@ -367,12 +367,12 @@ src/
                        `dismissDropNotice`), the saved-queries actions (`openSaveDialog`, `saveQuery`,
                        `askOpenSaved`, …), previewAnnouncement (what a screen reader hears about Run).
                        Tested with a fake API.
-  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `dropNotice`; the saved-queries keys), the
+  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; the saved-queries keys), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
                        User, Compliance, SavedQuery / SavedQueryDraft ("Data model").
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data. Empty by
-                       default: HIDDEN_ROW_BADGES, ROW_COLUMNS. Also MASCOT (the pickle files),
+                       default: FIRST_COLUMNS (the facets the Matching events table shows first). Also MASCOT (the pickle files),
                        EASTER_EGG_MASCOT (the easter-egg faces), EASTER_EGG_TOAST (the
                        reduced-motion toast text) and TEXT_SOURCES (the logos in front of the
                        dictionary's texts).
@@ -412,6 +412,7 @@ src/
     debounce.ts        debounce(fn, ms) (the live-stats trigger).
     requestSlot.ts     At most one request per kind in flight; the whole stale-response guard.
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
+    paging.ts          PAGE_SIZE (100), pageOf(total, page) — the clamped page of the Matching events table (pure).
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
     panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), escapeHtml(), optionsHtml().
@@ -439,7 +440,8 @@ src/
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
     statsPanel.ts      The statistics column (render + wiring: Show problem, Try again).
-    dataPreview.ts     Matching events and the Run button (render + wiring).
+    dataPreview.ts     Matching events and the Run button (render + wiring: Run, Previous / Next, an id).
+    eventTable.ts      The Matching events table (pure, Node-tested): tableColumns, cellSets, shortId, eventTableHtml, pagingHtml.
     accountMenu.ts     The top-bar account menu (render + wiring).
 mock-server/           Dev-only stand-in backend — see "Mock server".
   index.ts             Reads VITE_API_BASE and DEV_BACKEND_URL (.env), MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS / MOCK_HTTP_ERRORS, starts the server.
@@ -488,7 +490,11 @@ All state is one object, `AppState` (`src/state.ts`). Change it only with
 `store.setState(patch)`: a shallow merge, after which every subscriber is told
 which keys changed. Each async part of the state — `auth`, `compliance`,
 `stats`, `preview` — is a union on `status`, so a field exists only when it
-means something (only an `"authenticated"` auth has a `user`).
+means something (only an `"authenticated"` auth has a `user`; only an `"ok"`
+preview has `events` and `page`, the 0-based page of them on screen).
+`openEventId` is the event whose JSON dialog is open (an id of the results on
+screen) or `null`; it is reset together with `preview`, so the dialog never
+shows a result that is gone.
 
 The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
 pure helpers in `src/query/saved.ts`):
@@ -538,9 +544,11 @@ binding its Fomantic dropdowns must always happen together.
 | Trigger | Effect |
 |---|---|
 | App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
-| User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues` and `preview`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
+| User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
-| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 matching events.", "Could not load events: …"). |
+| User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 matching events.", "Could not load events: …"). |
+| User presses **Previous** / **Next** in the Matching events card | `app.showEventPage(page)` → `preview.page` (clamped by `pageOf`; the same page is a no-op), announced ("Showing results 101 to 200 of 1,987."). Only the preview panel repaints; the focus stays on the pressed button (its own `data-action`). |
+| User presses an event's id in the Matching events table | `app.openEvent(id)` → `openEventId` (only an id of the results on screen), `app.closeEvent()` clears it. |
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User presses **Deselect failing (N)** in the database picker | `onDatabasesChange` with the selection minus the marked databases: a database change like any other. The button and the markers go with the old results; the focus lands on **All**. |
 | User presses **Group contents** or **Ungroup** | `groupContents` / `ungroup` (`tree.ts`) → `app.onQueryChange` like any edit: the tree changes shape, so `changeScope` resets and refetches although the meaning is the same. Success clears an older `dropNotice`. A refused Ungroup changes no query: `app.showNotice` puts the reason in `dropNotice` (and announces it). |
@@ -564,7 +572,8 @@ control had focus before it repaints and focuses the same control afterwards.
   user out of the builder.
 - **"The same control"** is found by what it is, not where it is: the row or
   group it sits in (`data-node-id`), its tag, and the first of these attributes
-  it has: `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
+  it has: `data-event-id` (every result's id button shares its `data-action`),
+  `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
   `data-db-deselect-failing`, `data-range`, `data-part`, `id`, `aria-label` (`controlOf`). The label comes last
   because it can change with the state ("Collapse group" / "Expand group"), but
   it is the only name a Fomantic dropdown's typing box has. A new control that
@@ -1766,15 +1775,41 @@ Owns the app's only **Run query** button: disabled with the reason when the
 query can't run; enabled, with the text "Fetch a random sample of up to
 2,000 events this query matches." (`idleMessage`) and an advisory note ("You'll
 be asked to log in first.", `LOGIN_FIRST_NOTE`) when ready; a loader; an error with **Try again**;
-or the result. The result is a list of compact rows, one native `<details>`
-per event: the id's first 8 characters (all of it in the tooltip and the
-JSON), one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default; a
-cell joins the values of every occurrence of its facet), up to 3 tag and 2
-group badges ranked by how many of the event's facets carry them (values in `HIDDEN_ROW_BADGES` left out), and the facet
-count; expanding a row shows the event's JSON.
+or the result. The result is a **table**, one row per event, in pages of 100
+(`src/util/paging.ts`):
+
+- **Paging line:** "Results 101–200 of 1,987" with **Previous** / **Next**;
+  with 100 results or fewer, just "42 results" and no buttons. "Results" is the
+  one word for the returned sample, here and in the column headers, so nobody
+  reads a count as a total across all databases.
+- **Scroll box:** both directions, at most 70% of the window high, focusable
+  (`role="region"`, labelled) so it scrolls from the keyboard. The header row
+  is `position: sticky` at the top and the id column at the left (the corner
+  above both), with opaque backgrounds: a value never loses its header.
+  `border-collapse` is `separate` because collapsed borders do not travel with
+  sticky cells, and the table is `width: max-content` because a table wider
+  than its box would otherwise squeeze every column to its narrowest word.
+- **Columns:** the event id first (the first 8 characters, all of it in the
+  tooltip; a button that opens the event's JSON, `openEventId`), then one
+  column per facet that **any** result of the sample holds, so the columns do
+  not change while paging (`tableColumns`). Order: the facets of
+  `FIRST_COLUMNS` (`src/config.ts`; none by default), then by facet number
+  (`Facet.number`, the backend's `id_number`), then facets the dictionary does
+  not know, by label. A header names the facet and says "in 12 of 1,987
+  results" (over the whole sample; information only, it does not order).
+- **Cells:** empty when the result lacks the facet; otherwise one boxed set per
+  occurrence, each a `<dl>` of `field name: value` in the dictionary's field
+  order (fields the dictionary does not know come after, by key; `cellSets`),
+  all in a `<ul>`. Several occurrences stay separate boxes, so a value is only
+  read together with its own occurrence's. Values wrap; a set with no values
+  shows "—". Every lookup by a backend id uses `Object.hasOwn`, because ids are
+  backend data and may be names such as "constructor".
+- The table is a real `<table>` (hidden `<caption>` with the page, `scope`d
+  headers, the id cell is the row's `<th scope="row">`).
 
 The backend returns a **random sample of up to 2,000** of the matching events,
-not the first ones, and there is no pagination. `EVENT_SAMPLE_SIZE` (2000) in
+not the first ones, and the API has no pagination (the table pages the sample
+in the browser). `EVENT_SAMPLE_SIZE` (2000) in
 `dataPreview.ts` only words the idle text: the backend decides the real size,
 so change the constant when the backend's limit changes. The statistics, not
 this list, say how many events match in total.
@@ -1784,10 +1819,14 @@ button is replaced by the loader, then by the result; see "Keyboard focus
 across repaints"), and `app.ts` announces the loader, the result's count or the
 error to screen readers, wherever their focus is.
 
-**Decision: a list, not a grid.** Events are heterogeneous: facets as columns
-would mean 60–100+ columns for a varied sample, and events as columns stop
-fitting after 5–6. A summary list scales by scrolling vertically. The JSON
-view is a stand-in for a dedicated event viewer planned later.
+**Decided 2026-10-13 by the users: a table, not a list.** An earlier version
+chose a summary list because events are heterogeneous (facets as columns mean
+60–100+ columns for a varied sample). The users asked for the table to compare
+values across results and accept a horizontal scroll bar. One column **per
+facet**, not per field: per-field columns belong to a later Event viewer.
+"Keep it simple": a plain table, CSS `sticky`, pages of 100 and no data-grid
+library (a library would fight `paint()`). The event's JSON dialog is a
+stand-in for that viewer.
 
 ### Saved queries — `savedQueries.ts`
 
@@ -2145,9 +2184,9 @@ styles in their own section of `src/styles.css`.
 `activate()` and `destroy()` in `src/ui/fomantic.ts`. Never call `$` anywhere
 else.
 
-**…hide a badge, or add a column to the Matching events rows?** Edit
-`HIDDEN_ROW_BADGES` / `ROW_COLUMNS` in `src/config.ts` — the only place
-`src/` may name the backend's data.
+**…show certain facets first in the Matching events table?** Edit
+`FIRST_COLUMNS` in `src/config.ts` (facet ids, in the order to show them) —
+the only place `src/` may name the backend's data.
 
 **…show the third party's logo in the dictionary?** Replace
 `public/sources/third-party.svg` (a self-contained plain SVG, see "Pickle theme

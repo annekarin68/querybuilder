@@ -30,11 +30,12 @@ export type StatsState =
   | { status: "idle" | "loading" | "ok"; results: DatabaseResult[] }
   | { status: "error"; error: string };
 
-/** The Matching events request. Only "ok" carries events, only "error" a message. */
+/** The Matching events request. Only "ok" carries events (and which page of
+ *  them is on screen, 0-based: src/util/paging.ts), only "error" a message. */
 export type PreviewState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ok"; events: EventRecord[] }
+  | { status: "ok"; events: EventRecord[]; page: number }
   | { status: "error"; error: string };
 
 /** Which saved-queries dialog is open: "save" (name and note), "list", or, for
@@ -90,6 +91,9 @@ export interface AppState {
 
   stats: StatsState;
   preview: PreviewState;
+  /** The event whose JSON dialog is open (an `EventRecord.id` of the results
+   *  on screen), or null. Closed with the results whenever they reset. */
+  openEventId: string | null;
 
   sidebarCollapsed: boolean;
   /** A warning about the last change to the query, shown dismissible above it;
@@ -131,6 +135,7 @@ export const initialState: AppState = {
   serverIssues: [],
   stats: { status: "idle", results: [] },
   preview: { status: "idle" },
+  openEventId: null,
   // The docs are the main way to build a query, so they start open.
   sidebarCollapsed: false,
   dropNotice: null,

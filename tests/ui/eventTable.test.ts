@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { EventRecord, Facet } from "../../src/model";
-import { cellSets, shortId, tableColumns } from "../../src/ui/eventTable";
+import {
+  cellSets,
+  eventTableHtml,
+  pagingHtml,
+  shortId,
+  tableColumns,
+} from "../../src/ui/eventTable";
+import { pageOf } from "../../src/util/paging";
 
 const facet = (id: string, number: number, fields: string[] = []): Facet => ({
   id,
@@ -140,5 +147,78 @@ describe("shortId", () => {
   });
   it("keeps a short id as it is", () => {
     expect(shortId("e-12")).toBe("e-12");
+  });
+});
+
+describe("eventTableHtml", () => {
+  const columns = tableColumns(events, facets, []);
+  const html = eventTableHtml(events, columns, pageOf(events.length, 0), "en-US");
+
+  it("is a real table in a focusable, labelled scroll box with a hidden caption", () => {
+    expect(html).toContain(
+      '<div class="qb-et-scroll" tabindex="0" role="region" aria-label="Matching events table">',
+    );
+    expect(html).toContain('<caption class="qb-sr-only">Matching events</caption>');
+  });
+
+  it("heads each facet column with its name and how many results hold it", () => {
+    expect(html).toContain(
+      '<th scope="col"><span class="qb-et-facet">A</span><span class="qb-et-count">in 1 of 2 results</span></th>',
+    );
+  });
+
+  it("makes each row's id cell its row header, holding the button that opens its JSON", () => {
+    expect(html).toContain(
+      '<th scope="row" class="qb-et-id"><button type="button" class="qb-et-id-btn" data-action="open-event" data-event-id="e1" aria-label="Show event e1 as JSON" title="Event e1">#e1</button></th>',
+    );
+  });
+
+  it("draws each occurrence as its own set", () => {
+    expect(html).toContain(
+      '<ul class="qb-et-sets"><li><dl class="qb-et-set"><dt>pos name</dt><dd>right</dd><dt>val name</dt><dd>2.2</dd></dl></li><li><dl class="qb-et-set"><dt>pos name</dt><dd>left</dd><dt>val name</dt><dd>1.1</dd></dl></li></ul>',
+    );
+  });
+
+  it("shows — for an occurrence with no values, and nothing for a missing facet", () => {
+    const empty = eventTableHtml(
+      [event("e", { a: [{}] })],
+      tableColumns([event("e", { a: [{}] })], facets, []),
+      pageOf(1, 0),
+    );
+    expect(empty).toContain('<li><span class="qb-et-empty">—</span></li>');
+    expect(html).toContain("<td></td>");
+  });
+
+  it("escapes every text", () => {
+    const bad = [event('"><img>', { a: [{ pos: "<b>" }] })];
+    const out = eventTableHtml(bad, tableColumns(bad, facets, []), pageOf(1, 0));
+    expect(out).not.toContain("<img>");
+    expect(out).not.toContain("<b>");
+  });
+
+  it("shows only the rows of the page, and says which page in the caption", () => {
+    const many = Array.from({ length: 150 }, (_, i) => event(`e${i}`, { b: [{ x: i }] }));
+    const second = eventTableHtml(many, tableColumns(many, facets, []), pageOf(150, 1));
+    expect(second).toContain("Matching events, page 2 of 2");
+    expect(second).toContain('data-event-id="e100"');
+    expect(second).not.toContain('data-event-id="e99"');
+  });
+});
+
+describe("pagingHtml", () => {
+  it("says how many results when they fit on one page, with no buttons", () => {
+    expect(pagingHtml(pageOf(42, 0), "en-US")).toBe('<p class="qb-et-paging">42 results</p>');
+  });
+
+  it("says which results are shown, with Previous and Next", () => {
+    const html = pagingHtml(pageOf(1987, 1), "en-US");
+    expect(html).toContain("Results 101–200 of 1,987");
+    expect(html).toContain('data-action="previous-event-page" data-page="0">Previous</button>');
+    expect(html).toContain('data-action="next-event-page" data-page="2">Next</button>');
+  });
+
+  it("disables Previous on the first page and Next on the last", () => {
+    expect(pagingHtml(pageOf(150, 0))).toContain('data-page="-1" disabled>Previous');
+    expect(pagingHtml(pageOf(150, 1))).toContain('data-page="2" disabled>Next');
   });
 });

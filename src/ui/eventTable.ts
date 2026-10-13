@@ -1,4 +1,7 @@
 import type { EventRecord, Facet } from "../model";
+import { countLabel, exact } from "./format";
+import { escapeHtml } from "./panel";
+import type { Page } from "../util/paging";
 
 /**
  * The Matching events table (docs/ARCHITECTURE.md, "Under the query —
@@ -102,4 +105,71 @@ export function cellSets(event: EventRecord, column: FacetColumn): CellEntry[][]
       .sort()
       .map((key) => ({ name: key, value: String(occurrence[key]) })),
   ]);
+}
+
+/** One cell: nothing when the result lacks the facet; otherwise one set per
+ *  occurrence, each a small definition list, all in a list, so a screen
+ *  reader reads them as separate sets too. */
+function cellHtml(sets: CellEntry[][]): string {
+  if (sets.length === 0) return "";
+  const setHtml = (set: CellEntry[]) =>
+    set.length === 0
+      ? `<span class="qb-et-empty">—</span>`
+      : `<dl class="qb-et-set">${set.map((e) => `<dt>${escapeHtml(e.name)}</dt><dd>${escapeHtml(e.value)}</dd>`).join("")}</dl>`;
+  return `<ul class="qb-et-sets">${sets.map((set) => `<li>${setHtml(set)}</li>`).join("")}</ul>`;
+}
+
+/**
+ * The table for one page of the results, in its scroll box. The header row
+ * and the id column are sticky (styles.css): the headers stay in view while
+ * the user scrolls down and move with their columns sideways, so a value
+ * never loses its header (maintainers, 2026-10-13). Every text is escaped.
+ */
+export function eventTableHtml(
+  events: EventRecord[],
+  columns: FacetColumn[],
+  page: Page,
+  locale?: string,
+): string {
+  const caption =
+    page.pageCount > 1
+      ? `Matching events, page ${page.page + 1} of ${page.pageCount}`
+      : "Matching events";
+  const total = exact(page.total, locale);
+  const head = columns
+    .map(
+      (c) =>
+        `<th scope="col"><span class="qb-et-facet">${escapeHtml(c.name)}</span><span class="qb-et-count">in ${exact(c.resultCount, locale)} of ${total} results</span></th>`,
+    )
+    .join("");
+  const rows = events
+    .slice(Math.max(0, page.from - 1), page.to)
+    .map((e) => {
+      const id = escapeHtml(e.id);
+      const short = escapeHtml(shortId(e.id));
+      const cells = columns.map((c) => `<td>${cellHtml(cellSets(e, c))}</td>`).join("");
+      return `<tr><th scope="row" class="qb-et-id"><button type="button" class="qb-et-id-btn" data-action="open-event" data-event-id="${id}" aria-label="Show event ${short} as JSON" title="Event ${id}">#${short}</button></th>${cells}</tr>`;
+    })
+    .join("");
+  return `<div class="qb-et-scroll" tabindex="0" role="region" aria-label="Matching events table"><table class="qb-et"><caption class="qb-sr-only">${caption}</caption><thead><tr><th scope="col" class="qb-et-id">Event</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/**
+ * The line above the table: "42 results" when they fit on one page,
+ * otherwise "Results 101–200 of 1,987" with Previous and Next. "Results" is
+ * the one word for the returned sample, so nobody reads a count as a total
+ * across all databases (maintainers, 2026-10-13). The two buttons have their
+ * own `data-action`, so a repaint keeps the keyboard focus on the one pressed.
+ */
+export function pagingHtml(page: Page, locale?: string): string {
+  if (page.pageCount === 1) {
+    return `<p class="qb-et-paging">${countLabel(page.total, "result", "results", locale)}</p>`;
+  }
+  const first = page.page === 0 ? " disabled" : "";
+  const last = page.page === page.pageCount - 1 ? " disabled" : "";
+  return `<div class="qb-et-paging">
+    <span>Results ${exact(page.from, locale)}–${exact(page.to, locale)} of ${exact(page.total, locale)}</span>
+    <button type="button" class="ui mini basic button" data-action="previous-event-page" data-page="${page.page - 1}"${first}>Previous</button>
+    <button type="button" class="ui mini basic button" data-action="next-event-page" data-page="${page.page + 1}"${last}>Next</button>
+  </div>`;
 }

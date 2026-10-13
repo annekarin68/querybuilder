@@ -31,7 +31,9 @@ describe("mascotFor", () => {
     expect(mascotFor({ ...base, stats: { status: "ok", results: [ok("a", 0), ok("b", 0)] } })).toBe(
       "disappointed",
     );
-    expect(mascotFor({ ...base, preview: { status: "ok", events: [] } })).toBe("disappointed");
+    expect(mascotFor({ ...base, preview: { status: "ok", events: [], page: 0 } })).toBe(
+      "disappointed",
+    );
   });
 
   it("is disappointed when a database failed or found a problem in the query", () => {
@@ -49,7 +51,7 @@ describe("mascotFor", () => {
   it("is neutral when there are matches", () => {
     expect(mascotFor({ ...base, stats: { status: "ok", results: [ok("a", 3)] } })).toBe("neutral");
     expect(
-      mascotFor({ ...base, preview: { status: "ok", events: [{ id: "e", values: {} }] } }),
+      mascotFor({ ...base, preview: { status: "ok", events: [{ id: "e", values: {} }], page: 0 } }),
     ).toBe("neutral");
   });
 

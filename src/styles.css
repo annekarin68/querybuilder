@@ -20,7 +20,6 @@
   --qb-track: #e5e1c8; /* the empty part of a statistics bar */
   --qb-selected-bg: #e3eecb;
   --qb-selected-text: #2b5319;
-  --qb-open-row: #f0efd9;
   --qb-shadow: 0 8px 24px rgba(35, 48, 31, 0.2);
   --qb-backdrop: rgba(35, 48, 31, 0.45); /* the page behind an open dialog */
 
@@ -1180,85 +1179,126 @@ body {
 .qb-preview .ui.negative.message {
   margin: 0 0 0.75rem;
 }
-.qb-preview-note {
+/* ---- Matching events table (src/ui/eventTable.ts) ----
+   A plain table in its own scroll box. The header row sticks to the top of
+   the box and moves sideways with its columns; the id column sticks to the
+   left; the corner cell sits above both. Sticky cells need an opaque
+   background, or the scrolled cells show through them. border-collapse must
+   be "separate": collapsed borders do not move with sticky cells. */
+.qb-et-paging {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0 0 0.5rem;
   font-size: 0.85rem;
+  color: var(--qb-muted);
 }
-.qb-event-list {
+.qb-et-paging .ui.button {
+  margin: 0;
+}
+.qb-et-scroll {
+  max-height: 70vh;
+  overflow: auto;
   border: 1px solid var(--qb-border);
   border-radius: var(--qb-radius);
 }
-.qb-event-row {
+.qb-et-scroll:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+.qb-et {
+  border-collapse: separate;
+  border-spacing: 0;
+  /* Each column takes the width of its content (up to the td's max-width)
+     and the box scrolls. Without this, a table wider than the box squeezes
+     every column to its narrowest word. */
+  width: max-content;
+  font-size: 0.8rem;
+}
+.qb-et th,
+.qb-et td {
+  padding: 0.4rem 0.5rem;
+  border-right: 1px solid var(--qb-border);
   border-bottom: 1px solid var(--qb-border);
+  background: var(--qb-surface);
+  text-align: left;
+  vertical-align: top;
 }
-.qb-event-row:last-child {
-  border-bottom: none;
+.qb-et td {
+  min-width: 8rem;
+  max-width: 16rem;
+  overflow-wrap: anywhere;
 }
-.qb-event-row summary {
-  display: grid;
-  /* Set inline by dataPreview.ts from the configured ROW_COLUMNS. */
-  grid-template-columns: var(--qb-er-grid, 6rem minmax(0, 1fr) auto);
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  cursor: pointer;
-  list-style: none;
-}
-.qb-event-row summary::-webkit-details-marker {
-  display: none;
-}
-.qb-event-row summary:hover {
+.qb-et thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: var(--qb-surface-2);
 }
-.qb-event-row[open] summary {
-  background: var(--qb-open-row);
+.qb-et .qb-et-id {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  white-space: nowrap;
 }
-.qb-er-id {
+.qb-et thead .qb-et-id {
+  z-index: 2; /* the corner: above the sticky header row and the id column */
+}
+.qb-et-facet {
+  display: block;
   font-weight: 700;
 }
-.qb-er-count {
-  color: var(--qb-muted);
-  white-space: nowrap;
-  text-align: right;
-}
-.qb-er-cell {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--qb-muted);
-}
-.qb-er-groups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  min-width: 0;
-}
-.qb-group-badge {
-  display: inline-block;
-  padding: 0 0.45rem;
-  border: 1px dashed var(--qb-border);
-  border-radius: 999px;
-  color: var(--qb-subtle);
+.qb-et-count {
+  display: block;
+  font-weight: 400;
   font-size: 0.72rem;
-  line-height: calc(1.5em - 2px);
-  white-space: nowrap;
+  color: var(--qb-muted);
 }
-/* A little extra space where the tags end and the groups begin. */
-.qb-er-groups > :not(.qb-group-badge) + .qb-group-badge {
-  margin-left: 0.4rem;
+.qb-et-id-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--qb-and);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
 }
-.qb-er-more {
-  font-size: 0.8rem;
-  color: var(--qb-subtle);
+.qb-et-id-btn:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
 }
-.qb-er-json {
-  max-height: 24rem;
+.qb-et-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
   margin: 0;
-  padding: 0.75rem;
-  overflow: auto;
-  border-top: 1px solid var(--qb-border);
-  background: var(--qb-surface-2);
-  font-size: 0.8em;
+  padding: 0;
+  list-style: none;
+}
+/* One occurrence: its fields as a small two-column box, so the values that
+   belong together read as one set. */
+.qb-et-set {
+  display: grid;
+  /* A field name is as wide as it needs, up to 7rem; the value takes the rest
+     and breaks anywhere, so a long unbroken value never widens the cell. */
+  grid-template-columns: fit-content(7rem) minmax(0, 1fr);
+  gap: 0 0.4rem;
+  margin: 0;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 4px;
+}
+.qb-et-set dt {
+  color: var(--qb-muted);
+  overflow-wrap: break-word;
+}
+.qb-et-set dd {
+  margin: 0;
+}
+.qb-et-empty {
+  color: var(--qb-muted);
 }
 
 /* ---- Data dictionary (src/ui/docsSidebar.ts + docsFilter.ts) ---- */

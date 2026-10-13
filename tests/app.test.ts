@@ -182,7 +182,7 @@ describe("runPreview (the Run query button)", () => {
       expect.any(AbortSignal),
     );
     await flushPromises();
-    expect(store.getState().preview).toEqual({ status: "ok", events });
+    expect(store.getState().preview).toEqual({ status: "ok", events, page: 0 });
   });
 
   it("a 401 saves the query and goes to log in", async () => {
@@ -312,9 +312,13 @@ describe("previewAnnouncement", () => {
     expect(previewAnnouncement({ status: "idle" })).toBeNull();
   });
   it("counts the events, or says there are none", () => {
-    expect(previewAnnouncement({ status: "ok", events: [] })).toBe("No events match this query.");
-    expect(previewAnnouncement({ status: "ok", events })).toBe("Showing 1 matching event.");
-    expect(previewAnnouncement({ status: "ok", events: [...events, ...events] })).toBe(
+    expect(previewAnnouncement({ status: "ok", events: [], page: 0 })).toBe(
+      "No events match this query.",
+    );
+    expect(previewAnnouncement({ status: "ok", events, page: 0 })).toBe(
+      "Showing 1 matching event.",
+    );
+    expect(previewAnnouncement({ status: "ok", events: [...events, ...events], page: 0 })).toBe(
       "Showing 2 matching events.",
     );
   });
@@ -466,10 +470,58 @@ describe("statistics", () => {
   });
 });
 
+describe("Matching events pages and the event dialog", () => {
+  const many: EventRecord[] = Array.from({ length: 250 }, (_, i) => ({ id: `e-${i}`, values: {} }));
+  const shownMany = (): Partial<AppState> => ({
+    ...ready(),
+    preview: { status: "ok", events: many, page: 0 },
+  });
+
+  it("a run starts at the first page", async () => {
+    const { app, store } = setup(ready(), fakeApi({ runQuery: vi.fn(async () => many) }));
+    app.runPreview();
+    await flushPromises();
+    expect(store.getState().preview).toEqual({ status: "ok", events: many, page: 0 });
+  });
+
+  it("shows another page and says which results are shown", () => {
+    const { app, store, announce } = setup(shownMany());
+    app.showEventPage(2);
+    expect(store.getState().preview).toMatchObject({ page: 2 });
+    expect(announce).toHaveBeenCalledWith("Showing results 201 to 250 of 250.");
+  });
+
+  it("clamps a page that does not exist, and does nothing for the page on screen", () => {
+    const { app, store, announce } = setup(shownMany());
+    app.showEventPage(9);
+    expect(store.getState().preview).toMatchObject({ page: 2 });
+    announce.mockClear();
+    app.showEventPage(2);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("a query edit resets the page and closes the dialog with the results", () => {
+    const { app, store } = setup({ ...shownMany(), openEventId: "e-3" });
+    app.onQueryChange(runnableQuery(9));
+    expect(store.getState().preview).toEqual({ status: "idle" });
+    expect(store.getState().openEventId).toBeNull();
+  });
+
+  it("opens the dialog for a shown event only, and closes it", () => {
+    const { app, store } = setup(shownMany());
+    app.openEvent("ghost");
+    expect(store.getState().openEventId).toBeNull();
+    app.openEvent("e-3");
+    expect(store.getState().openEventId).toBe("e-3");
+    app.closeEvent();
+    expect(store.getState().openEventId).toBeNull();
+  });
+});
+
 // ---- query and database changes -------------------------------------------
 
 describe("query and database changes", () => {
-  const shown: Partial<AppState> = { preview: { status: "ok", events } };
+  const shown: Partial<AppState> = { preview: { status: "ok", events, page: 0 } };
 
   it("an edit clears the preview at once and revalidates", () => {
     const { app, store } = setup({ ...ready(), ...shown });
@@ -508,7 +560,7 @@ describe("query and database changes", () => {
 describe("logging out and invalidating compliance", () => {
   const signedIn: Partial<AppState> = {
     ...ready(),
-    preview: { status: "ok", events },
+    preview: { status: "ok", events, page: 0 },
     auth: { status: "authenticated", user: { name: "pat" } },
     compliance: { status: "acknowledged", log: "{}" },
   };
@@ -1373,7 +1425,7 @@ describe("saved queries: opening one from the list", () => {
       ...inList,
       ...ready(emptyQuery()),
       stats: { status: "ok", results: [] },
-      preview: { status: "ok", events },
+      preview: { status: "ok", events, page: 0 },
     });
     app.askOpenSaved("t");
     expect(store.getState().stats).toEqual({ status: "idle", results: [] });

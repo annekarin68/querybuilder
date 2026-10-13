@@ -81,7 +81,11 @@ shell.onMenu({
 });
 wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
 wireDocsResize(shell.docsResizeHandle);
-wireDataPreview(panels.preview, app.runPreview);
+wireDataPreview(panels.preview, {
+  onRun: app.runPreview,
+  onPage: app.showEventPage,
+  onOpenEvent: app.openEvent,
+});
 wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
 wireStatsPanel(panels.stats, {
   onRetry: app.retryStats,
