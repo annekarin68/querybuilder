@@ -71,7 +71,9 @@ function showFullChoice(node: HTMLElement): void {
     else el.removeAttribute("title");
   }
   node.querySelectorAll<HTMLElement>(":scope > a.ui.label").forEach((label) => {
-    label.title = (label.dataset.value ?? label.textContent ?? "").trim();
+    // The shown text, not data-value: Fomantic stores data-value HTML-escaped
+    // (`"` becomes the literal `&quot;`), while the label shows it decoded.
+    label.title = (label.textContent ?? "").trim();
   });
 }
 
