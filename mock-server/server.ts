@@ -277,7 +277,7 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
     .map((row) => ENTRYSETS[String(row.id)])
     .filter((e): e is Entryset => e !== undefined)
     .slice(0, QUERY_RESULT_CAP);
-  logQueryAudit(session.user.name, session.compliance.reason);
+  logQueryAudit(session.user.display_name, session.compliance.reason);
   sendJson(res, 200, { entrysets });
 }
 
@@ -303,7 +303,7 @@ function forSessionUser(act: ForUser): Handler {
   return async (req, res) => {
     const session = sessionFor(req.headers.cookie);
     if (!session) return sendJson(res, 401, { error: "Log in to use saved queries." });
-    const answer = await act(session.user.name, req, res);
+    const answer = await act(session.user.sub ?? session.user.user_id ?? "", req, res);
     if (answer) sendAnswer(res, answer);
   };
 }
@@ -476,7 +476,7 @@ function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<strin
     [`GET ${api}/mock-idp/authorize/confirm`]: (req, res, url) =>
       confirmIdpLogin(req, res, url, api),
     [`GET ${api}/auth/callback`]: finishLogin,
-    [`GET ${api}/auth/me`]: currentUser,
+    [`GET ${api}/users/me`]: currentUser,
     [`POST ${api}/auth/logout`]: logOut,
 
     [`GET ${api}/compliance/start`]: (req, res) => startComplianceFlow(req, res, api),

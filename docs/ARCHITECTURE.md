@@ -664,7 +664,8 @@ comments, `/api/stats` and the like are short for `{prefix}/stats`.
 | `GET {prefix}/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
 | `POST {prefix}/stats` | Body: a `QueryRequest` ("Wire format of the query"). Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
 | `POST {prefix}/query` | Body: a `QueryRequest` ("Wire format of the query"). The matching events, capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
-| `GET {prefix}/auth/login`, `/callback`, `/me`, `POST /logout` | Login (below). |
+| `GET {prefix}/users/me` | Who's logged in (`UserResponse`; the app shows `display_name`). `401` when anonymous. |
+| `GET {prefix}/auth/login`, `/callback`, `POST /logout` | Login (below). |
 | `GET {prefix}/compliance/start`, `/callback`, `/status`, `POST /invalidate` | Compliance (below). |
 | `GET {prefix}/saved-queries` | The user's saved queries, newest `updatedAt` first. Needs a session (`401`). |
 | `POST {prefix}/saved-queries` | Body: a `SavedQueryRequest`. `201` + the `SavedQueryResponse`. `409` for a name already used, `400` for a malformed body. Needs a session. |
@@ -710,6 +711,8 @@ The mapping is also where the backend's quirks are dealt with, once:
   `message`, `kind`, and the `nodeId` it points at or `null`): see below.
 
 - **A missing name.** A database or facet with a blank `name` shows its id.
+- **The user's name** is the backend's `display_name` (it already falls back from
+  the username to the email to the id); a blank one shows `sub` / `user_id`.
 
 Only what the app uses is mapped (and checked). `DatabasesResponse.percentageOfTotal`,
 `IndividualResponse.idNumber` and `IndividualFieldResponse.cardinality` are
@@ -829,8 +832,8 @@ OAuth2 authorization code login against an internal, LAN-reachable identity
 provider. The IdP redirects back to the **backend** (`/api/auth/callback`),
 never to the SPA, so the frontend never handles the code, the CSRF `state` or
 tokens. The backend sets an `HttpOnly`, `SameSite=Lax` (and, in production,
-`Secure`) session cookie and redirects to `/?resume=1`. `GET /api/auth/me`
-answers `200 AuthUser` or `401`.
+`Secure`) session cookie and redirects to `/?resume=1`. `GET /api/users/me`
+answers `200 UserResponse` or `401`.
 
 Everything except `POST /api/query` is anonymous. The UI's login state is
 **display-only**: Run is never disabled for it, and `runBlocker` knows nothing
@@ -1764,9 +1767,9 @@ to a named handler function — add a route there, and a test in
   the first problem, e.g. `Malformed query: query.children[0].fieldId must be a
   non-empty string or null.`
 - **Saved queries** (`savedQueries.ts`) are kept in memory, per user, and are
-  lost when the mock restarts; the list starts empty. The user is the session's
-  user name, the only stable user identifier the mock has, so every mock login
-  shares one list. The body is checked for shape only (`readSavedQueryBody`),
+  lost when the mock restarts; the list starts empty. The user is the session
+  user's `sub`; every mock login is the same fictional user, so they all share
+  one list. The body is checked for shape only (`readSavedQueryBody`),
   in the style of `requestBody.ts` and naming the first problem. Shape includes
   what the client relies on: node ids and database ids are non-blank
   (`toSavedQuery` reads them strictly, so one bad stored entry would make the

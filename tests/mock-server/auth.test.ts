@@ -48,7 +48,9 @@ describe("login/callback round trip", () => {
     if (!outcome.ok) throw new Error("expected success");
     const cookieHeader = sessionCookieHeader(outcome.sessionId);
     const sessionId = parseCookie(cookieHeader, "qb_session");
-    expect(sessionFor(`qb_session=${sessionId}`)).toEqual({ user: { name: "demo.user" } });
+    expect(sessionFor(`qb_session=${sessionId}`)).toMatchObject({
+      user: { display_name: "demo.user" },
+    });
   });
 
   it("a state can only be consumed once", () => {
@@ -109,7 +111,9 @@ describe("sessionFor / endSession", () => {
 
   it("finds the session for a valid cookie", () => {
     const sessionId = newSession();
-    expect(sessionFor(`qb_session=${sessionId}`)).toEqual({ user: { name: "demo.user" } });
+    expect(sessionFor(`qb_session=${sessionId}`)).toMatchObject({
+      user: { display_name: "demo.user" },
+    });
   });
 
   it("endSession removes the session so it's no longer found", () => {

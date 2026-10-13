@@ -65,7 +65,7 @@ export interface AppState {
   databases: Database[] | null;
   /** The data model backing the docs sidebar (loaded once). */
   facets: Facet[] | null;
-  /** Who's logged in, if anyone — loaded once at startup via GET /api/auth/me. */
+  /** Who's logged in, if anyone — loaded once at startup via GET /api/users/me. */
   auth: AuthState;
   /** Compliance acknowledgment for this session — loaded once at startup via
    *  GET /api/compliance/status. Display-only, same as `auth`: it drives the

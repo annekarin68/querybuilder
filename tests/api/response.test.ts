@@ -16,7 +16,6 @@ import type { Group } from "../../src/query/types";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
 import { isEdited, type OpenSaved } from "../../src/query/saved";
 import type {
-  AuthUser,
   ComplianceStatus,
   DatabasesResponse,
   EntrysetResponse,
@@ -24,6 +23,7 @@ import type {
   IndividualResponse,
   SavedQueryResponse,
   StatsResponse,
+  UserResponse,
 } from "../../src/api/types";
 
 /** `body` as client.ts hands it to the function under test. Typed, so each
@@ -282,8 +282,24 @@ describe("toDatabaseResult", () => {
 });
 
 describe("toUser", () => {
-  it("keeps the name", () => {
-    expect(toUser(read<AuthUser>({ name: "pat" }))).toEqual({ name: "pat" });
+  it("shows the display name the backend chose", () => {
+    const user = read<UserResponse>({
+      sub: "u-1",
+      preferred_username: "pat",
+      email: null,
+      authorizations: [],
+      display_name: "pat",
+    });
+    expect(toUser(user)).toEqual({ name: "pat" });
+  });
+
+  it("shows the user's id when the display name is blank, either spelling", () => {
+    expect(
+      toUser(read<UserResponse>({ sub: "u-1", authorizations: [], display_name: " " })),
+    ).toEqual({ name: "u-1" });
+    expect(
+      toUser(read<UserResponse>({ user_id: "u-2", authorizations: [], display_name: "" })),
+    ).toEqual({ name: "u-2" });
   });
 });
 

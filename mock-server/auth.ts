@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
-import type { AuthUser, ComplianceStatus } from "../src/api/types";
+import type { UserResponse, ComplianceStatus } from "../src/api/types";
 
 interface Session {
-  user: AuthUser;
+  user: UserResponse;
   compliance?: { reason: string; ackedAt: string };
 }
 
@@ -64,6 +64,15 @@ export function issueFakeCode(): string {
   return code;
 }
 
+/** The one user every mock login becomes. Fictional, like all mock data. */
+const MOCK_USER: UserResponse = {
+  sub: "mock-user-0001",
+  preferred_username: "demo.user",
+  email: "demo.user@example.test",
+  authorizations: [],
+  display_name: "demo.user",
+};
+
 export type ExchangeOutcome = { ok: true; sessionId: string } | { ok: false; error: string };
 
 /** Stands in for POSTing the code to the IdP's /token endpoint with the client
@@ -76,7 +85,7 @@ export function exchangeCodeForSession(code: string, state: string): ExchangeOut
   if (!PENDING_STATES.take(state)) return { ok: false, error: "Invalid or expired login attempt." };
   if (!FAKE_CODES.take(code)) return { ok: false, error: "Invalid or expired authorization code." };
   const sessionId = randomToken(32);
-  SESSIONS.set(sessionId, { user: { name: "demo.user" } });
+  SESSIONS.set(sessionId, { user: MOCK_USER });
   return { ok: true, sessionId };
 }
 

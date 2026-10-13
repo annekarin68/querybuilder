@@ -11,9 +11,25 @@
  * out: read it with an `optional…` read there.
  */
 
-/** Who's logged in, returned by GET /api/auth/me. */
-export interface AuthUser {
-  name: string;
+/**
+ * Who's logged in, returned by GET /api/users/me. The backend accepts two
+ * spellings of two keys (`user_id` is another name for `sub`, `username` for
+ * `preferred_username`), so either may arrive. The app reads only
+ * `display_name`, which the backend fills from the username, else the email,
+ * else the user id, and falls back to the id itself only if that is blank.
+ */
+export interface UserResponse {
+  /** The user's id. Also sent as `user_id`. */
+  sub?: string;
+  user_id?: string;
+  /** Also sent as `username`. */
+  preferred_username?: string | null;
+  username?: string | null;
+  email?: string | null;
+  /** What the user may do. Not used by the frontend yet. */
+  authorizations: string[];
+  /** The text to show for the user. */
+  display_name: string;
 }
 
 /** Compliance acknowledgment status, returned by GET /api/compliance/status. */

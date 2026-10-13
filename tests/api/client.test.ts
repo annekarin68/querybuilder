@@ -255,11 +255,11 @@ describe("api client", () => {
   });
 
   it("getMe returns the user when logged in", async () => {
-    const f = mockFetchOnce(200, { name: "demo.user" });
+    const f = mockFetchOnce(200, { sub: "u-1", authorizations: [], display_name: "demo.user" });
     vi.stubGlobal("fetch", f);
     const out = await getMe();
     expect(out).toEqual({ name: "demo.user" });
-    expect(f).toHaveBeenCalledWith("/api/v1/auth/me", {
+    expect(f).toHaveBeenCalledWith("/api/v1/users/me", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });

@@ -230,11 +230,11 @@ describe("login and compliance navigations", () => {
   });
 });
 
-describe("GET /api/auth/me and /api/compliance/status", () => {
+describe("GET /api/users/me and /api/compliance/status", () => {
   it("me is 401 without a session and the user with one", async () => {
-    expect((await get(`${API}/auth/me`)).status).toBe(401);
-    const res = await get(`${API}/auth/me`, loggedIn());
-    expect(await res.json()).toEqual({ name: "demo.user" });
+    expect((await get(`${API}/users/me`)).status).toBe(401);
+    const res = await get(`${API}/users/me`, loggedIn());
+    expect(await res.json()).toMatchObject({ display_name: "demo.user", sub: "mock-user-0001" });
   });
 
   it("compliance status follows the session", async () => {

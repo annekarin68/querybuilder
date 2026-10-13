@@ -1,5 +1,4 @@
 import type {
-  AuthUser,
   ComplianceStatus,
   DatabasesResponse,
   EntrysetResponse,
@@ -11,6 +10,7 @@ import type {
   SavedQueryResponse,
   StatsErrorMessage,
   StatsResponse,
+  UserResponse,
 } from "./types";
 import type { ResponseObject } from "./contract";
 import type {
@@ -130,8 +130,10 @@ export function toDatabaseResult(line: ResponseObject<StatsResponse>): DatabaseR
   return { databaseId, status: "failed", errors, notes };
 }
 
-export function toUser(u: ResponseObject<AuthUser>): User {
-  return { name: u.text("name") };
+export function toUser(u: ResponseObject<UserResponse>): User {
+  // The backend already picked the best name (username, else email, else id).
+  // A blank one shows the id, as a nameless database does.
+  return { name: u.text("display_name") || u.optionalText("sub") || u.optionalText("user_id") };
 }
 
 export function toCompliance(c: ResponseObject<ComplianceStatus>): Compliance {

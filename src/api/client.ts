@@ -1,5 +1,4 @@
 import type {
-  AuthUser,
   ComplianceStatus,
   DatabasesResponse,
   EntrysetResponse,
@@ -7,6 +6,7 @@ import type {
   IndividualResponse,
   SavedQueryResponse,
   StatsResponse,
+  UserResponse,
 } from "./types";
 import type {
   Compliance,
@@ -157,8 +157,8 @@ export async function runQuery(
  */
 export async function getMe(): Promise<User | null> {
   try {
-    const body = await getJson("/auth/me");
-    return toUser(body.object<AuthUser>());
+    const body = await getJson("/users/me");
+    return toUser(body.object<UserResponse>());
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return null;
     throw err;
