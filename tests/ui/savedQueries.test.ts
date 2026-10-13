@@ -333,8 +333,8 @@ describe("the login dialog", () => {
     },
   );
 
-  it("Escape closes it", () => {
-    expect(escapeAction(at("login-to-save"))).toBe("close-saved-dialog");
+  it.each(["login-to-save", "login-to-list"] as const)("Escape closes %s", (kind) => {
+    expect(escapeAction(at(kind))).toBe("close-saved-dialog");
   });
 
   it("opening it puts the focus on Log in", () => {

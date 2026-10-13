@@ -998,6 +998,27 @@ describe("dropping docs items", () => {
       expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
     });
 
+    it("is replaced by Add all on a tag: one group of the tag's facets, each present", () => {
+      const tagged: Facet[] = [
+        { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
+        { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
+      ];
+      const { store, app } = setup({
+        ...ready(startingQuery()),
+        facets: tagged,
+        catalog: buildFieldCatalog(tagged),
+      });
+      app.onAddItem({ type: "tag", tag: "t" });
+      const q = store.getState().query;
+      expect(q.children).toHaveLength(1);
+      const group = q.children[0];
+      expect(group).toMatchObject({ kind: "group", operator: "AND" });
+      expect(group?.kind === "group" && group.children).toEqual([
+        expect.objectContaining({ facetId: "one", fieldId: null, operatorId: "present" }),
+        expect.objectContaining({ facetId: "two", fieldId: null, operatorId: "present" }),
+      ]);
+    });
+
     it("stays when the drop fails", () => {
       const { store, app } = setup({ ...ready(startingQuery()) });
       app.onAddItem({ type: "facet", facetId: "ghost" });

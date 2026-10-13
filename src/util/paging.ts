@@ -14,11 +14,12 @@ export interface Page {
 /**
  * Page `page` of `total` results, with the page number clamped to the pages
  * that exist: a click on a page that is gone (the results changed) shows the
- * nearest page instead of nothing.
+ * nearest page instead of nothing (Infinity: the last page). NaN has no
+ * nearest page and shows the first.
  */
 export function pageOf(total: number, page: number, size = PAGE_SIZE): Page {
   const pageCount = Math.max(1, Math.ceil(total / size));
-  const wanted = Number.isFinite(page) ? Math.floor(page) : 0;
+  const wanted = Number.isNaN(page) ? 0 : Math.floor(page);
   const p = Math.min(Math.max(0, wanted), pageCount - 1);
   return {
     page: p,

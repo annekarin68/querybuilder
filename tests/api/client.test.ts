@@ -263,6 +263,42 @@ describe("api client", () => {
     );
   });
 
+  // The answer started, then the connection broke: the browser rejects the
+  // body's read with a TypeError, as it does fetch() itself.
+  it("turns a body that breaks off while it is read into a NetworkError", async () => {
+    const broken = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.error(new TypeError("network error"));
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(broken, { status: 200 })),
+    );
+    await expect(getDatabases()).rejects.toBeInstanceOf(NetworkError);
+  });
+
+  it("turns a statistics stream that breaks off mid-way into a NetworkError, after the lines before it", async () => {
+    const line = JSON.stringify({ label: "db1", success: true, match_count: 3 });
+    let sent = false;
+    const breaking = new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (sent) return c.error(new TypeError("network error"));
+        sent = true;
+        c.enqueue(new TextEncoder().encode(`${line}\n`));
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(breaking, { status: 200 })),
+    );
+    const received: unknown[] = [];
+    await expect(getStats(query, ["db1"], (r) => received.push(r))).rejects.toBeInstanceOf(
+      NetworkError,
+    );
+    expect(received).toHaveLength(1);
+  });
+
   it("getMe returns the user when logged in", async () => {
     const f = mockFetchOnce(200, { sub: "u-1", authorizations: [], display_name: "demo.user" });
     vi.stubGlobal("fetch", f);
