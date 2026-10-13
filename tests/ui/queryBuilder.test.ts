@@ -5,6 +5,7 @@ import {
   collapseButton,
   footerHtml,
   groupHtml,
+  moveButtons,
   issuesHtml,
   noticeHtml,
   queryTitleHtml,
@@ -430,5 +431,67 @@ describe("issuesHtml", () => {
 
   it("only shows the issues of the node it is asked about", () => {
     expect(issuesHtml("g2", [{ nodeId: "g1", message: "x", kind: "invalid" }])).toBe("");
+  });
+});
+
+describe("Move up / Move down buttons", () => {
+  const catalog = buildFieldCatalog([]);
+  const ctx = { catalog, facets: null, issues: [], query: emptyQuery() };
+  const [a, b, c] = [newCondition(), newCondition(), newCondition()];
+
+  /** The button with `data-action` in `html`, up to its closing tag. */
+  const button = (html: string, action: string) => {
+    const at = html.indexOf(`data-action="${action}"`);
+    return html.slice(html.lastIndexOf("<button", at), html.indexOf("</button>", at));
+  };
+
+  it("names what moves and which way, for screen readers", () => {
+    const html = moveButtons("condition", { index: 2, count: 3 });
+    expect(button(html, "move-up")).toContain('aria-label="Move condition up"');
+    expect(button(html, "move-down")).toContain('aria-label="Move condition down"');
+    expect(moveButtons("group", { index: 2, count: 3 })).toContain('aria-label="Move group up"');
+  });
+
+  it("a middle node can go either way", () => {
+    const html = moveButtons("condition", { index: 2, count: 3 });
+    expect(html).not.toContain("disabled");
+  });
+
+  // aria-disabled, not disabled: a disabled button loses keyboard focus, and
+  // Enter pressed repeatedly would then bounce the node back the other way.
+  it("the first node can't go up and the last can't go down", () => {
+    const first = moveButtons("condition", { index: 1, count: 3 });
+    expect(button(first, "move-up")).toContain('aria-disabled="true"');
+    expect(button(first, "move-down")).not.toContain("disabled");
+    const last = moveButtons("condition", { index: 3, count: 3 });
+    expect(button(last, "move-up")).not.toContain("disabled");
+    expect(button(last, "move-down")).toContain('aria-disabled="true"');
+  });
+
+  it("an unavailable end stays focusable: it has no disabled attribute", () => {
+    const first = moveButtons("condition", { index: 1, count: 3 });
+    expect(button(first, "move-up")).not.toMatch(/ disabled[ >=]/);
+  });
+
+  it("an only child has nothing to pass either way", () => {
+    const only = moveButtons("condition", { index: 1, count: 1 });
+    expect(only.match(/aria-disabled="true"/g)).toHaveLength(2);
+    expect(only).not.toMatch(/ disabled[ >=]/);
+  });
+
+  it("every child of a group gets buttons that fit its place; the root gets none", () => {
+    const html = groupHtml(ctx, { ...emptyQuery(), children: [a, b, c] }, true);
+    expect(html.match(/data-action="move-up"/g)).toHaveLength(3);
+    expect(html.match(/data-action="move-down"/g)).toHaveLength(3);
+    expect(html.match(/data-action="move-up"[^>]* aria-disabled="true"/g)).toHaveLength(1);
+    expect(html.match(/data-action="move-down"[^>]* aria-disabled="true"/g)).toHaveLength(1);
+  });
+
+  it("a nested group has its own buttons, open or folded", () => {
+    const inner = { ...emptyQuery(), id: "g-inner", children: [a] };
+    const place = { index: 2, count: 3 };
+    for (const g of [inner, { ...inner, collapsed: true }]) {
+      expect(groupHtml(ctx, g, false, place)).toContain('aria-label="Move group up"');
+    }
   });
 });

@@ -14,9 +14,10 @@ your own result), say what you noticed, why it matters to the end user, what
 you recommend, and ask one sharp question. Typical targets: two names for one
 thing, labels or flows a first-time user would not understand, requirements
 that conflict with each other or with the backend, scope bigger than the goal,
-missing cases (empty states, errors, narrow screens, keyboard use). If they
-decide otherwise, follow the decision and write down why. Do not interrupt
-settled or trivial choices, and do not turn every task into a questionnaire.
+missing cases (empty states, errors, narrow desktop windows down to 512 px,
+keyboard use). If they decide otherwise, follow the decision and write down why.
+Do not interrupt settled or trivial choices, and do not turn every task into a
+questionnaire.
 
 ## Code for a junior team
 
@@ -68,5 +69,9 @@ by name: it can kill your own shell or somebody else's server.
   `npm run check:offline` fails the build if the output reaches off-origin.
 - **Only `src/ui/fomantic.ts` uses jQuery** ("The Fomantic discipline"), and
   `src/` never imports `mock-server/`. ESLint enforces both.
+- **Desktop only.** Phones and tablets are not supported and never will be
+  (decided 2026-10-07; "Supported screens" in the architecture doc): do not
+  design, test or ask about phone or tablet layouts or touch input. The minimum
+  is a desktop browser window 512 px wide (half a 1024 px screen, split).
 - **Do not rename headings in `docs/ARCHITECTURE.md`**: code and tests cite
   them by title (`tests/docReferences.test.ts`).

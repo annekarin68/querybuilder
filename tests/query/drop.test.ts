@@ -6,6 +6,7 @@ import {
   dropNotice,
   groupedMessage,
   movedMessage,
+  reorderedMessage,
   nodesForItem,
   parseDragItem,
   UNGROUPED_MESSAGE,
@@ -215,5 +216,16 @@ describe("groupedMessage / UNGROUPED_MESSAGE (read out to screen readers)", () =
   });
   it("says a group was dissolved", () => {
     expect(UNGROUPED_MESSAGE).toBe("Ungrouped.");
+  });
+});
+
+describe("reorderedMessage (read out after Move up / Move down)", () => {
+  it("says what moved, which way, and where it stands now", () => {
+    expect(reorderedMessage("condition", "up", { index: 1, count: 3 })).toBe(
+      "Moved the condition up, to position 1 of 3.",
+    );
+    expect(reorderedMessage("group", "down", { index: 3, count: 3 })).toBe(
+      "Moved the group down, to position 3 of 3.",
+    );
   });
 });

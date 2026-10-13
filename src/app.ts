@@ -9,6 +9,7 @@ import {
   dropNotice,
   movedMessage,
   nodesForItem,
+  reorderedMessage,
   type DragItem,
 } from "./query/drop";
 import {
@@ -16,11 +17,14 @@ import {
   countConditions,
   findNode,
   moveNode,
+  moveSibling,
   newCondition,
   placeNodes,
+  positionOf,
   sameSemantics,
   sameTree,
   updateNode,
+  type Direction,
 } from "./query/tree";
 import { hasUnsavedWork, sameName, saveTarget } from "./query/saved";
 import type { Group } from "./query/types";
@@ -376,6 +380,21 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
    *  that holds just a blank row, in its place); a tag's facets arrive as one group. */
   function onAddItem(item: DragItem): void {
     onDropItem(item, store.getState().query.id);
+  }
+
+  /**
+   * The Move up / Move down buttons: the keyboard's way to reorder. Swaps the
+   * node with a sibling, never changes its group (dragging does that). Nothing
+   * to swap with (an end of the list) does nothing, and says nothing.
+   */
+  function onMoveNode(nodeId: string, direction: Direction): void {
+    const { query } = store.getState();
+    const moved = moveSibling(query, nodeId, direction);
+    const node = findNode(query, nodeId);
+    const position = positionOf(moved ?? query, nodeId);
+    if (!moved || !node || !position) return;
+    onQueryChange(moved);
+    announce(reorderedMessage(node.kind, direction, position));
   }
 
   function dismissDropNotice(): void {
@@ -762,6 +781,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onQueryChange,
     onDropItem,
     onAddItem,
+    onMoveNode,
     dismissDropNotice,
     showNotice,
     onDatabasesChange,

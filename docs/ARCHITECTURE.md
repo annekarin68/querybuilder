@@ -86,6 +86,20 @@ speaks the backend's vocabulary):
 | a database's `eventCount` | `DatabasesResponse.total_entrysets` | same |
 | one database's statistics, `DatabaseResult` (`matchCount`, `nodeId`) | `StatsResponse` (`match_count`, `error_messages[].node_id`) | same |
 
+### Supported screens
+
+The app is a **desktop-browser tool**. **Phones and tablets are not supported
+and never will be** (decided 2026-10-07): there is no touch input (no
+touch drag-and-drop, no touch-sized targets) and there are no layouts for
+narrow portrait screens. Do not design, test or ask about them. Mouse and
+keyboard users are still fully supported: their targets meet WCAG 2.2 AA (at
+least 24 px, criterion 2.5.8) and everything works from the keyboard. The
+minimum is a desktop browser window **512 px wide**, half of a 1024 px screen
+in a split screen (**Narrow screens** under "Screen layout"; the minimum was
+1024 px until it was lowered for split screens). Desktop windows can be narrow,
+so below 1100 px the open dictionary floats over the page; that is for narrow
+desktop windows, not for tablets.
+
 ### Screen layout
 
 ```
@@ -265,8 +279,15 @@ is why the rain used to work only in some browsers, or only with a steady hand.
 | **Small mock server** | `npm run dev` gives a working app end to end. Dev-only. |
 | **Vitest, unit tests without a DOM** | The valuable logic is pure (`src/query/`) or takes its dependencies as arguments (`src/app.ts`, driven by a fake API in tests), so it is easy to test. The panels only turn state into HTML strings, so they are not DOM-tested. |
 
-**Toolchain floor: Node 20.19+** (Vite 8, Vitest 4, ESLint 9 flat config).
-`npm audit` is clean.
+**Toolchain floor: Node 22.12+** (Vite 8, Vitest 4, ESLint 9 flat config).
+Vite 8 itself accepts 20.19 or 22.12, but Node 20 reached end of life in April
+2026 and CI runs Node 22, so 22.12 is the floor we test and deploy on
+(`engines` in `package.json`, `node-version` in `.github/workflows/ci.yml`).
+On 2026-10-13 `npm audit` reported 0 vulnerabilities, both for the production
+dependencies (`npm audit --omit=dev`, which is what ships to users) and for
+everything (`npm audit`; a critical finding in `concurrently`'s `shell-quote`,
+a dev-only helper for `npm run dev`, was fixed within its version range).
+Re-run both commands when you change dependencies.
 
 ### The audience constraint
 
@@ -375,7 +396,8 @@ src/
   app.ts               createApp({ store, api, navigate, announce }) — everything the app DOES, with no DOM: startup
                        (+ restoring the pending query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
-                       `dismissDropNotice`), the saved-queries actions (`openSaveDialog`, `saveQuery`,
+                       `dismissDropNotice`), Move up / Move down (`onMoveNode`), the saved-queries
+                       actions (`openSaveDialog`, `saveQuery`,
                        `askOpenSaved`, …), previewAnnouncement (what a screen reader hears about Run).
                        Tested with a fake API.
   state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; the saved-queries keys), the
@@ -405,7 +427,7 @@ src/
   query/
     types.ts           Condition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
-                       groupOf, sameSemantics, sameTree, …).
+                       moveSibling, positionOf, groupOf, sameSemantics, sameTree, …).
     saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork`, `saveTarget`.
     drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
                        docs item creates, and what it couldn't), `dropNotice`, `addedNodesMessage` — pure.
@@ -422,6 +444,7 @@ src/
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
   util/
     debounce.ts        debounce(fn, ms) (the live-stats trigger).
+    afterPointer.ts    When a typed value may be committed: not while the mouse button is down (see "Centre — `queryBuilder.ts`", Wiring).
     requestSlot.ts     At most one request per kind in flight; the whole stale-response guard.
     pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
     paging.ts          PAGE_SIZE (100), pageOf(total, page) — the clamped page of the Matching events table (pure).
@@ -1222,6 +1245,11 @@ condition).
   is impossible (unknown id, an unknown target, the root, a group into itself
   or something inside it). `insertNodes` with an unknown target returns the
   tree unchanged.
+  `moveSibling` is the keyboard's smaller move: it swaps a node with its
+  previous or next sibling inside the same group (`null` at an end, for the
+  root or an unknown id), and `positionOf` says where a node stands among its
+  siblings (`{index, count}`, 1-based), which the Move buttons and the spoken
+  message both use.
   `replaceLoneBlankCondition` is how a blank row gives way: when the group a
   drop lands in (the target group, or the parent of the target row) holds
   exactly one condition with nothing chosen (the starting query's seed from
@@ -1376,7 +1404,7 @@ like the builder's **+ Condition**; the small value rows keep an icon-only
 "+". When the sidebar column is narrower than 21rem (a container query on
 `.qb-docs`, the card inside the column, so the rule is `max-width: 19rem`) the
 word drops and the "+" stays. The accessible name (`aria-label="Add … to the
-query"`) is the same either way. In the docs, the count pills are tinted
+query"`) is the same either way. In the dictionary, the count pills are tinted
 instead of outlined, so they are not mistaken for the buttons beside them, and
 the labelled buttons have a keyboard focus ring like the icon buttons.
 
@@ -1481,8 +1509,9 @@ as if the whole builder needed a login.
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
 a bordered collapse chevron (`collapseButton`: `angle down` while open,
 `angle right` while folded, the same arrows as the data dictionary),
-"Match [ALL | ANY] of the following", **+ Condition**, **+ Group**, **Group contents**,
-**Ungroup** (not on the root; see below), ✕ (not on the root). The buttons sit
+"Match [ALL | ANY] of the following", **+ Condition**, **+ Group**,
+**Group contents**, **Ungroup** (not on the root; see below), ✕ (not on the
+root). The buttons sit
 together in one right-aligned box (`.qb-group-actions`) that wraps among itself
 in a narrow header, so the ✕ stays last on the right and never ends up alone at
 the start of a line, where it could be taken for a condition's remove button. A
@@ -1627,9 +1656,29 @@ the issue's message tells the user to do exactly that.
   `app.ts`), so the user sees what arrived. Collapsing stays display-only.
 - **Keyboard and the "+" buttons.** Every drag has a non-mouse path: the + button
   on a docs item calls `onAddItem`, which drops the item on the **root group**,
-  at its end. The + button is a real `<button>`, so Tab and Enter work. (Moving an
-  existing node is mouse-only; use the row's own dropdowns and ✕ to rebuild
-  without a mouse.) A tag's **Add all N** adds its group the same way.
+  at its end. The + button is a real `<button>`, so Tab and Enter work. A tag's
+  **Add all N** adds its group the same way.
+  Moving an existing node has a keyboard path too: **Move up / Move down**
+  (`moveButtons`), a side-by-side pair of icon buttons right after the node's
+  grip on every condition and every group but the root (open or folded). They
+  swap the node with its previous or next sibling (`moveSibling`) and never
+  change which group it is in; dragging does that. The first node's Up and the
+  last node's Down are `aria-disabled="true"` (not hidden, and not `disabled`),
+  so the pair keeps its shape, a screen reader says why nothing happens, and the
+  button keeps keyboard focus (a click on one does nothing: the click handler
+  ignores an `aria-disabled` Move button before its `switch`; only Move, since
+  an `aria-disabled` **Ungroup** is pressed to hear why it is refused). Keeping
+  focus costs one extra tab stop on the first and the last row.
+  `wireQueryBuilder` calls `hooks.onMove`, wired to `app.onMoveNode`, which
+  announces the result ("Moved the condition up, to position 2 of 3.",
+  `reorderedMessage` in `drop.ts`). The repaint replaces the pressed button, and
+  `paint()` puts the focus back on the same node's button for the same
+  direction ("Keyboard focus across repaints"), also when the node has just
+  reached an end: a `disabled` button would lose focus there, and the next Enter
+  would then move the node back the other way. Each button is a normal icon
+  button (1.75rem, 24.5px square), because the pair is the single-pointer
+  alternative to dragging and must meet the 24 px target size (WCAG 2.5.8);
+  side by side they add width, not height, to a condition row or a group header.
 - **A lone blank row is replaced, not joined.** When a group's only child is a
   blank condition (the starting query's root, or a group just added with
   "+ Group"), any drop or + that creates something puts it in that row's place
@@ -1727,6 +1776,47 @@ The `change` listener skips everything inside a `.ui.dropdown`: a search
 dropdown's typing box fires `change` when it loses focus on the mousedown
 before a menu click, and repainting then would remove the item under the
 pointer before the click lands.
+
+The plain `<input>`s that remain commit **later than their `change`**
+(`src/util/afterPointer.ts`). Both reasons share one cause: `change` fires while
+the box loses focus, before whatever the user did next has finished, and the
+commit repaints the whole builder.
+
+- **With the mouse**, `change` fires on mousedown, so the repaint would replace
+  the button under the pointer and the click would be lost. A `change` that
+  arrives while the primary button is down (`pointerdown` / `pointerup` /
+  `pointercancel` on `document`) is therefore held. It is applied in a
+  `setTimeout(0)` after the release, which runs after the click.
+- **With the keyboard**, Tab or Enter out of a box also repaints before the
+  focus has moved, destroying the control it moves to. So even with the pointer
+  up the commit waits one `setTimeout(0)`, by which time the focus is already on
+  its destination.
+- **A click on a button or link** (a `button`, an `a[href]` or an element with
+  `data-action`: the builder's buttons, **Run query**, the other panels', and
+  the top bar's **Log in** and the compliance link) applies the held edit
+  first, from a capture-phase `click` listener on `document`, because the
+  handler reads the query and must see the typed value (the flow links save the
+  query before leaving the page). What counts is decided by the pure
+  `shouldFlushBeforeClick` in `afterPointer.ts`. The delegated
+  listeners survive the repaint and the replaced button still answers
+  `closest("[data-action]")`. The three ways of applying share one queue
+  (`flush` in `afterPointer.ts`), so whichever comes first does the work and the
+  others find nothing to do. A window that loses focus (`blur`) flushes too, as
+  its `pointerup` may never arrive.
+- **Dropdowns and checkboxes are left out of that early flush.** The repaint
+  destroys Fomantic's handlers, so repainting before their click would make the
+  click do nothing; they use the after-the-click timeout. That repaint closes a
+  dropdown the click has just opened, so `commitTypedValue` notes that a menu
+  was open and opens it again in the dropdown `paint()` put the focus back in.
+
+The row is read when the commit runs (a row repainted meanwhile still holds
+what was typed) and applied to the latest query by the row's node id
+(`handleRowChange`), because a click in between may have changed the tree; if
+the node is gone by then the edit is dropped. After the repaint `paint()` puts
+the focus back where it had moved to ("Keyboard focus across repaints").
+One case no deferral can help: if the typed value is what makes the query
+complete, **Run query** is still disabled when the mouse goes down, so the
+browser sends it no click and the user presses it again.
 
 ### Right — `statsPanel.ts`
 

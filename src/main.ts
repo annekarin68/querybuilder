@@ -98,6 +98,7 @@ wireAccountMenu(panels.account, {
 });
 const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange, {
   onDrop: app.onDropItem,
+  onMove: app.onMoveNode,
   onDismissNotice: app.dismissDropNotice,
   onNotice: app.showNotice,
   announce: shell.announce,
