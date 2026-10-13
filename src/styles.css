@@ -1379,10 +1379,11 @@ body {
 .qb-doc-field-blurb {
   flex: 1 0 100%;
   /* The 100% basis must include the indent below, or the text sticks out of
-     the row by that much (Fomantic does not set border-box on plain
-     elements). */
+     the row by that much. Everything inside a <details> inherits content-box:
+     the browser's own box around a <details>' content is not matched by
+     Fomantic's `* { box-sizing: inherit }` reset, so it falls back to
+     content-box and passes that on to its children. */
   box-sizing: border-box;
-  min-width: 0;
   /* Lines up under the field name: the row's padding (0.5rem) + this = the name's
      left edge (chevron + grip + their gaps; measured in the browser). */
   padding-left: 3rem;
