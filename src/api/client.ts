@@ -194,12 +194,12 @@ export function invalidateCompliance(): Promise<void> {
 // name is taken) and 400 (a malformed body, which is a bug on our side).
 
 export async function listSavedQueries(): Promise<SavedQuery[]> {
-  const body = await getJson("/saved-queries");
+  const body = await getJson("/filter/saved");
   return body.list<SavedQueryResponse>().map(toSavedQuery);
 }
 
 export async function createSavedQuery(draft: SavedQueryDraft): Promise<SavedQuery> {
-  const body = await postJson("/saved-queries", toSavedQueryRequest(draft));
+  const body = await postJson("/filter/saved", toSavedQueryRequest(draft));
   return toSavedQuery(body.object<SavedQueryResponse>());
 }
 
@@ -215,7 +215,7 @@ export function deleteSavedQuery(id: string): Promise<void> {
 
 /** The id may hold any character (it is the server's), so it is encoded. */
 function savedQueryPath(id: string): string {
-  return `/saved-queries/${encodeURIComponent(id)}`;
+  return `/filter/saved/${encodeURIComponent(id)}`;
 }
 
 // ---- how a request is sent --------------------------------------------------

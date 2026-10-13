@@ -66,7 +66,7 @@ function valueOf(c: Condition): RequestValue {
 // ---- saved queries ------------------------------------------------------------
 
 /**
- * The body of POST/PUT …/saved-queries (docs/ARCHITECTURE.md, "Saved queries").
+ * The body of POST/PUT …/filter/saved (docs/ARCHITECTURE.md, "Saved queries").
  * Unlike `toQueryRequest` it accepts a half-built query: blank conditions, a
  * missing operator, a from–to pair with one end empty, an empty group. The
  * backend checks the shape only, so a bug in our own validation can never stop

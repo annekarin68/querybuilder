@@ -203,12 +203,12 @@ function savedTreeProblem(
 // ---- the path ---------------------------------------------------------------------
 
 /**
- * The `{id}` of `…/saved-queries/{id}`, decoded, or null when `pathname` is
+ * The `{id}` of `…/filter/saved/{id}`, decoded, or null when `pathname` is
  * not such a path (the server's route table matches exact paths, so it asks
  * this for the PUT and DELETE routes that carry an id).
  */
 export function savedQueryIdFrom(pathname: string, apiBase: string): string | null {
-  const prefix = `${apiBase}/saved-queries/`;
+  const prefix = `${apiBase}/filter/saved/`;
   if (!pathname.startsWith(prefix)) return null;
   const rest = pathname.slice(prefix.length);
   if (rest === "" || rest.includes("/")) return null;

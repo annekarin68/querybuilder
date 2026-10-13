@@ -122,7 +122,7 @@ export type Compliance =
       log: string;
     };
 
-/** A query the user saved (GET/POST/PUT …/saved-queries). It may be unfinished
+/** A query the user saved (GET/POST/PUT …/filter/saved). It may be unfinished
  *  or invalid: saving never checks what the query means. */
 export interface SavedQuery {
   /** Made by the server (not a backend `label`); never shown to the user. */

@@ -8,8 +8,8 @@ describe("parseHttpErrors", () => {
   });
 
   it("reads rules separated by commas", () => {
-    expect(parseHttpErrors("POST /saved-queries=500, GET /databases=502:html")).toEqual([
-      { method: "POST", path: "/saved-queries", status: 500, html: false },
+    expect(parseHttpErrors("POST /filter/saved=500, GET /databases=502:html")).toEqual([
+      { method: "POST", path: "/filter/saved", status: 500, html: false },
       { method: "GET", path: "/databases", status: 502, html: true },
     ]);
   });
@@ -30,17 +30,17 @@ describe("parseHttpErrors", () => {
 
 describe("httpErrorFor", () => {
   const rules = parseHttpErrors(
-    "POST /saved-queries=500, DELETE /saved-queries/*=404, * /filter/validate=503",
+    "POST /filter/saved=500, DELETE /filter/saved/*=404, * /filter/validate=503",
   );
 
   it("matches the method and the path exactly", () => {
-    expect(httpErrorFor(rules, "POST", "/saved-queries")?.status).toBe(500);
-    expect(httpErrorFor(rules, "GET", "/saved-queries")).toBeUndefined();
+    expect(httpErrorFor(rules, "POST", "/filter/saved")?.status).toBe(500);
+    expect(httpErrorFor(rules, "GET", "/filter/saved")).toBeUndefined();
   });
 
   it("a path ending in /* matches everything below it, not itself", () => {
-    expect(httpErrorFor(rules, "DELETE", "/saved-queries/abc")?.status).toBe(404);
-    expect(httpErrorFor(rules, "DELETE", "/saved-queries")).toBeUndefined();
+    expect(httpErrorFor(rules, "DELETE", "/filter/saved/abc")?.status).toBe(404);
+    expect(httpErrorFor(rules, "DELETE", "/filter/saved")).toBeUndefined();
   });
 
   it("* matches any method", () => {

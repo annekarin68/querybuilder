@@ -318,7 +318,7 @@ async function readSavedQuery(req: IncomingMessage, res: ServerResponse) {
   return null;
 }
 
-/** The PUT and DELETE routes of `…/saved-queries/{id}`; undefined for any other method. */
+/** The PUT and DELETE routes of `…/filter/saved/{id}`; undefined for any other method. */
 function savedQueryIdHandler(method: string | undefined, id: string, store: SavedQueryStore) {
   if (method === "PUT") {
     return forSessionUser(async (userId, req, res) => {
@@ -475,8 +475,8 @@ function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<strin
     [`POST ${api}/filter/validate`]: (req, res) => streamStats(req, res, config),
     [`POST ${api}/filter/execute`]: queryEvents,
 
-    [`GET ${api}/saved-queries`]: forSessionUser((userId) => savedQueries.list(userId)),
-    [`POST ${api}/saved-queries`]: forSessionUser(async (userId, req, res) => {
+    [`GET ${api}/filter/saved`]: forSessionUser((userId) => savedQueries.list(userId)),
+    [`POST ${api}/filter/saved`]: forSessionUser(async (userId, req, res) => {
       const body = await readSavedQuery(req, res);
       return body && savedQueries.create(userId, body);
     }),

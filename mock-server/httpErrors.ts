@@ -3,12 +3,12 @@
  * the frontend copes when the backend fails (docs/ARCHITECTURE.md, "Mock
  * server"). The variable holds rules separated by commas:
  *
- *     MOCK_HTTP_ERRORS="POST /saved-queries=500, GET /documentation/databases=502:html"
+ *     MOCK_HTTP_ERRORS="POST /filter/saved=500, GET /documentation/databases=502:html"
  *
  * Each rule is `METHOD PATH=STATUS`. PATH is below the API prefix
- * ("/saved-queries", not "/api/v1/saved-queries"). `*` as METHOD or PATH
+ * ("/filter/saved", not "/api/v1/filter/saved"). `*` as METHOD or PATH
  * matches anything, and a PATH ending in "/*" matches everything below it
- * ("/saved-queries/*" is every saved query's own path). `:html` answers with a
+ * ("/filter/saved/*" is every saved query's own path). `:html` answers with a
  * small HTML page instead of the usual `{ "error": … }` JSON, as a proxy or
  * gateway in front of a real backend would. The first matching rule wins.
  */
@@ -35,7 +35,7 @@ export function parseHttpErrors(text: string | undefined): HttpErrorRule[] {
     const status = m ? Number(m[3]) : 0;
     if (!m || status < 400 || status > 599) {
       throw new Error(
-        `MOCK_HTTP_ERRORS: "${rule}" should look like "POST /saved-queries=500" ` +
+        `MOCK_HTTP_ERRORS: "${rule}" should look like "POST /filter/saved=500" ` +
           `(a status from 400 to 599, optionally followed by ":html").`,
       );
     }
@@ -45,7 +45,7 @@ export function parseHttpErrors(text: string | undefined): HttpErrorRule[] {
 
 function pathMatches(rulePath: string, path: string): boolean {
   if (rulePath === "*" || rulePath === path) return true;
-  // "/saved-queries/*": anything below "/saved-queries/".
+  // "/filter/saved/*": anything below "/filter/saved/".
   return rulePath.endsWith("/*") && path.startsWith(rulePath.slice(0, -1));
 }
 

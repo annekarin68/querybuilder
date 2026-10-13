@@ -229,7 +229,7 @@ export interface RequestCondition {
 export type RequestScalar = string | number | boolean;
 export type RequestValue = null | RequestScalar | RequestScalar[];
 
-// ---- saved queries (GET/POST …/saved-queries, PUT/DELETE …/saved-queries/{id}) --
+// ---- saved queries (GET/POST …/filter/saved, PUT/DELETE …/filter/saved/{id}) --
 
 /**
  * A saved query as stored by the backend: the query as the user left it,

@@ -263,8 +263,8 @@ describe("GET /api/users/me and /api/log/status", () => {
   });
 });
 
-describe("saved queries (…/saved-queries)", () => {
-  const url = `${API}/saved-queries`;
+describe("saved queries (…/filter/saved)", () => {
+  const url = `${API}/filter/saved`;
   const send = (method: string, path: string, cookie?: string, body?: unknown) =>
     fetch(base + path, {
       method,

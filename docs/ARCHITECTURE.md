@@ -666,7 +666,7 @@ per endpoint, all under one **API prefix**,
 `VITE_API_BASE`. Every JSON endpoint answers a 4xx/5xx with
 `{ "error": "human readable message" }`, which the client throws as an
 `ApiError` carrying the HTTP `status`. Its message is for the console: the
-request, the status line and the server's text (`POST /api/v1/saved-queries
+request, the status line and the server's text (`POST /api/v1/filter/saved
 failed: 500 Internal Server Error: …`). A request that gets no answer at all
 (server down, network gone) rejects with a `NetworkError` that names the
 request. A 2xx answer that doesn't match the contract is thrown as a
@@ -696,10 +696,10 @@ comments, `/api/filter/validate` and the like are short for `{prefix}/filter/val
 | `GET {prefix}/log/build` | Starts the compliance flow: a browser navigation, not a fetch (Compliance, below). The callback the compliance service returns to is the backend's own business. |
 | `GET {prefix}/log/status` | The session's compliance log: `200` with a structured message (`ComplianceLogResponse`, fields owned by the backend) or `403` when the session has none. |
 | `POST {prefix}/log/invalidate` | Clears the session's compliance log. The session stays. |
-| `GET {prefix}/saved-queries` | The user's saved queries, newest `updatedAt` first. Needs a session (`401`). |
-| `POST {prefix}/saved-queries` | Body: a `SavedQueryRequest`. `201` + the `SavedQueryResponse`. `409` for a name already used, `400` for a malformed body. Needs a session. |
-| `PUT {prefix}/saved-queries/{id}` | Body: a `SavedQueryRequest`. `200` + the `SavedQueryResponse`. `404`, `409`, `400` as above. Needs a session. |
-| `DELETE {prefix}/saved-queries/{id}` | `204`. `404` for an unknown id. Needs a session. |
+| `GET {prefix}/filter/saved` | The user's saved queries, newest `updated_at` first. Needs a session (`401`). |
+| `POST {prefix}/filter/saved` | Body: a `SavedQueryRequest`. `201` + the `SavedQueryResponse`. `409` for a name already used, `400` for a malformed body. Needs a session. |
+| `PUT {prefix}/filter/saved/{id}` | Body: a `SavedQueryRequest`. `200` + the `SavedQueryResponse`. `404`, `409`, `400` as above. Needs a session. |
+| `DELETE {prefix}/filter/saved/{id}` | `204`. `404` for an unknown id. Needs a session. |
 
 A body that isn't a well-formed `QueryRequest` is answered with `400`.
 
@@ -948,6 +948,9 @@ compliance reason is needed. The list never shows the query itself (queries can
 be sensitive): a name and an optional note help recall it. (Not to be confused
 with "Saved query across the login/compliance redirect": that one is the
 *pending query*, a `sessionStorage` copy of the query on screen, never sent to
+The endpoints are `GET` and `POST {prefix}/filter/saved`, and `PUT` and
+`DELETE {prefix}/filter/saved/{id}` ("API contract").
+
 the backend.)
 
 `SavedQueryRequest` is `{ name, note, databases, query }`.
@@ -1929,7 +1932,7 @@ to a named handler function — add a route there, and a test in
   (`toSavedQuery` reads them strictly, so one bad stored entry would make the
   whole list unreadable), and no two nodes of one tree share an id (the builder
   finds nodes by id). The route
-  table matches exact paths, so `server.ts` gives `…/saved-queries/{id}` a
+  table matches exact paths, so `server.ts` gives `…/filter/saved/{id}` a
   second look (`savedQueryIdFrom`) before the 404.
 - **Login and compliance** are simulated in-process (`auth.ts`): stand-in IdP
   and compliance pages, fake codes and tokens, in-memory sessions. The mock
@@ -1948,7 +1951,7 @@ Besides `.env`, three environment variables, read by `index.ts`:
 |---|---|---|
 | `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/filter/validate` lines that simulate an unreachable database. `0` turns it off. |
 | `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/filter/validate` line. `0` = no pause. |
-| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /saved-queries=500, GET /documentation/databases=502:html"`. |
+| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /filter/saved=500, GET /documentation/databases=502:html"`. |
 
 The sample data is **fictional** vehicle telemetry, and the real backend's
 data differs — which is why `src/` must never name it (`src/config.ts` holds

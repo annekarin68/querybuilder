@@ -287,17 +287,17 @@ describe("savedQueryIdFrom: the {id} of a saved-query path", () => {
   const api = "/test-api/v9";
 
   it("returns the decoded id", () => {
-    expect(savedQueryIdFrom(`${api}/saved-queries/sq-1`, api)).toBe("sq-1");
-    expect(savedQueryIdFrom(`${api}/saved-queries/a%2Fb`, api)).toBe("a/b");
+    expect(savedQueryIdFrom(`${api}/filter/saved/sq-1`, api)).toBe("sq-1");
+    expect(savedQueryIdFrom(`${api}/filter/saved/a%2Fb`, api)).toBe("a/b");
   });
 
   it.each([
-    ["the list path", `${api}/saved-queries`],
-    ["the list path with a slash", `${api}/saved-queries/`],
-    ["a longer path", `${api}/saved-queries/a/b`],
-    ["another prefix", `/other/saved-queries/sq-1`],
+    ["the list path", `${api}/filter/saved`],
+    ["the list path with a slash", `${api}/filter/saved/`],
+    ["a longer path", `${api}/filter/saved/a/b`],
+    ["another prefix", `/other/filter/saved/sq-1`],
     ["another resource", `${api}/databases/sq-1`],
-    ["broken percent-encoding", `${api}/saved-queries/%E0%A4%A`],
+    ["broken percent-encoding", `${api}/filter/saved/%E0%A4%A`],
   ])("returns null for %s", (_label, pathname) => {
     expect(savedQueryIdFrom(pathname, api)).toBeNull();
   });

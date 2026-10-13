@@ -536,7 +536,7 @@ describe("saved queries", () => {
     const out = await listSavedQueries();
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
-    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries", {
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
@@ -546,21 +546,21 @@ describe("saved queries", () => {
     const f = mockFetchOnce(201, unfinishedResponse);
     vi.stubGlobal("fetch", f);
     expect(await createSavedQuery(unfinishedDraft)).toMatchObject(saved);
-    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries", sentInit("POST"));
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved", sentInit("POST"));
   });
 
   it("updateSavedQuery PUTs to the id's path, encoded, and returns the saved query", async () => {
     const f = mockFetchOnce(200, unfinishedResponse);
     vi.stubGlobal("fetch", f);
     expect(await updateSavedQuery("a/b", unfinishedDraft)).toMatchObject(saved);
-    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries/a%2Fb", sentInit("PUT"));
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved/a%2Fb", sentInit("PUT"));
   });
 
   it("deleteSavedQuery DELETEs the id's path, encoded, and resolves with nothing on 204", async () => {
     const f = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", f);
     await expect(deleteSavedQuery("a/b")).resolves.toBeUndefined();
-    expect(f).toHaveBeenCalledWith("/api/v1/saved-queries/a%2Fb", {
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved/a%2Fb", {
       method: "DELETE",
       signal: expect.any(AbortSignal),
     });
@@ -573,7 +573,7 @@ describe("saved queries", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 409 });
     expect((err as ApiError).message).toBe(
-      `POST /api/v1/saved-queries failed: 409 STATUS: ${message}`,
+      `POST /api/v1/filter/saved failed: 409 STATUS: ${message}`,
     );
   });
 
@@ -582,14 +582,14 @@ describe("saved queries", () => {
     await expect(updateSavedQuery("sq-1", unfinishedDraft)).rejects.toMatchObject({
       name: "ApiError",
       status,
-      message: `PUT /api/v1/saved-queries/sq-1 failed: ${status} STATUS: Nope.`,
+      message: `PUT /api/v1/filter/saved/sq-1 failed: ${status} STATUS: Nope.`,
     });
   });
 
   it("an answer that breaks the contract is a ContractError naming the field", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(200, [{ ...unfinishedResponse, id: undefined }]));
     await expect(listSavedQueries()).rejects.toThrow(
-      'GET /api/v1/saved-queries: "[0].id" should be non-blank text, but it is missing.',
+      'GET /api/v1/filter/saved: "[0].id" should be non-blank text, but it is missing.',
     );
   });
 });
