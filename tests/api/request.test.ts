@@ -46,9 +46,9 @@ describe("toQueryRequest", () => {
           {
             kind: "condition",
             id: ids.c1,
-            facetId: "thing",
-            fieldId: "size",
-            operatorId: "gt",
+            facet_id: "thing",
+            field_id: "size",
+            operator_id: "gt",
             value: 3,
           },
           {
@@ -59,9 +59,9 @@ describe("toQueryRequest", () => {
               {
                 kind: "condition",
                 id: ids.c2,
-                facetId: "thing",
-                fieldId: "color",
-                operatorId: "in",
+                facet_id: "thing",
+                field_id: "color",
+                operator_id: "in",
                 value: ["red", "blue"],
               },
             ],
@@ -100,7 +100,7 @@ describe("toQueryRequest", () => {
       value: false,
     });
     const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
-    expect(sent.map((c) => [c.operatorId, c.value])).toEqual([
+    expect(sent.map((c) => [c.operator_id, c.value])).toEqual([
       ["eq", "2024-11"],
       ["absent", null],
       ["eq", false],
@@ -123,7 +123,7 @@ describe("toQueryRequest", () => {
     expect(() => toQueryRequest(oneCondition(patch), ["alpha"])).toThrow(/cannot be sent/);
   });
 
-  it("sends a facet-level condition with fieldId null", () => {
+  it("sends a facet-level condition with field_id null", () => {
     const t = oneCondition({
       facetId: "thing",
       fieldId: null,
@@ -132,9 +132,9 @@ describe("toQueryRequest", () => {
     });
     const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
     expect(sent[0]).toMatchObject({
-      facetId: "thing",
-      fieldId: null,
-      operatorId: "present",
+      facet_id: "thing",
+      field_id: null,
+      operator_id: "present",
       value: null,
     });
   });

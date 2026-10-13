@@ -41,6 +41,10 @@ import type { Condition, Group, QueryNode } from "../query/types";
  * query's tree and database ids are read with these); `text` and `strings` are
  * only shown, so they fall back to blank.
  *
+ * The wire is snake_case and the model camelCase: the keys read here are the
+ * backend's (`total_entrysets`), the properties built are ours
+ * (`eventCount`), and this file is the only place that knows both.
+ *
  * This is also where the backend's quirks are smoothed out once, instead of in
  * every panel: text may arrive padded, a facet or field may have no name, and a
  * field's type may sit in `type` or in `format`.
@@ -53,7 +57,7 @@ export function toDatabase(d: ResponseObject<DatabasesResponse>): Database {
     name: d.text("name") || id,
     description: d.text("description"),
     owner: d.text("owner"),
-    eventCount: d.number("totalEntrysets"),
+    eventCount: d.number("total_entrysets"),
   };
 }
 
@@ -84,7 +88,7 @@ export function toFacet(i: ResponseObject<IndividualResponse>): Facet {
     group: i.text("group"),
     comment: i.text("comment"),
     description: i.text("description"),
-    eventCount: i.number("totalCount"),
+    eventCount: i.number("total_count"),
     fields: i.list<IndividualFieldResponse>("fields").map(toField),
   };
 }
@@ -105,7 +109,7 @@ export function toEvent(e: ResponseObject<EventResponse>): EventRecord {
 }
 
 /**
- * One item of a stats line's `errorMessages`. These decide whether Run is
+ * One item of a stats line's `error_messages`. These decide whether Run is
  * allowed (src/state.ts), so the item must be an object; within it, a kind
  * this app doesn't know is "invalid" (the safe choice, as in toCompliance).
  */
@@ -113,7 +117,7 @@ function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
   return {
     message: e.text("message") || "The server found a problem in the query.",
     kind: e.text("kind") === "incomplete" ? "incomplete" : "invalid",
-    nodeId: e.optionalText("nodeId") || null,
+    nodeId: e.optionalText("node_id") || null,
   };
 }
 
@@ -124,14 +128,14 @@ function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
 export function toDatabaseResult(line: ResponseObject<StatsResponse>): DatabaseResult {
   const databaseId = line.id("label");
   const success = line.boolean("success");
-  const matchCount = line.optionalNumber("matchCount");
-  const notes = line.optionalStrings("infoMessages");
+  const matchCount = line.optionalNumber("match_count");
+  const notes = line.optionalStrings("info_messages");
   if (success && matchCount !== undefined) {
     return { databaseId, status: "ok", matchCount, notes };
   }
   const errors: DatabaseError[] = success
     ? [{ message: "The server sent no count for this database.", kind: "invalid", nodeId: null }]
-    : line.optionalList<StatsErrorMessage>("errorMessages").map(toDatabaseError);
+    : line.optionalList<StatsErrorMessage>("error_messages").map(toDatabaseError);
   return { databaseId, status: "failed", errors, notes };
 }
 
@@ -168,7 +172,7 @@ export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery 
     note: q.text("note"),
     databaseIds: q.ids("databases"),
     query: toSavedGroup(root),
-    updatedAt: q.id("updatedAt"),
+    updatedAt: q.id("updated_at"),
   };
 }
 
@@ -191,9 +195,9 @@ function toSavedCondition(c: ResponseObject<SavedCondition>): Condition {
   return {
     kind: "condition",
     id: c.id("id"),
-    facetId: c.nullableId("facetId"),
-    fieldId: c.nullableId("fieldId"),
-    operatorId: c.nullableId("operatorId"),
+    facetId: c.nullableId("facet_id"),
+    fieldId: c.nullableId("field_id"),
+    operatorId: c.nullableId("operator_id"),
     value: c.savedValue("value"),
   };
 }

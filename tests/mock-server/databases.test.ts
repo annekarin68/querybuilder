@@ -27,17 +27,17 @@ describe("DATABASES", () => {
     ]);
   });
 
-  it("every database has a positive totalEntrysets, spanning several orders of magnitude", () => {
-    for (const d of DATABASES) expect(d.totalEntrysets).toBeGreaterThan(0);
-    const sizes = DATABASES.map((d) => d.totalEntrysets);
+  it("every database has a positive total_entrysets, spanning several orders of magnitude", () => {
+    for (const d of DATABASES) expect(d.total_entrysets).toBeGreaterThan(0);
+    const sizes = DATABASES.map((d) => d.total_entrysets);
     expect(Math.max(...sizes) / Math.min(...sizes)).toBeGreaterThan(1000);
   });
 
-  it("percentageOfTotal is each database's share of totalEntrysets, summing to ~100", () => {
-    const sum = DATABASES.reduce((s, d) => s + d.percentageOfTotal, 0);
+  it("percentage_of_total is each database's share of total_entrysets, summing to ~100", () => {
+    const sum = DATABASES.reduce((s, d) => s + d.percentage_of_total, 0);
     expect(sum).toBeCloseTo(100, 0);
     for (const d of DATABASES) {
-      expect(d.percentageOfTotal).toBeGreaterThan(0);
+      expect(d.percentage_of_total).toBeGreaterThan(0);
       expect(d.description.length).toBeGreaterThan(0);
       expect(d.owner.length).toBeGreaterThan(0);
     }

@@ -56,11 +56,11 @@ export function createSavedQueryStore(
   });
 
   return {
-    /** Newest `updatedAt` first; for the same instant, the one created later first. */
+    /** Newest `updated_at` first; for the same instant, the one created later first. */
     list(userId: string): SavedQueryAnswer {
       const newestCreatedFirst = [...queriesOf(userId).values()].reverse();
       // sort is stable, so ties keep the "created later first" order from above.
-      newestCreatedFirst.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      newestCreatedFirst.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
       return { status: 200, body: newestCreatedFirst };
     },
 
@@ -70,7 +70,7 @@ export function createSavedQueryStore(
         ...body,
         name: body.name.trim(),
         id: newId(),
-        updatedAt: now().toISOString(),
+        updated_at: now().toISOString(),
       };
       queriesOf(userId).set(saved.id, saved);
       return { status: 201, body: saved };
@@ -85,7 +85,7 @@ export function createSavedQueryStore(
         ...body,
         name: body.name.trim(),
         id,
-        updatedAt: now().toISOString(),
+        updated_at: now().toISOString(),
       };
       queries.set(id, saved);
       return { status: 200, body: saved };
@@ -190,7 +190,7 @@ function savedTreeProblem(
     }
     return null;
   }
-  for (const key of ["facetId", "fieldId", "operatorId"] as const) {
+  for (const key of ["facet_id", "field_id", "operator_id"] as const) {
     if (!isNonBlankStringOrNull(node[key]))
       return `${at}.${key} must be a non-blank string or null.`;
   }

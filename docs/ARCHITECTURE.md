@@ -27,7 +27,7 @@ the app runs end to end during development.
 ### Terminology
 
 - **Event** — one record: something that happened, holding values for some
-  facets. The events API calls them *events*; the databases' `totalEntrysets`
+  facets. The events API calls them *events*; the databases' `total_entrysets`
   and the mock's stored sample data still say *entrysets*.
 - **Facet** — one described aspect of an event (a signal, a reading, a piece
   of context), with its own fields, tags and group. The backend calls these
@@ -37,7 +37,7 @@ the app runs end to end during development.
 
 ### Naming
 
-Three conventions that the code relies on everywhere:
+Four conventions that the code relies on everywhere:
 
 1. **`id` is the machine id; `name` is the text shown to the user.** This
    holds for every type in the frontend's model (`src/model.ts`: `Database`,
@@ -60,9 +60,19 @@ Three conventions that the code relies on everywhere:
    `GET /api/documentation/databases` returns a `DatabasesResponse[]`, and each line of the
    `/api/filter/validate` stream is one `StatsResponse`. (`EventsResponse` is the
    exception: it is the whole `/api/filter/execute` body.)
+4. **The wire is snake_case; the frontend is camelCase.** Every key the API
+   sends or receives is snake_case (`facet_id`, `total_entrysets`, `node_id`),
+   in requests and responses alike; a key that is one word (`label`, `kind`)
+   is the same on both sides. Everything in the frontend (`src/model.ts`,
+   `src/query/types.ts`, state, panels) is camelCase (`facetId`,
+   `eventCount`, `nodeId`). `src/api/` is where the two meet: `response.ts`
+   reads the snake_case keys and builds the camelCase model, `request.ts` does
+   the reverse. The point is that either side's code tells you at a glance
+   which side of the line it is on, and that the frontend's model does not
+   depend on the backend's. Apart from the mock server, no file outside `src/api/` spells a wire key.
 
 The same things have different names in the UI and `src/`, on the wire (named
-by the real backend, so they stay) and inside the mock server (which speaks
+by the backend's vocabulary, in snake_case) and inside the mock server (which speaks
 the backend's vocabulary):
 
 | UI and `src/` (`src/model.ts`) | Wire (`src/api/types.ts`) | Mock server |
@@ -71,8 +81,8 @@ the backend's vocabulary):
 | facet, `Facet` | `IndividualResponse`, `GET /api/documentation/individuals` | `Individual`, `INDIVIDUALS`, `data/individual.json` |
 | field, `Field` | `IndividualFieldResponse` | same |
 | an event's values, `EventRecord.values` (by facet id, then a list of occurrences keyed by field id) | `EventResponse.items` (`facet_label` + `values`, one object per occurrence) | `Entryset.items` |
-| a database's `eventCount` | `DatabasesResponse.totalEntrysets` | same |
-| one database's statistics, `DatabaseResult` | `StatsResponse` | same |
+| a database's `eventCount` | `DatabasesResponse.total_entrysets` | same |
+| one database's statistics, `DatabaseResult` (`matchCount`, `nodeId`) | `StatsResponse` (`match_count`, `error_messages[].node_id`) | same |
 
 ### Screen layout
 
@@ -762,8 +772,8 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **The user's name** is the backend's `display_name` (it already falls back from
   the username to the email to the id); a blank one shows `sub` / `user_id`.
 
-Only what the app uses is mapped (and checked). `DatabasesResponse.percentageOfTotal`,
-`IndividualResponse.idNumber` and `IndividualFieldResponse.cardinality` are
+Only what the app uses is mapped (and checked). `DatabasesResponse.percentage_of_total`,
+`IndividualResponse.id_number` and `IndividualFieldResponse.cardinality` are
 left out; add them to the model when a panel needs them.
 
 ### Reading responses
@@ -779,9 +789,9 @@ the value it reads. There are two kinds:
 
 | Read | For | When the value is missing or wrong |
 |---|---|---|
-| `id`, `number`, `boolean`, `list`, `optionalList`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest. `optionalList` is `list` for a key marked `?` in `types.ts` (a stats line's `errorMessages`) | throws a `ContractError`; only `optionalList` accepts a missing (or `null`) value, which becomes `[]` |
+| `id`, `number`, `boolean`, `list`, `optionalList`, `object` | what the app can't work without: ids, counts, `success`, the lists and objects that hold the rest. `optionalList` is `list` for a key marked `?` in `types.ts` (a stats line's `error_messages`) | throws a `ContractError`; only `optionalList` accepts a missing (or `null`) value, which becomes `[]` |
 | `ids` | a list of machine ids (a saved query's `databases`) | throws a `ContractError` for a missing key, a non-list, or an item that is blank or not text; the message names the item, e.g. `"[0].databases[1]"` |
-| `nullableId` | an id that may be unset (an unfinished condition's `facetId`) | `null` and a left-out key are both `null`; a number or blank text throws |
+| `nullableId` | an id that may be unset (an unfinished condition's `facet_id`) | `null` and a left-out key are both `null`; a number or blank text throws |
 | `oneOf` | one of a few texts (a saved node's `kind`, a group's `operator`) | throws, and the message lists the allowed texts: `"query.children[0].kind" should be "group" or "condition", but it is the text "other".` |
 | `savedValue` | a saved condition's `value` | `null` and a left-out key are both `null`; a scalar or a list of scalars and nulls is copied as sent; anything else throws |
 | `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
@@ -813,24 +823,24 @@ can't drift apart unnoticed.
 A stats line has no name and no total: the frontend looks the database up in
 `AppState.databases` by its `id` and uses its `eventCount` as the
 denominator. `toDatabaseResult` turns each line into a `DatabaseResult`: an
-`"ok"` one has a `matchCount`; a `"failed"` one has none, so a failed database
+`"ok"` one has a `matchCount` (the wire's `match_count`); a `"failed"` one has none, so a failed database
 can never be shown as "0 matched", and carries `errors` (from
-`errorMessages`) instead. Each `errorMessages` item is an object
-`{ nodeId?, message, kind }` (`StatsErrorMessage`). `nodeId` is the `id` of a
+`error_messages`) instead. Each `error_messages` item is an object
+`{ node_id?, message, kind }` (`StatsErrorMessage`). `node_id` is the `id` of a
 group or condition from the request; `kind` is `"incomplete"` or `"invalid"`,
 like an `Issue` (any other kind reads as `"invalid"`). The items decide
 whether Run is allowed, so a plain-text item is a contract error; a blank
 `message` reads as "The server found a problem in the query." An error with a
-`nodeId` is shown **once, in the query builder, next to what is wrong**; the
+`node_id` is shown **once, in the query builder, next to what is wrong**; the
 statistics panel only offers **Show problem**, which jumps to it ("Right —
-`statsPanel.ts`"). An error without a `nodeId` makes that database's row a red
+`statsPanel.ts`"). An error without a `node_id` makes that database's row a red
 bar with the reason on one line under it. `app.ts` keeps the
-errors with a `nodeId` in
+errors with a `node_id` in
 `AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`), once however
 many databases report them, and they block Run (`runBlocker` → `"rejected"`).
-A line that says `success` but has no `matchCount`
+A line that says `success` but has no `match_count`
 counts as failed rather than as a made-up 0. Both carry `notes` (from
-`infoMessages`). The headline sums the successful databases only; the databases
+`info_messages`). The headline sums the successful databases only; the databases
 that failed are the striped red end of its bar ("Right — `statsPanel.ts`").
 When the query itself is at fault (`queryIsAtFault`), no database failed:
 nothing is red, and the rows say the query was not run.
@@ -947,13 +957,13 @@ the backend.)
 - `note`: 0–80 characters after trimming (`""` for none).
 - `databases`: database labels (the model's `databaseIds`). May be empty.
 - `query`: the **draft tree** (`SavedGroup` / `SavedCondition`). It has the
-  shape of `RequestGroup` / `RequestCondition`, but a condition's `facetId`,
-  `fieldId`, `operatorId` and `value` may each be `null` (and a `value` list may
+  shape of `RequestGroup` / `RequestCondition`, but a condition's `facet_id`,
+  `field_id`, `operator_id` and `value` may each be `null` (and a `value` list may
   hold nulls: a from–to pair with one end empty), and a group's `children` may
   be empty. There is no `collapsed`: display state is not saved.
 
-`SavedQueryResponse` is the same plus `id` (made by the server) and `updatedAt`
-(ISO 8601 UTC). `GET` answers newest `updatedAt` first. A `404` means no saved
+`SavedQueryResponse` is the same plus `id` (made by the server) and `updated_at`
+(ISO 8601 UTC). `GET` answers newest `updated_at` first. A `404` means no saved
 query of this user has that id (another user's counts as unknown); a `400` is
 a malformed body, which is a bug on our side, never a user mistake.
 
@@ -967,7 +977,7 @@ the rest of the app sees `Group` / `QueryNode` and the model's `SavedQuery`.
 `toSavedQueryRequest` trims name and note, drops `collapsed`, and throws only
 on a value that is not JSON scalars and nulls (a bug). `toSavedQuery` reads the
 tree strictly (a node of unknown `kind`, a missing `children` or a number as
-`facetId`, or a missing or non-text database id, is a `ContractError` naming
+`facet_id`, or a missing or non-text database id, is a `ContractError` naming
 the path) and a missing note as `""` with a warning. The `client.ts` functions are `listSavedQueries`,
 `createSavedQuery`, `updateSavedQuery(id, draft)` and `deleteSavedQuery(id)`;
 the id goes into the path with `encodeURIComponent`.
@@ -1037,14 +1047,14 @@ This is the mock's reading; the real backend owns the rule.
 `{ databases, query }`. `databases` holds the databases' `label`s (the model's
 `Database.id`s), and
 `query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
-and `RequestCondition`s (`facetId`, `fieldId`, `operatorId`, `value`).
-`fieldId` is `string | null`: `null` means the condition is about the facet
+and `RequestCondition`s (`facet_id`, `field_id`, `operator_id`, `value`).
+`field_id` is `string | null`: `null` means the condition is about the facet
 itself, and what that means is the backend's to interpret. A facet-level
 `present` matches an event holding any value for the facet, `absent` the
 opposite; a field-level `present` matches an event holding a non-blank value
 for the field, `absent` one that doesn't. Every
 node carries the frontend's `id` for it. The backend treats it as opaque, and
-quotes it back as `nodeId` in a stats line's `errorMessages` to point at the
+quotes it back as `node_id` in a stats line's `error_messages` to point at the
 node a problem is in ("Statistics lines").
 
 `toQueryRequest` (`src/api/request.ts`) builds the body from the query on
@@ -1080,7 +1090,7 @@ The mock answers a body that isn't a well-formed `QueryRequest` with `400`
 and a message naming the first problem (`mock-server/requestBody.ts`). The
 real backend should do the same.
 
-**Backend hand-off:** the real backend must accept `fieldId: null`, implement
+**Backend hand-off:** the real backend must accept `field_id: null`, implement
 `present`/`absent` at both levels, and no longer receive `isEmpty`/`isNotEmpty`
 (the old names of the same operators; the frontend no longer sends them).
 
@@ -1887,11 +1897,11 @@ to a named handler function — add a route there, and a test in
   database's real size (`scaleCount`) and streams one line per database with a
   pause between lines; now and then it simulates a database that can't be
   reached. A text value (or a text item in a list) longer than 100
-  characters fails in every database, with an `errorMessages` item pointing
+  characters fails in every database, with an `error_messages` item pointing
   at its condition (`queryErrors`), so the builder's backend issues can be
   tried in dev. A group with at least one child, **all** of whose children
   have an error of their own, also gets
-  `{ nodeId: <group id>, kind: "incomplete", message: "Group contains no valid conditions." }`,
+  `{ node_id: <group id>, kind: "incomplete", message: "Group contains no valid conditions." }`,
   as the real backend does. It is `incomplete`, like the real backend's; the
   builder still highlights it (mustard, warning icon), and the condition
   errors that cause it stay red. An empty group gets
@@ -1901,14 +1911,14 @@ to a named handler function — add a route there, and a test in
   occurrence per individual), at most `QUERY_RESULT_CAP` (25).
 - **`present` / `absent`** work at both levels (`conditionMatches` in
   `evaluate.ts`). On a field, `present` matches a non-blank value (not `null`,
-  missing or `""`) and `absent` a blank one. With `fieldId: null`, `present`
+  missing or `""`) and `absent` a blank one. With `field_id: null`, `present`
   matches an event holding any non-null value for any key of that facet
   (`rowHasFacet`) and `absent` the opposite; any other operator on a facet
   matches nothing. This is the mock's reading; the real backend owns the rule.
 - **Request bodies** are checked against `QueryRequest` before anything reads
-  them (`requestBody.ts`, `queryProblem`); `fieldId: null` is accepted (a
+  them (`requestBody.ts`, `queryProblem`); `field_id: null` is accepted (a
   facet-level condition), an empty string is not: a malformed one gets a `400` naming
-  the first problem, e.g. `Malformed query: query.children[0].fieldId must be a
+  the first problem, e.g. `Malformed query: query.children[0].field_id must be a
   non-empty string or null.`
 - **Saved queries** (`savedQueries.ts`) are kept in memory, per user, and are
   lost when the mock restarts; the list starts empty. The user is the session
@@ -2064,8 +2074,8 @@ only `src/api/` imports `src/api/types.ts`).
 4. Tests: `fieldCatalog`, `validate`, `summary`, `evaluate`. Tell the backend
    team — the operator's `id` is part of the wire format.
 
-**…follow a backend rename or reshape** (say `totalEntrysets` becomes
-`entrysetCount`)? Change the type in `src/api/types.ts`; `npm run typecheck`
+**…follow a backend rename or reshape** (say `total_entrysets` becomes
+`entryset_count`)? Change the type in `src/api/types.ts`; `npm run typecheck`
 then points at the line in `src/api/response.ts` (or `request.ts`) that reads
 the old name, and at the mock server. Fix those and their tests in
 `tests/api/`. Nothing outside `src/api/` and `mock-server/` should need a

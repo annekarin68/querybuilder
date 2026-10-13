@@ -6,7 +6,7 @@ import type { DatabaseResult } from "../../src/model";
 import type { Condition, Group } from "../../src/query/types";
 import { createMockServer } from "../../mock-server/server";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
-import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
+import { unfinishedDraft, unfinishedTree } from "../savedQueryFixtures";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -165,7 +165,7 @@ describe("saved queries through the client", () => {
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedRequest.query,
+      query: unfinishedTree,
     });
     expect(await client.listSavedQueries()).toEqual([created]);
 

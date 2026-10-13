@@ -236,8 +236,8 @@ function statsOutcome(
       },
     };
   }
-  const totalEntrysets = DATABASES.find((d) => d.label === c.label)?.totalEntrysets ?? 0;
-  // The sample drives match RATES; DATABASES[].totalEntrysets drives the
+  const totalEntrysets = DATABASES.find((d) => d.label === c.label)?.total_entrysets ?? 0;
+  // The sample drives match RATES; DATABASES[].total_entrysets drives the
   // MAGNITUDE the API reports, so the UI sees realistic numbers.
   return { label: c.label, matchCount: scaleCount(c.matchCount, c.totalCount, totalEntrysets) };
 }

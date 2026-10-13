@@ -14,6 +14,9 @@ import type {
 import type { SavedQueryDraft } from "../model";
 import type { Condition, Group, QueryNode } from "../query/types";
 
+// Both builders below write the wire's snake_case keys (`facet_id`) from the
+// model's camelCase properties (`facetId`): this file is where the two meet.
+
 /**
  * The body of POST …/filter/validate and POST …/filter/execute, built from the query on screen
  * (docs/ARCHITECTURE.md, "Wire format of the query"). A projection, never a
@@ -43,9 +46,9 @@ function conditionOf(c: Condition): RequestCondition {
   return {
     kind: "condition",
     id: c.id,
-    facetId: c.facetId,
-    fieldId: c.fieldId,
-    operatorId: c.operatorId,
+    facet_id: c.facetId,
+    field_id: c.fieldId,
+    operator_id: c.operatorId,
     value: valueOf(c),
   };
 }
@@ -92,9 +95,9 @@ function savedConditionOf(c: Condition): SavedCondition {
   return {
     kind: "condition",
     id: c.id,
-    facetId: c.facetId,
-    fieldId: c.fieldId,
-    operatorId: c.operatorId,
+    facet_id: c.facetId,
+    field_id: c.fieldId,
+    operator_id: c.operatorId,
     value: savedValueOf(c),
   };
 }

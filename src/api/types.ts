@@ -1,6 +1,9 @@
 /**
  * The backend's request and response types: the API contract, spelled exactly
- * as the backend spells it (docs/ARCHITECTURE.md, "API contract"). Only
+ * as it goes over the wire (docs/ARCHITECTURE.md, "API contract"). Every key is
+ * snake_case, in requests and responses alike; the frontend's own model
+ * (src/model.ts) is camelCase, and src/api/response.ts and request.ts translate.
+ * The backend team builds its response models from this file. Only
  * src/api/ may import this file (ESLint enforces it). The rest of the app uses
  * its own model (src/model.ts); src/api/response.ts and src/api/request.ts
  * translate between the two.
@@ -57,13 +60,13 @@ export interface StatsResponse {
   /** Events matched by this query in this database. Only meaningful
    *  when `success` is true — optional rather than a fabricated 0, so a
    *  failed database can never be misread as "zero rows matched." */
-  matchCount?: number;
+  match_count?: number;
   /** Problems with the query itself — an operator this database no longer
    *  supports, a value it can't accept (a malformed date, a too-long text, …). */
-  errorMessages?: StatsErrorMessage[];
+  error_messages?: StatsErrorMessage[];
   /** Other information or error messages — a database timeout, an internal
    *  server error, or a non-blocking notice. */
-  infoMessages?: string[];
+  info_messages?: string[];
 }
 
 /** One problem with the query, found by the backend in one database. */
@@ -71,7 +74,7 @@ export interface StatsErrorMessage {
   /** The `id` of the group or condition from the request (RequestGroup.id,
    *  RequestCondition.id) that the problem is in. Left out when the problem
    *  is not in one place. */
-  nodeId?: string;
+  node_id?: string;
   message: string;
   /** "incomplete": something is missing. "invalid": something can't work. */
   kind: "incomplete" | "invalid";
@@ -88,10 +91,10 @@ export interface DatabasesResponse {
   owner: string;
   /** Total events in this database. (The backend still calls them
    *  entrysets.) */
-  totalEntrysets: number;
+  total_entrysets: number;
   /** This database's share of the total data across all databases — sums
    *  to 100% across every database returned. */
-  percentageOfTotal: number;
+  percentage_of_total: number;
   /** API-friendly "ID", not meant to be displayed. */
   label: string;
 }
@@ -140,7 +143,7 @@ export interface IndividualResponse {
   /** Our own tags, from a limited reusable pool. More useful than `group`. */
   tags: string[];
   /** This facet's unique identification number. */
-  idNumber: number;
+  id_number: number;
   /** Descriptive name, shown to the user in place of `label`. */
   name: string;
   /** A third-party technical description — present distinct from `comment`. */
@@ -149,8 +152,8 @@ export interface IndividualResponse {
   comment: string;
   /** How many times this facet appears across ALL databases. No
    *  percentage is supplied — the frontend derives one from
-   *  DatabasesResponse[].totalEntrysets. */
-  totalCount: number;
+   *  DatabasesResponse[].total_entrysets. */
+  total_count: number;
   fields: IndividualFieldResponse[];
 }
 
@@ -199,7 +202,7 @@ export type RequestNode = RequestGroup | RequestCondition;
 export interface RequestGroup {
   kind: "group";
   /** The frontend's id for this node: opaque, unique within the request.
-   *  Quoted back as `StatsErrorMessage.nodeId` when a database finds a problem
+   *  Quoted back as `StatsErrorMessage.node_id` when a database finds a problem
    *  in this node. */
   id: string;
   operator: "AND" | "OR";
@@ -211,13 +214,13 @@ export interface RequestCondition {
   kind: "condition";
   id: string;
   /** `IndividualResponse.label`. */
-  facetId: string;
+  facet_id: string;
   /** `IndividualFieldResponse.label`, within that individual — or `null` for a
    *  condition about the individual (facet) itself, e.g. "is present". What a
    *  null field means is the backend's to interpret. */
-  fieldId: string | null;
+  field_id: string | null;
   /** An operator label, e.g. "gt". */
-  operatorId: string;
+  operator_id: string;
   /** Shaped by the operator's arity: `null` (none), one value (one),
    *  `[from, to]` (two) or a non-empty list (many). */
   value: RequestValue;
@@ -249,7 +252,7 @@ export interface SavedQueryResponse extends SavedQueryRequest {
   /** Made by the server. Not a `label`: it names a user's own record, not backend data. */
   id: string;
   /** ISO 8601 UTC. */
-  updatedAt: string;
+  updated_at: string;
 }
 
 export type SavedNode = SavedGroup | SavedCondition;
@@ -266,9 +269,9 @@ export interface SavedGroup {
 export interface SavedCondition {
   kind: "condition";
   id: string;
-  facetId: string | null;
-  fieldId: string | null;
-  operatorId: string | null;
+  facet_id: string | null;
+  field_id: string | null;
+  operator_id: string | null;
   value: SavedValue;
 }
 

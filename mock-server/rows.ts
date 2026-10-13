@@ -5,7 +5,7 @@ import { rowKey, type Row } from "./evaluate";
 /**
  * Flattens one entryset's nested `items[individualLabel][fieldLabel]` shape
  * into flat `rowKey(individualLabel, fieldLabel)` keys, so a condition's
- * (facetId, fieldId) pair finds its value — plus a synthetic `__db` key (see
+ * (facet_id, field_id) pair finds its value — plus a synthetic `__db` key (see
  * mock-server/databases.ts) used only for database scoping.
  */
 export function flattenEntryset(entryset: Entryset): Row {

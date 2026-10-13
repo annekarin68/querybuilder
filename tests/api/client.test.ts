@@ -97,7 +97,7 @@ function feedableStreamFetch() {
   };
 }
 
-const alphaLine = JSON.stringify({ label: "alpha", success: true, matchCount: 1 });
+const alphaLine = JSON.stringify({ label: "alpha", success: true, match_count: 1 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -112,8 +112,8 @@ describe("api client", () => {
         name: "ALPHA",
         description: "",
         owner: "",
-        totalEntrysets: 1,
-        percentageOfTotal: 100,
+        total_entrysets: 1,
+        percentage_of_total: 100,
       },
     ]);
     vi.stubGlobal("fetch", f);
@@ -133,11 +133,11 @@ describe("api client", () => {
         label: "engine_rpm",
         group: "engine",
         tags: [],
-        idNumber: 1,
+        id_number: 1,
         name: "Engine RPM",
         description: "",
         comment: "",
-        totalCount: 100,
+        total_count: 100,
         fields: [],
       },
     ]);
@@ -164,8 +164,12 @@ describe("api client", () => {
 
   it("getStats streams NDJSON lines, calling onResult once per line, even split across chunks", async () => {
     const lines = [
-      { label: "alpha", success: true, matchCount: 1 },
-      { label: "beta", success: false, errorMessages: [{ message: "bad query", kind: "invalid" }] },
+      { label: "alpha", success: true, match_count: 1 },
+      {
+        label: "beta",
+        success: false,
+        error_messages: [{ message: "bad query", kind: "invalid" }],
+      },
     ];
     const ndjson = lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
     const splitAt = ndjson.indexOf("\n") + 3; // cut mid-way into the second line
@@ -426,7 +430,7 @@ describe("api client", () => {
     // "é" is two bytes in UTF-8; cut between them. Decoding each chunk on its
     // own would turn both halves into U+FFFD.
     const bytes = new TextEncoder().encode(
-      JSON.stringify({ label: "caf\u00e9", success: true, matchCount: 1 }) + "\n",
+      JSON.stringify({ label: "caf\u00e9", success: true, match_count: 1 }) + "\n",
     );
     const cut = bytes.indexOf(0xc3) + 1;
     const stream = feedableStreamFetch();
@@ -441,7 +445,7 @@ describe("api client", () => {
   });
 
   it("getStats accepts \\r\\n line endings", async () => {
-    const beta = JSON.stringify({ label: "beta", success: true, matchCount: 2 });
+    const beta = JSON.stringify({ label: "beta", success: true, match_count: 2 });
     vi.stubGlobal("fetch", mockStreamFetch(200, [`${alphaLine}\r\n${beta}\r\n`]));
     const received: { databaseId: string }[] = [];
     await getStats(query, databaseIds, (r) => received.push(r));
@@ -474,7 +478,7 @@ describe("api client", () => {
 
 describe("a response that breaks the API contract", () => {
   it("rejects with a ContractError naming the request and the field", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce(200, [{ name: "ALPHA", totalEntrysets: 1 }]));
+    vi.stubGlobal("fetch", mockFetchOnce(200, [{ name: "ALPHA", total_entrysets: 1 }]));
     const err = await getDatabases().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ContractError);
     expect((err as Error).message).toBe(
@@ -497,7 +501,7 @@ describe("a response that breaks the API contract", () => {
   });
 
   it("a statistics line that isn't JSON names its line, and stops the stream", async () => {
-    const ok = JSON.stringify({ label: "alpha", success: true, matchCount: 1 });
+    const ok = JSON.stringify({ label: "alpha", success: true, match_count: 1 });
     vi.stubGlobal("fetch", mockStreamFetch(200, [`${ok}\nnot json\n${ok}\n`]));
     const onResult = vi.fn();
     await expect(getStats(query, databaseIds, onResult)).rejects.toThrow(

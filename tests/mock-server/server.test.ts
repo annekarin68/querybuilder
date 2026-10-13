@@ -72,9 +72,9 @@ const everyEvent = {
     {
       kind: "condition",
       id: "c1",
-      facetId: "observation_window",
-      fieldId: "from_timestamp",
-      operatorId: "present",
+      facet_id: "observation_window",
+      field_id: "from_timestamp",
+      operator_id: "present",
       value: null,
     },
   ],
@@ -107,7 +107,7 @@ describe("POST /api/filter/validate", () => {
     expect(lines.map((l) => l.label)).toEqual(["beta", "alpha"]);
     for (const l of lines) {
       expect(l.success).toBe(true);
-      expect(typeof l.matchCount).toBe("number");
+      expect(typeof l.match_count).toBe("number");
     }
   });
 
@@ -115,7 +115,7 @@ describe("POST /api/filter/validate", () => {
     const tooLong = {
       ...everyEvent,
       children: [
-        { ...everyEvent.children[0], operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
+        { ...everyEvent.children[0], operator_id: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
       ],
     };
     const res = await post(`${API}/filter/validate`, body(["alpha", "beta"], tooLong));
@@ -128,11 +128,11 @@ describe("POST /api/filter/validate", () => {
       ["alpha", "beta"].map((label) => ({
         label,
         success: false,
-        errorMessages: [
-          { nodeId: "c1", kind: "invalid", message: "Text is too long (at most 100 characters)." },
-          { nodeId: "g1", kind: "incomplete", message: "Group contains no valid conditions." },
+        error_messages: [
+          { node_id: "c1", kind: "invalid", message: "Text is too long (at most 100 characters)." },
+          { node_id: "g1", kind: "incomplete", message: "Group contains no valid conditions." },
         ],
-        infoMessages: [],
+        info_messages: [],
       })),
     );
   });
@@ -158,8 +158,8 @@ describe("POST /api/filter/validate", () => {
     ],
     [
       "condition without a field",
-      body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], fieldId: "" }] }),
-      "Malformed query: query.children[0].fieldId must be a non-empty string or null.",
+      body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], field_id: "" }] }),
+      "Malformed query: query.children[0].field_id must be a non-empty string or null.",
     ],
     ["no databases", body([]), "Select at least one database."],
   ])("answers 400 for a %s", async (_label, payload, error) => {
@@ -292,7 +292,7 @@ describe("saved queries (…/saved-queries)", () => {
     expect(created.status).toBe(201);
     const first = await created.json();
     expect(first).toMatchObject({ ...named("First"), id: expect.any(String) });
-    expect(new Date(first.updatedAt).toISOString()).toBe(first.updatedAt);
+    expect(new Date(first.updated_at).toISOString()).toBe(first.updated_at);
 
     const listed = await (await send("GET", url, cookie)).json();
     expect(listed).toEqual([first]);

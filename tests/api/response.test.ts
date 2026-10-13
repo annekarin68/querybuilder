@@ -11,7 +11,7 @@ import {
   toUser,
 } from "../../src/api/response";
 import { toSavedQueryRequest } from "../../src/api/request";
-import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
+import { unfinishedDraft, unfinishedResponse, unfinishedTree } from "../savedQueryFixtures";
 import type { Group } from "../../src/query/types";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
 import { isEdited, type OpenSaved } from "../../src/query/saved";
@@ -47,11 +47,11 @@ const wireFacet = (over: Partial<IndividualResponse> = {}): IndividualResponse =
   label: "thing",
   group: "",
   tags: [],
-  idNumber: 1,
+  id_number: 1,
   name: "Thing",
   description: "",
   comment: "",
-  totalCount: 10,
+  total_count: 10,
   fields: [],
   ...over,
 });
@@ -61,8 +61,8 @@ const wireDatabase = (over: Partial<DatabasesResponse> = {}): DatabasesResponse 
   name: "Alpha",
   description: "",
   owner: "",
-  totalEntrysets: 1200,
-  percentageOfTotal: 40,
+  total_entrysets: 1200,
+  percentage_of_total: 40,
   ...over,
 });
 
@@ -90,9 +90,9 @@ describe("toDatabase", () => {
   });
 
   it("throws a ContractError naming the field when the event count is missing", () => {
-    const broken = { ...wireDatabase(), totalEntrysets: undefined };
+    const broken = { ...wireDatabase(), total_entrysets: undefined };
     expect(() => toDatabase(readBroken<DatabasesResponse>(broken))).toThrow(
-      new ContractError("GET /test", '"totalEntrysets" should be a number, but it is missing.'),
+      new ContractError("GET /test", '"total_entrysets" should be a number, but it is missing.'),
     );
   });
 });
@@ -220,8 +220,8 @@ describe("toDatabaseResult", () => {
         read<StatsResponse>({
           label: "alpha",
           success: true,
-          matchCount: 7,
-          infoMessages: ["slow"],
+          match_count: 7,
+          info_messages: ["slow"],
         }),
       ),
     ).toEqual({ databaseId: "alpha", status: "ok", matchCount: 7, notes: ["slow"] });
@@ -229,7 +229,7 @@ describe("toDatabaseResult", () => {
 
   it("a zero count is a real zero", () => {
     expect(
-      toDatabaseResult(read<StatsResponse>({ label: "alpha", success: true, matchCount: 0 })),
+      toDatabaseResult(read<StatsResponse>({ label: "alpha", success: true, match_count: 0 })),
     ).toMatchObject({ status: "ok", matchCount: 0 });
   });
 
@@ -239,11 +239,11 @@ describe("toDatabaseResult", () => {
         read<StatsResponse>({
           label: "beta",
           success: false,
-          errorMessages: [
-            { nodeId: "c1", message: "Operator no longer supported.", kind: "invalid" },
+          error_messages: [
+            { node_id: "c1", message: "Operator no longer supported.", kind: "invalid" },
             { message: "Query too complex.", kind: "incomplete" },
           ],
-          infoMessages: ["timeout"],
+          info_messages: ["timeout"],
         }),
       ),
     ).toEqual({
@@ -270,7 +270,7 @@ describe("toDatabaseResult", () => {
       readBroken<StatsResponse>({
         label: "beta",
         success: false,
-        errorMessages: [{ nodeId: "c1", message: " ", kind: "fatal" }],
+        error_messages: [{ node_id: "c1", message: " ", kind: "fatal" }],
       }),
     );
     expect(result).toMatchObject({
@@ -283,9 +283,9 @@ describe("toDatabaseResult", () => {
   it("a plain-text error (the old contract) throws a ContractError", () => {
     expect(() =>
       toDatabaseResult(
-        readBroken<StatsResponse>({ label: "beta", success: false, errorMessages: ["bad date"] }),
+        readBroken<StatsResponse>({ label: "beta", success: false, error_messages: ["bad date"] }),
       ),
-    ).toThrow('"errorMessages[0]" should be an object, but it is the text "bad date".');
+    ).toThrow('"error_messages[0]" should be an object, but it is the text "bad date".');
   });
 
   it("a success without a count is a failure, not a made-up 0", () => {
@@ -364,14 +364,14 @@ describe("toSavedQuery", () => {
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedResponse.query,
+      query: unfinishedTree,
       updatedAt: "2026-10-08T09:30:00.000Z",
     });
   });
 
   it("round-trips a draft: what is sent is what comes back", () => {
     const sent = toSavedQueryRequest(unfinishedDraft);
-    const back = toSavedQuery(read({ ...sent, id: "sq-9", updatedAt: "2026-10-08T10:00:00Z" }));
+    const back = toSavedQuery(read({ ...sent, id: "sq-9", updated_at: "2026-10-08T10:00:00Z" }));
     expect(back).toMatchObject({
       name: "Slow trips",
       note: "the ones to check",
@@ -379,7 +379,7 @@ describe("toSavedQuery", () => {
     });
     // toEqual, not toMatchObject: a key added on the way (or one left in, like
     // the draft's `collapsed`) must fail the test.
-    expect(back.query).toEqual(unfinishedResponse.query);
+    expect(back.query).toEqual(unfinishedTree);
   });
 
   it("opening what was just saved is not an edit (the real conversions, both ways)", () => {
@@ -398,7 +398,11 @@ describe("toSavedQuery", () => {
     query = updateNode(query, folded.id, { collapsed: true });
     const draft = { name: "Trips", note: "", databaseIds: ["alpha", "beta"], query };
 
-    const answer = { ...toSavedQueryRequest(draft), id: "sq-1", updatedAt: "2026-10-08T10:00:00Z" };
+    const answer = {
+      ...toSavedQueryRequest(draft),
+      id: "sq-1",
+      updated_at: "2026-10-08T10:00:00Z",
+    };
     // Through JSON text, as it travels.
     const saved = toSavedQuery(read<SavedQueryResponse>(JSON.parse(JSON.stringify(answer))));
     const open: OpenSaved = {
@@ -429,9 +433,7 @@ describe("toSavedQuery", () => {
     expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras))).toEqual(
       toSavedQuery(read(unfinishedResponse)),
     );
-    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras)).query).toEqual(
-      unfinishedResponse.query,
-    );
+    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras)).query).toEqual(unfinishedTree);
   });
 
   it("trims a padded name", () => {
@@ -449,9 +451,9 @@ describe("toSavedQuery", () => {
     ["a missing name", { name: undefined }, '"name" should be non-blank text, but it is missing.'],
     ["a blank name", { name: "  " }, '"name" should be non-blank text'],
     [
-      "a missing updatedAt",
-      { updatedAt: undefined },
-      '"updatedAt" should be non-blank text, but it is missing.',
+      "a missing updated_at",
+      { updated_at: undefined },
+      '"updated_at" should be non-blank text, but it is missing.',
     ],
     ["a missing query", { query: undefined }, '"query" should be an object, but it is missing.'],
   ])("throws a ContractError for %s", (_label, patch, message) => {
@@ -478,9 +480,9 @@ describe("toSavedQuery", () => {
       '"query.children[0].kind" should be "group" or "condition", but it is the text "other".',
     ],
     [
-      "a facetId that is a number",
-      { facetId: 3 },
-      '"query.children[0].facetId" should be non-blank text, but',
+      "a facet_id that is a number",
+      { facet_id: 3 },
+      '"query.children[0].facet_id" should be non-blank text, but',
     ],
     [
       "a missing node id",
@@ -488,9 +490,9 @@ describe("toSavedQuery", () => {
       '"query.children[0].id" should be non-blank text, but it is missing.',
     ],
     [
-      "an operatorId that is a list",
-      { operatorId: [] },
-      '"query.children[0].operatorId" should be non-blank text, but',
+      "an operator_id that is a list",
+      { operator_id: [] },
+      '"query.children[0].operator_id" should be non-blank text, but',
     ],
     ["a value that is an object", { value: { from: 1 } }, '"query.children[0].value" should be'],
     ["a value list holding an object", { value: [1, {}] }, '"query.children[0].value" should be'],

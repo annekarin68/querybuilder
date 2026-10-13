@@ -32,15 +32,15 @@ describe("the saved-query store", () => {
     expect(testStore().store.list("ann")).toEqual({ status: 200, body: [] });
   });
 
-  it("creates with 201, an id and updatedAt, keeping the body as sent", () => {
+  it("creates with 201, an id and updated_at, keeping the body as sent", () => {
     const { store } = testStore();
     expect(store.create("ann", draft("First"))).toEqual({
       status: 201,
-      body: { ...draft("First"), id: "id-1", updatedAt: "2026-10-08T09:00:00.000Z" },
+      body: { ...draft("First"), id: "id-1", updated_at: "2026-10-08T09:00:00.000Z" },
     });
   });
 
-  it("lists newest updatedAt first, and the newer-created first on a tie", () => {
+  it("lists newest updated_at first, and the newer-created first on a tie", () => {
     const { store, tick } = testStore();
     store.create("ann", draft("A"));
     store.create("ann", draft("B")); // same instant as A
@@ -77,7 +77,7 @@ describe("the saved-query store", () => {
     expect(names(store.list("ann"))).toEqual(["Slow Trips"]);
   });
 
-  it("updates in place: the same id, a new updatedAt, the new content", () => {
+  it("updates in place: the same id, a new updated_at, the new content", () => {
     const { store, tick } = testStore();
     store.create("ann", draft("Old"));
     tick();
@@ -87,7 +87,7 @@ describe("the saved-query store", () => {
       body: {
         ...draft("New", { note: "changed" }),
         id: "id-1",
-        updatedAt: "2026-10-08T09:00:01.000Z",
+        updated_at: "2026-10-08T09:00:01.000Z",
       },
     });
     expect(names(store.list("ann"))).toEqual(["New"]);
@@ -144,9 +144,9 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
   const condition = {
     kind: "condition",
     id: "c1",
-    facetId: "thing",
-    fieldId: "size",
-    operatorId: "gt",
+    facet_id: "thing",
+    field_id: "size",
+    operator_id: "gt",
     value: 3,
   };
 
@@ -254,19 +254,19 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
       "query.children must be a list.",
     ],
     [
-      "a facetId that is a number",
-      withQuery(group(condition, { ...condition, id: "c2", facetId: 3 })),
-      "query.children[1].facetId must be a non-blank string or null.",
+      "a facet_id that is a number",
+      withQuery(group(condition, { ...condition, id: "c2", facet_id: 3 })),
+      "query.children[1].facet_id must be a non-blank string or null.",
     ],
     [
-      "an operatorId that is an empty string",
-      withQuery(group({ ...condition, operatorId: "" })),
-      "query.children[0].operatorId must be a non-blank string or null.",
+      "an operator_id that is an empty string",
+      withQuery(group({ ...condition, operator_id: "" })),
+      "query.children[0].operator_id must be a non-blank string or null.",
     ],
     [
-      "a fieldId of spaces",
-      withQuery(group({ ...condition, fieldId: "  " })),
-      "query.children[0].fieldId must be a non-blank string or null.",
+      "a field_id of spaces",
+      withQuery(group({ ...condition, field_id: "  " })),
+      "query.children[0].field_id must be a non-blank string or null.",
     ],
     [
       "a value that is an object",
