@@ -91,7 +91,7 @@ export function previewAnnouncement(preview: PreviewState): string | null {
     case "ok": {
       const n = preview.events.length;
       if (n === 0) return "No events match this query.";
-      return `Showing ${n} matching ${n === 1 ? "event" : "events"}.`;
+      return n === 1 ? "Showing 1 result." : `Showing ${n.toLocaleString()} results.`;
     }
   }
 }
@@ -145,8 +145,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     const state = store.getState();
     if (runBlocker(state)) return;
     const req = previewSlot.start();
-    const show = (preview: PreviewState) => {
-      store.setState({ preview });
+    const show = (preview: PreviewState, extra: Partial<AppState> = {}) => {
+      store.setState({ preview, ...extra });
       const spoken = previewAnnouncement(preview);
       if (spoken) announce(spoken);
     };
@@ -154,7 +154,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       console.error("Run query failed:", err);
       show({ status: "error", error: userMessage(err) });
     };
-    show({ status: "loading" });
+    // A new run replaces the results, so a dialog open on one of them closes
+    // in the same setState (docs/ARCHITECTURE.md, "State and the render loop").
+    show({ status: "loading" }, { openEventId: null });
     api
       .runQuery(state.query, state.selectedDatabaseIds, req.signal)
       .then((events) => {
@@ -718,7 +720,10 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     const shown = pageOf(preview.events.length, page);
     if (shown.page === preview.page) return;
     store.setState({ preview: { ...preview, page: shown.page } });
-    announce(`Showing results ${shown.from} to ${shown.to} of ${shown.total}.`);
+    // The viewer's number format, like the paging line on screen.
+    announce(
+      `Showing results ${shown.from.toLocaleString()} to ${shown.to.toLocaleString()} of ${shown.total.toLocaleString()}.`,
+    );
   }
 
   /** Open the JSON dialog of a result on screen (an id from an older run,

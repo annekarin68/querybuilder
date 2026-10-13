@@ -282,7 +282,7 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     expect(announce).toHaveBeenLastCalledWith("Fetching events…");
     await flushPromises();
-    expect(announce.mock.calls).toEqual([["Fetching events…"], ["Showing 1 matching event."]]);
+    expect(announce.mock.calls).toEqual([["Fetching events…"], ["Showing 1 result."]]);
   });
 
   it("tells screen-reader users about a failed run", async () => {
@@ -315,11 +315,9 @@ describe("previewAnnouncement", () => {
     expect(previewAnnouncement({ status: "ok", events: [], page: 0 })).toBe(
       "No events match this query.",
     );
-    expect(previewAnnouncement({ status: "ok", events, page: 0 })).toBe(
-      "Showing 1 matching event.",
-    );
+    expect(previewAnnouncement({ status: "ok", events, page: 0 })).toBe("Showing 1 result.");
     expect(previewAnnouncement({ status: "ok", events: [...events, ...events], page: 0 })).toBe(
-      "Showing 2 matching events.",
+      "Showing 2 results.",
     );
   });
 });
@@ -489,6 +487,35 @@ describe("Matching events pages and the event dialog", () => {
     app.showEventPage(2);
     expect(store.getState().preview).toMatchObject({ page: 2 });
     expect(announce).toHaveBeenCalledWith("Showing results 201 to 250 of 250.");
+  });
+
+  // Numbers follow the viewer's language ("1,987" or "1.987"), like the paging line.
+  it("writes the numbers of the announcement in the viewer's format", () => {
+    const thousands: EventRecord[] = Array.from({ length: 2500 }, (_, i) => ({
+      id: `t-${i}`,
+      values: {},
+    }));
+    const { app, announce } = setup({
+      ...ready(),
+      preview: { status: "ok", events: thousands, page: 0 },
+    });
+    app.showEventPage(1);
+    expect(announce).toHaveBeenCalledWith(
+      `Showing results ${(101).toLocaleString()} to ${(200).toLocaleString()} of ${(2500).toLocaleString()}.`,
+    );
+    expect(previewAnnouncement({ status: "ok", events: thousands, page: 0 })).toBe(
+      `Showing ${(2500).toLocaleString()} results.`,
+    );
+  });
+
+  it("starting a run closes the open event with the results it showed", async () => {
+    const response = deferred<EventRecord[]>();
+    const { app, store } = setup(
+      { ...shownMany(), openEventId: "e-3" },
+      fakeApi({ runQuery: vi.fn(() => response.promise) }),
+    );
+    app.runPreview();
+    expect(store.getState()).toMatchObject({ preview: { status: "loading" }, openEventId: null });
   });
 
   it("clamps a page that does not exist, and does nothing for the page on screen", () => {
