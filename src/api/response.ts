@@ -84,6 +84,7 @@ export function toFacet(i: ResponseObject<IndividualResponse>): Facet {
   return {
     id,
     name: i.text("name") || id,
+    number: i.number("id_number"),
     tags: [...new Set(tags)],
     group: i.text("group"),
     comment: i.text("comment"),
@@ -104,7 +105,10 @@ export function toEvent(e: ResponseObject<EventResponse>): EventRecord {
       .list<Record<string, Scalar | null>>("values")
       .map((occurrence) => occurrence.scalars());
     // The same facet listed twice: keep every occurrence rather than drop one.
-    values[facetId] = [...(values[facetId] ?? []), ...occurrences];
+    // Checked with hasOwn: a facet named like a built-in ("constructor") would
+    // otherwise pick up Object.prototype's value here.
+    const earlier = Object.hasOwn(values, facetId) ? values[facetId]! : [];
+    values[facetId] = [...earlier, ...occurrences];
   }
   return { id: e.id("id"), values };
 }

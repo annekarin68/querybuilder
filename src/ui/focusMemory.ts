@@ -19,6 +19,9 @@
  *  group" / "Expand group"), but it is the only name a Fomantic dropdown's
  *  typing box has (fomantic.ts copies it from the <select>). */
 const IDENTIFYING_ATTRIBUTES = [
+  // Every result's id button shares its `data-action`; its event id tells
+  // them apart.
+  "data-event-id",
   "data-action",
   "data-db-id",
   "data-db-all",

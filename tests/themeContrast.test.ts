@@ -42,6 +42,8 @@ const PAIRS: [string, string][] = [
   ["qb-selected-text", "qb-selected-bg"],
   ["qb-selected-text", "qb-chip"],
   ["qb-or-text", "qb-surface"],
+  // The id link in the Matching events table (.qb-et-id-btn).
+  ["qb-and", "qb-surface"],
   ["qb-danger", "qb-surface"],
   ["qb-warn", "qb-surface"],
   // The compliance badges inside the account chip. Their backgrounds must be

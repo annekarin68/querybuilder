@@ -50,6 +50,9 @@ export interface Field {
 export interface Facet {
   id: string;
   name: string;
+  /** The backend's number for this facet. The Matching events table orders
+   *  its columns by it (after the facets in `FIRST_COLUMNS`). */
+  number: number;
   /** Our own tags: trimmed, no blanks, no repeats. May be empty. */
   tags: string[];
   /** A third-party grouping; "" when there is none. Less useful than `tags`. */

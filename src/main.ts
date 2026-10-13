@@ -28,6 +28,7 @@ import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
 import { renderSavedDialog, wireSavedDialog } from "./ui/savedQueries";
+import { renderEventDialog, wireEventDialog } from "./ui/eventDialog";
 import { createClickCounter, easterEggReaction, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
@@ -81,7 +82,11 @@ shell.onMenu({
 });
 wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
 wireDocsResize(shell.docsResizeHandle);
-wireDataPreview(panels.preview, app.runPreview);
+wireDataPreview(panels.preview, {
+  onRun: app.runPreview,
+  onPage: app.showEventPage,
+  onOpenEvent: app.openEvent,
+});
 wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
 wireStatsPanel(panels.stats, {
   onRetry: app.retryStats,
@@ -100,6 +105,7 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   onOpenSavedList: app.openSavedList,
 });
 wireSavedDialog(shell.savedDialog, app);
+wireEventDialog(shell.eventDialog, app.closeEvent);
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
@@ -163,6 +169,21 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   {
     keys: ["savedDialog", "save", "savedList", "savedConfirm", "savedListNotice", "openSaved"],
     run: (s) => renderSavedDialog(shell.savedDialog, s),
+  },
+  // After the preview row, which repaints the id buttons that closing this
+  // dialog gives the focus to. `issues` and `serverIssues` are what can block
+  // Run (and so hide the table) while `preview` stays "ok": see openEventOf.
+  {
+    keys: [
+      "openEventId",
+      "preview",
+      "catalog",
+      "selectedDatabaseIds",
+      "query",
+      "issues",
+      "serverIssues",
+    ],
+    run: (s) => renderEventDialog(shell.eventDialog, s),
   },
 ];
 

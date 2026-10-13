@@ -57,6 +57,16 @@ describe("controlOf (which control an element is, in words that survive a repain
     expect(sameControl(controlOf(collapse), controlOf(expand))).toBe(true);
   });
 
+  it("tells the results' id buttons apart by their event id", () => {
+    expect(controlOf(el("BUTTON", { "data-action": "open-event", "data-event-id": "e7" }))).toEqual(
+      {
+        tag: "BUTTON",
+        attribute: "data-event-id",
+        value: "e7",
+      },
+    );
+  });
+
   it("falls back to the label: a dropdown's typing box has nothing else", () => {
     expect(controlOf(el("INPUT", { "aria-label": "Operator" }))).toEqual({
       tag: "INPUT",

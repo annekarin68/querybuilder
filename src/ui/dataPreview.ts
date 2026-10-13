@@ -1,8 +1,9 @@
 import { runBlocker, type AppState, type RunBlocker } from "../state";
-import type { EventRecord, Facet, Scalar } from "../model";
+import { FIRST_COLUMNS } from "../config";
+import { pageOf } from "../util/paging";
 import { escapeHtml, paint } from "./panel";
-import { countLabel, displayLabel, exact, formatWhen } from "./format";
-import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
+import { exact } from "./format";
+import { eventTableHtml, pagingHtml, scrollAfterRepaint, tableColumns } from "./eventTable";
 
 /**
  * How many events the Run query panel promises. The backend decides the real
@@ -16,138 +17,13 @@ export function idleMessage(locale?: string): string {
   return `Fetch a random sample of up to ${exact(EVENT_SAMPLE_SIZE, locale)} events this query matches.`;
 }
 
-/** How many tag / group badges to show inline before collapsing the rest into "+N". */
-const MAX_TAG_BADGES = 3;
-const MAX_GROUP_BADGES = 2;
-
-function facetsById(state: AppState): Map<string, Facet> {
-  const map = new Map<string, Facet>();
-  for (const facet of state.facets ?? []) map.set(facet.id, facet);
-  return map;
-}
-
-/**
- * The distinct tags and third-party groups of an event's facets, each
- * ordered by how many of its facets carry it (most first, then alphabetical),
- * so the inline badges show what this event is mostly about. Values listed in
- * `hidden` (default: `HIDDEN_ROW_BADGES` in config.ts, matched ignoring case
- * and surrounding whitespace) are dropped.
- */
-export function eventBadges(
-  event: EventRecord,
-  byId: Map<string, Facet>,
-  hidden: { tags: string[]; groups: string[] } = HIDDEN_ROW_BADGES,
-): { tags: string[]; groups: string[] } {
-  const norm = (s: string) => s.trim().toLowerCase();
-  const hiddenTags = new Set(hidden.tags.map(norm));
-  const hiddenGroups = new Set(hidden.groups.map(norm));
-  const tags = new Map<string, number>();
-  const groups = new Map<string, number>();
-  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
-  for (const id of Object.keys(event.values)) {
-    const facet = byId.get(id);
-    if (!facet) continue;
-    if (facet.group && !hiddenGroups.has(norm(facet.group))) bump(groups, facet.group);
-    for (const tag of facet.tags) {
-      if (!hiddenTags.has(norm(tag))) bump(tags, tag);
-    }
-  }
-  const ranked = (m: Map<string, number>) =>
-    [...m.keys()].sort((a, b) => m.get(b)! - m.get(a)! || a.localeCompare(b));
-  return { tags: ranked(tags), groups: ranked(groups) };
-}
-
-/** Up to `max` badges of one kind, then a "+N" whose hover lists the rest. */
-function badgesHtml(values: string[], max: number, cls: string, kind: string): string {
-  const shown = values.slice(0, max);
-  const rest = values.slice(max).map(displayLabel);
-  return (
-    shown
-      .map((v) => `<span class="${cls}" title="${kind}">${escapeHtml(displayLabel(v))}</span>`)
-      .join("") +
-    (rest.length
-      ? `<span class="qb-er-more" title="${escapeHtml(`More ${kind.toLowerCase()}s: ${rest.join(", ")}`)}">+${rest.length}</span>`
-      : "")
-  );
-}
-
-/** Tags first (our own, filled chips), then third-party groups (outlined). */
-function tagsAndGroupsHtml(event: EventRecord, byId: Map<string, Facet>): string {
-  const { tags, groups } = eventBadges(event, byId);
-  return (
-    badgesHtml(tags, MAX_TAG_BADGES, "qb-tag", "Tag") +
-    badgesHtml(groups, MAX_GROUP_BADGES, "qb-group-badge", "Group")
-  );
-}
-
-/**
- * Every value `event` holds for one field, across all occurrences of its
- * facet (usually one), without blanks or repeats, in the order they come.
- */
-export function fieldValues(event: EventRecord, facetId: string, fieldId: string): Scalar[] {
-  const seen = new Set<string>();
-  const out: Scalar[] = [];
-  for (const occurrence of event.values[facetId] ?? []) {
-    const v = occurrence[fieldId];
-    if (v === undefined || v === "" || seen.has(String(v))) continue;
-    seen.add(String(v));
-    out.push(v);
-  }
-  return out;
-}
-
-/** The text of one configured column for one event ("—" when absent). */
-export function rowCell(event: EventRecord, col: RowColumn): string {
-  const values = fieldValues(event, col.facet, col.field);
-  if (values.length === 0) return "—";
-  return values
-    .map((v) => (col.format === "datetime" ? formatWhen(String(v)) : String(v)))
-    .join(", ");
-}
-
-/** The start of a long event id (a GUID has 36 characters). The row's tooltip
- *  and its JSON show the whole id. */
-export function shortId(id: string): string {
-  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
-}
-
-/** The row grid: id, one column per ROW_COLUMNS entry, badges, facet count.
- *  Every row is its own grid, so tracks must not depend on content or the
- *  columns would misalign: dates get a fixed width that fits a medium
- *  date + short time; text is capped and ellipsised, full value on hover. */
-export function rowGrid(columns: RowColumn[]): string {
-  const cols = columns.map((c) => (c.format === "datetime" ? "12rem" : "minmax(0, 10rem)"));
-  return ["6rem", ...cols, "minmax(0, 1fr)", "auto"].join(" ");
-}
-
-function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: RowColumn[]): string {
-  const cells = columns
-    .map((col) => {
-      const value = rowCell(event, col);
-      return `<span class="qb-er-cell" title="${escapeHtml(`${col.heading}: ${value}`)}">${escapeHtml(value)}</span>`;
-    })
-    .join("");
-  return `
-    <details class="qb-event-row">
-      <summary>
-        <span class="qb-er-id" title="Event ${escapeHtml(event.id)}">#${escapeHtml(shortId(event.id))}</span>
-        ${cells}
-        <span class="qb-er-groups">${tagsAndGroupsHtml(event, byId)}</span>
-        <span class="qb-er-count">${countLabel(Object.keys(event.values).length, "facet")}</span>
-      </summary>
-      <pre class="qb-er-json">${escapeHtml(JSON.stringify(event, null, 2))}</pre>
-    </details>`;
-}
-
 /** The panel's card. It is its `data-focus-landing` (not in the Tab
  *  order, tabindex -1, but can be given the focus by script; a mouse click also
  *  focuses it): Run turns into a loader, then into the result, and a
  *  keyboard user who pressed it stays in this card instead of dropping to the
  *  page (paint(), focusMemory.ts). app.ts announces what happened. */
-function card(body: string, count?: number): string {
-  const n =
-    count === undefined ? "" : ` <span class="qb-card-count">· ${escapeHtml(exact(count))}</span>`;
-  return `<div class="qb-card qb-preview" tabindex="-1" data-focus-landing><h2 class="qb-card-title">Matching events${n}</h2>${body}</div>`;
+function card(body: string): string {
+  return `<div class="qb-card qb-preview" tabindex="-1" data-focus-landing><h2 class="qb-card-title">Matching events</h2>${body}</div>`;
 }
 
 /**
@@ -196,6 +72,32 @@ const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
   unfinished: "Finish the query to run it.",
   rejected: "A database found a problem in the query (shown above). Change the query to run it.",
 };
+
+// ---- Keeping the table's scroll position (needs a DOM, so it is checked in a browser) ----
+
+/** Which page of the table each panel last painted: a repaint of the same
+ *  page keeps the scroll position, another page starts at the top. */
+const shownPage = new WeakMap<HTMLElement, number>();
+
+/** The scroll box's offsets now, or null when no table is on screen. */
+function scrollOf(el: HTMLElement): { left: number; top: number } | null {
+  const box = el.querySelector<HTMLElement>(".qb-et-scroll");
+  return box ? { left: box.scrollLeft, top: box.scrollTop } : null;
+}
+
+/** Put the new scroll box where `scrollAfterRepaint` says. paint() has
+ *  replaced the old box, so without this every repaint would jump to the top left. */
+function restoreScroll(
+  el: HTMLElement,
+  before: { left: number; top: number } | null,
+  samePage: boolean,
+): void {
+  const box = el.querySelector<HTMLElement>(".qb-et-scroll");
+  if (!box) return;
+  const { left, top } = scrollAfterRepaint(before, samePage);
+  box.scrollLeft = left;
+  box.scrollTop = top;
+}
 
 export function renderDataPreview(el: HTMLElement, state: AppState): void {
   const p = state.preview;
@@ -248,24 +150,38 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
   }
   const { events } = p;
   if (events.length === 0) {
-    paint(el, card(`<p class="qb-placeholder">No events match this query.</p>`, 0));
+    paint(el, card(`<p class="qb-placeholder">No events match this query.</p>`));
     return;
   }
-  const byId = facetsById(state);
-  paint(
-    el,
-    card(
-      `<p class="qb-preview-note qb-muted">Showing ${countLabel(events.length, "event")} — click a row to see its full JSON.</p>
-       <div class="qb-event-list" style="--qb-er-grid: ${rowGrid(ROW_COLUMNS)}">${events.map((e) => eventRowHtml(e, byId, ROW_COLUMNS)).join("")}</div>`,
-      events.length,
-    ),
-  );
+  // One page of the results as a table: columns from the whole sample, so
+  // they stay put while paging (docs/ARCHITECTURE.md, "Under the query —
+  // `dataPreview.ts` (Matching events)").
+  const page = pageOf(events.length, p.page);
+  const columns = tableColumns(events, state.facets ?? [], FIRST_COLUMNS);
+  // The paging line already says how many results there are, so the title
+  // carries no count of its own.
+  const before = scrollOf(el);
+  paint(el, card(pagingHtml(page) + eventTableHtml(events, columns, page)));
+  restoreScroll(el, before, shownPage.get(el) === p.page);
+  shownPage.set(el, p.page);
 }
 
-/** One delegated listener for the Run / Try again button. Call once at startup. */
-export function wireDataPreview(container: HTMLElement, onRun: () => void): void {
+/** One delegated listener for the card's buttons: Run / Try again, Previous /
+ *  Next, and each result's id. Call once at startup. */
+export function wireDataPreview(
+  container: HTMLElement,
+  hooks: { onRun(): void; onPage(page: number): void; onOpenEvent(id: string): void },
+): void {
   container.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action='run']");
-    if (btn && !btn.disabled) onRun();
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
+    // aria-disabled: the paging buttons at the ends stay focusable (eventTable.ts).
+    if (!btn || btn.disabled || btn.getAttribute("aria-disabled") === "true") return;
+    const action = btn.dataset.action;
+    if (action === "run") hooks.onRun();
+    else if (action === "previous-event-page" || action === "next-event-page") {
+      hooks.onPage(Number(btn.dataset.page));
+    } else if (action === "open-event" && btn.dataset.eventId) {
+      hooks.onOpenEvent(btn.dataset.eventId);
+    }
   });
 }

@@ -15,9 +15,10 @@ import { newCondition } from "../../src/query/tree";
 import type { Condition } from "../../src/query/types";
 import type { Facet } from "../../src/model";
 
-const facet = (id: string, tags: string[], fields: Facet["fields"] = []): Facet => ({
+const facet = (id: string, tags: string[], fields: Facet["fields"] = [], number = 1): Facet => ({
   id,
   name: id.toUpperCase(),
+  number,
   tags,
   group: "",
   comment: "",

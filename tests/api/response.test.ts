@@ -141,6 +141,15 @@ describe("toFacet", () => {
     expect(facet.fields.map((f) => f.id)).toEqual(["size"]);
   });
 
+  it("keeps the backend's facet number, which orders the events table's columns", () => {
+    expect(toFacet(read(wireFacet({ id_number: 7 }))).number).toBe(7);
+  });
+
+  it("throws a ContractError when the facet number is missing", () => {
+    const broken = { ...wireFacet(), id_number: undefined };
+    expect(() => toFacet(readBroken<IndividualResponse>(broken))).toThrow('"id_number"');
+  });
+
   it("trims tags and drops blank and repeated ones", () => {
     expect(toFacet(read(wireFacet({ tags: [" red ", "", "red", "  ", "blue"] }))).tags).toEqual([
       "red",
@@ -199,6 +208,11 @@ describe("toEvent", () => {
     expect(toEvent(read<EventResponse>(body)).values).toEqual({
       thing: [{ size: 5 }, { size: 6 }],
     });
+  });
+
+  it("reads a facet named like a built-in property", () => {
+    const body = { id: "e1", items: [{ facet_label: "constructor", values: [{ k: 1 }] }] };
+    expect(toEvent(read<EventResponse>(body)).values).toEqual({ constructor: [{ k: 1 }] });
   });
 
   it("throws a ContractError when the id is missing", () => {
