@@ -1183,6 +1183,8 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    and no known values has nothing to open, so it is a plain row (`is-leaf`, a
    `<div>`, not a `<details>`): no arrow, but a spacer of the arrow's width
    (`.qb-chevron-spacer`) so its grip and name line up with the other rows.
+   The one-line blurb stays inside its row at every width (its `box-sizing`
+   includes its indent; a long word breaks: `overflow-wrap: anywhere`).
 4. **Previously seen values** — the field's pick-list (`CatalogField.options`)
    as a labelled block: the heading "Previously seen values (N)" (N counts all
    known values), a hint ("Drag one or press + to add *field* equals *value*.
