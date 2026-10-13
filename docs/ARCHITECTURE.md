@@ -57,24 +57,25 @@ Four conventions that the code relies on everywhere:
    `label` to translate ("Saved queries").
 3. **The backend's types keep the backend's names.** In `src/api/types.ts`, a
    `…Response` type is one record from a response, not the whole body:
-   `GET /api/documentation/databases` returns a `DatabasesResponse[]`, and each line of the
-   `/api/filter/validate` stream is one `StatsResponse`. (`EventsResponse` is the
-   exception: it is the whole `/api/filter/execute` body.)
+   `GET /api/documentation/databases` returns a `DatabasesResponse[]`, and each
+   line of the `/api/filter/validate` stream is one `StatsResponse`.
+   (`EventsResponse` is the exception: it is the whole `/api/filter/execute`
+   body.)
 4. **The wire is snake_case; the frontend is camelCase.** Every key the API
    sends or receives is snake_case (`facet_id`, `total_entrysets`, `node_id`),
-   in requests and responses alike; a key that is one word (`label`, `kind`)
-   is the same on both sides. Everything in the frontend (`src/model.ts`,
-   `src/query/types.ts`, state, panels) is camelCase (`facetId`,
-   `eventCount`, `nodeId`). `src/api/` is where the two meet: `response.ts`
-   reads the snake_case keys and builds the camelCase model, `request.ts` does
-   the reverse. The point is that either side's code tells you at a glance
-   which side of the line it is on, and that the frontend's model does not
-   depend on the backend's. No `src/` file outside `src/api/` spells a wire key (the mock
+   in requests and responses alike; a key that is one word (`label`, `kind`) is
+   the same on both sides. Everything in the frontend (`src/model.ts`,
+   `src/query/types.ts`, state, panels) is camelCase (`facetId`, `eventCount`,
+   `nodeId`). `src/api/` is where the two meet: `response.ts` reads the
+   snake_case keys and builds the camelCase model, `request.ts` does the
+   reverse. The point is that either side's code tells you at a glance which
+   side of the line it is on, and that the frontend's model does not depend on
+   the backend's. No `src/` file outside `src/api/` spells a wire key (the mock
    server and the tests do, because they stand in for or check the backend).
 
-The same things have different names in the UI and `src/`, on the wire (named
-by the backend's vocabulary, in snake_case) and inside the mock server (which speaks
-the backend's vocabulary):
+The same things have different names in the UI and `src/`, on the wire (named by
+the backend's vocabulary, in snake_case) and inside the mock server (which
+speaks the backend's vocabulary):
 
 | UI and `src/` (`src/model.ts`) | Wire (`src/api/types.ts`) | Mock server |
 |---|---|---|
@@ -112,26 +113,27 @@ the backend's vocabulary):
   badge shrinks to its icon, text hidden the same way. The logo and the app name
   always stay. Spacing alone was tried first and is not enough: with every label
   shown, the logged-in bar needs over 600 px even with the name cut to nothing.
-- **Data dictionary and its rail** — generated from `GET /api/documentation/individuals`.
-  Open by default, because dragging from it is the main way to build a query.
-  It is 26rem wide to start, the user can drag its right edge to anything from
-  20rem to 40rem (remembered), and the rail down its left edge or the
-  **Hide dictionary** button folds it away. The rail says what a click does: its
-  arrow and its vertical label flip between « **Hide dictionary** and » **Show dictionary**
-  (`docsToggle` in `layout.ts`), and the header's **Hide dictionary** is a solid green
-  button, so neither has to be guessed. Folded, the rail is a solid green bar
-  (a faint strip would be easy to miss, and it is the only way back to the
-  dictionary). Under 1100 px wide the open dictionary floats over the page instead of
-  squeezing the builder; in a window too narrow for its width (a remembered 40rem
-  needs about 600 px) it is cut to fit and always leaves one gap of the page
-  showing on its right, so its resize handle stays within reach (**Width** under
-  `docsSidebar.ts`, below). Searchable by facet and field name.
-  **Naming (decided 2026-10-07):** users see one name, **dictionary** ("data
-  dictionary" in the title, "Hide / Show dictionary" on the controls), because
-  the users will understand it. An earlier version also said "docs", which
-  suggested optional help text rather than the thing you build queries from.
-  The identifiers in the code still say "docs" (`qb-docs-*`, `docsToggle`,
-  `data-panel="docs"`); renaming them would only be churn, so they stay.
+- **Data dictionary and its rail** — generated from
+  `GET /api/documentation/individuals`. Open by default, because dragging from
+  it is the main way to build a query. It is 26rem wide to start, the user can
+  drag its right edge to anything from 20rem to 40rem (remembered), and the rail
+  down its left edge or the **Hide dictionary** button folds it away. The rail
+  says what a click does: its arrow and its vertical label flip between « **Hide
+  dictionary** and » **Show dictionary** (`docsToggle` in `layout.ts`), and the
+  header's **Hide dictionary** is a solid green button, so neither has to be
+  guessed. Folded, the rail is a solid green bar (a faint strip would be easy to
+  miss, and it is the only way back to the dictionary). Under 1100 px wide the
+  open dictionary floats over the page instead of squeezing the builder; in a
+  window too narrow for its width (a remembered 40rem needs about 600 px) it is
+  cut to fit and always leaves one gap of the page showing on its right, so its
+  resize handle stays within reach (**Width** under `docsSidebar.ts`, below).
+  Searchable by facet and field name. **Naming (decided 2026-10-07):** users see
+  one name, **dictionary** ("data dictionary" in the title, "Hide / Show
+  dictionary" on the controls), because the users will understand it. An earlier
+  version also said "docs", which suggested optional help text rather than the
+  thing you build queries from. The identifiers in the code still say "docs"
+  (`qb-docs-*`, `docsToggle`, `data-panel="docs"`); renaming them would only be
+  churn, so they stay.
 - **Main column** — database scope, the query builder (nested ALL/ANY groups,
   any depth, collapsible), and **Matching events**: a sample of matching
   events, fetched only when the user presses **Run query** in that card. The
@@ -181,10 +183,16 @@ to mark keyboard focus on the dictionary's resize handle stands out 3:1 from the
 page and the card (WCAG 1.4.11), and that the statistics bars (green, red)
 stand out 3:1 from the track and the card.
 
-The pickle is four small SVG files in `public/pickle/` (plus the three easter-egg
-faces below), served as-is. Three of them are named by `MASCOT` in
-`src/config.ts` (`logo.svg`, `disappointed.svg`, `loading.svg`); the favicon is referenced from `index.html`. They are meant to
-be replaced: overwrite a file with the same name and nothing else changes. Replacement SVGs must be self-contained plain SVG: export them as plain or optimised SVG with no namespaces other than `http://www.w3.org/2000/svg` (typical Inkscape or Illustrator exports add `xmlns:xlink`, `xmlns:inkscape`, `sodipodi` and `rdf` URLs, which make `npm run build`'s `check:offline` fail; nothing checks a file swapped in on an already-deployed build).
+The pickle is four small SVG files in `public/pickle/` (plus the three
+easter-egg faces below), served as-is. Three of them are named by `MASCOT` in
+`src/config.ts` (`logo.svg`, `disappointed.svg`, `loading.svg`); the favicon is
+referenced from `index.html`. They are meant to be replaced: overwrite a file
+with the same name and nothing else changes. Replacement SVGs must be
+self-contained plain SVG: export them as plain or optimised SVG with no
+namespaces other than `http://www.w3.org/2000/svg` (typical Inkscape or
+Illustrator exports add `xmlns:xlink`, `xmlns:inkscape`, `sodipodi` and `rdf`
+URLs, which make `npm run build`'s `check:offline` fail; nothing checks a file
+swapped in on an already-deployed build).
 
 | File | Where it shows |
 |---|---|
@@ -208,18 +216,18 @@ The files are `egg-logo.svg`, `egg-disappointed.svg` and `egg-loading.svg` in
 `MASCOT`, so replacing them works the same way and the same SVG rules apply).
 They are original drawings made for this repo. The favicon has no egg version.
 
-**Hidden: five clicks on the logo within 3 seconds toggle the easter-egg set
-and make it rain pickles** (`createClickCounter`, `startRain` in
+**Hidden: five clicks on the logo within 3 seconds toggle the easter-egg set and
+make it rain pickles** (`createClickCounter`, `startRain` in
 `src/ui/pickleRain.ts`). The first five clicks switch the logo to the egg set
 (`AppState.easterEgg`), five more switch it back; each toggle rains with the
-**new** set. The switch is display only and not stored: a reload brings back
-the normal pickle (decided 2026-10-08). The rain is 30 images of the set's
-logo, disappointed and loading files, which fall from the top of the screen
-for a few seconds, as a CSS animation (`.qb-rain-drop`) on an overlay that
-ignores the mouse and is hidden from screen readers. Only files that actually load are
-used (each gets 2 seconds), so a replaced or removed file cannot leave
-broken-image icons falling; if none loads, nothing falls. For people who prefer
-reduced motion, nothing falls: turning the set on shows a short toast instead
+**new** set. The switch is display only and not stored: a reload brings back the
+normal pickle (decided 2026-10-08). The rain is 30 images of the set's logo,
+disappointed and loading files, which fall from the top of the screen for a few
+seconds, as a CSS animation (`.qb-rain-drop`) on an overlay that ignores the
+mouse and is hidden from screen readers. Only files that actually load are used
+(each gets 2 seconds), so a replaced or removed file cannot leave broken-image
+icons falling; if none loads, nothing falls. For people who prefer reduced
+motion, nothing falls: turning the set on shows a short toast instead
 (`EASTER_EGG_TOAST` in `src/config.ts`, shown by `showToast` in `fomantic.ts`);
 turning it off needs no toast because the face visibly changes back
 (`easterEggReaction(turnedOn, reduceMotion)` in `pickleRain.ts`: `"rain"`,
@@ -299,7 +307,8 @@ nothing else* — no internet. So:
    The machine that builds `dist/` needs internet once; the one that serves it
    never does.
 
-The mascot SVGs live in `public/pickle/` and are self-contained; `check:offline` scans them.
+The mascot SVGs live in `public/pickle/` and are self-contained; `check:offline`
+scans them.
 
 Check any new dependency or asset against these rules before it lands.
 
@@ -500,9 +509,9 @@ which keys changed. Each async part of the state — `auth`, `compliance`,
 means something (only an `"authenticated"` auth has a `user`; only an `"ok"`
 preview has `events` and `page`, the 0-based page of them on screen).
 `openEventId` is the event whose JSON dialog is open (an id of the results on
-screen) or `null`; it is reset together with `preview` (a query or database change, or a new run),
-and `openEventOf` is also null while `runBlocker` blocks Run, so the dialog
-never shows a result that is gone or hidden.
+screen) or `null`; it is reset together with `preview` (a query or database
+change, or a new run), and `openEventOf` is also null while `runBlocker` blocks
+Run, so the dialog never shows a result that is gone or hidden.
 
 The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
 pure helpers in `src/query/saved.ts`):
@@ -532,8 +541,9 @@ edit, so the "Correctness invariant" holds. Database ids that no longer exist
 are dropped and said in `dropNotice`. A `401` from any saved-queries call
 redirects to log in like Run does (the query is saved first), while opening
 either dialog anonymously asks first whether to log in (`mayUseSavedQueries`,
-"Saved queries — `savedQueries.ts`"); another error is shown in the dialog's state (`save`, `savedList`; a failed
-delete in `savedListNotice`, so the list stays on screen).
+"Saved queries — `savedQueries.ts`"); another error is shown in the dialog's
+state (`save`, `savedList`; a failed delete in `savedListNotice`, so the list
+stays on screen).
 
 `main.ts` has one table, `panelRenderers`: for each panel, the `AppState`
 keys it reads and how to render it. One subscriber runs a panel's render
@@ -584,12 +594,13 @@ control had focus before it repaints and focuses the same control afterwards.
   group it sits in (`data-node-id`), its tag, and the first of these attributes
   it has: `data-event-id` (every result's id button shares its `data-action`),
   `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
-  `data-db-deselect-failing`, `data-range`, `data-part`, `id`, `aria-label` (`controlOf`). The label comes last
-  because it can change with the state ("Collapse group" / "Expand group"), but
-  it is the only name a Fomantic dropdown's typing box has. A new control that
-  should keep the focus needs one of these attributes. A text box keeps its
-  caret; a number box hides its caret from scripts, so its number is selected
-  instead (typing replaces it, as after Tab).
+  `data-db-deselect-failing`, `data-range`, `data-part`, `id`, `aria-label`
+  (`controlOf`). The label comes last because it can change with the state
+  ("Collapse group" / "Expand group"), but it is the only name a Fomantic
+  dropdown's typing box has. A new control that should keep the focus needs one
+  of these attributes. A text box keeps its caret; a number box hides its caret
+  from scripts, so its number is selected instead (typing replaces it, as after
+  Tab).
 - **When the control is gone** (a removed row, Run turned into a loader, an
   account action that rebuilt the menu closed), the focus goes to the nearest
   `data-focus-landing`: one in the control's own row or group, then in each
@@ -667,8 +678,8 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
   `/api/filter/validate` streams running on the backend.
 - **Whoever aborts a request resets its panel.** An aborted request's own
   handlers are stale and never touch state. `changeScope` resets both panels;
-  logout and compliance invalidation reset only the preview (`/api/filter/validate` is
-  anonymous).
+  logout and compliance invalidation reset only the preview
+  (`/api/filter/validate` is anonymous).
 - **Streaming is not staleness.** While `stats.status` is `"loading"`,
   `stats.results` holds fewer results than there are selected databases;
   every result it holds belongs to the query on screen, because the guard
@@ -681,29 +692,28 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
 `src/api/types.ts` is the contract: every request and response type, with doc
 comments saying what each field means. The rest of the app never sees these
 types: `src/api/client.ts` translates every response into the frontend's own
-model ("Data model"). It is the only file that calls `fetch()`: one function
-per endpoint, all under one **API prefix**,
-`VITE_API_BASE`. Every JSON endpoint answers a 4xx/5xx with
-`{ "error": "human readable message" }`, which the client throws as an
-`ApiError` carrying the HTTP `status`. Its message is for the console: the
-request, the status line and the server's text (`POST /api/v1/filter/saved
-failed: 500 Internal Server Error: …`). A request that gets no answer at all
-(server down, network gone) rejects with a `NetworkError` that names the
-request. A 2xx answer that doesn't match the contract is thrown as a
-`ContractError` ("Reading responses"). Every request has a 60 s timeout
-(`REQUEST_TIMEOUT_MS`, rejecting with a `TimeoutError`); for the streamed
-`/filter/validate` body the clock restarts on every chunk, so a slow stream that is
-still making progress is never cut off.
+model ("Data model"). It is the only file that calls `fetch()`: one function per
+endpoint, all under one **API prefix**, `VITE_API_BASE`. Every JSON endpoint
+answers a 4xx/5xx with `{ "error": "human readable message" }`, which the client
+throws as an `ApiError` carrying the HTTP `status`. Its message is for the
+console: the request, the status line and the server's text
+(`POST /api/v1/filter/saved failed: 500 Internal Server Error: …`). A request
+that gets no answer at all (server down, network gone) rejects with a
+`NetworkError` that names the request. A 2xx answer that doesn't match the
+contract is thrown as a `ContractError` ("Reading responses"). Every request has
+a 60 s timeout (`REQUEST_TIMEOUT_MS`, rejecting with a `TimeoutError`); for the
+streamed `/filter/validate` body the clock restarts on every chunk, so a slow
+stream that is still making progress is never cut off.
 
 **The API prefix** is set in one place, the committed `.env`
 (`VITE_API_BASE=/api/v1`), and carries the API version: moving to v2 means
 changing that line. A deployment overrides it with `.env.local`,
 `.env.production` or an environment variable at build time. `client.ts` has no
-fallback, and `vite.config.ts` stops dev and build when the prefix is missing
-or ends in `/`. The whole API moves with it, the login and compliance flows
-included, so the backend registers its callback URLs under the deployed
-prefix. The mock server reads the same `.env`. In this document and in code
-comments, `/api/filter/validate` and the like are short for `{prefix}/filter/validate`.
+fallback, and `vite.config.ts` stops dev and build when the prefix is missing or
+ends in `/`. The whole API moves with it, the login and compliance flows
+included, so the backend registers its callback URLs under the deployed prefix.
+The mock server reads the same `.env`. In this document and in code comments,
+`/api/filter/validate` and the like are short for `{prefix}/filter/validate`.
 
 | Endpoint | What |
 |---|---|
@@ -783,9 +793,10 @@ The mapping is also where the backend's quirks are dealt with, once:
   doesn't fill `name` in yet: `Field.name` is always set.
 - **A field's type** comes from `type`, or from `format` when `type` is empty,
   into `Field.typeName` (see "The field catalog").
-- **A statistics line** becomes a `DatabaseResult` that is either `"ok"`
-  (with a `matchCount`, from `match_count`) or `"failed"` (with `errors`, each a `DatabaseError`:
-  `message`, `kind`, and the `nodeId` (from `node_id`) it points at or `null`): see below.
+- **A statistics line** becomes a `DatabaseResult` that is either `"ok"` (with a
+  `matchCount`, from `match_count`) or `"failed"` (with `errors`, each a
+  `DatabaseError`: `message`, `kind`, and the `nodeId` (from `node_id`) it
+  points at or `null`): see below.
 - **An event's id** is a GUID (text); its values are kept per occurrence.
   The backend merges a facet that occurs several times in one event into one
   item whose `values` is a list of objects, one per occurrence (and the reader
@@ -846,29 +857,28 @@ can't drift apart unnoticed.
 ### Statistics lines
 
 A stats line has no name and no total: the frontend looks the database up in
-`AppState.databases` by its `id` and uses its `eventCount` as the
-denominator. `toDatabaseResult` turns each line into a `DatabaseResult`: an
-`"ok"` one has a `matchCount` (the wire's `match_count`); a `"failed"` one has none, so a failed database
-can never be shown as "0 matched", and carries `errors` (from
+`AppState.databases` by its `id` and uses its `eventCount` as the denominator.
+`toDatabaseResult` turns each line into a `DatabaseResult`: an `"ok"` one has a
+`matchCount` (the wire's `match_count`); a `"failed"` one has none, so a failed
+database can never be shown as "0 matched", and carries `errors` (from
 `error_messages`) instead. Each `error_messages` item is an object
 `{ node_id?, message, kind }` (`StatsErrorMessage`). `node_id` is the `id` of a
 group or condition from the request; `kind` is `"incomplete"` or `"invalid"`,
-like an `Issue` (any other kind reads as `"invalid"`). The items decide
-whether Run is allowed, so a plain-text item is a contract error; a blank
-`message` reads as "The server found a problem in the query." An error with a
-`node_id` is shown **once, in the query builder, next to what is wrong**; the
-statistics panel only offers **Show problem**, which jumps to it ("Right —
+like an `Issue` (any other kind reads as `"invalid"`). The items decide whether
+Run is allowed, so a plain-text item is a contract error; a blank `message`
+reads as "The server found a problem in the query." An error with a `node_id` is
+shown **once, in the query builder, next to what is wrong**; the statistics
+panel only offers **Show problem**, which jumps to it ("Right —
 `statsPanel.ts`"). An error without a `node_id` makes that database's row a red
-bar with the reason on one line under it. `app.ts` keeps the
-errors with a `node_id` in
-`AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`), once however
-many databases report them, and they block Run (`runBlocker` → `"rejected"`).
-A line that says `success` but has no `match_count`
-counts as failed rather than as a made-up 0. Both carry `notes` (from
-`info_messages`). The headline sums the successful databases only; the databases
-that failed are the striped red end of its bar ("Right — `statsPanel.ts`").
-When the query itself is at fault (`queryIsAtFault`), no database failed:
-nothing is red, and the rows say the query was not run.
+bar with the reason on one line under it. `app.ts` keeps the errors with a
+`node_id` in `AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`),
+once however many databases report them, and they block Run (`runBlocker` →
+`"rejected"`). A line that says `success` but has no `match_count` counts as
+failed rather than as a made-up 0. Both carry `notes` (from `info_messages`).
+The headline sums the successful databases only; the databases that failed are
+the striped red end of its bar ("Right — `statsPanel.ts`"). When the query
+itself is at fault (`queryIsAtFault`), no database failed: nothing is red, and
+the rows say the query was not run.
 
 ### The field catalog (there is no schema endpoint)
 
@@ -995,20 +1005,20 @@ The endpoints are `GET` and `POST {prefix}/filter/saved`, and `PUT` and
 query of this user has that id (another user's counts as unknown); a `400` is
 a malformed body, which is a bug on our side, never a user mistake.
 
-**Decided 2026-10-08: the backend checks the shape only, never the meaning, so
-a half-built query can be saved.** The `/filter/validate` format cannot hold unfinished
-conditions, and a validation bug on our side must never stop a user saving
-their work. The frontend still never rewrites a condition ("Wire format of the
-query"): it converts the tree in `src/api/` only, both ways
-(`toSavedQueryRequest` in `request.ts`, `toSavedQuery` in `response.ts`), so
-the rest of the app sees `Group` / `QueryNode` and the model's `SavedQuery`.
-`toSavedQueryRequest` trims name and note, drops `collapsed`, and throws only
-on a value that is not JSON scalars and nulls (a bug). `toSavedQuery` reads the
+**Decided 2026-10-08: the backend checks the shape only, never the meaning, so a
+half-built query can be saved.** The `/filter/validate` format cannot hold
+unfinished conditions, and a validation bug on our side must never stop a user
+saving their work. The frontend still never rewrites a condition ("Wire format
+of the query"): it converts the tree in `src/api/` only, both ways
+(`toSavedQueryRequest` in `request.ts`, `toSavedQuery` in `response.ts`), so the
+rest of the app sees `Group` / `QueryNode` and the model's `SavedQuery`.
+`toSavedQueryRequest` trims name and note, drops `collapsed`, and throws only on
+a value that is not JSON scalars and nulls (a bug). `toSavedQuery` reads the
 tree strictly (a node of unknown `kind`, a missing `children` or a number as
 `facet_id`, or a missing or non-text database id, is a `ContractError` naming
-the path) and a missing note as `""` with a warning. The `client.ts` functions are `listSavedQueries`,
-`createSavedQuery`, `updateSavedQuery(id, draft)` and `deleteSavedQuery(id)`;
-the id goes into the path with `encodeURIComponent`.
+the path) and a missing note as `""` with a warning. The `client.ts` functions
+are `listSavedQueries`, `createSavedQuery`, `updateSavedQuery(id, draft)` and
+`deleteSavedQuery(id)`; the id goes into the path with `encodeURIComponent`.
 
 ### Saved query across the login/compliance redirect
 
@@ -1071,19 +1081,18 @@ This is the mock's reading; the real backend owns the rule.
 
 ### Wire format of the query
 
-`/filter/validate` and `/filter/execute` take a `QueryRequest` (`src/api/types.ts`):
-`{ databases, query }`. `databases` holds the databases' `label`s (the model's
-`Database.id`s), and
-`query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
-and `RequestCondition`s (`facet_id`, `field_id`, `operator_id`, `value`).
-`field_id` is `string | null`: `null` means the condition is about the facet
-itself, and what that means is the backend's to interpret. A facet-level
-`present` matches an event holding any value for the facet, `absent` the
-opposite; a field-level `present` matches an event holding a non-blank value
-for the field, `absent` one that doesn't. Every
-node carries the frontend's `id` for it. The backend treats it as opaque, and
-quotes it back as `node_id` in a stats line's `error_messages` to point at the
-node a problem is in ("Statistics lines").
+`/filter/validate` and `/filter/execute` take a `QueryRequest`
+(`src/api/types.ts`): `{ databases, query }`. `databases` holds the databases'
+`label`s (the model's `Database.id`s), and `query` is a tree of `RequestGroup`s
+(`AND`/`OR` over `children`, never empty) and `RequestCondition`s (`facet_id`,
+`field_id`, `operator_id`, `value`). `field_id` is `string | null`: `null` means
+the condition is about the facet itself, and what that means is the backend's to
+interpret. A facet-level `present` matches an event holding any value for the
+facet, `absent` the opposite; a field-level `present` matches an event holding a
+non-blank value for the field, `absent` one that doesn't. Every node carries the
+frontend's `id` for it. The backend treats it as opaque, and quotes it back as
+`node_id` in a stats line's `error_messages` to point at the node a problem is
+in ("Statistics lines").
 
 `toQueryRequest` (`src/api/request.ts`) builds the body from the query on
 screen; `getStats` and `runQuery` in `client.ts` call it, so `app.ts` passes
@@ -1149,18 +1158,18 @@ condition).
 - **`src/api/request.ts`** — `toQueryRequest`, the one place the tree becomes
   the request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
-  `incomplete` (not filled in yet, shown as a quiet grey hint; a database's "incomplete" problem is
-  highlighted instead, below) or `invalid`
-  (can't work, shown in red). Besides a field, an operator and a value of the
-  right shape, it checks every value against the field's type (a number,
-  `true`/`false`, text, a partial UTC timestamp) and that a number range
-  doesn't run backwards. A value that isn't on the field's pick-list is fine.
-  A facet-level condition must name a known facet, use `present` or `absent`
-  and hold no value; the two messages for a facet-level operator or value that
-  isn't allowed end with "Pick Is present or Is absent." because the row has no
-  Operator or Value slot to fix, only the Field dropdown ("The Field dropdown's
-  two kinds of choice"). These checks also cover a query restored after a
-  redirect. **Any issue blocks running.**
+  `incomplete` (not filled in yet, shown as a quiet grey hint; a database's
+  "incomplete" problem is highlighted instead, below) or `invalid` (can't work,
+  shown in red). Besides a field, an operator and a value of the right shape, it
+  checks every value against the field's type (a number, `true`/`false`, text, a
+  partial UTC timestamp) and that a number range doesn't run backwards. A value
+  that isn't on the field's pick-list is fine. A facet-level condition must name
+  a known facet, use `present` or `absent` and hold no value; the two messages
+  for a facet-level operator or value that isn't allowed end with "Pick Is
+  present or Is absent." because the row has no Operator or Value slot to fix,
+  only the Field dropdown ("The Field dropdown's two kinds of choice"). These
+  checks also cover a query restored after a redirect. **Any issue blocks
+  running.**
 - **`issues.ts`** — the backend's issues and where issues are shown.
   `serverIssues` turns each stats error that points at a node into an
   `Issue` marked `fromServer`, once; the builder always highlights those
@@ -1172,32 +1181,31 @@ condition).
   doesn't have. Issues that end up the same on one node are kept once; if
   one of them came from the server, the one kept is marked `fromServer`, so
   it is still drawn as the server's.
-- **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet
-  clears field, operator and value; a new field clears operator and value; an
-  operator change that alters the arity resets the value instead of reading
-  the old control. Choosing a whole-facet test in the Field dropdown ("Is present" /
-  "Is absent") clears the field and sets that operator. `cursorAfterChange` and
+- **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet clears
+  field, operator and value; a new field clears operator and value; an operator
+  change that alters the arity resets the value instead of reading the old
+  control. Choosing a whole-facet test in the Field dropdown ("Is present" / "Is
+  absent") clears the field and sets that operator. `cursorAfterChange` and
   `announcementAfterChange` decide, on the committed condition, where the cursor
   goes and what a screen reader hears.
 - **`summary.ts`** — `queryToText`, e.g. `Thing: size Greater than 3000 AND
   (…)`, or `Thing is present` for a facet-level condition. Display only;
   unfinished values show as `(value?)`.
-- **`drop.ts`** — the pure half of drag-to-build: the drag payload
-  (`DragItem`: facet, field, value, tag or node; `parseDragItem` treats the
-  data as untrusted and returns `null` for anything else) and `nodesForItem`,
-  which says what a dropped dictionary item creates. A facet becomes a facet-level
-  `present`; a field becomes a condition with that field chosen and nothing
-  else; a value becomes `field eq value` (a number field's value goes out as a
-  number); a tag becomes one new ALL group holding a facet-level `present` per facet
-  carrying it (just the condition when only one facet carries it). What
-  can't be created comes back as `problems`, in words for the user.
-  **Tag drops and "Add all N" arrive as one ALL group (decided 2026-10-13).**
-  Users complained about removing a dozen rows one by one after a misplaced
-  "Add all", so the facets now arrive in their own group (`groupOf`), which can
-  be moved, ungrouped or removed in one go. It stays ALL (decided 2026-10-07,
-  confirmed 2026-10-13): a query then matches only events that hold every one of
-  those facets, which can be rare (in the mock, often none). Switching the group
-  to ANY is one click.
+- **`drop.ts`** — the pure half of drag-to-build: the drag payload (`DragItem`:
+  facet, field, value, tag or node; `parseDragItem` treats the data as untrusted
+  and returns `null` for anything else) and `nodesForItem`, which says what a
+  dropped dictionary item creates. A facet becomes a facet-level `present`; a
+  field becomes a condition with that field chosen and nothing else; a value
+  becomes `field eq value` (a number field's value goes out as a number); a tag
+  becomes one new ALL group holding a facet-level `present` per facet carrying
+  it (just the condition when only one facet carries it). What can't be created
+  comes back as `problems`, in words for the user. **Tag drops and "Add all N"
+  arrive as one ALL group (decided 2026-10-13).** Users complained about
+  removing a dozen rows one by one after a misplaced "Add all", so the facets
+  now arrive in their own group (`groupOf`), which can be moved, ungrouped or
+  removed in one go. It stays ALL (decided 2026-10-07, confirmed 2026-10-13): a
+  query then matches only events that hold every one of those facets, which can
+  be rare (in the mock, often none). Switching the group to ANY is one click.
 - **`tree.ts`, grouping** — `groupContents` moves a group's children into one
   new group with the same ALL/ANY, which becomes its only child (the query
   means the same; only one level is added). `ungroup` does the reverse: it puts
@@ -1230,36 +1238,36 @@ condition).
 
 Anonymous: a **Log in** button. Logged in: a chip with the user's name and a
 compliance badge that opens a native `<details>` menu with the session's
-compliance log, exactly as the backend sent it, formatted as indented JSON
-(+ **Invalidate**), or **Start compliance check**; then **Log out**. The log
-is a `<pre class="qb-account-log">` with a maximum height that scrolls both
-ways. It has `tabindex="0"` and an `aria-label` ("Compliance log"), because a
-scrollable region the keyboard cannot focus cannot be scrolled by it. The menu
-reads no field of the log. Outside clicks and Escape close it. Display-only (see "Auth"). In a narrow
-window the chip shrinks (name with an ellipsis, badge as an icon): see "Screen
-layout".
-**Invalidate** and **Log out** close the menu at once and put the focus on
-the chip (a failure's toast would otherwise cover the open menu); when they
-succeed, the repaint moves the focus to the chip, or to **Log in**
-("Keyboard focus across repaints").
+compliance log, exactly as the backend sent it, formatted as indented JSON (+
+**Invalidate**), or **Start compliance check**; then **Log out**. The log is a
+`<pre class="qb-account-log">` with a maximum height that scrolls both ways. It
+has `tabindex="0"` and an `aria-label` ("Compliance log"), because a scrollable
+region the keyboard cannot focus cannot be scrolled by it. The menu reads no
+field of the log. Outside clicks and Escape close it. Display-only (see "Auth").
+In a narrow window the chip shrinks (name with an ellipsis, badge as an icon):
+see "Screen layout". **Invalidate** and **Log out** close the menu at once and
+put the focus on the chip (a failure's toast would otherwise cover the open
+menu); when they succeed, the repaint moves the focus to the chip, or to **Log
+in** ("Keyboard focus across repaints").
 
 ### Above the builder — `databasePicker.ts`
 
-One pill per database (a native checkbox in a styled label; hover shows
-"owner: description"), "N of M selected", **All** / **None**. Zero selected →
-a warning-coloured "Select at least one database." and the other cards say why they are
-empty.
+One pill per database (a native checkbox in a styled label; hover shows "owner:
+description"), "N of M selected", **All** / **None**. Zero selected → a
+warning-coloured "Select at least one database." and the other cards say why
+they are empty.
 
-**Failed databases.** A selected database that failed for the query on screen
-is marked on its pill: a danger-coloured outline, a "!" icon and the hidden
-text " failed for this query" (`qb-sr-only`; the leading space keeps a screen
-reader from running it into the name), so the colour is not the only signal.
-Its reasons (`failureReasons`, also used by its statistics row) are appended to the pill's tooltip on a new
-line, after the database description: its errors that point at no node, else
-its notes, else its node errors' messages, else "Failed.". Only the current
-results count and only selected databases are marked: `changeScope` empties
-`results` when a new query starts, and an unselected database is not part of
-this query. The picker therefore re-renders on `stats`.
+**Failed databases.** A selected database that failed for the query on screen is
+marked on its pill: a danger-coloured outline, a "!" icon and the hidden text "
+failed for this query" (`qb-sr-only`; the leading space keeps a screen reader
+from running it into the name), so the colour is not the only signal. Its
+reasons (`failureReasons`, also used by its statistics row) are appended to the
+pill's tooltip on a new line, after the database description: its errors that
+point at no node, else its notes, else its node errors' messages, else
+"Failed.". Only the current results count and only selected databases are
+marked: `changeScope` empties `results` when a new query starts, and an
+unselected database is not part of this query. The picker therefore re-renders
+on `stats`.
 
 **When the query is at fault, nothing is marked** (`queryIsAtFault`): every
 selected database that has answered so far failed, and only with errors that
@@ -1336,20 +1344,20 @@ the text. **Decided 2026-10-13:** logos replaced the words "Third-party:", which
 confused users. The comment also stays italic, so the two can be told apart
 without the logo.
 
-Blank texts are `""` in the model ("Data model"), and blank parts are left
-out. The panel header has a **Hide dictionary** button, a one-line hint (`DOCS_HINT`:
+Blank texts are `""` in the model ("Data model"), and blank parts are left out.
+The panel header has a **Hide dictionary** button, a one-line hint (`DOCS_HINT`:
 "Click a section, facet or field with an arrow to expand it. Drag it into the
-query, or press + Add.") and the search box (`matchDocs`: facet name, field id or name), which hides what
-doesn't match and opens the sections that do, directly on the painted DOM (the
-one exception to "always repaint", see "The Fomantic discipline"). A facet
-card opens only when a *field* matched (`DocsMatch.openFacets`), and that
-field row gets the `is-match` highlight (`DocsMatch.fields`, found through the
-row's `data-field-id`); a facet that matched by name alone stays closed.
-Clearing the search closes everything again. A status line under the box
-(`.qb-docs-status`, `role="status"`, painted empty so the region exists before
-its text changes) is filled by `filterStatus`: "3 facets match." for screen
-readers only (`qb-sr-only`), or "No facets match “…”." in plain sight when
-nothing does.
+query, or press + Add.") and the search box (`matchDocs`: facet name, field id
+or name), which hides what doesn't match and opens the sections that do,
+directly on the painted DOM (the one exception to "always repaint", see "The
+Fomantic discipline"). A facet card opens only when a *field* matched
+(`DocsMatch.openFacets`), and that field row gets the `is-match` highlight
+(`DocsMatch.fields`, found through the row's `data-field-id`); a facet that
+matched by name alone stays closed. Clearing the search closes everything again.
+A status line under the box (`.qb-docs-status`, `role="status"`, painted empty
+so the region exists before its text changes) is filled by `filterStatus`: "3
+facets match." for screen readers only (`qb-sr-only`), or "No facets match “…”."
+in plain sight when nothing does.
 
 **Rows that open say so.** Tag sections, facet cards and field rows are native
 `<details>`, and each one starts its `<summary>` with a Fomantic `angle right`
@@ -1377,11 +1385,11 @@ user's focus to the page, so it is put back: folding the docs while focus is
 inside them moves it to the rail (`setSidebarCollapsed`), and folding or
 unfolding a group in the builder keeps it on that group's (repainted) collapse
 button, like every control a repaint replaces (see "Keyboard focus across
-repaints"); after a mouse click the new button gets no focus ring. Green
-buttons (`.ui.primary.button`, e.g. **Hide docs**, **Log in**) show a ring on
+repaints"); after a mouse click the new button gets no focus ring. Green buttons
+(`.ui.primary.button`, e.g. **Hide docs**, **Log in**) show a ring on
 `:focus-visible` (a light ring on the dark top bar itself, a green one inside
-the light account-menu panel), and keep the resting green on plain `:focus`, so a mouse click leaves no stuck
-colour and Fomantic's blue never shows.
+the light account-menu panel), and keep the resting green on plain `:focus`, so
+a mouse click leaves no stuck colour and Fomantic's blue never shows.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
 on the tag section, facet card, field row and value row) starts a drag, and a
@@ -1396,19 +1404,19 @@ keep from also opening or closing the card.
 **Width.** The panel is open by default (`sidebarCollapsed: false`). Its right
 edge is a separator (`role="separator"`, focusable) wired by `docsResize.ts`:
 drag it, or press Left / Right (1rem a step). The width is kept in the
-`--qb-docs-w` CSS variable, limited to 20–40rem (26rem to start) and
-remembered in `localStorage` (`qb:docs-width`; if storage is unavailable it
-just isn't remembered). Under 1100 px the open panel floats over the page,
-so `main.ts` starts the page with it collapsed on such a screen (before the
-first paint; `initialState` stays `false`), and Escape closes the floating
-panel while focus is inside it, returning focus to the rail button
-(`escapeClosesDocs`). In the search box the first Escape only clears its text
-(the box calls `preventDefault()`, which `escapeClosesDocs` treats as "spent");
-a second Escape, with the box empty, closes the panel. A click
-anywhere outside the docs column, the rail and the **Hide dictionary** / **Show dictionary**
-buttons closes it too (also `main.ts`, same 1100 px query): the open docs cover
-the builder, and nothing else would close them. Clicks inside the docs never
-do, or **+ Add** and dragging would break.
+`--qb-docs-w` CSS variable, limited to 20–40rem (26rem to start) and remembered
+in `localStorage` (`qb:docs-width`; if storage is unavailable it just isn't
+remembered). Under 1100 px the open panel floats over the page, so `main.ts`
+starts the page with it collapsed on such a screen (before the first paint;
+`initialState` stays `false`), and Escape closes the floating panel while focus
+is inside it, returning focus to the rail button (`escapeClosesDocs`). In the
+search box the first Escape only clears its text (the box calls
+`preventDefault()`, which `escapeClosesDocs` treats as "spent"); a second
+Escape, with the box empty, closes the panel. A click anywhere outside the docs
+column, the rail and the **Hide dictionary** / **Show dictionary** buttons
+closes it too (also `main.ts`, same 1100 px query): the open docs cover the
+builder, and nothing else would close them. Clicks inside the docs never do, or
+**+ Add** and dragging would break.
 
 A floating panel that is wider than the room is cut to fit. That is the case in
 a window narrower than the remembered width plus the rail plus one gap (a stored
@@ -1440,9 +1448,9 @@ most (it stays 40rem if it is there already), and the next Left press shrinks th
 column right away. Where the column is not cut, the two widths are equal and a
 press moves it exactly 1rem.
 
-Nothing needed to read the dictionary is behind a hover: names, types and
-blurbs are visible text, and a `title` only labels a button, repeats a number, or names a text's source
-(also in its `alt`).
+Nothing needed to read the dictionary is behind a hover: names, types and blurbs
+are visible text, and a `title` only labels a button, repeats a number, or names
+a text's source (also in its `alt`).
 
 **Known limitation, not tested in Firefox.** The tag section's grip sits inside
 its `<summary>`. Chromium starts the drag from it; Firefox is known to treat a
@@ -1471,46 +1479,45 @@ no note. **Decided 2026-10-13:** the note under the buttons (2026-10-08) read
 as if the whole builder needed a login.
 
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
-a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
-right` while folded, the same arrows as the data dictionary), "Match [ALL |
-ANY] of the following", **+ Condition**, **+ Group**, **Group contents**, **Ungroup** (not on the root; see below), ✕ (not on the root). The
-buttons sit together in one right-aligned box (`.qb-group-actions`) that wraps
-among itself in a narrow header, so the ✕ stays last on the right and never
-ends up alone at the start of a line, where it could be taken for a condition's
-remove button. A
+a bordered collapse chevron (`collapseButton`: `angle down` while open,
+`angle right` while folded, the same arrows as the data dictionary),
+"Match [ALL | ANY] of the following", **+ Condition**, **+ Group**, **Group contents**,
+**Ungroup** (not on the root; see below), ✕ (not on the root). The buttons sit
+together in one right-aligned box (`.qb-group-actions`) that wraps among itself
+in a narrow header, so the ✕ stays last on the right and never ends up alone at
+the start of a line, where it could be taken for a condition's remove button. A
 collapsed group folds to its `queryToText` summary and "N conditions", and that
 whole line is the click target for unfolding it (`data-action="toggle-collapse"`
 on the header, a pointer cursor, a hover background and the tooltip "Click to
 expand"), except when the click ends a text selection; the grip inside it does
-not toggle, because a click there belongs to dragging. A condition row is three cascading Fomantic
-dropdowns — **Facet**, **Field** (a whole-facet test, then that facet's fields,
-`fieldsOfFacet`, by `Field.name`: "The Field dropdown's two kinds of choice"),
-**Operator** (the field's `operatorIds`; absent on a whole-facet condition) —
-then the value control from `valueControl.ts`: nothing; for **Equals** /
-**Not equals** on a field with a pick-list, a free-entry dropdown (its known
-values, plus anything typed); otherwise one input, a boolean toggle or a
-timestamp text box; a from–to pair (numbers and dates); or, for **Is any
-of**, a free-entry multi-select. Free-entry dropdowns are Fomantic `search`
-dropdowns with `allowAdditions` (`data-free-entry`, activated in
-`fomantic.ts`): type an entry and press Enter, or pick one from the list.
-Their `delimiter` is a character no key can type, so a comma is part of an
-entry (`c,d` is one value) instead of splitting it. Fomantic HTML-escapes a
-typed entry in the `<option>` it creates for it (`a"b` → `a&quot;b`);
-`optionEntry` undoes that, so the entry goes out exactly as typed. (Typing
-an entity itself, such as `&lt;`, reads back as `<`: Fomantic stores both
-alike.) A picked or typed entry becomes the field's type
-(`parseEntry`: `"3"` → `3` on a number field; anything else stays as typed,
-for validation to report). Every control has an accessible name. Every box
-shows its full content on hover (users asked, 2026-10-13): the dropdowns
-through `fomantic.ts`, the value boxes through a `title` that follows the
-typing. A tooltip is mouse-only; keyboard and screen-reader users get the same
-text from the control itself. Issues — the
-local ones and the backend's — show under their row or group (`placeIssues`): the user's own unfinished
-parts as a grey hint, the backend's "incomplete" ones in mustard with a
-warning icon, anything invalid in red. An issue inside a collapsed group shows on that group, and one whose node is
-unknown on the root group, so none is lost. The footer shows the whole query
-in plain English (wrapped, never cut off with "…") once nothing needs attention,
-otherwise how many parts do.
+not toggle, because a click there belongs to dragging. A condition row is three
+cascading Fomantic dropdowns — **Facet**, **Field** (a whole-facet test, then
+that facet's fields, `fieldsOfFacet`, by `Field.name`: "The Field dropdown's two
+kinds of choice"), **Operator** (the field's `operatorIds`; absent on a
+whole-facet condition) — then the value control from `valueControl.ts`: nothing;
+for **Equals** / **Not equals** on a field with a pick-list, a free-entry
+dropdown (its known values, plus anything typed); otherwise one input, a boolean
+toggle or a timestamp text box; a from–to pair (numbers and dates); or, for **Is
+any of**, a free-entry multi-select. Free-entry dropdowns are Fomantic `search`
+dropdowns with `allowAdditions` (`data-free-entry`, activated in `fomantic.ts`):
+type an entry and press Enter, or pick one from the list. Their `delimiter` is a
+character no key can type, so a comma is part of an entry (`c,d` is one value)
+instead of splitting it. Fomantic HTML-escapes a typed entry in the `<option>`
+it creates for it (`a"b` → `a&quot;b`); `optionEntry` undoes that, so the entry
+goes out exactly as typed. (Typing an entity itself, such as `&lt;`, reads back
+as `<`: Fomantic stores both alike.) A picked or typed entry becomes the field's
+type (`parseEntry`: `"3"` → `3` on a number field; anything else stays as typed,
+for validation to report). Every control has an accessible name. Every box shows
+its full content on hover (users asked, 2026-10-13): the dropdowns through
+`fomantic.ts`, the value boxes through a `title` that follows the typing. A
+tooltip is mouse-only; keyboard and screen-reader users get the same text from
+the control itself. Issues — the local ones and the backend's — show under their
+row or group (`placeIssues`): the user's own unfinished parts as a grey hint,
+the backend's "incomplete" ones in mustard with a warning icon, anything invalid
+in red. An issue inside a collapsed group shows on that group, and one whose
+node is unknown on the root group, so none is lost. The footer shows the whole
+query in plain English (wrapped, never cut off with "…") once nothing needs
+attention, otherwise how many parts do.
 
 **The Field dropdown's two kinds of choice.** The second dropdown answers
 "what do I want to say about this facet?", so its menu has two sections:
@@ -1633,18 +1640,17 @@ the issue's message tells the user to do exactly that.
   moved node too, judged after the node is taken out: dragging the last other
   row onto a group's blank row (or into a new group) leaves just that row.
 - **Announcements.** The query card repaints on every change, so a screen-reader
-  user hears nothing when "+" adds a row or a drop lands (or, in a condition row,
-  when a whole-facet test removes the Operator and Value slots: `main.ts` also
-  gives `wireQueryBuilder` `announce`, see "The Field dropdown's two kinds of
-  choice"). After a drop or move
-  that changed the query, `onDropItem` calls `announce` ("Added 3 conditions to
-  the query.", "Added a group of 12 conditions to the query." from
-  `addedNodesMessage`, "Moved the group.", the words in `drop.ts`). A move that leaves
-  the tree identical (`sameTree`: the last row dropped on its own group) changes
-  nothing and announces nothing. The builder's own
-  **+ Condition** and **+ Group** say "Added 1 condition to the query." and
-  "Added a group to the query." (`ADDED_GROUP_MESSAGE`); the focus stays on the
-  button, so pressing it again adds another. `announce` is a
+  user hears nothing when "+" adds a row or a drop lands (or, in a condition
+  row, when a whole-facet test removes the Operator and Value slots: `main.ts`
+  also gives `wireQueryBuilder` `announce`, see "The Field dropdown's two kinds
+  of choice"). After a drop or move that changed the query, `onDropItem` calls
+  `announce` ("Added 3 conditions to the query.", "Added a group of 12
+  conditions to the query." from `addedNodesMessage`, "Moved the group.", the
+  words in `drop.ts`). A move that leaves the tree identical (`sameTree`: the
+  last row dropped on its own group) changes nothing and announces nothing. The
+  builder's own **+ Condition** and **+ Group** say "Added 1 condition to the
+  query." and "Added a group to the query." (`ADDED_GROUP_MESSAGE`); the focus
+  stays on the button, so pressing it again adds another. `announce` is a
   dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
   which writes to a visually hidden `role="status"` region in the page frame.
   That region is never repainted, which is what makes a screen reader speak a
@@ -1652,19 +1658,23 @@ the issue's message tells the user to do exactly that.
   dialog holds its own region next to the body its panel paints
   (`DIALOG_INSIDE`, `dialogBody`), and `announce` writes to the open dialog's
   region instead (picked when the text goes in). That is how "Deleted “X”." is
-  heard in the Saved queries dialog. When several messages arrive within its 50 ms pause (a drop that adds
-  some things and refuses others) they are read together, in order. A drop that
-  did nothing announces no "Added" or "Moved"; its `dropNotice` is the message,
-  and `setNotice` also sends it through `announce`: the warning box is painted
-  together with its text, which a screen reader may not speak.
+  heard in the Saved queries dialog. When several messages arrive within its 50
+  ms pause (a drop that adds some things and refuses others) they are read
+  together, in order. A drop that did nothing announces no "Added" or "Moved";
+  its `dropNotice` is the message, and `setNotice` also sends it through
+  `announce`: the warning box is painted together with its text, which a screen
+  reader may not speak.
 - **`dropNotice`.** A drop never fails silently. Whatever can't be done sets
   `AppState.dropNotice`, drawn above the query card as a dismissible warning
-  (`noticeHtml`, which has no `role` of its own: it is inserted already holding its text, so it would never be spoken, and it is spoken through `announce` instead; the ✕ works by click, Enter and Space, and dismissing moves focus to the query card so keyboard users keep their place). A drop that fully
-  succeeds clears an older warning; a drop that partly succeeds still inserts
-  what it can. Despite its name, the warning is not only about drops: it also
-  carries a refused **Ungroup** (its reason) and, after opening a saved query,
-  "N saved databases no longer exist and were left out." (the last three rows
-  below). The messages:
+  (`noticeHtml`, which has no `role` of its own: it is inserted already holding
+  its text, so it would never be spoken, and it is spoken through `announce`
+  instead; the ✕ works by click, Enter and Space, and dismissing moves focus to
+  the query card so keyboard users keep their place). A drop that fully succeeds
+  clears an older warning; a drop that partly succeeds still inserts what it
+  can. Despite its name, the warning is not only about drops: it also carries a
+  refused **Ungroup** (its reason) and, after opening a saved query, "N saved
+  databases no longer exist and were left out." (the last three rows below). The
+  messages:
 
 | Drop | Result | Warning |
 |---|---|---|
@@ -1695,19 +1705,19 @@ movement in `queryBuilder.ts`):
 - **Arrow keys move, Enter picks** (`selectOnKeydown: false`). Fomantic's
   default picks on every arrow press; that fires `onChange`, and the repaint
   replaced the open dropdown with a closed one.
-- **The cursor moves on.** A choice in Facet, Field or Operator puts the
-  cursor in the next part of the row (`cursorAfterChange` in
-  `conditionEdit.ts`, then `focusPart`), so a whole condition can be built from
-  the keyboard: the next dropdown opens (`openDropdown`), or the cursor goes to
-  the first value box. Without this the repaint would lose the cursor. **One
-  exception:** a whole-facet test ("Is present" / "Is absent") finishes the row
-  — no Operator or Value follows — so the cursor stays on the closed Field
-  dropdown (`focusFieldDropdown`); see "The Field dropdown's two kinds of
-  choice". `cursorAfterChange` judges by the condition that was just committed,
-  not by the row's dropdowns: after a new Facet the Field dropdown still shows
-  the old facet's choice until the repaint, and that stale choice must not
-  count. Operator is a search dropdown partly for this: a click on a search dropdown whose menu is already open keeps it open,
-  where a plain one would close it.
+- **The cursor moves on.** A choice in Facet, Field or Operator puts the cursor
+  in the next part of the row (`cursorAfterChange` in `conditionEdit.ts`, then
+  `focusPart`), so a whole condition can be built from the keyboard: the next
+  dropdown opens (`openDropdown`), or the cursor goes to the first value box.
+  Without this the repaint would lose the cursor. **One exception:** a
+  whole-facet test ("Is present" / "Is absent") finishes the row — no Operator
+  or Value follows — so the cursor stays on the closed Field dropdown
+  (`focusFieldDropdown`); see "The Field dropdown's two kinds of choice".
+  `cursorAfterChange` judges by the condition that was just committed, not by
+  the row's dropdowns: after a new Facet the Field dropdown still shows the old
+  facet's choice until the repaint, and that stale choice must not count.
+  Operator is a search dropdown partly for this: a click on a search dropdown
+  whose menu is already open keeps it open, where a plain one would close it.
 
 Wiring: two delegated listeners (`click` for `data-action` buttons, `change`
 for plain `<input>`s) read the current tree through `getState()` when an event
@@ -1747,15 +1757,15 @@ Each kind of error is shown once, where the person who can fix it looks:
 | The statistics request itself failed (`ApiError`, `NetworkError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with `userMessage(err)` and **Try again** |
 
 N (in the button's label) is `AppState.serverIssues.length`, already
-de-duplicated across databases. **Show problem**'s accessible name starts with its visible text ("Show
-problem in the query", or "Show problem (the first of N in the query)": WCAG
-2.5.3, label in name). It carries the id `placeIssues` drew the first problem on, so a problem
-inside a collapsed group points at that group. It is in `data-target-id`, not
-`data-node-id`: that one marks query nodes, and "Keyboard focus across
-repaints" would take the button for one; `main.ts` wires it to
-`revealNode` (`queryBuilder.ts`), which scrolls that row or group to the
-middle of the builder and focuses it (it gets `tabindex="-1"` first, so
-script can focus it without making it a Tab stop). **Try again** calls
+de-duplicated across databases. **Show problem**'s accessible name starts with
+its visible text ("Show problem in the query", or "Show problem (the first of N
+in the query)": WCAG 2.5.3, label in name). It carries the id `placeIssues` drew
+the first problem on, so a problem inside a collapsed group points at that
+group. It is in `data-target-id`, not `data-node-id`: that one marks query
+nodes, and "Keyboard focus across repaints" would take the button for one;
+`main.ts` wires it to `revealNode` (`queryBuilder.ts`), which scrolls that row
+or group to the middle of the builder and focuses it (it gets `tabindex="-1"`
+first, so script can focus it without making it a Tab stop). **Try again** calls
 `app.retryStats`, which fetches the statistics again for the current query and
 scope. `wireStatsPanel` owns both buttons with one delegated listener.
 
@@ -1789,11 +1799,11 @@ broken.
 ### Under the query — `dataPreview.ts` (Matching events)
 
 Owns the app's only **Run query** button: disabled with the reason when the
-query can't run; enabled, with the text "Fetch a random sample of up to
-2,000 events this query matches." (`idleMessage`) and an advisory note ("You'll
-be asked to log in first.", `LOGIN_FIRST_NOTE`) when ready; a loader; an error with **Try again**;
-or the result. The result is a **table**, one row per event, in pages of 100
-(`src/util/paging.ts`):
+query can't run; enabled, with the text "Fetch a random sample of up to 2,000
+events this query matches." (`idleMessage`) and an advisory note ("You'll be
+asked to log in first.", `LOGIN_FIRST_NOTE`) when ready; a loader; an error with
+**Try again**; or the result. The result is a **table**, one row per event, in
+pages of 100 (`src/util/paging.ts`):
 
 - **Paging line:** "Results 101–200 of 1,987" with **Previous** / **Next**
   (`aria-disabled` on the first / last page: still focusable, muted in
@@ -1820,10 +1830,10 @@ or the result. The result is a **table**, one row per event, in pages of 100
   result's JSON.", describes it for all rows via `aria-describedby`), then one
   column per facet that **any** result of the sample holds, so the columns do
   not change while paging (`tableColumns`; ties are broken in code order, not
-  `localeCompare`, so the columns are the same on every machine). Order: the facets of
-  `FIRST_COLUMNS` (`src/config.ts`; none by default), then by facet number
-  (`Facet.number`, the backend's `id_number`), then facets the dictionary does
-  not know, by id. A header names the facet and says "in 12 of 1,987
+  `localeCompare`, so the columns are the same on every machine). Order: the
+  facets of `FIRST_COLUMNS` (`src/config.ts`; none by default), then by facet
+  number (`Facet.number`, the backend's `id_number`), then facets the dictionary
+  does not know, by id. A header names the facet and says "in 12 of 1,987
   results" (over the whole sample; information only, it does not order).
 - **Cells:** empty when the result lacks the facet; otherwise one boxed set per
   occurrence, each a `<dl>` of `field name: value` in the dictionary's field
@@ -1838,19 +1848,20 @@ or the result. The result is a **table**, one row per event, in pages of 100
   backend data and may be names such as "constructor".
 - The table is a real `<table>` (hidden `<caption>` with the page, `scope`d
   headers, the id cell is the row's `<th scope="row">`).
-- **Event JSON dialog** (`eventDialog.ts`): an id opens that result's JSON in
-  a native `<dialog>` (title "Event" plus the short id, the whole id, then the
-  JSON in a focusable, scrolling `<pre role="region">`, which makes its label heard). On a short window
-  the JSON shrinks to what is left of the dialog's height (a flex column), so
-  only the JSON scrolls, never the dialog as well. It is built like the saved-queries
-  dialog: created once by the shell (`Shell.eventDialog`), painted from the
-  state (`openEventId`, `openEventOf`) and opened or closed to match it. The
-  focus starts on **Close**. While the same result stays open the dialog is
-  not repainted, which would send the JSON back to its top. **Close**, Escape and any other close tell the
-  state (`app.closeEvent`) and the focus goes back to that result's id button
-  (or to the card when the table is gone). The dialog closes by itself when
-  the result is no longer on screen (a new run, another query or database, or
-  a late statistics line that blocks Run). An expanded row was rejected: it would sit
+- **Event JSON dialog** (`eventDialog.ts`): an id opens that result's JSON in a
+  native `<dialog>` (title "Event" plus the short id, the whole id, then the
+  JSON in a focusable, scrolling `<pre role="region">`, which makes its label
+  heard). On a short window the JSON shrinks to what is left of the dialog's
+  height (a flex column), so only the JSON scrolls, never the dialog as well. It
+  is built like the saved-queries dialog: created once by the shell
+  (`Shell.eventDialog`), painted from the state (`openEventId`, `openEventOf`)
+  and opened or closed to match it. The focus starts on **Close**. While the
+  same result stays open the dialog is not repainted, which would send the JSON
+  back to its top. **Close**, Escape and any other close tell the state
+  (`app.closeEvent`) and the focus goes back to that result's id button (or to
+  the card when the table is gone). The dialog closes by itself when the result
+  is no longer on screen (a new run, another query or database, or a late
+  statistics line that blocks Run). An expanded row was rejected: it would sit
   far off to the left inside the wide, sideways-scrolled table. The dialog is
   where the later Event viewer can plug in.
 
@@ -1878,9 +1889,10 @@ stand-in for that viewer.
 ### Saved queries — `savedQueries.ts`
 
 The **Save…** and **Saved queries** buttons of the query card open one of two
-dialogs (or, for a logged-out user, the login question: see "Logged out"). Everything they do is an action in `app.ts` ("Saved queries" under
-"API contract", and the state in "State and the render loop"); this file only
-draws `savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
+dialogs (or, for a logged-out user, the login question: see "Logged out").
+Everything they do is an action in `app.ts` ("Saved queries" under "API
+contract", and the state in "State and the render loop"); this file only draws
+`savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
 `openSaved`.
 
 - **Save query**: **Name** (required, at most 80 characters) and **Note**
@@ -1914,30 +1926,29 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
   (`ui small negative message`, `role="alert"`), and the list stays.
 - **Logged out**: both buttons open a small dialog instead: "Log in to save
   queries" / "Log in to see saved queries", "… You'll leave this page to log in
-  and come back here; the query you are building is kept.", **Log in**
-  (focused and described by the explanation, `aria-describedby`;
-  `app.logInToSave`, which serves both login dialogs, the query is saved first: "Saved query across the
+  and come back here; the query you are building is kept.", **Log in** (focused
+  and described by the explanation, `aria-describedby`; `app.logInToSave`, which
+  serves both login dialogs, the query is saved first: "Saved query across the
   login/compliance redirect") and **Cancel**. Escape closes it; closing returns
   the focus to the button that opened it.
 
-**Decision: a native `<dialog>` with `showModal()`, not Fomantic's modal.**
-The browser keeps the focus inside it, greys out and blocks the page, and
-closes it on Escape, with no plugin, so no new jQuery ("The Fomantic
-discipline"). Fomantic's CSS classes (`ui form`, `ui button`, `ui message`)
-still style its contents. The `<dialog>` is created once by `renderShell`
-(`Shell.savedDialog`, labelled by the heading inside it) and never replaced:
-`renderSavedDialog` paints its body (`dialogBody`) and calls `showModal()` or `close()`
-so that it is open exactly when `savedDialog` is not null. The Cancel / Close
-buttons call `app.closeSavedDialog()`. Escape (the `cancel` event, whose
-default is prevented) does what `escapeAction` (pure) says: **while a question
-is showing it cancels the question** ("Replace it?": `app.cancelReplace`;
-"Delete “…”?" or "Replace the current query?": `app.cancelSavedAction`),
-because Escape is how a keyboard user says "no" to a question, and closing the
-dialog would throw away the name and note the user typed (or the list they were
-in); otherwise it closes the dialog. A `close` the state did not ask for (a browser
-may close on a second Escape anyway) also tells the state, so the two never
-disagree. Its renderer is the last row of `panelRenderers`, after the query
-card.
+**Decision: a native `<dialog>` with `showModal()`, not Fomantic's modal.** The
+browser keeps the focus inside it, greys out and blocks the page, and closes it
+on Escape, with no plugin, so no new jQuery ("The Fomantic discipline").
+Fomantic's CSS classes (`ui form`, `ui button`, `ui message`) still style its
+contents. The `<dialog>` is created once by `renderShell` (`Shell.savedDialog`,
+labelled by the heading inside it) and never replaced: `renderSavedDialog`
+paints its body (`dialogBody`) and calls `showModal()` or `close()` so that it
+is open exactly when `savedDialog` is not null. The Cancel / Close buttons call
+`app.closeSavedDialog()`. Escape (the `cancel` event, whose default is
+prevented) does what `escapeAction` (pure) says: **while a question is showing
+it cancels the question** ("Replace it?": `app.cancelReplace`; "Delete “…”?" or
+"Replace the current query?": `app.cancelSavedAction`), because Escape is how a
+keyboard user says "no" to a question, and closing the dialog would throw away
+the name and note the user typed (or the list they were in); otherwise it closes
+the dialog. A `close` the state did not ask for (a browser may close on a second
+Escape anyway) also tells the state, so the two never disagree. Its renderer is
+the last row of `panelRenderers`, after the query card.
 
 The submit listener reads the two boxes and calls `app.saveQuery`; the browser
 has already refused a blank or too long name (`required`, `maxlength`). A
@@ -1946,11 +1957,11 @@ reads the boxes before it paints and passes them to `savedDialogHtml`.
 
 Keyboard focus:
 
-- **Opening** puts the focus on the dialog's `data-initial-focus` control:
-  the Name box, **Log in** in the login question, or in the list the first **Open**, the empty-state or loading
-  text (`tabindex="-1"`), or **Try again**. When the control that had the
-  focus goes (the loader replaced by the list, Save turned into a loader), it
-  goes there again.
+- **Opening** puts the focus on the dialog's `data-initial-focus` control: the
+  Name box, **Log in** in the login question, or in the list the first **Open**,
+  the empty-state or loading text (`tabindex="-1"`), or **Try again**. When the
+  control that had the focus goes (the loader replaced by the list, Save turned
+  into a loader), it goes there again.
 - **A question** takes the focus to its yes button; cancelling it gives the
   focus back to the item's button that asked (`focusAfterRepaint`, pure). The
   question is a `role="group"` labelled by its text, so a screen reader reads it
@@ -1999,16 +2010,16 @@ to a named handler function — add a route there, and a test in
 - **`/api/filter/validate`** projects the 21-event sample's match rate onto each
   database's real size (`scaleCount`) and streams one line per database with a
   pause between lines; now and then it simulates a database that can't be
-  reached. A text value (or a text item in a list) longer than 100
-  characters fails in every database, with an `error_messages` item pointing
-  at its condition (`queryErrors`), so the builder's backend issues can be
-  tried in dev. A group with at least one child, **all** of whose children
-  have an error of their own, also gets
+  reached. A text value (or a text item in a list) longer than 100 characters
+  fails in every database, with an `error_messages` item pointing at its
+  condition (`queryErrors`), so the builder's backend issues can be tried in
+  dev. A group with at least one child, **all** of whose children have an error
+  of their own, also gets
   `{ node_id: <group id>, kind: "incomplete", message: "Group contains no valid conditions." }`,
   as the real backend does. It is `incomplete`, like the real backend's; the
-  builder still highlights it (mustard, warning icon), and the condition
-  errors that cause it stay red. An empty group gets
-  none: the frontend's own validation reports it.
+  builder still highlights it (mustard, warning icon), and the condition errors
+  that cause it stay red. An empty group gets none: the frontend's own
+  validation reports it.
 - **`/api/filter/execute`** returns the matching events themselves, as
   `EventResponse`s (`events.ts`: a GUID made from the stored numeric id, one
   occurrence per individual): a random sample of at most `QUERY_RESULT_CAP`
@@ -2024,9 +2035,9 @@ to a named handler function — add a route there, and a test in
   matches nothing. This is the mock's reading; the real backend owns the rule.
 - **Request bodies** are checked against `QueryRequest` before anything reads
   them (`requestBody.ts`, `queryProblem`); `field_id: null` is accepted (a
-  facet-level condition), an empty string is not: a malformed one gets a `400` naming
-  the first problem, e.g. `Malformed query: query.children[0].field_id must be a
-  non-empty string or null.`
+  facet-level condition), an empty string is not: a malformed one gets a `400`
+  naming the first problem, e.g.
+  `Malformed query: query.children[0].field_id must be a non-empty string or null.`
 - **Saved queries** (`savedQueries.ts`) are kept in memory, per user, and are
   lost when the mock restarts; the list starts empty. The user is the session
   user's `sub`; every mock login is the same fictional user, so they all share
@@ -2128,7 +2139,8 @@ file it tests, in the same place under `tests/`. The ones to know about:
   payloads, what a drop creates, the warnings).
 - `tests/themeContrast.test.ts` — reads the `:root` colour tokens from
   `src/styles.css` and fails if a text/background pair falls below WCAG AA
-  (4.5:1), or a keyboard-focus colour or a statistics bar below 3:1 ("Pickle theme and mascot").
+  (4.5:1), or a keyboard-focus colour or a statistics bar below 3:1 ("Pickle
+  theme and mascot").
 - `tests/api/` — the client over a stubbed `fetch`, the contract checks
   (`contract.test.ts`), and the translation both ways: `response.test.ts`
   (backend → model) and `request.test.ts` (query → request body).
@@ -2149,17 +2161,18 @@ file it tests, in the same place under `tests/`. The ones to know about:
 
 Scripts: `npm run dev` (mock + Vite), `dev:app` (Vite alone, for a real
 backend), `mock`, `build` (`typecheck`, then `build:app`), `build:app`
-(type-check the app only + bundle + `check:offline`), `preview`, `test`, `test:watch`, `typecheck`, `lint`
-(ESLint + Prettier check), `format` (Prettier, rewriting files), `check:offline`. CI (`.github/workflows/ci.yml`) runs
+(type-check the app only + bundle + `check:offline`), `preview`, `test`,
+`test:watch`, `typecheck`, `lint` (ESLint + Prettier check), `format` (Prettier,
+rewriting files), `check:offline`. CI (`.github/workflows/ci.yml`) runs
 typecheck, test, lint and build on every pull request and push to `main`.
 
-The mock server is a dev stand-in, so it can never stop the app from running
-or building. `dev:app` is Vite alone, which doesn't type-check and loads no
+The mock server is a dev stand-in, so it can never stop the app from running or
+building. `dev:app` is Vite alone, which doesn't type-check and loads no
 `mock-server/` code. `build:app` type-checks only what ends up in `dist/`
 (`tsconfig.app.json`: `src/` and `vite.config.ts`), so it still works when the
 mock or the tests have drifted from `src/api/types.ts`. `build` is the full
-`typecheck` followed by `build:app`, so it still checks everything. `tests/appScripts.test.ts` keeps both
-that way.
+`typecheck` followed by `build:app`, so it still checks everything.
+`tests/appScripts.test.ts` keeps both that way.
 
 `tsconfig.json` is `strict` with `noUncheckedIndexedAccess`; `allowJs` lets
 `tests/offlineCheck.test.ts` import `scripts/check-offline.mjs` with its JSDoc
@@ -2192,13 +2205,13 @@ the old name, and at the mock server. Fix those and their tests in
 `tests/api/`. Nothing outside `src/api/` and `mock-server/` should need a
 change. See "Data model".
 
-**…find out why the app says "The server sent an answer this app doesn't understand"?**
-Open the browser console: the `ContractError` logged there names the request
-and the field. It means the backend sent something `src/api/types.ts` doesn't
-allow. Look at the real response in the browser's Network tab: if the backend
-changed on purpose, follow the rename above; otherwise it is a backend bug. A
-console warning of the same form means a display-only value was missing and is
-shown blank. See "Reading responses".
+**…find out why the app says "The server sent an answer this app doesn't
+understand"?** Open the browser console: the `ContractError` logged there names
+the request and the field. It means the backend sent something
+`src/api/types.ts` doesn't allow. Look at the real response in the browser's
+Network tab: if the backend changed on purpose, follow the rename above;
+otherwise it is a backend bug. A console warning of the same form means a
+display-only value was missing and is shown blank. See "Reading responses".
 
 **…support another backend type name** (say `SMALLSERIAL`)? Add it to
 `TYPE_NAMES` in `src/query/fieldCatalog.ts` and a case to the `valueTypeFor`
@@ -2247,8 +2260,8 @@ and mascot") and put the company's name in `TEXT_SOURCES.thirdParty.label` in
 
 **…see how the app copes with a failing backend?** Start the mock with
 `MOCK_HTTP_ERRORS` (see "Mock server"), e.g.
-`MOCK_HTTP_ERRORS="POST /filter/validate=503" npm run dev`. A dead network (no answer
-at all) cannot be simulated by the mock: in a Playwright check use
+`MOCK_HTTP_ERRORS="POST /filter/validate=503" npm run dev`. A dead network (no
+answer at all) cannot be simulated by the mock: in a Playwright check use
 `page.route(url, (route) => route.abort("connectionrefused"))`.
 
 **…debug with the mock without random failures and delays?**
