@@ -14,7 +14,7 @@ import {
   startCompliance,
   issueFakeComplianceToken,
   exchangeComplianceToken,
-  complianceStatusFor,
+  complianceLogFor,
   clearCompliance,
   complianceStateCookieHeader,
   clearComplianceStateCookieHeader,
@@ -173,8 +173,8 @@ describe("compliance state/token round trip", () => {
     const token = issueFakeComplianceToken("investigating incident #123");
     const outcome = exchangeComplianceToken(token, state, cookie);
     expect(outcome).toEqual({ ok: true });
-    expect(complianceStatusFor(cookie)).toMatchObject({
-      status: "acknowledged",
+    expect(complianceLogFor(cookie)).toMatchObject({
+      user: "demo.user",
       reason: "investigating incident #123",
     });
   });
@@ -233,7 +233,7 @@ describe("compliance state/token round trip", () => {
   });
 });
 
-describe("complianceStatusFor / clearCompliance", () => {
+describe("complianceLogFor / clearCompliance", () => {
   function ackedSession(): string {
     const state = startLogin();
     const code = issueFakeCode();
@@ -247,23 +247,24 @@ describe("complianceStatusFor / clearCompliance", () => {
     return sessionId;
   }
 
-  it("reports required for a session with no compliance record", () => {
+  it("has no log for a session with no compliance record", () => {
     const state = startLogin();
     const code = issueFakeCode();
     const outcome = exchangeCodeForSession(code, state);
     if (!outcome.ok) throw new Error("expected success");
-    expect(complianceStatusFor(`qb_session=${outcome.sessionId}`)).toEqual({ status: "required" });
+    expect(complianceLogFor(`qb_session=${outcome.sessionId}`)).toBeNull();
   });
 
-  it("reports required when there is no session at all", () => {
-    expect(complianceStatusFor(undefined)).toEqual({ status: "required" });
+  it("has no log when there is no session at all", () => {
+    expect(complianceLogFor(undefined)).toBeNull();
   });
 
-  it("reports acknowledged with the reason after a successful exchange", () => {
+  it("is a structured message (snake_case, backend-owned) after a successful exchange", () => {
     const sessionId = ackedSession();
-    expect(complianceStatusFor(`qb_session=${sessionId}`)).toMatchObject({
-      status: "acknowledged",
+    expect(complianceLogFor(`qb_session=${sessionId}`)).toEqual({
+      user: "demo.user",
       reason: "reason",
+      logged_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
     });
   });
 
@@ -271,7 +272,7 @@ describe("complianceStatusFor / clearCompliance", () => {
     const sessionId = ackedSession();
     const cookie = `qb_session=${sessionId}`;
     clearCompliance(cookie);
-    expect(complianceStatusFor(cookie)).toEqual({ status: "required" });
+    expect(complianceLogFor(cookie)).toBeNull();
     expect(sessionFor(cookie)).not.toBeNull(); // still logged in
   });
 });

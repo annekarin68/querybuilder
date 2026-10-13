@@ -33,6 +33,8 @@ const PAIRS: [string, string][] = [
   // on the row's hover tint) and its text sit on it.
   ["qb-subtle", "qb-surface-2"],
   ["qb-muted", "qb-surface-2"],
+  // The compliance log in the account menu.
+  ["qb-text", "qb-surface-2"],
   ["qb-text-on-fill", "qb-topbar"],
   ["qb-topbar-text", "qb-topbar"],
   ["qb-topbar-muted", "qb-topbar"],

@@ -111,7 +111,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
    * compliance is one such requirement, but not necessarily the only one (e.g. a
    * user not permitted to query a database). Redirecting into the compliance flow
    * on every 403 would send such a user round in circles with no error ever shown,
-   * so ask the backend whether compliance is actually what's missing first.
+   * so ask the backend whether compliance is actually what's missing first:
+   * GET /api/log/status answers 403 when the session has no compliance log
+   * (getComplianceStatus turns that into "required").
    */
   async function complianceIsRequired(): Promise<boolean> {
     try {

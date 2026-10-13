@@ -35,7 +35,7 @@ import {
   startCompliance,
   issueFakeComplianceToken,
   exchangeComplianceToken,
-  complianceStatusFor,
+  complianceLogFor,
   clearCompliance,
   complianceStateCookieHeader,
   clearComplianceStateCookieHeader,
@@ -387,7 +387,7 @@ function logOut(req: IncomingMessage, res: ServerResponse) {
   res.end();
 }
 
-// ---- compliance: app → …/compliance/start → mock form → submit → callback → app
+// ---- compliance: app → …/log/build → mock form → submit → callback → app
 
 function startComplianceFlow(req: IncomingMessage, res: ServerResponse, apiBase: string) {
   // A navigation: without a session (e.g. it expired, or the mock was
@@ -428,7 +428,7 @@ async function submitComplianceForm(req: IncomingMessage, res: ServerResponse, a
   const token = issueFakeComplianceToken(reason);
   redirect(
     res,
-    `${apiBase}/compliance/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
+    `${apiBase}/log/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
   );
 }
 
@@ -447,6 +447,14 @@ function finishCompliance(req: IncomingMessage, res: ServerResponse, url: URL) {
   redirect(res, "/?resume=1", clearComplianceStateCookieHeader());
 }
 
+/** GET …/log/status: 403 without a compliance log (the real backend's way of
+ *  saying "required"), else the log itself. */
+function complianceLog(req: IncomingMessage, res: ServerResponse) {
+  const log = complianceLogFor(req.headers.cookie);
+  if (!log) return sendJson(res, 403, { error: "No compliance log for this session." });
+  sendJson(res, 200, log);
+}
+
 function invalidateCompliance(req: IncomingMessage, res: ServerResponse) {
   clearCompliance(req.headers.cookie);
   res.writeHead(204);
@@ -462,8 +470,8 @@ type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | P
 function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<string, Handler> {
   const api = config.apiBase;
   return {
-    [`GET ${api}/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
-    [`GET ${api}/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
+    [`GET ${api}/documentation/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
+    [`GET ${api}/documentation/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
     [`POST ${api}/filter/validate`]: (req, res) => streamStats(req, res, config),
     [`POST ${api}/filter/execute`]: queryEvents,
 
@@ -481,14 +489,13 @@ function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<strin
     [`GET ${api}/users/me`]: currentUser,
     [`POST ${api}/auth/logout`]: logOut,
 
-    [`GET ${api}/compliance/start`]: (req, res) => startComplianceFlow(req, res, api),
+    [`GET ${api}/log/build`]: (req, res) => startComplianceFlow(req, res, api),
     [`GET ${api}/mock-compliance/submit`]: (req, res, url) =>
       showComplianceForm(req, res, url, api),
     [`POST ${api}/mock-compliance/submit`]: (req, res) => submitComplianceForm(req, res, api),
-    [`GET ${api}/compliance/callback`]: finishCompliance,
-    [`GET ${api}/compliance/status`]: (req, res) =>
-      sendJson(res, 200, complianceStatusFor(req.headers.cookie)),
-    [`POST ${api}/compliance/invalidate`]: invalidateCompliance,
+    [`GET ${api}/log/callback`]: finishCompliance,
+    [`GET ${api}/log/status`]: complianceLog,
+    [`POST ${api}/log/invalidate`]: invalidateCompliance,
   };
 }
 

@@ -57,7 +57,7 @@ Three conventions that the code relies on everywhere:
    `label` to translate ("Saved queries").
 3. **The backend's types keep the backend's names.** In `src/api/types.ts`, a
    `…Response` type is one record from a response, not the whole body:
-   `GET /api/databases` returns a `DatabasesResponse[]`, and each line of the
+   `GET /api/documentation/databases` returns a `DatabasesResponse[]`, and each line of the
    `/api/filter/validate` stream is one `StatsResponse`. (`EventsResponse` is the
    exception: it is the whole `/api/filter/execute` body.)
 
@@ -68,7 +68,7 @@ the backend's vocabulary):
 | UI and `src/` (`src/model.ts`) | Wire (`src/api/types.ts`) | Mock server |
 |---|---|---|
 | event, `EventRecord` | `EventResponse`, `EventsResponse.events` | `Entryset`, `ENTRYSETS`, `data/entrysets.json` (stored format; answered as `EventResponse`, `events.ts`) |
-| facet, `Facet` | `IndividualResponse`, `GET /api/individuals` | `Individual`, `INDIVIDUALS`, `data/individual.json` |
+| facet, `Facet` | `IndividualResponse`, `GET /api/documentation/individuals` | `Individual`, `INDIVIDUALS`, `data/individual.json` |
 | field, `Field` | `IndividualFieldResponse` | same |
 | an event's values, `EventRecord.values` (by facet id, then a list of occurrences keyed by field id) | `EventResponse.items` (`facet_label` + `values`, one object per occurrence) | `Entryset.items` |
 | a database's `eventCount` | `DatabasesResponse.totalEntrysets` | same |
@@ -101,7 +101,7 @@ the backend's vocabulary):
   badge shrinks to its icon, text hidden the same way. The logo and the app name
   always stay. Spacing alone was tried first and is not enough: with every label
   shown, the logged-in bar needs over 600 px even with the name cut to nothing.
-- **Data dictionary and its rail** — generated from `GET /api/individuals`.
+- **Data dictionary and its rail** — generated from `GET /api/documentation/individuals`.
   Open by default, because dragging from it is the main way to build a query.
   It is 26rem wide to start, the user can drag its right edge to anything from
   20rem to 40rem (remembered), and the rail down its left edge or the
@@ -677,13 +677,15 @@ comments, `/api/filter/validate` and the like are short for `{prefix}/filter/val
 
 | Endpoint | What |
 |---|---|
-| `GET {prefix}/databases` | The databases to scope to — a bare array. |
-| `GET {prefix}/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
+| `GET {prefix}/documentation/databases` | The databases to scope to — a bare array. |
+| `GET {prefix}/documentation/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
 | `POST {prefix}/filter/validate` | The statistics (the backend's name for this endpoint). Body: a `QueryRequest` ("Wire format of the query"). Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
-| `POST {prefix}/filter/execute` | Body: a `QueryRequest` ("Wire format of the query"). The matching events (`EventsResponse`: `{ events: [{ id, items: [{ facet_label, values: [ … ] }] }] }`), capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
+| `POST {prefix}/filter/execute` | Body: a `QueryRequest` ("Wire format of the query"). The matching events (`EventsResponse`: `{ events: [{ id, items: [{ facet_label, values: [ … ] }] }] }`), capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance log (`403`). |
 | `GET {prefix}/users/me` | Who's logged in (`UserResponse`; the app shows `display_name`). `401` when anonymous. |
 | `GET {prefix}/auth/login`, `/callback`, `POST /logout` | Login (below). |
-| `GET {prefix}/compliance/start`, `/callback`, `/status`, `POST /invalidate` | Compliance (below). |
+| `GET {prefix}/log/build` | Starts the compliance flow: a browser navigation, not a fetch (Compliance, below). The callback the compliance service returns to is the backend's own business. |
+| `GET {prefix}/log/status` | The session's compliance log: `200` with a structured message (`ComplianceLogResponse`, fields owned by the backend) or `403` when the session has none. |
+| `POST {prefix}/log/invalidate` | Clears the session's compliance log. The session stays. |
 | `GET {prefix}/saved-queries` | The user's saved queries, newest `updatedAt` first. Needs a session (`401`). |
 | `POST {prefix}/saved-queries` | Body: a `SavedQueryRequest`. `201` + the `SavedQueryResponse`. `409` for a name already used, `400` for a malformed body. Needs a session. |
 | `PUT {prefix}/saved-queries/{id}` | Body: a `SavedQueryRequest`. `200` + the `SavedQueryResponse`. `404`, `409`, `400` as above. Needs a session. |
@@ -704,11 +706,13 @@ shapes below as proposed, and asks the backend team to confirm or correct them:
   each event; the same `QueryRequest` body and the same `401` / `403` as before.
 - `POST /filter/validate` (the statistics): that its answer is still the
   newline-delimited stream of `StatsResponse` lines, one per selected database.
-- Compliance: the backend has `/log/build/` (keep the compliance log) and
-  `/log/validate` (check its state) instead of the `/compliance/…` flow this
-  app still calls; and the paths of the databases, facets and saved-queries
-  endpoints. Until these are confirmed the frontend keeps the paths in the
-  table above.
+- After login and after the compliance check, the backend must send the browser
+  back to `/?resume=1`. Today it returns to the URL that started the flow, which
+  loses the query kept across the redirect ("Saved query across the
+  login/compliance redirect").
+- The paths of the saved-queries endpoints. Until they are confirmed the
+  frontend keeps the paths in the table above. (The data dictionary and
+  compliance paths were confirmed on 2026-10-13 and are adopted.)
 - Whether some `403` reasons must be shown to users. Today the GUI never shows
   the server's text (a `403` shows the plain `userMessage` text; the server's
   words go to the console).
@@ -781,15 +785,16 @@ the value it reads. There are two kinds:
 | `oneOf` | one of a few texts (a saved node's `kind`, a group's `operator`) | throws, and the message lists the allowed texts: `"query.children[0].kind" should be "group" or "condition", but it is the text "other".` |
 | `savedValue` | a saved condition's `value` | `null` and a left-out key are both `null`; a scalar or a list of scalars and nulls is copied as sent; anything else throws |
 | `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
+| `formatted` | a whole message whose fields the backend owns (the compliance log): it returns the value as indented JSON (`JSON.stringify(value, null, 2)`), to be shown as it is | nothing to check, so it never throws or warns; the caller first asks for `object` when the message must be an object |
 | `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` in `types.ts` | becomes `""`, `[]` or `undefined`; a warning only if the value is there but of the wrong kind |
 
 A `ContractError`'s message names the request and the place in the body,
 written as it would be in JavaScript:
 
 ```
-Unexpected response from GET /api/v1/individuals: "[3].fields" should be a list, but it is missing.
+Unexpected response from GET /api/v1/documentation/individuals: "[3].fields" should be a list, but it is missing.
 Unexpected response from POST /api/v1/filter/validate, line 2: "label" should be non-blank text, but it is missing.
-Unexpected response from GET /api/v1/databases: the body should be JSON, but it starts with "<!doctype html>…". That looks like a web page, not the API: check VITE_API_BASE in .env, and that the backend (or `npm run mock`) is running.
+Unexpected response from GET /api/v1/documentation/databases: the body should be JSON, but it starts with "<!doctype html>…". That looks like a web page, not the API: check VITE_API_BASE in .env, and that the backend (or `npm run mock`) is running.
 ```
 
 It is logged to the console with its stack; the panel that made the request
@@ -889,7 +894,8 @@ about auth. Run always attempts the request and `app.ts` reacts to the answer:
 - `401` → save the query, go to login.
 - `403` → a `403` only means "some requirement is unmet", and compliance may
   not be the only one (a user may not be allowed a database). So `app.ts`
-  first asks `GET /api/compliance/status`: if it says `"required"`, save the
+  first asks `GET /api/log/status`: if that answers `403` (no compliance log,
+  which `getComplianceStatus` turns into `"required"`), save the
   query and go to the compliance flow; otherwise show the plain `userMessage`
   text for a `403` (the server's text goes to the console only).
   Redirecting on every `403` would send such a user round in circles.
@@ -900,14 +906,24 @@ about auth. Run always attempts the request and `app.ts` reacts to the answer:
 
 ### Compliance
 
-A second redirect flow, shaped like Auth, that attaches a user-given reason to
-the **same** session (no second cookie). `GET /api/compliance/start` is a
-browser navigation: without a session it redirects to login rather than
-answering with JSON, and a failed callback shows a small HTML page instead of
-JSON. `GET /api/compliance/status` never errors (`"required"` without a
-session). `POST /api/compliance/invalidate` clears the reason but keeps the
-session. Every successful `POST /api/filter/execute` is logged with the user and reason
-(in the mock: `mock-server/audit.ts`).
+A second redirect flow, shaped like Auth, that attaches a compliance log to
+the **same** session (no second cookie). `COMPLIANCE_START_URL` is
+`{prefix}/log/build`, a browser navigation: the backend redirects to an
+external compliance service, whose callback sets a secure cookie. The callback
+path is the backend's business; the frontend never sees it.
+
+`GET /api/log/status` answers `200` when the session has a compliance log. The
+body is a *structured compliance message*, a JSON object whose fields the
+backend owns. The frontend reads no field of it: `toCompliance` requires an
+object (anything else is a `ContractError`) and keeps the whole message as
+`Compliance.log`, indented JSON from `ResponseValue.formatted()`, which the
+account menu shows as it is. `403` means there is no compliance log (no
+cookie): `getComplianceStatus` resolves it to `{ status: "required" }`, the way
+`getMe` turns a `401` into `null`. Any other failure rejects.
+`POST /api/log/invalidate` clears the log but keeps the session. `POST
+/api/filter/execute` answers `403` without one, and `app.ts` then asks
+`/log/status` ("Auth"). Every successful `POST /api/filter/execute` is logged
+with the user and reason (in the mock: `mock-server/audit.ts`).
 
 What a real backend must add (a real IdP and audit service, durable sessions,
 the `Secure` flag, …) is listed in issue #15 and in §7 of the two historical
@@ -1173,9 +1189,13 @@ condition).
 ### Top bar — `accountMenu.ts`
 
 Anonymous: a **Log in** button. Logged in: a chip with the user's name and a
-compliance badge that opens a native `<details>` menu with the reason and when
-it was given (+ **Invalidate**), or **Start compliance check**; then **Log
-out**. Outside clicks and Escape close it. Display-only (see "Auth"). In a narrow
+compliance badge that opens a native `<details>` menu with the session's
+compliance log, exactly as the backend sent it, formatted as indented JSON
+(+ **Invalidate**), or **Start compliance check**; then **Log out**. The log
+is a `<pre class="qb-account-log">` with a maximum height that scrolls both
+ways. It has `tabindex="0"` and an `aria-label` ("Compliance log"), because a
+scrollable region the keyboard cannot focus cannot be scrolled by it. The menu
+reads no field of the log. Outside clicks and Escape close it. Display-only (see "Auth"). In a narrow
 window the chip shrinks (name with an ellipsis, badge as an icon): see "Screen
 layout".
 **Invalidate** and **Log out** change what the menu shows, and its repaint
@@ -1902,7 +1922,12 @@ to a named handler function — add a route there, and a test in
   table matches exact paths, so `server.ts` gives `…/saved-queries/{id}` a
   second look (`savedQueryIdFrom`) before the 404.
 - **Login and compliance** are simulated in-process (`auth.ts`): stand-in IdP
-  and compliance pages, fake codes and tokens, in-memory sessions. CSRF
+  and compliance pages, fake codes and tokens, in-memory sessions. The mock
+  uses the real backend's paths: `GET {prefix}/documentation/databases` and
+  `/individuals`, `GET /log/build` (starts the flow), its own `GET /log/callback`
+  (the real one is the backend's business), `GET /log/status` (`403 { error }`
+  without a log, else a made-up snake_case message such as
+  `{ user, reason, logged_at }`) and `POST /log/invalidate`. CSRF
   `state` values are single-use, bound to the browser by a short-lived cookie
   (`qb_login_state`, `qb_compliance_state`), and expire after 5 minutes. None
   of this is reusable in production (issue #15).

@@ -97,8 +97,7 @@ function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
     getMe: vi.fn(async () => ({ name: "pat" })),
     getComplianceStatus: vi.fn(async () => ({
       status: "acknowledged" as const,
-      reason: "audit",
-      givenAt: "2026-09-23T10:00:00Z",
+      log: '{\n  "reason": "audit"\n}',
     })),
     getStats: vi.fn(async () => {}),
     runQuery: vi.fn(async () => events),
@@ -510,7 +509,7 @@ describe("logging out and invalidating compliance", () => {
     ...ready(),
     preview: { status: "ok", events },
     auth: { status: "authenticated", user: { name: "pat" } },
-    compliance: { status: "acknowledged", reason: "audit", givenAt: null },
+    compliance: { status: "acknowledged", log: "{}" },
   };
 
   it("logout clears the preview at once, even if logging out fails", async () => {
@@ -575,7 +574,10 @@ describe("start", () => {
     expect(s.query.children).toHaveLength(1);
     expect(s.issues).toEqual([expect.objectContaining({ kind: "incomplete" })]);
     expect(s.auth).toMatchObject({ status: "authenticated", user: { name: "pat" } });
-    expect(s.compliance).toMatchObject({ status: "acknowledged", reason: "audit" });
+    expect(s.compliance).toMatchObject({
+      status: "acknowledged",
+      log: expect.stringContaining("audit"),
+    });
   });
 
   it("logs login and compliance failures and carries on", async () => {

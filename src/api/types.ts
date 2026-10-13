@@ -32,12 +32,13 @@ export interface UserResponse {
   display_name: string;
 }
 
-/** Compliance acknowledgment status, returned by GET /api/compliance/status. */
-export interface ComplianceStatus {
-  status: "required" | "acknowledged";
-  reason?: string;
-  ackedAt?: string;
-}
+/**
+ * The session's compliance log, returned by GET /api/log/status (200). A
+ * structured message whose fields the backend owns: the frontend shows it
+ * whole as formatted JSON and reads no field of it. The backend answers 403
+ * when the session has no compliance log.
+ */
+export type ComplianceLogResponse = Record<string, unknown>;
 
 /**
  * One database's result from the POST /api/filter/validate stream. The endpoint's
@@ -76,7 +77,7 @@ export interface StatsErrorMessage {
   kind: "incomplete" | "invalid";
 }
 
-/** The databases the query can be scoped to (GET /api/databases). Returns
+/** The databases the query can be scoped to (GET /api/documentation/databases). Returns
  *  DatabasesResponse[] directly — no wrapper object. */
 export interface DatabasesResponse {
   /** A short summary of what this database contains or what makes it unique. */
@@ -95,7 +96,7 @@ export interface DatabasesResponse {
   label: string;
 }
 
-/** One field an individual can report a value for (GET /api/individuals). */
+/** One field an individual can report a value for (GET /api/documentation/individuals). */
 export interface IndividualFieldResponse {
   /** This field's locally unique, API-friendly "ID" within this facet. */
   label: string;
@@ -126,7 +127,7 @@ export interface IndividualFieldResponse {
 
 /**
  * One individual (a facet, in the frontend's words) — something an entryset
- * may hold a value for (GET /api/individuals). The frontend knows no facet by
+ * may hold a value for (GET /api/documentation/individuals). The frontend knows no facet by
  * name: everything it shows about facets comes from this response (or from
  * src/config.ts).
  */
@@ -155,7 +156,7 @@ export interface IndividualResponse {
 
 /**
  * An event matching the query (POST /api/filter/execute): one record, holding
- * values for some of the individuals returned by GET /api/individuals.
+ * values for some of the individuals returned by GET /api/documentation/individuals.
  */
 export interface EventResponse {
   /** The event's unique id (a GUID), read by the backend from a metadata individual. */

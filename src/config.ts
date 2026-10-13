@@ -1,7 +1,7 @@
 /**
  * Display settings meant to be edited by hand — the ONLY place the frontend
  * may name anything from the backend's data (facets, fields, tags, groups).
- * Everything else learns those names at runtime from GET /api/individuals.
+ * Everything else learns those names at runtime from GET /api/documentation/individuals.
  * Every setting about the data defaults to empty, so the app works against any
  * dataset. (The mascot and the easter-egg toast below are not backend data.)
  */

@@ -105,7 +105,7 @@ afterEach(() => {
 });
 
 describe("api client", () => {
-  it("getDatabases GETs /api/databases and returns the databases in the frontend's model", async () => {
+  it("getDatabases GETs /api/documentation/databases and returns the databases in the frontend's model", async () => {
     const f = mockFetchOnce(200, [
       {
         label: "alpha",
@@ -121,13 +121,13 @@ describe("api client", () => {
     expect(out).toEqual([
       { id: "alpha", name: "ALPHA", description: "", owner: "", eventCount: 1 },
     ]);
-    expect(f).toHaveBeenCalledWith("/api/v1/databases", {
+    expect(f).toHaveBeenCalledWith("/api/v1/documentation/databases", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
   });
 
-  it("getFacets GETs /api/individuals and returns the facets in the frontend's model", async () => {
+  it("getFacets GETs /api/documentation/individuals and returns the facets in the frontend's model", async () => {
     const f = mockFetchOnce(200, [
       {
         label: "engine_rpm",
@@ -146,7 +146,7 @@ describe("api client", () => {
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);
     expect(out[0]?.id).toBe("engine_rpm");
-    expect(f).toHaveBeenCalledWith("/api/v1/individuals", {
+    expect(f).toHaveBeenCalledWith("/api/v1/documentation/individuals", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
@@ -230,9 +230,13 @@ describe("api client", () => {
 
   it("falls back to the request and status line when there is no error field", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, {}));
-    await expect(getDatabases()).rejects.toThrow("GET /api/v1/databases failed: 500 STATUS");
+    await expect(getDatabases()).rejects.toThrow(
+      "GET /api/v1/documentation/databases failed: 500 STATUS",
+    );
     vi.stubGlobal("fetch", mockFetchOnce(502, "<html>Bad Gateway</html>"));
-    await expect(getDatabases()).rejects.toThrow("GET /api/v1/databases failed: 502 STATUS");
+    await expect(getDatabases()).rejects.toThrow(
+      "GET /api/v1/documentation/databases failed: 502 STATUS",
+    );
   });
 
   it("throws an ApiError whose message carries everything the console needs", async () => {
@@ -240,7 +244,7 @@ describe("api client", () => {
     await expect(getDatabases()).rejects.toBeInstanceOf(ApiError);
     await expect(getDatabases()).rejects.toMatchObject({
       status: 401,
-      message: "GET /api/v1/databases failed: 401 STATUS: nope",
+      message: "GET /api/v1/documentation/databases failed: 401 STATUS: nope",
     });
   });
 
@@ -251,7 +255,7 @@ describe("api client", () => {
     );
     await expect(getDatabases()).rejects.toBeInstanceOf(NetworkError);
     await expect(getDatabases()).rejects.toThrow(
-      "GET /api/v1/databases failed: no answer from the server (Failed to fetch)",
+      "GET /api/v1/documentation/databases failed: no answer from the server (Failed to fetch)",
     );
   });
 
@@ -290,23 +294,49 @@ describe("api client", () => {
     await expect(logout()).rejects.toThrow("boom");
   });
 
-  it("getComplianceStatus GETs /api/compliance/status and returns the frontend's model", async () => {
-    const f = mockFetchOnce(200, { status: "required" });
+  it("getComplianceStatus GETs /api/log/status; a 200 is the log, shown whole as formatted JSON", async () => {
+    const f = mockFetchOnce(200, {
+      user: "Ada",
+      reason: "audit",
+      logged_at: "2026-10-13T09:00:00Z",
+    });
     vi.stubGlobal("fetch", f);
     const out = await getComplianceStatus();
-    expect(out).toEqual({ status: "required" });
-    expect(f).toHaveBeenCalledWith("/api/v1/compliance/status", {
+    expect(out).toEqual({
+      status: "acknowledged",
+      log: JSON.stringify(
+        { user: "Ada", reason: "audit", logged_at: "2026-10-13T09:00:00Z" },
+        null,
+        2,
+      ),
+    });
+    expect(f).toHaveBeenCalledWith("/api/v1/log/status", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
   });
 
-  it("invalidateCompliance POSTs to /api/compliance/invalidate", async () => {
+  it("getComplianceStatus resolves a 403 (no compliance log) to required, like getMe's 401", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(403, { error: "No compliance log for this session." }));
+    expect(await getComplianceStatus()).toEqual({ status: "required" });
+  });
+
+  it("getComplianceStatus still rejects on any other failure", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(500, { error: "boom" }));
+    await expect(getComplianceStatus()).rejects.toThrow("boom");
+  });
+
+  it("getComplianceStatus rejects when the log is not a JSON object", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, ["not", "an", "object"]));
+    await expect(getComplianceStatus()).rejects.toBeInstanceOf(ContractError);
+  });
+
+  it("invalidateCompliance POSTs to /api/log/invalidate", async () => {
     const f = mockFetchOnce(200, {});
     vi.stubGlobal("fetch", f);
     await invalidateCompliance();
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/v1/compliance/invalidate");
+    expect(url).toBe("/api/v1/log/invalidate");
     expect(init.method).toBe("POST");
   });
 
@@ -317,7 +347,7 @@ describe("api client", () => {
 
   it("builds the login / compliance redirect URLs from the same API base as fetches", () => {
     expect(LOGIN_URL).toBe("/api/v1/auth/login");
-    expect(COMPLIANCE_START_URL).toBe("/api/v1/compliance/start");
+    expect(COMPLIANCE_START_URL).toBe("/api/v1/log/build");
   });
 
   it("rejects with a TimeoutError when the server stays silent past REQUEST_TIMEOUT_MS", async () => {
@@ -448,14 +478,14 @@ describe("a response that breaks the API contract", () => {
     const err = await getDatabases().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ContractError);
     expect((err as Error).message).toBe(
-      'Unexpected response from GET /api/v1/databases: "[0].label" should be non-blank text, but it is missing.',
+      'Unexpected response from GET /api/v1/documentation/databases: "[0].label" should be non-blank text, but it is missing.',
     );
   });
 
   it("a web page instead of JSON says so, and what to check", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(200, "<!doctype html><title>Query Builder</title>"));
     await expect(getFacets()).rejects.toThrow(
-      /GET \/api\/v1\/individuals: the body should be JSON.*check VITE_API_BASE/,
+      /GET \/api\/v1\/documentation\/individuals: the body should be JSON.*check VITE_API_BASE/,
     );
   });
 

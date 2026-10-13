@@ -112,14 +112,14 @@ export interface User {
   name: string;
 }
 
-/** Whether this session has given a compliance reason. */
+/** Whether this session has a compliance log. */
 export type Compliance =
   | { status: "required" }
   | {
       status: "acknowledged";
-      reason: string;
-      /** When the reason was given (an ISO timestamp), if the backend says. */
-      givenAt: string | null;
+      /** The session's compliance log as the backend sent it, formatted as
+       *  indented JSON for display. The frontend reads no field of it. */
+      log: string;
     };
 
 /** A query the user saved (GET/POST/PUT …/saved-queries). It may be unfinished

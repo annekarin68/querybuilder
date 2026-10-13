@@ -6,10 +6,10 @@ requires login (OAuth2, via the backend) and a compliance reason for the session
 
 All data comes from our API, under the API prefix `VITE_API_BASE`, set in
 `.env` (`/api/v1`): the facets
-of the data model (`GET /individuals` — the backend's name for them), the
-databases a query can be scoped to (`GET /databases`), live statistics
+of the data model (`GET /documentation/individuals` — the backend's name for them), the
+databases a query can be scoped to (`GET /documentation/databases`), live statistics
 (`POST /filter/validate`), the matching events (`POST /filter/execute`), and the login and
-compliance flows (`/auth/*`, `/compliance/*`). The full contract is in
+compliance flows (`/auth/*`, `/log/*`). The full contract is in
 `docs/ARCHITECTURE.md` ("API contract"). A dev-only mock server implements all of it so the app
 runs end to end locally, on fictional vehicle-telemetry sample data.
 

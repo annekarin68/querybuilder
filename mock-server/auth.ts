@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { UserResponse, ComplianceStatus } from "../src/api/types";
+import type { UserResponse, ComplianceLogResponse } from "../src/api/types";
 
 interface Session {
   user: UserResponse;
@@ -165,17 +165,17 @@ export function complianceStateFromCookie(cookieHeader: string | undefined): str
   return parseCookie(cookieHeader, COMPLIANCE_STATE_COOKIE);
 }
 
-/** CSRF `state` values issued by /api/compliance/start, valid until consumed by
- *  /api/compliance/callback. A separate set from the login flow's, so the two
+/** CSRF `state` values issued by /api/log/build, valid until consumed by
+ *  /api/log/callback. A separate set from the login flow's, so the two
  *  flows' state spaces can never cross-validate each other's tokens. */
 const PENDING_COMPLIANCE_STATES = pendingStore<true>();
 
 /** The reason text a user typed on the mock compliance page, keyed by a
- *  single-use token, until /api/compliance/callback consumes it. */
+ *  single-use token, until /api/log/callback consumes it. */
 const PENDING_COMPLIANCE_REASONS = pendingStore<string>();
 
 /** Starts a compliance attempt: a fresh CSRF `state`, valid until
- *  /api/compliance/callback consumes it. */
+ *  /api/log/callback consumes it. */
 export function startCompliance(): string {
   const state = randomToken();
   PENDING_COMPLIANCE_STATES.put(state, true);
@@ -217,16 +217,17 @@ export function exchangeComplianceToken(
   return { ok: true };
 }
 
-/** Never errors: no session, or a session with no compliance record, both
- *  report "required" — from the caller's perspective, compliance isn't met
- *  either way. */
-export function complianceStatusFor(cookieHeader: string | undefined): ComplianceStatus {
+/** The session's compliance log, or null when there is none (no session, or
+ *  a session that has not given a reason): the server answers 403 for null.
+ *  A made-up structured message in snake_case: like the real backend's, its
+ *  fields are the backend's business and the frontend shows it whole. */
+export function complianceLogFor(cookieHeader: string | undefined): ComplianceLogResponse | null {
   const session = sessionFor(cookieHeader);
-  if (!session?.compliance) return { status: "required" };
+  if (!session?.compliance) return null;
   return {
-    status: "acknowledged",
+    user: session.user.display_name,
     reason: session.compliance.reason,
-    ackedAt: session.compliance.ackedAt,
+    logged_at: session.compliance.ackedAt,
   };
 }
 

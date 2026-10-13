@@ -69,9 +69,10 @@ export interface AppState {
   facets: Facet[] | null;
   /** Who's logged in, if anyone — loaded once at startup via GET /api/users/me. */
   auth: AuthState;
-  /** Compliance acknowledgment for this session — loaded once at startup via
-   *  GET /api/compliance/status. Display-only, same as `auth`: it drives the
-   *  account menu and an advisory hint, never gating logic. */
+  /** The session's compliance log — loaded once at startup via
+   *  GET /api/log/status (a 403 there means "required"). Display-only, same as
+   *  `auth`: it drives the account menu and an advisory hint, never gating
+   *  logic. */
   compliance: ComplianceState;
   /** The `Database.id`s of the databases the query runs against. Empty =
    *  nothing runs. */

@@ -16,7 +16,6 @@ import type { Group } from "../../src/query/types";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
 import { isEdited, type OpenSaved } from "../../src/query/saved";
 import type {
-  ComplianceStatus,
   DatabasesResponse,
   EventResponse,
   IndividualFieldResponse,
@@ -328,33 +327,24 @@ describe("toUser", () => {
 });
 
 describe("toCompliance", () => {
-  it("an acknowledged session carries its reason and when it was given", () => {
-    expect(
-      toCompliance(
-        read<ComplianceStatus>({
-          status: "acknowledged",
-          reason: "audit",
-          ackedAt: "2026-09-23T10:00:00Z",
-        }),
-      ),
-    ).toEqual({ status: "acknowledged", reason: "audit", givenAt: "2026-09-23T10:00:00Z" });
-  });
+  const body = (value: unknown) => new ResponseValue(value, "GET /test");
 
-  it("fills in what the backend leaves out", () => {
-    expect(toCompliance(read<ComplianceStatus>({ status: "acknowledged" }))).toEqual({
+  it("shows the whole compliance log as indented JSON and reads no field of it", () => {
+    const log = { user: "Ada", reason: "audit", nested: { list: [1, 2] }, anything: null };
+    expect(toCompliance(body(log))).toEqual({
       status: "acknowledged",
-      reason: "",
-      givenAt: null,
+      log: JSON.stringify(log, null, 2),
     });
+    expect(toCompliance(body({ a: 1 }))).toEqual({ status: "acknowledged", log: '{\n  "a": 1\n}' });
   });
 
-  it("anything else needs a reason", () => {
-    expect(toCompliance(read<ComplianceStatus>({ status: "required" }))).toEqual({
-      status: "required",
-    });
-    expect(toCompliance(readBroken<ComplianceStatus>({ status: "expired" }))).toEqual({
-      status: "required",
-    });
+  it("an empty log is still a log", () => {
+    expect(toCompliance(body({}))).toEqual({ status: "acknowledged", log: "{}" });
+  });
+
+  it("a log that is not an object is a ContractError", () => {
+    expect(() => toCompliance(body("fine"))).toThrow(ContractError);
+    expect(() => toCompliance(body([1]))).toThrow(ContractError);
   });
 });
 

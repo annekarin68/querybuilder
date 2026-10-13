@@ -82,8 +82,8 @@ const everyEvent = {
 const body = (databases: string[], query: unknown = everyEvent) =>
   JSON.stringify({ query, databases });
 
-describe("GET /api/databases and /api/individuals", () => {
-  it.each([`${API}/databases`, `${API}/individuals`])(
+describe("GET /api/documentation/databases and /api/documentation/individuals", () => {
+  it.each([`${API}/documentation/databases`, `${API}/documentation/individuals`])(
     "%s returns a bare JSON array",
     async (path) => {
       const res = await get(path);
@@ -219,7 +219,7 @@ describe("login and compliance navigations", () => {
   });
 
   it("starting compliance without a session goes to log in instead", async () => {
-    const res = await get(`${API}/compliance/start`);
+    const res = await get(`${API}/log/build`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(`${API}/auth/login`);
   });
@@ -234,19 +234,32 @@ describe("login and compliance navigations", () => {
   });
 });
 
-describe("GET /api/users/me and /api/compliance/status", () => {
+describe("GET /api/users/me and /api/log/status", () => {
   it("me is 401 without a session and the user with one", async () => {
     expect((await get(`${API}/users/me`)).status).toBe(401);
     const res = await get(`${API}/users/me`, loggedIn());
     expect(await res.json()).toMatchObject({ display_name: "demo.user", sub: "mock-user-0001" });
   });
 
-  it("compliance status follows the session", async () => {
-    expect(await (await get(`${API}/compliance/status`)).json()).toEqual({ status: "required" });
-    expect(await (await get(`${API}/compliance/status`, compliant())).json()).toMatchObject({
-      status: "acknowledged",
+  it("the compliance log is 403 without a log, and a structured message with one", async () => {
+    const none = await get(`${API}/log/status`);
+    expect(none.status).toBe(403);
+    expect(await none.json()).toEqual({ error: "No compliance log for this session." });
+    // A session without a compliance log is refused the same way.
+    expect((await get(`${API}/log/status`, loggedIn())).status).toBe(403);
+    const res = await get(`${API}/log/status`, compliant());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      user: "demo.user",
       reason: "testing",
+      logged_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
     });
+  });
+
+  it("the old compliance and data dictionary paths are gone", async () => {
+    for (const path of ["compliance/status", "databases", "individuals", "compliance/start"]) {
+      expect((await get(`${API}/${path}`)).status).toBe(404);
+    }
   });
 });
 
@@ -334,8 +347,8 @@ it("an unknown route is a 404 with a JSON error", async () => {
 
 describe("the API prefix (MockConfig.apiBase)", () => {
   it("serves the API only under the prefix", async () => {
-    expect((await get(`${API}/databases`)).status).toBe(200);
-    expect((await get("/api/databases")).status).toBe(404);
+    expect((await get(`${API}/documentation/databases`)).status).toBe(200);
+    expect((await get("/api/documentation/databases")).status).toBe(404);
   });
 
   it("the mock IdP sends the browser back to the login callback under the prefix", async () => {
@@ -351,7 +364,7 @@ describe("the API prefix (MockConfig.apiBase)", () => {
       body: new URLSearchParams({ state: "s", reason: "testing" }),
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toMatch(`${API}/compliance/callback?token=`);
+    expect(res.headers.get("location")).toMatch(`${API}/log/callback?token=`);
   });
   // So that the dev server's single proxy rule (the prefix) reaches every
   // page the browser is sent to during login and compliance.
@@ -372,7 +385,9 @@ describe("MOCK_HTTP_ERRORS", () => {
       apiBase: API,
       failRate: 0,
       lineDelayMs: () => 0,
-      httpErrors: parseHttpErrors("GET /databases=503, GET /individuals=502:html"),
+      httpErrors: parseHttpErrors(
+        "GET /documentation/databases=503, GET /documentation/individuals=502:html",
+      ),
     });
     await new Promise<void>((resolve) => failing.listen(0, resolve));
     failingBase = `http://localhost:${(failing.address() as AddressInfo).port}`;
@@ -383,20 +398,20 @@ describe("MOCK_HTTP_ERRORS", () => {
   });
 
   it("answers a matching route with the simulated status and a JSON error", async () => {
-    const res = await fetch(`${failingBase}${API}/databases`);
+    const res = await fetch(`${failingBase}${API}/documentation/databases`);
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({
-      error: `Simulated HTTP 503 for GET ${API}/databases (MOCK_HTTP_ERRORS).`,
+      error: `Simulated HTTP 503 for GET ${API}/documentation/databases (MOCK_HTTP_ERRORS).`,
     });
   });
 
   it("answers with an HTML page for a :html rule", async () => {
-    const res = await fetch(`${failingBase}${API}/individuals`);
+    const res = await fetch(`${failingBase}${API}/documentation/individuals`);
     expect(res.status).toBe(502);
     expect(res.headers.get("content-type")).toContain("text/html");
   });
 
   it("leaves every other route alone", async () => {
-    expect((await fetch(`${failingBase}${API}/compliance/status`)).status).toBe(200);
+    expect((await fetch(`${failingBase}${API}/log/status`)).status).toBe(403);
   });
 });

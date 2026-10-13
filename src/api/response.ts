@@ -1,5 +1,5 @@
 import type {
-  ComplianceStatus,
+  ComplianceLogResponse,
   DatabasesResponse,
   EventItemResponse,
   EventResponse,
@@ -13,7 +13,7 @@ import type {
   StatsResponse,
   UserResponse,
 } from "./types";
-import type { ResponseObject } from "./contract";
+import type { ResponseObject, ResponseValue } from "./contract";
 import type {
   Compliance,
   Database,
@@ -141,15 +141,15 @@ export function toUser(u: ResponseObject<UserResponse>): User {
   return { name: u.text("display_name") || u.optionalText("sub") || u.optionalText("user_id") };
 }
 
-export function toCompliance(c: ResponseObject<ComplianceStatus>): Compliance {
-  // Anything but "acknowledged" — even a status this app doesn't know yet —
-  // means a reason is still needed.
-  if (c.text("status") !== "acknowledged") return { status: "required" };
-  return {
-    status: "acknowledged",
-    reason: c.optionalText("reason"),
-    givenAt: c.optionalText("ackedAt") || null,
-  };
+/**
+ * A 200 from GET /api/log/status: the session has a compliance log. Its fields
+ * belong to the backend, so none is read; the whole message is kept as
+ * formatted JSON for display. Only the shape is checked: a log that is not a
+ * JSON object is a ContractError.
+ */
+export function toCompliance(body: ResponseValue): Compliance {
+  body.object<ComplianceLogResponse>();
+  return { status: "acknowledged", log: body.formatted() };
 }
 
 /**

@@ -1,5 +1,4 @@
 import type {
-  ComplianceStatus,
   DatabasesResponse,
   EventResponse,
   EventsResponse,
@@ -47,7 +46,7 @@ const BASE = import.meta.env.VITE_API_BASE;
  * a non-default VITE_API_BASE moves these links too.
  */
 export const LOGIN_URL = `${BASE}/auth/login`;
-export const COMPLIANCE_START_URL = `${BASE}/compliance/start`;
+export const COMPLIANCE_START_URL = `${BASE}/log/build`;
 
 /**
  * How long a request may go without the server sending anything before it is
@@ -102,12 +101,12 @@ function asNetworkError(err: unknown, source: string): unknown {
 // src/api/types.ts, src/api/contract.ts).
 
 export async function getDatabases(): Promise<Database[]> {
-  const body = await getJson("/databases");
+  const body = await getJson("/documentation/databases");
   return body.list<DatabasesResponse>().map(toDatabase);
 }
 
 export async function getFacets(): Promise<Facet[]> {
-  const body = await getJson("/individuals");
+  const body = await getJson("/documentation/individuals");
   return body.list<IndividualResponse>().map(toFacet);
 }
 
@@ -169,13 +168,23 @@ export function logout(): Promise<void> {
   return post("/auth/logout");
 }
 
+/**
+ * The session's compliance log, if there is one. A 403 here is a normal answer
+ * (no compliance log yet), so it resolves to "required" rather than throwing,
+ * the same way getMe turns a 401 into `null`. Any other failure rejects.
+ */
 export async function getComplianceStatus(): Promise<Compliance> {
-  const body = await getJson("/compliance/status");
-  return toCompliance(body.object<ComplianceStatus>());
+  try {
+    const body = await getJson("/log/status");
+    return toCompliance(body);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 403) return { status: "required" };
+    throw err;
+  }
 }
 
 export function invalidateCompliance(): Promise<void> {
-  return post("/compliance/invalidate");
+  return post("/log/invalidate");
 }
 
 // ---- saved queries: the logged-in user's own list ---------------------------
@@ -247,7 +256,7 @@ async function readJson(res: Response, source: string): Promise<ResponseValue> {
  * Send one request under the API prefix, with the shared timeout, and hand a
  * successful response to `read`. Any other status rejects with an ApiError.
  *
- * `read` gets `source` ("GET /api/v1/databases", for error messages) and runs
+ * `read` gets `source` ("GET /api/v1/documentation/databases", for error messages) and runs
  * inside the timeout, so a body that never finishes arriving times out too. A
  * streaming reader calls `touch()` whenever data arrives, to restart the clock.
  */

@@ -267,6 +267,13 @@ describe("display-only reads", () => {
     expect(console.warn).toHaveBeenCalledOnce();
   });
 
+  it("formatted shows any value as indented JSON, without reading or checking it", () => {
+    const value = { user: "Ada", nested: { list: [1, 2] }, nothing: null };
+    expect(new ResponseValue(value, "GET /log").formatted()).toBe(JSON.stringify(value, null, 2));
+    expect(new ResponseValue([1], "GET /log").formatted()).toBe("[\n  1\n]");
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
   it("optionalNumber is undefined when missing or not a number", () => {
     expect(thing({ count: 4 }).optionalNumber("count")).toBe(4);
     expect(thing({}).optionalNumber("count")).toBeUndefined();
