@@ -1521,7 +1521,9 @@ describe("saved queries: deleting", () => {
     expect(store.getState().savedList).toEqual({ status: "ok", queries: [] });
   });
 
-  it("a failed delete keeps the list and says so in a toast", async () => {
+  // The toast is drawn under the modal dialog's backdrop and the page's live
+  // region is inert while the dialog is open, so the notice lives in the dialog.
+  it("a failed delete keeps the list and says so inside the dialog", async () => {
     const api = fakeApi({
       deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
     });
@@ -1533,9 +1535,45 @@ describe("saved queries: deleting", () => {
     app.confirmSavedAction();
     await flushPromises();
     expect(store.getState().savedList).toEqual({ status: "ok", queries: [a] });
-    expect(showError).toHaveBeenCalledWith(
+    expect(store.getState().savedListNotice).toBe(
       `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
     );
+    expect(showError).not.toHaveBeenCalled();
+  });
+
+  it("the delete notice goes away when the list reloads, another question is asked or the dialog closes", async () => {
+    const failing = () =>
+      fakeApi({
+        deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
+        listSavedQueries: vi.fn(async () => [a]),
+      });
+    const failedDelete = async () => {
+      const made = setup(
+        { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+        failing(),
+      );
+      made.app.askDeleteSaved("a");
+      made.app.confirmSavedAction();
+      await flushPromises();
+      expect(made.store.getState().savedListNotice).not.toBeNull();
+      return made;
+    };
+
+    const reload = await failedDelete();
+    reload.app.retrySavedList();
+    expect(reload.store.getState().savedListNotice).toBeNull();
+
+    const asking = await failedDelete();
+    asking.app.askDeleteSaved("a");
+    expect(asking.store.getState().savedListNotice).toBeNull();
+
+    const closing = await failedDelete();
+    closing.app.closeSavedDialog();
+    expect(closing.store.getState().savedListNotice).toBeNull();
+
+    const reopening = await failedDelete();
+    reopening.app.openSavedList();
+    expect(reopening.store.getState().savedListNotice).toBeNull();
   });
 
   it("a 401 on delete redirects to log in", async () => {

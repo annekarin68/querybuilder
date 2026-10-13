@@ -136,6 +136,19 @@ describe("the saved queries list", () => {
     expect(html).toMatch(/data-action="retry-saved-list"[^>]*>Try again<\/button>/);
   });
 
+  it("shows a delete notice above the list as an alert, escaped, and keeps the list", () => {
+    const html = savedDialogHtml(listDialog({ savedListNotice: "Couldn't delete “A <b>”. Down." }));
+    expect(html).toContain(
+      '<div class="ui small negative message" role="alert">Couldn&#39;t delete “A &lt;b&gt;”. Down.</div>',
+    );
+    expect(html.indexOf('role="alert"')).toBeLessThan(html.indexOf('class="qb-saved-list"'));
+    expect(html).toMatch(/data-action="open-saved" data-id="sq-1"/);
+  });
+
+  it("shows no alert without a notice", () => {
+    expect(savedDialogHtml(listDialog())).not.toContain('role="alert"');
+  });
+
   it("lists name, note, number of databases and date, escaped", () => {
     const html = savedDialogHtml(listDialog());
     expect(html).toContain("Weekly &lt;check&gt;");

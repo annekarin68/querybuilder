@@ -442,8 +442,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   // ---- saved queries ------------------------------------------------------
-  // The dialogs only show `savedDialog`, `save`, `savedList` and `savedConfirm`;
-  // everything they do happens here.
+  // The dialogs only show `savedDialog`, `save`, `savedList`, `savedConfirm` and
+  // `savedListNotice`; everything they do happens here.
 
   /** A saved-query request failed. A 401 means there is no session: redirect
    *  like Run does (the query is saved first). Anything else is shown by `show`. */
@@ -478,7 +478,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
 
   function loadSavedList(): void {
     const req = savedListSlot.start();
-    store.setState({ savedList: { status: "loading" } });
+    store.setState({ savedList: { status: "loading" }, savedListNotice: null });
     api
       .listSavedQueries()
       .then((queries) => {
@@ -506,6 +506,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       savedConfirm: null,
       save: { status: "idle" },
       savedList: { status: "idle" },
+      savedListNotice: null,
     });
   }
 
@@ -632,6 +633,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       },
       savedDialog: null,
       savedConfirm: null,
+      savedListNotice: null,
     });
     announce(`Opened “${saved.name}”.`);
     setNotice(
@@ -650,14 +652,14 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (!saved) return; // the list changed under the click
     const { openSaved, query, selectedDatabaseIds } = store.getState();
     if (hasUnsavedWork(openSaved, query, selectedDatabaseIds)) {
-      store.setState({ savedConfirm: { action: "open", id } });
+      store.setState({ savedConfirm: { action: "open", id }, savedListNotice: null });
     } else {
       openSavedQuery(saved);
     }
   }
 
   function askDeleteSaved(id: string): void {
-    store.setState({ savedConfirm: { action: "delete", id } });
+    store.setState({ savedConfirm: { action: "delete", id }, savedListNotice: null });
   }
 
   function deleteSaved(id: string): void {
@@ -669,18 +671,23 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       if (name !== undefined) announce(`Deleted “${name}”.`);
       if (savedDialog === "list") loadSavedList();
     };
-    api
-      .deleteSavedQuery(id)
-      .then(deleted)
-      .catch((err) => {
-        // Already gone (deleted in another tab): that is what the user wanted.
-        if (err instanceof ApiError && err.status === 404) return deleted();
-        // Keep the list on screen: replacing it with an error would hide every
-        // other saved query because one delete failed.
-        savedCallFailed(err, (error) =>
-          showError(`Couldn't delete “${name ?? "the saved query"}”. ${error}`),
-        );
+    // `.then(ok, failed)`, not `.then(ok).catch(failed)`: a bug inside
+    // `deleted()` must not be reported to the user as a failed delete.
+    api.deleteSavedQuery(id).then(deleted, (err) => {
+      // Already gone (deleted in another tab): that is what the user wanted.
+      if (err instanceof ApiError && err.status === 404) return deleted();
+      // Keep the list on screen: replacing it with an error would hide every
+      // other saved query because one delete failed. The notice is shown inside
+      // the dialog: a toast would be drawn under its backdrop (Delete is only
+      // reachable in the modal dialog).
+      savedCallFailed(err, (error) => {
+        // The dialog may have been closed while the request ran.
+        if (store.getState().savedDialog !== "list") return;
+        store.setState({
+          savedListNotice: `Couldn't delete “${name ?? "the saved query"}”. ${error}`,
+        });
       });
+    });
   }
 
   function confirmSavedAction(): void {

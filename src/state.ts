@@ -110,6 +110,11 @@ export interface AppState {
   save: SaveState;
   savedList: SavedListState;
   savedConfirm: SavedConfirm;
+  /** Why the last delete in the Saved queries dialog failed, shown above the
+   *  list; null when there is nothing to say. It lives in the state, not in the
+   *  toast, because the toast is drawn under the open dialog's backdrop. Cleared
+   *  by the next action in the dialog and when it closes. */
+  savedListNotice: string | null;
 }
 
 export const initialState: AppState = {
@@ -134,6 +139,7 @@ export const initialState: AppState = {
   save: { status: "idle" },
   savedList: { status: "idle" },
   savedConfirm: null,
+  savedListNotice: null,
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */

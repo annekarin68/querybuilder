@@ -12,8 +12,8 @@ import { countLabel, formatDate } from "./format";
  * inside it, greys out the page and reports Escape (which cancels a question
  * or closes the dialog: `escapeAction`), all without a Fomantic plugin (so
  * without jQuery). Everything the dialogs do happens in app.ts;
- * this file only draws `savedDialog`, `save`, `savedList`, `savedConfirm` and
- * `openSaved` (the save form starts with its name and note).
+ * this file only draws `savedDialog`, `save`, `savedList`, `savedConfirm`,
+ * `savedListNotice` and `openSaved` (the save form starts with its name and note).
  */
 
 /** The heading's id: the `<dialog>` in layout.ts is labelled by it. */
@@ -187,7 +187,12 @@ function savedListBodyHtml(state: AppState): string {
 
 /** The list dialog's body and its Close button. */
 function savedListHtml(state: AppState): string {
-  return `${savedListBodyHtml(state)}
+  // role="alert" is announced inside a modal dialog, where the page's own live
+  // region is inert and a toast would be hidden behind the backdrop.
+  const notice = state.savedListNotice
+    ? `<div class="ui small negative message" role="alert">${escapeHtml(state.savedListNotice)}</div>`
+    : "";
+  return `${notice}${savedListBodyHtml(state)}
     <div class="qb-dialog-actions">
       <button type="button" class="ui small basic button" data-action="close-saved-dialog">Close</button>
     </div>`;

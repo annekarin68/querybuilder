@@ -493,13 +493,20 @@ pure helpers in `src/query/saved.ts`):
 - `savedList`: the user's saved queries, newest first: `idle`, `loading`, `ok`
   or `error`. It reloads every time the list opens and after a delete.
 - `savedConfirm`: an open or delete in the list waiting for the user's yes.
+- `savedListNotice`: why the last **Delete** failed (`Couldn't delete “…”.` and
+  the plain `userMessage`), shown inside the list dialog as a
+  `role="alert"` message above the list; null otherwise. A toast would be drawn
+  under the modal dialog's backdrop, and the page's live region is inert while
+  the dialog is open. The next action in the dialog (a reload, a question) and
+  closing it clear it.
 
 Opening a saved query goes through `changeScope` and `validateQuery` like any
 edit, so the "Correctness invariant" holds. Database ids that no longer exist
 are dropped and said in `dropNotice`. A `401` from any saved-queries call
 redirects to log in like Run does (the query is saved first), while opening
 either dialog anonymously asks first whether to log in (`mayUseSavedQueries`,
-"Saved queries — `savedQueries.ts`"); another error is shown in the dialog's state.
+"Saved queries — `savedQueries.ts`"); another error is shown in the dialog's state (`save`, `savedList`; a failed
+delete in `savedListNotice`, so the list stays on screen).
 
 `main.ts` has one table, `panelRenderers`: for each panel, the `AppState`
 keys it reads and how to render it. One subscriber runs a panel's render
@@ -528,7 +535,7 @@ binding its Fomantic dropdowns must always happen together.
 | User presses **Group contents** or **Ungroup** | `groupContents` / `ungroup` (`tree.ts`) → `app.onQueryChange` like any edit: the tree changes shape, so `changeScope` resets and refetches although the meaning is the same. Success clears an older `dropNotice`. A refused Ungroup changes no query: `app.showNotice` puts the reason in `dropNotice` (and announces it). |
 | User presses **Try again** in the statistics column | `app.retryStats` → the debounced stats fetch for the same query and scope; it replaces the failed request in the stats slot. Nothing else is reset. |
 | User opens a saved query (**Open**, after "Replace the current query?" if asked) | `openSavedQuery` → `changeScope` with the saved `query`, the databases that still exist, fresh `issues` and `openSaved`, and the dialog closed, in one `setState`: like any edit, so the old statistics and preview go and new ones are fetched. Databases left out are said in `dropNotice`. |
-| User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
+| User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `savedListNotice`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
 | Five clicks on the logo | `easterEgg` flips → only the mascot repaints (`setMascot`); the rain or toast is started by `main.ts` (`easterEggReaction`). |
 | User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (or, over a lone blank row, put in its place; a moved node too) and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
@@ -1684,7 +1691,8 @@ view is a stand-in for a dedicated event viewer planned later.
 The **Save…** and **Saved queries** buttons of the query card open one of two
 dialogs (or, for a logged-out user, the login question: see "Logged out"). Everything they do is an action in `app.ts` ("Saved queries" under
 "API contract", and the state in "State and the render loop"); this file only
-draws `savedDialog`, `save`, `savedList`, `savedConfirm` and `openSaved`.
+draws `savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
+`openSaved`.
 
 - **Save query**: **Name** (required, at most 80 characters) and **Note**
   (optional, at most 80, hint "A few words to recognise it later"), **Save**
@@ -1711,7 +1719,9 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm` and `openSaved`.
   saved." (`hasUnsavedWork`). The other items keep their buttons, and pressing
   one asks about that item instead. Loading, the empty state ("No saved
   queries yet. Build a query and press Save…") and an error with **Try again**
-  show in the dialog. **Close** closes it.
+  show in the dialog. **Close** closes it. A **Delete** that fails shows
+  `savedListNotice` above the list (`ui small negative message`, `role="alert"`:
+  spoken inside the modal, unlike the page's live region) and keeps the list.
 - **Logged out**: both buttons open a small dialog instead: "Log in to save
   queries" / "Log in to see saved queries", "… You'll leave this page to log in
   and come back here; the query you are building is kept.", **Log in**
@@ -1870,10 +1880,12 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   invariant"). The error itself, with the request, the status code and text,
   the server's text and the stack, is logged to the console. Errors of
   requests aborted because they were superseded never reach a panel.
-- An action with no panel of its own (**Log out**, **Invalidate**, **Delete**
-  in the saved-queries list) reports a failure with a red toast, also spoken
-  (`AppDeps.showError`). Deleting a saved query that is already gone (`404`)
-  counts as deleted.
+- An action with no panel of its own (**Log out**, **Invalidate**) reports a
+  failure with a red toast, also spoken (`AppDeps.showError`). A failed
+  **Delete** in the saved-queries list is not a toast: that action is only
+  reachable inside the modal dialog, which hides the toast and silences the
+  page's live region, so it is `AppState.savedListNotice`, shown in the dialog.
+  Deleting a saved query that is already gone (`404`) counts as deleted.
 - A database that finds a problem in the query reports it in its stats
   line, not as an HTTP error: the statistics panel shows it in that
   database's row if it points at no query node; an error that points at a

@@ -161,7 +161,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   // Last: when a dialog closes, the focus goes back to its button in the query
   // card, which must already be repainted (opening a saved query repaints it).
   {
-    keys: ["savedDialog", "save", "savedList", "savedConfirm", "openSaved"],
+    keys: ["savedDialog", "save", "savedList", "savedConfirm", "savedListNotice", "openSaved"],
     run: (s) => renderSavedDialog(shell.savedDialog, s),
   },
 ];
