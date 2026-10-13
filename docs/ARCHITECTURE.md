@@ -451,10 +451,12 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   server.ts            createMockServer(config): one route table ("METHOD /path" -> handler).
   auth.ts, audit.ts    Fake login / compliance sessions and the audit log (in memory).
   httpErrors.ts        MOCK_HTTP_ERRORS rules: parseHttpErrors, httpErrorFor.
+  paths.ts             pathBelow: the part of a path below the API prefix (stops at a "/").
   databases.ts, rows.ts, evaluate.ts, requestBody.ts, vehicleData.ts
                        The 7 mock databases, the flattened rows, the query evaluator, the request-body check, the data loader.
   events.ts            eventGuid, toEventResponse: a stored event as POST /filter/execute answers it.
-  savedQueries.ts      The in-memory saved-queries store and its body check ("Saved queries").
+  savedQueries.ts      The in-memory saved-queries store, its body check ("Saved queries") and savedQueryOwner
+                       (a user without an id is refused, never given a shared list).
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
 public/sources/third-party.svg  The third party's logo in the dictionary (a placeholder; replace it).
@@ -2048,7 +2050,7 @@ Besides `.env`, three environment variables, read by `index.ts`:
 |---|---|---|
 | `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/filter/validate` lines that simulate an unreachable database. `0` turns it off. |
 | `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/filter/validate` line. `0` = no pause. |
-| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /filter/saved=500, GET /documentation/databases=502:html"`. |
+| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /filter/saved=500, GET /documentation/databases=502:html"`. The stand-in login and compliance pages are routes under the prefix too, so `* *=503` (or `GET *`) also locks you out of logging in: name the routes you mean. |
 
 The sample data is **fictional** vehicle telemetry, and the real backend's
 data differs — which is why `src/` must never name it (`src/config.ts` holds

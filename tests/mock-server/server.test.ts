@@ -421,9 +421,43 @@ describe("MOCK_HTTP_ERRORS", () => {
     const res = await fetch(`${failingBase}${API}/documentation/individuals`);
     expect(res.status).toBe(502);
     expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toContain("<h1>502</h1>");
   });
 
   it("leaves every other route alone", async () => {
     expect((await fetch(`${failingBase}${API}/log/status`)).status).toBe(403);
+  });
+});
+
+describe('MOCK_HTTP_ERRORS="* *=503"', () => {
+  let failing: Server;
+  let failingBase: string;
+
+  beforeAll(async () => {
+    failing = createMockServer({
+      apiBase: API,
+      failRate: 0,
+      lineDelayMs: () => 0,
+      httpErrors: parseHttpErrors("* *=503"),
+    });
+    await new Promise<void>((resolve) => failing.listen(0, resolve));
+    failingBase = `http://localhost:${(failing.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve) => failing.close(resolve));
+  });
+
+  // Said in the env table: nobody can log in while every route fails.
+  it("fails every route under the prefix, the stand-in login page too", async () => {
+    expect((await fetch(`${failingBase}${API}/documentation/databases`)).status).toBe(503);
+    const login = await fetch(`${failingBase}${API}/auth/login`, { redirect: "manual" });
+    expect(login.status).toBe(503);
+  });
+
+  it("leaves a request outside the prefix alone", async () => {
+    expect((await fetch(`${failingBase}/elsewhere`)).status).toBe(404);
+    // Starts with the same letters as the prefix, but is not below it.
+    expect((await fetch(`${failingBase}${API}0/documentation/databases`)).status).toBe(404);
   });
 });

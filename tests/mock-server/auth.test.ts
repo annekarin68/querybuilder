@@ -53,6 +53,20 @@ describe("login/callback round trip", () => {
     });
   });
 
+  // One shared object would let a change to one session's user show up in
+  // every other session.
+  it("gives every session its own copy of the demo user", () => {
+    const sessionUser = () => {
+      const outcome = exchangeCodeForSession(issueFakeCode(), startLogin());
+      if (!outcome.ok) throw new Error("expected success");
+      return sessionFor(`qb_session=${outcome.sessionId}`)!.user;
+    };
+    const first = sessionUser();
+    const second = sessionUser();
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
+  });
+
   it("a state can only be consumed once", () => {
     const state = startLogin();
     const code1 = issueFakeCode();

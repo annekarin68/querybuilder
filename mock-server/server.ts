@@ -14,10 +14,12 @@ import { sampleOf, toEventResponse } from "./events";
 import { ROWS } from "./rows";
 import { queryProblem } from "./requestBody";
 import { httpErrorFor, type HttpErrorRule } from "./httpErrors";
+import { pathBelow } from "./paths";
 import {
   createSavedQueryStore,
   readSavedQueryBody,
   savedQueryIdFrom,
+  savedQueryOwner,
   type SavedQueryAnswer,
 } from "./savedQueries";
 import type { QueryRequest, StatsErrorMessage } from "../src/api/types";
@@ -295,16 +297,21 @@ type ForUser = (
 
 /**
  * A saved-queries route: needs a session (401 without), then runs `act` with
- * the user's key and sends its answer. The key is the user's id (`sub`), the
- * stable identifier a real backend has. Two logins of the same mock user share
- * one list. `act` returns null after sending a
- * 400 itself.
+ * the user's key and sends its answer. The key is the user's id
+ * (`savedQueryOwner`), the stable identifier a real backend has. Two logins of
+ * the same mock user share one list. A user without an id is refused (500):
+ * every such user would otherwise share one list. `act` returns null after
+ * sending a 400 itself.
  */
 function forSessionUser(act: ForUser): Handler {
   return async (req, res) => {
     const session = sessionFor(req.headers.cookie);
     if (!session) return sendJson(res, 401, { error: "Log in to use saved queries." });
-    const answer = await act(session.user.sub ?? session.user.user_id ?? "", req, res);
+    const owner = savedQueryOwner(session.user);
+    if (owner === null) {
+      return sendJson(res, 500, { error: "The logged-in user has no id (sub or user_id)." });
+    }
+    const answer = await act(owner, req, res);
     if (answer) sendAnswer(res, answer);
   };
 }
@@ -506,9 +513,7 @@ export function createMockServer(config: MockConfig) {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     // A simulated failure wins over the real route (MOCK_HTTP_ERRORS).
-    const below = url.pathname.startsWith(config.apiBase)
-      ? url.pathname.slice(config.apiBase.length)
-      : null;
+    const below = pathBelow(url.pathname, config.apiBase);
     const simulated =
       below === null ? undefined : httpErrorFor(config.httpErrors ?? [], req.method ?? "", below);
     if (simulated) {
