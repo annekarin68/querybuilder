@@ -28,6 +28,7 @@ import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
 import { renderSavedDialog, wireSavedDialog } from "./ui/savedQueries";
+import { renderEventDialog, wireEventDialog } from "./ui/eventDialog";
 import { createClickCounter, easterEggReaction, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
@@ -104,6 +105,7 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   onOpenSavedList: app.openSavedList,
 });
 wireSavedDialog(shell.savedDialog, app);
+wireEventDialog(shell.eventDialog, app.closeEvent);
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
@@ -167,6 +169,12 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   {
     keys: ["savedDialog", "save", "savedList", "savedConfirm", "savedListNotice", "openSaved"],
     run: (s) => renderSavedDialog(shell.savedDialog, s),
+  },
+  // After the saved dialog, so that closing focuses an id button that is
+  // already repainted.
+  {
+    keys: ["openEventId", "preview"],
+    run: (s) => renderEventDialog(shell.eventDialog, s),
   },
 ];
 

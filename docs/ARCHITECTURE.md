@@ -418,8 +418,8 @@ src/
     panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), escapeHtml(), optionsHtml().
     focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
-    layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries <dialog>
-                       (`savedDialog`), setActiveView, setSidebarCollapsed, announce, setMascot,
+    layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries and event <dialog>s
+                       (`savedDialog`, `eventDialog`), setActiveView, setSidebarCollapsed, announce, setMascot,
                        the sidebar's resize handle, onMenu. Also BRAND_HTML (the logo, not draggable)
                        and mascotFile (which face file to show, with its fallbacks; pure).
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
@@ -442,6 +442,8 @@ src/
     statsPanel.ts      The statistics column (render + wiring: Show problem, Try again).
     dataPreview.ts     Matching events and the Run button (render + wiring: Run, Previous / Next, an id).
     eventTable.ts      The Matching events table (pure, Node-tested): tableColumns, cellSets, shortId, eventTableHtml, pagingHtml.
+    eventDialog.ts     The event JSON dialog: openEventOf, eventDialogHtml (pure), renderEventDialog (paints and
+                       opens/closes the <dialog>), wireEventDialog.
     accountMenu.ts     The top-bar account menu (render + wiring).
 mock-server/           Dev-only stand-in backend — see "Mock server".
   index.ts             Reads VITE_API_BASE and DEV_BACKEND_URL (.env), MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS / MOCK_HTTP_ERRORS, starts the server.
@@ -1806,6 +1808,17 @@ or the result. The result is a **table**, one row per event, in pages of 100
   backend data and may be names such as "constructor".
 - The table is a real `<table>` (hidden `<caption>` with the page, `scope`d
   headers, the id cell is the row's `<th scope="row">`).
+- **Event JSON dialog** (`eventDialog.ts`): an id opens that result's JSON in
+  a native `<dialog>` (title "Event" plus the short id, the whole id, then the
+  JSON in a focusable, scrolling `<pre>`). It is built like the saved-queries
+  dialog: created once by the shell (`Shell.eventDialog`), painted from the
+  state (`openEventId`, `openEventOf`) and opened or closed to match it. The
+  focus starts on **Close**; **Close**, Escape and any other close tell the
+  state (`app.closeEvent`) and the focus goes back to that result's id button.
+  The dialog closes by itself when the result is no longer on screen (a new
+  run, another query or database). An expanded row was rejected: it would sit
+  far off to the left inside the wide, sideways-scrolled table. The dialog is
+  where the later Event viewer can plug in.
 
 The backend returns a **random sample of up to 2,000** of the matching events,
 not the first ones, and the API has no pagination (the table pages the sample
