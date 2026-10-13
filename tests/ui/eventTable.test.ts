@@ -105,6 +105,14 @@ describe("cellSets", () => {
   it("keeps an occurrence with no values as an empty set", () => {
     expect(cellSets(event("e", { a: [{}] }), a!)).toEqual([[]]);
   });
+
+  it("treats a field named like a built-in object property as missing when absent", () => {
+    const withBuiltin = [facet("a", 1, ["constructor", "pos"])];
+    const col = tableColumns([event("e", { a: [{ pos: "p" }] })], withBuiltin, [])[0]!;
+    expect(cellSets(event("e", { a: [{ pos: "p" }] }), col)).toEqual([
+      [{ name: "pos name", value: "p" }],
+    ]);
+  });
 });
 
 describe("shortId", () => {

@@ -84,8 +84,12 @@ export function tableColumns(
 export function cellSets(event: EventRecord, column: FacetColumn): CellEntry[][] {
   const known = new Set(column.fields.map((f) => f.id));
   return (event.values[column.facetId] ?? []).map((occurrence) => [
+    // `in` would also find names every object inherits ("constructor",
+    // "toString"), so a field with such an id would show JavaScript internals
+    // instead of being treated as missing. Object.hasOwn checks only the
+    // occurrence's own keys.
     ...column.fields
-      .filter((f) => f.id in occurrence)
+      .filter((f) => Object.hasOwn(occurrence, f.id))
       .map((f) => ({ name: f.name, value: String(occurrence[f.id]) })),
     ...Object.keys(occurrence)
       .filter((key) => !known.has(key))
