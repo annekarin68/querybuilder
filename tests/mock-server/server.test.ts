@@ -11,7 +11,9 @@ import {
   startLogin,
 } from "../../mock-server/auth";
 import { auditLogSnapshot } from "../../mock-server/audit";
+import { parseHttpErrors } from "../../mock-server/httpErrors";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
+import { unfinishedRequest } from "../savedQueryFixtures";
 
 // The mock server over real HTTP, on a free port. Deterministic: no simulated
 // failures and no streaming delay.
@@ -70,9 +72,9 @@ const everyEvent = {
     {
       kind: "condition",
       id: "c1",
-      facetId: "observation_window",
-      fieldId: "from_timestamp",
-      operatorId: "present",
+      facet_id: "observation_window",
+      field_id: "from_timestamp",
+      operator_id: "present",
       value: null,
     },
   ],
@@ -80,8 +82,8 @@ const everyEvent = {
 const body = (databases: string[], query: unknown = everyEvent) =>
   JSON.stringify({ query, databases });
 
-describe("GET /api/databases and /api/individuals", () => {
-  it.each([`${API}/databases`, `${API}/individuals`])(
+describe("GET /api/documentation/databases and /api/documentation/individuals", () => {
+  it.each([`${API}/documentation/databases`, `${API}/documentation/individuals`])(
     "%s returns a bare JSON array",
     async (path) => {
       const res = await get(path);
@@ -93,9 +95,9 @@ describe("GET /api/databases and /api/individuals", () => {
   );
 });
 
-describe("POST /api/stats", () => {
+describe("POST /api/filter/validate", () => {
   it("streams one successful line per selected database, in order", async () => {
-    const res = await post(`${API}/stats`, body(["beta", "alpha"]));
+    const res = await post(`${API}/filter/validate`, body(["beta", "alpha"]));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("application/x-ndjson");
     const lines = (await res.text())
@@ -105,18 +107,18 @@ describe("POST /api/stats", () => {
     expect(lines.map((l) => l.label)).toEqual(["beta", "alpha"]);
     for (const l of lines) {
       expect(l.success).toBe(true);
-      expect(typeof l.matchCount).toBe("number");
+      expect(typeof l.match_count).toBe("number");
     }
   });
 
-  it("fails every database, pointing at the condition, when a text is too long", async () => {
+  it("fails every database, pointing at the condition and its group, when a text is too long", async () => {
     const tooLong = {
       ...everyEvent,
       children: [
-        { ...everyEvent.children[0], operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
+        { ...everyEvent.children[0], operator_id: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
       ],
     };
-    const res = await post(`${API}/stats`, body(["alpha", "beta"], tooLong));
+    const res = await post(`${API}/filter/validate`, body(["alpha", "beta"], tooLong));
     expect(res.status).toBe(200);
     const lines = (await res.text())
       .trim()
@@ -126,10 +128,11 @@ describe("POST /api/stats", () => {
       ["alpha", "beta"].map((label) => ({
         label,
         success: false,
-        errorMessages: [
-          { nodeId: "c1", kind: "invalid", message: "Text is too long (at most 100 characters)." },
+        error_messages: [
+          { node_id: "c1", kind: "invalid", message: "Text is too long (at most 100 characters)." },
+          { node_id: "g1", kind: "incomplete", message: "Group contains no valid conditions." },
         ],
-        infoMessages: [],
+        info_messages: [],
       })),
     );
   });
@@ -155,42 +158,58 @@ describe("POST /api/stats", () => {
     ],
     [
       "condition without a field",
-      body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], fieldId: "" }] }),
-      "Malformed query: query.children[0].fieldId must be a non-empty string or null.",
+      body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], field_id: "" }] }),
+      "Malformed query: query.children[0].field_id must be a non-empty string or null.",
     ],
     ["no databases", body([]), "Select at least one database."],
   ])("answers 400 for a %s", async (_label, payload, error) => {
-    const res = await post(`${API}/stats`, payload);
+    const res = await post(`${API}/filter/validate`, payload);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error });
   });
 });
 
-describe("POST /api/query", () => {
+describe("POST /api/filter/execute", () => {
   it("needs a session (401)", async () => {
-    const res = await post(`${API}/query`, body(["alpha"]));
+    const res = await post(`${API}/filter/execute`, body(["alpha"]));
     expect(res.status).toBe(401);
   });
 
   it("needs a compliance reason (403)", async () => {
-    const res = await post(`${API}/query`, body(["alpha"]), loggedIn());
+    const res = await post(`${API}/filter/execute`, body(["alpha"]), loggedIn());
     expect(res.status).toBe(403);
   });
 
-  it("returns the matching events, capped, and writes an audit entry", async () => {
+  it("returns up to 2,000 matching events, each at most once, and writes an audit entry", async () => {
     const before = auditLogSnapshot().length;
     const all = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"];
-    const res = await post(`${API}/query`, body(all), compliant());
+    const res = await post(`${API}/filter/execute`, body(all), compliant());
     expect(res.status).toBe(200);
-    const { entrysets } = (await res.json()) as { entrysets: { id: number }[] };
-    expect(entrysets.length).toBeGreaterThan(0);
-    expect(entrysets.length).toBeLessThanOrEqual(QUERY_RESULT_CAP);
+    const json = (await res.json()) as { events: { id: string; items: unknown[] }[] };
+    expect(json.events.length).toBeGreaterThan(0);
+    expect(QUERY_RESULT_CAP).toBe(2000);
+    expect(json.events.length).toBeLessThanOrEqual(QUERY_RESULT_CAP);
+    expect(new Set(json.events.map((e) => e.id)).size).toBe(json.events.length);
+    for (const event of json.events) {
+      expect(event.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(Array.isArray(event.items)).toBe(true);
+    }
     expect(auditLogSnapshot()).toHaveLength(before + 1);
     expect(auditLogSnapshot().at(-1)).toMatchObject({ name: "demo.user", reason: "testing" });
   });
 
+  it("returns only events that match the query", async () => {
+    const nobody = {
+      ...everyEvent,
+      children: [{ ...everyEvent.children[0], operator_id: "absent" }],
+    };
+    const all = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"];
+    const res = await post(`${API}/filter/execute`, body(all, nobody), compliant());
+    expect(((await res.json()) as { events: unknown[] }).events).toEqual([]);
+  });
+
   it("checks the body after the session", async () => {
-    const res = await post(`${API}/query`, "{", compliant());
+    const res = await post(`${API}/filter/execute`, "{", compliant());
     expect(res.status).toBe(400);
   });
 });
@@ -212,7 +231,7 @@ describe("login and compliance navigations", () => {
   });
 
   it("starting compliance without a session goes to log in instead", async () => {
-    const res = await get(`${API}/compliance/start`);
+    const res = await get(`${API}/log/build`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(`${API}/auth/login`);
   });
@@ -227,19 +246,108 @@ describe("login and compliance navigations", () => {
   });
 });
 
-describe("GET /api/auth/me and /api/compliance/status", () => {
+describe("GET /api/users/me and /api/log/status", () => {
   it("me is 401 without a session and the user with one", async () => {
-    expect((await get(`${API}/auth/me`)).status).toBe(401);
-    const res = await get(`${API}/auth/me`, loggedIn());
-    expect(await res.json()).toEqual({ name: "demo.user" });
+    expect((await get(`${API}/users/me`)).status).toBe(401);
+    const res = await get(`${API}/users/me`, loggedIn());
+    expect(await res.json()).toMatchObject({ display_name: "demo.user", sub: "mock-user-0001" });
   });
 
-  it("compliance status follows the session", async () => {
-    expect(await (await get(`${API}/compliance/status`)).json()).toEqual({ status: "required" });
-    expect(await (await get(`${API}/compliance/status`, compliant())).json()).toMatchObject({
-      status: "acknowledged",
+  it("the compliance log is 403 without a log, and a structured message with one", async () => {
+    const none = await get(`${API}/log/status`);
+    expect(none.status).toBe(403);
+    expect(await none.json()).toEqual({ error: "No compliance log for this session." });
+    // A session without a compliance log is refused the same way.
+    expect((await get(`${API}/log/status`, loggedIn())).status).toBe(403);
+    const res = await get(`${API}/log/status`, compliant());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      user: "demo.user",
       reason: "testing",
+      logged_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
     });
+  });
+
+  it("the old compliance and data dictionary paths are gone", async () => {
+    for (const path of ["compliance/status", "databases", "individuals", "compliance/start"]) {
+      expect((await get(`${API}/${path}`)).status).toBe(404);
+    }
+  });
+});
+
+describe("saved queries (…/filter/saved)", () => {
+  const url = `${API}/filter/saved`;
+  const send = (method: string, path: string, cookie?: string, body?: unknown) =>
+    fetch(base + path, {
+      method,
+      headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+      body: body === undefined || method === "GET" ? undefined : JSON.stringify(body),
+    });
+  const named = (name: string) => ({ ...unfinishedRequest, name });
+
+  it.each([
+    ["GET", url],
+    ["POST", url],
+    ["PUT", `${url}/sq-1`],
+    ["DELETE", `${url}/sq-1`],
+  ])("%s %s without a session is a 401", async (method, path) => {
+    const res = await send(method, path, undefined, unfinishedRequest);
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Log in to use saved queries." });
+  });
+
+  it("creates, lists, updates and deletes, answering as the contract says", async () => {
+    const cookie = loggedIn();
+    expect(await (await send("GET", url, cookie)).json()).toEqual([]);
+
+    const created = await send("POST", url, cookie, named("First"));
+    expect(created.status).toBe(201);
+    const first = await created.json();
+    expect(first).toMatchObject({ ...named("First"), id: expect.any(String) });
+    expect(new Date(first.updated_at).toISOString()).toBe(first.updated_at);
+
+    const listed = await (await send("GET", url, cookie)).json();
+    expect(listed).toEqual([first]);
+
+    const renamed = await send("PUT", `${url}/${first.id}`, cookie, named("Second"));
+    expect(renamed.status).toBe(200);
+    expect(await renamed.json()).toMatchObject({ id: first.id, name: "Second" });
+
+    const deleted = await send("DELETE", `${url}/${first.id}`, cookie);
+    expect(deleted.status).toBe(204);
+    expect(await deleted.text()).toBe("");
+    expect(await (await send("GET", url, cookie)).json()).toEqual([]);
+  });
+
+  it("answers 404 for an unknown id and 409 for a taken name", async () => {
+    const cookie = loggedIn();
+    expect((await send("PUT", `${url}/nope`, cookie, named("X"))).status).toBe(404);
+    expect((await send("DELETE", `${url}/nope`, cookie)).status).toBe(404);
+    await send("POST", url, cookie, named("Taken"));
+    const clash = await send("POST", url, cookie, named(" taken "));
+    expect(clash.status).toBe(409);
+    expect(await clash.json()).toEqual({ error: 'A saved query called "taken" already exists.' });
+  });
+
+  it("finds an id that needs decoding", async () => {
+    const cookie = loggedIn();
+    const res = await send("DELETE", `${url}/a%2Fb`, cookie);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "No saved query with that id." });
+  });
+
+  it("answers 400 for a malformed body, naming the problem", async () => {
+    const cookie = loggedIn();
+    const res = await send("POST", url, cookie, { ...unfinishedRequest, name: "  " });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "name must be 1 to 80 characters." });
+    const notJson = await fetch(base + url, { method: "POST", body: "{", headers: { cookie } });
+    expect(notJson.status).toBe(400);
+  });
+
+  it("does not answer other methods on an id path", async () => {
+    const res = await send("GET", `${url}/sq-1`, loggedIn());
+    expect(res.status).toBe(404);
   });
 });
 
@@ -251,8 +359,8 @@ it("an unknown route is a 404 with a JSON error", async () => {
 
 describe("the API prefix (MockConfig.apiBase)", () => {
   it("serves the API only under the prefix", async () => {
-    expect((await get(`${API}/databases`)).status).toBe(200);
-    expect((await get("/api/databases")).status).toBe(404);
+    expect((await get(`${API}/documentation/databases`)).status).toBe(200);
+    expect((await get("/api/documentation/databases")).status).toBe(404);
   });
 
   it("the mock IdP sends the browser back to the login callback under the prefix", async () => {
@@ -268,7 +376,7 @@ describe("the API prefix (MockConfig.apiBase)", () => {
       body: new URLSearchParams({ state: "s", reason: "testing" }),
     });
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toMatch(`${API}/compliance/callback?token=`);
+    expect(res.headers.get("location")).toMatch(`${API}/log/callback?token=`);
   });
   // So that the dev server's single proxy rule (the prefix) reaches every
   // page the browser is sent to during login and compliance.
@@ -277,5 +385,79 @@ describe("the API prefix (MockConfig.apiBase)", () => {
     expect(idp).toContain(`href="${API}/mock-idp/authorize/confirm?state=s"`);
     const form = await (await get(`${API}/mock-compliance/submit?state=s`)).text();
     expect(form).toContain(`action="${API}/mock-compliance/submit"`);
+  });
+});
+
+describe("MOCK_HTTP_ERRORS", () => {
+  let failing: Server;
+  let failingBase: string;
+
+  beforeAll(async () => {
+    failing = createMockServer({
+      apiBase: API,
+      failRate: 0,
+      lineDelayMs: () => 0,
+      httpErrors: parseHttpErrors(
+        "GET /documentation/databases=503, GET /documentation/individuals=502:html",
+      ),
+    });
+    await new Promise<void>((resolve) => failing.listen(0, resolve));
+    failingBase = `http://localhost:${(failing.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve) => failing.close(resolve));
+  });
+
+  it("answers a matching route with the simulated status and a JSON error", async () => {
+    const res = await fetch(`${failingBase}${API}/documentation/databases`);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({
+      error: `Simulated HTTP 503 for GET ${API}/documentation/databases (MOCK_HTTP_ERRORS).`,
+    });
+  });
+
+  it("answers with an HTML page for a :html rule", async () => {
+    const res = await fetch(`${failingBase}${API}/documentation/individuals`);
+    expect(res.status).toBe(502);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toContain("<h1>502</h1>");
+  });
+
+  it("leaves every other route alone", async () => {
+    expect((await fetch(`${failingBase}${API}/log/status`)).status).toBe(403);
+  });
+});
+
+describe('MOCK_HTTP_ERRORS="* *=503"', () => {
+  let failing: Server;
+  let failingBase: string;
+
+  beforeAll(async () => {
+    failing = createMockServer({
+      apiBase: API,
+      failRate: 0,
+      lineDelayMs: () => 0,
+      httpErrors: parseHttpErrors("* *=503"),
+    });
+    await new Promise<void>((resolve) => failing.listen(0, resolve));
+    failingBase = `http://localhost:${(failing.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve) => failing.close(resolve));
+  });
+
+  // Said in the env table: nobody can log in while every route fails.
+  it("fails every route under the prefix, the stand-in login page too", async () => {
+    expect((await fetch(`${failingBase}${API}/documentation/databases`)).status).toBe(503);
+    const login = await fetch(`${failingBase}${API}/auth/login`, { redirect: "manual" });
+    expect(login.status).toBe(503);
+  });
+
+  it("leaves a request outside the prefix alone", async () => {
+    expect((await fetch(`${failingBase}/elsewhere`)).status).toBe(404);
+    // Starts with the same letters as the prefix, but is not below it.
+    expect((await fetch(`${failingBase}${API}0/documentation/databases`)).status).toBe(404);
   });
 });

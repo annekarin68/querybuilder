@@ -11,8 +11,8 @@
  * - Tab to the next control: `change` fires before the focus moves, so a
  *   repaint destroys the control the focus is moving to. So even with the
  *   pointer up the commit waits for the next macrotask, when the focus has
- *   already moved and the repaint can put it back (see "Focus across a repaint"
- *   in docs/ARCHITECTURE.md).
+ *   already moved and the repaint can put it back (see "Keyboard focus across
+ *   repaints" in docs/ARCHITECTURE.md).
  *
  * Pure: the DOM (is the pointer down? what is a macrotask?) is injected, so the
  * Node-only tests can drive it by hand.

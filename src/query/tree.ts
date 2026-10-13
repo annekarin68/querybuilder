@@ -1,4 +1,4 @@
-import type { Condition, Group, QueryNode } from "./types";
+import type { Condition, Group, LogicalOperator, QueryNode } from "./types";
 
 export type NodePatch = Partial<Pick<Condition, "facetId" | "fieldId" | "operatorId" | "value">> &
   Partial<Pick<Group, "operator" | "collapsed">>;
@@ -29,6 +29,12 @@ export function newCondition(): Condition {
  *  its last condition is removed — validate.ts reports that case. */
 export function newGroup(): Group {
   return { kind: "group", id: id("g"), operator: "AND", children: [newCondition()] };
+}
+
+/** A new, open group holding `children`: how a tag's facets arrive ("Add
+ *  all"), so a misplaced or unwanted "Add all" is moved or removed in one go. */
+export function groupOf(children: QueryNode[], operator: LogicalOperator = "AND"): Group {
+  return { kind: "group", id: id("g"), operator, children };
 }
 
 /** Return a copy of `node` with `fn` applied to every node in the tree (post-order). */
@@ -87,6 +93,16 @@ export function sameSemantics(a: QueryNode, b: QueryNode): boolean {
 }
 
 /**
+ * Whether two trees are identical, `collapsed` included: nothing on screen
+ * would change. Unlike `sameSemantics`, folding a group counts as a change,
+ * because the user sees it. Used to tell a move that did something from one
+ * that put a node back where it was.
+ */
+export function sameTree(a: QueryNode, b: QueryNode): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
  * Put `nodes` where a drop on `targetId` lands: at the end of the target if it
  * is a group, otherwise just before the target in its parent. An unknown
  * target changes nothing.
@@ -110,7 +126,7 @@ export function insertNodes(tree: Group, targetId: string, nodes: QueryNode[]): 
 }
 
 /** A condition nobody has touched: nothing chosen yet (what "+ Condition" adds). */
-function isBlankCondition(node: QueryNode): boolean {
+export function isBlankCondition(node: QueryNode): boolean {
   return (
     node.kind === "condition" &&
     node.facetId === null &&
@@ -173,9 +189,31 @@ export function moveNode(tree: Group, nodeId: string, targetId: string): Group |
   return placeNodes(removeNode(tree, nodeId), targetId, [node]);
 }
 
+/**
+ * "Group contents": the group's children move into one new group, with the
+ * same ALL/ANY, which becomes the group's only child. The query means the same
+ * afterwards; the user can then add a sibling group and switch ALL/ANY.
+ * An unknown id (or a condition's) changes nothing.
+ */
+export function groupContents(tree: Group, groupId: string): Group {
+  const target = findNode(tree, groupId);
+  if (!target || target.kind !== "group") return tree;
+  return mapTree(tree, (n) =>
+    n.kind === "group" && n.id === groupId
+      ? {
+          ...n,
+          children: [{ kind: "group", id: id("g"), operator: n.operator, children: n.children }],
+        }
+      : n,
+  ) as Group;
+}
+
+export const UNGROUP_BLOCKED_MESSAGE =
+  "Ungroup works only when this group and the one around it are both ALL or both ANY, or when it holds one item.";
+
 export type Direction = "up" | "down";
 
-/** The group that holds `nodeId` directly, or null for the root and unknown ids. */
+/** The group that holds `nodeId` directly, or null (the root, or unknown). */
 function parentOf(tree: Group, nodeId: string): Group | null {
   for (const child of tree.children) {
     if (child.id === nodeId) return tree;
@@ -217,4 +255,34 @@ export function moveSibling(tree: Group, nodeId: string, direction: Direction): 
     [children[from], children[to]] = [children[to]!, children[from]!];
     return { ...n, children };
   }) as Group;
+}
+
+/**
+ * Why `groupId` can't be ungrouped, or null if it can. Ungrouping must never
+ * change what the query means: that holds when the group combines its items
+ * the same way as its parent, or when it holds only one item (a one-item
+ * group means the same under ALL and ANY).
+ */
+export function ungroupBlocker(tree: Group, groupId: string): string | null {
+  if (groupId === tree.id) return "The whole query can't be ungrouped.";
+  const node = findNode(tree, groupId);
+  const parent = parentOf(tree, groupId);
+  if (!node || node.kind !== "group" || !parent) return "That group is no longer in the query.";
+  if (node.operator === parent.operator || node.children.length === 1) return null;
+  return UNGROUP_BLOCKED_MESSAGE;
+}
+
+/** Put `groupId`'s children in its place in its parent; null when `ungroupBlocker` says no. */
+export function ungroup(tree: Group, groupId: string): Group | null {
+  if (ungroupBlocker(tree, groupId) !== null) return null;
+  return mapTree(tree, (n) =>
+    n.kind === "group" && n.children.some((c) => c.id === groupId)
+      ? {
+          ...n,
+          children: n.children.flatMap((c) =>
+            c.id === groupId && c.kind === "group" ? c.children : [c],
+          ),
+        }
+      : n,
+  ) as Group;
 }

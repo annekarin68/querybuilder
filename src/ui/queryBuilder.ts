@@ -17,16 +17,28 @@ import {
   addChild,
   countConditions,
   findNode,
+  groupContents,
   newCondition,
   newGroup,
   removeNode,
+  ungroup,
+  ungroupBlocker,
+  UNGROUP_BLOCKED_MESSAGE,
   updateNode,
   type Direction,
-  type NodePatch,
 } from "../query/tree";
 import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
-import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
+import {
+  ADDED_GROUP_MESSAGE,
+  addedMessage,
+  DRAG_MIME,
+  groupedMessage,
+  parseDragItem,
+  UNGROUPED_MESSAGE,
+  type DragItem,
+} from "../query/drop";
 import { placeIssues } from "../query/issues";
+import { isEdited } from "../query/saved";
 import { queryToText } from "../query/summary";
 import {
   createAfterPointer,
@@ -35,7 +47,7 @@ import {
 } from "../util/afterPointer";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
-import { countLabel } from "./format";
+import { countLabel, hoverTitle } from "./format";
 import { readValueControl, renderValueControl } from "./valueControl";
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
@@ -43,26 +55,36 @@ interface BuilderCtx {
   catalog: FieldCatalog;
   facets: Facet[] | null;
   issues: Issue[];
+  /** The whole query: a group's Ungroup button needs its parent's ALL/ANY. */
+  query: Group;
 }
 
 /**
- * Unfinished parts are quiet grey hints — the user simply isn't done yet. Only
- * an invalid query is shown in red. Both kinds still block running (validate.ts).
- * Issues come from validate.ts and from the backend (src/query/issues.ts).
+ * The issues under a row or group. The user's own unfinished parts are quiet
+ * grey hints: they simply aren't done yet. Anything the databases found is
+ * highlighted with an icon in the warning colour even when it is only
+ * "incomplete" (such as "Group contains no valid conditions."): nothing else
+ * on screen says it, and users missed it in grey (2026-10-13). Invalid is red.
+ * Every kind blocks running (validate.ts). Issues come from validate.ts and
+ * from the backend (src/query/issues.ts).
  */
-function issuesHtml(nodeId: string, issues: Issue[]): string {
+export function issuesHtml(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
-  const text = (kind: Issue["kind"]) =>
+  const text = (pick: (i: Issue) => boolean) =>
     mine
-      .filter((i) => i.kind === kind)
+      .filter(pick)
       .map((i) => escapeHtml(i.message))
       .join(" ");
-  const incomplete = text("incomplete");
-  const invalid = text("invalid");
+  const hint = text((i) => i.kind === "incomplete" && !i.fromServer);
+  const warning = text((i) => i.kind === "incomplete" && i.fromServer === true);
+  const invalid = text((i) => i.kind === "invalid");
   return (
-    (incomplete ? `<div class="qb-hint">${incomplete}</div>` : "") +
+    (hint ? `<div class="qb-hint">${hint}</div>` : "") +
+    (warning
+      ? `<div class="qb-server-warning"><i class="exclamation triangle icon" aria-hidden="true"></i>${warning}</div>`
+      : "") +
     (invalid
-      ? `<div class="qb-invalid"><i class="exclamation circle icon"></i>${invalid}</div>`
+      ? `<div class="qb-invalid"><i class="exclamation circle icon" aria-hidden="true"></i>${invalid}</div>`
       : "")
   );
 }
@@ -70,7 +92,7 @@ function issuesHtml(nodeId: string, issues: Issue[]): string {
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
   if (!notice) return "";
-  return `<div class="ui warning message qb-notice" role="status">
+  return `<div class="ui warning message qb-notice">
       <i class="close icon" data-action="dismiss-notice" role="button" tabindex="0" aria-label="Dismiss"></i>
       <p>${escapeHtml(notice)}</p>
     </div>`;
@@ -87,8 +109,8 @@ function nodeGrip(nodeId: string, kind: "group" | "condition"): string {
   return `<span class="${cls}" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move this ${kind}"><i class="grip vertical icon"></i></span>`;
 }
 
-function iconButton(action: string, label: string, icon: string, extra = ""): string {
-  return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"${extra}><i class="${icon} icon"></i></button>`;
+function iconButton(action: string, label: string, icon: string): string {
+  return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"><i class="${icon} icon"></i></button>`;
 }
 
 /** Where a node stands among its siblings: `index` counts from 1. */
@@ -116,6 +138,17 @@ export function moveButtons(kind: "condition" | "group", position: Position): st
     return `<button type="button" class="qb-icon-btn" data-action="move-${direction}" aria-label="${label}" title="${title}"${unavailable ? ' aria-disabled="true"' : ""}><i class="angle ${direction} icon"></i></button>`;
   };
   return `<span class="qb-move" role="group" aria-label="Move this ${kind}">${button("up", position.index <= 1)}${button("down", position.index >= position.count)}</span>`;
+}
+
+/** Describe the element a click landed on for `shouldFlushBeforeClick`. */
+function describeClickTarget(el: Element): ClickTargetDescription {
+  return {
+    inButton: el.closest("button") !== null,
+    inLink: el.closest("a[href]") !== null,
+    inDataAction: el.closest("[data-action]") !== null,
+    inDropdown: el.closest(".ui.dropdown") !== null,
+    inCheckbox: el.closest(".ui.checkbox") !== null,
+  };
 }
 
 /** The condition row's plain dropdowns and their labels. The Field dropdown
@@ -205,6 +238,20 @@ function nodeOf(container: HTMLElement, nodeId: string): HTMLElement | null {
   return container.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"]`);
 }
 
+/**
+ * Scrolls node `nodeId` into view and moves focus to it (the "Show" button of
+ * the statistics panel). A row or group is not focusable by itself, so it gets
+ * `tabindex="-1"` first: focusable by script, not a stop for the Tab key. The
+ * builder repaints on every edit, which drops the attribute with the element.
+ */
+export function revealNode(container: HTMLElement, nodeId: string): void {
+  const node = nodeOf(container, nodeId);
+  if (!node) return;
+  if (!node.hasAttribute("tabindex")) node.setAttribute("tabindex", "-1");
+  node.scrollIntoView({ block: "center" });
+  node.focus();
+}
+
 /** The `.ui.dropdown` Fomantic built from the row's `<select data-part=…>`. */
 function dropdownOf(row: HTMLElement | null, part: string): HTMLElement | null {
   return (
@@ -234,62 +281,6 @@ function focusFieldDropdown(container: HTMLElement, nodeId: string): void {
   dropdownOf(nodeOf(container, nodeId), "field")
     ?.querySelector<HTMLElement>("input.search")
     ?.focus();
-}
-
-/** Where the cursor stood inside a condition row, in terms that survive a
- *  repaint (the element itself does not). `range` is "from" or "to" in a
- *  Between pair. */
-interface CursorSpot {
-  nodeId: string;
-  part: string;
-  range: string | null;
-  /** Whether the dropdown's menu was open (the user's click opened it). */
-  menuOpen: boolean;
-}
-
-/** Describe the element a click landed on for `shouldFlushBeforeClick`. */
-function describeClickTarget(el: Element): ClickTargetDescription {
-  return {
-    inButton: el.closest("button") !== null,
-    inLink: el.closest("a[href]") !== null,
-    inDataAction: el.closest("[data-action]") !== null,
-    inDropdown: el.closest(".ui.dropdown") !== null,
-    inCheckbox: el.closest(".ui.checkbox") !== null,
-  };
-}
-
-/**
- * The cursor's place if it is on a dropdown or a text or number box of a
- * condition row, else null (a button needs no help: `paint` restores it).
- */
-function cursorSpot(container: HTMLElement): CursorSpot | null {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement) || !container.contains(active)) return null;
-  const nodeId = active.closest<HTMLElement>(".qb-condition[data-node-id]")?.dataset.nodeId;
-  // The dropdown's typing box (the focused element) has no data-part; its
-  // <select> beside it has.
-  const dropdownPart = active.closest(".ui.dropdown")?.querySelector("select")?.dataset.part;
-  const part = dropdownPart ?? active.dataset.part;
-  if (!nodeId || !part) return null;
-  const menuOpen = active.closest(".ui.dropdown")?.matches(".active") ?? false;
-  return { nodeId, part, range: active.dataset.range ?? null, menuOpen };
-}
-
-/**
- * Put the cursor back where `cursorSpot` found it, in the repainted row. A
- * dropdown only gets the cursor (Tab does not open menus, see
- * `focusFieldDropdown`), unless its menu was open: then the user just clicked it
- * and the repaint closed the menu under their pointer, so it is opened again.
- */
-function restoreCursorSpot(container: HTMLElement, spot: CursorSpot): void {
-  const row = nodeOf(container, spot.nodeId);
-  const dropdown = spot.range ? null : dropdownOf(row, spot.part);
-  if (dropdown && spot.menuOpen) return openDropdown(dropdown);
-  const box = spot.range
-    ? row?.querySelector<HTMLElement>(`input[data-range="${spot.range}"]`)
-    : (dropdown?.querySelector<HTMLElement>("input.search") ??
-      (spot.part === "value" ? row?.querySelector<HTMLElement>(".qb-value input") : null));
-  box?.focus();
 }
 
 function conditionHtml(ctx: BuilderCtx, c: Condition, position: Position): string {
@@ -328,39 +319,6 @@ function conditionHtml(ctx: BuilderCtx, c: Condition, position: Position): strin
   </div>`;
 }
 
-/** Put the cursor on group `nodeId`'s fold/unfold button. */
-function focusCollapseButton(container: HTMLElement, nodeId: string): void {
-  nodeOf(container, nodeId)
-    ?.querySelector<HTMLElement>(":scope > .qb-group-head .qb-collapse-btn")
-    ?.focus();
-}
-
-/**
- * After a keyboard press on a ✕ the node and its button are gone, so `paint`
- * has nothing to put the cursor back on. Put it on the "+ Condition" button of
- * the group the node was in: the user is most likely to go on editing there.
- */
-function focusAddConditionButton(container: HTMLElement, groupId: string): void {
-  nodeOf(container, groupId)
-    ?.querySelector<HTMLElement>(":scope > .qb-group-head [data-action='add-condition']")
-    ?.focus();
-}
-
-/**
- * After a keyboard press on group or condition `nodeId`'s Move up / Move down
- * button the repaint replaced it: put the cursor on the same node's button for
- * the same `direction`, so the user can press it again to keep moving. At an
- * end that button is `aria-disabled` but still focusable (see `moveButtons`),
- * so the cursor stays on it and a further press does nothing.
- */
-function focusMoveButton(container: HTMLElement, nodeId: string, direction: Direction): void {
-  nodeOf(container, nodeId)
-    ?.querySelector<HTMLElement>(
-      `:scope > .qb-cond-row > .qb-move > [data-action="move-${direction}"], :scope > .qb-group-head > .qb-move > [data-action="move-${direction}"]`,
-    )
-    ?.focus();
-}
-
 /**
  * The group's fold/unfold button: a bordered chevron (down while open, right
  * while folded — the same arrows the data dictionary uses), so it reads as
@@ -378,6 +336,11 @@ export function collapseButton(collapsed: boolean): string {
  * "joiner" on the bracket line. A collapsed group folds to one line: its
  * plain-English summary and how many conditions it holds. That whole line is a
  * click target for unfolding it (buttons and the grip inside keep their own jobs).
+ *
+ * "+ Condition" is the group's `data-focus-landing`: when the control that had
+ * the keyboard focus is removed (a row's or a sub-group's ✕), focus goes there,
+ * in the same group, and not onto a neighbour's ✕ where a second Enter would
+ * delete something else (see focusMemory.ts).
  */
 export function groupHtml(
   ctx: BuilderCtx,
@@ -405,6 +368,23 @@ export function groupHtml(
       ${issuesHtml(g.id, ctx.issues)}
     </div>`;
   }
+  // With two or more items, "Group contents" is the way to put a sibling group
+  // next to them (e.g. to mix ALL and ANY). Ungroup is always drawn on a
+  // non-root group, but is aria-disabled with the reason when it would change
+  // what the query means: not `disabled`, so keyboard and screen-reader users
+  // can still reach the button and hear why.
+  const groupContentsButton =
+    g.children.length >= 2
+      ? `<button type="button" class="ui mini basic button" data-action="group-contents" title="Put this group's conditions and groups into a new group inside it"><i class="object group outline icon" aria-hidden="true"></i>Group contents</button>`
+      : "";
+  const blocked = isRoot ? null : ungroupBlocker(ctx.query, g.id);
+  const ungroupButton = isRoot
+    ? ""
+    : `<button type="button" class="ui mini basic button" data-action="ungroup"${blocked ? ` aria-disabled="true" title="${escapeHtml(blocked)}"` : ` title="Put this group's items into the group around it"`}><i class="object ungroup outline icon" aria-hidden="true"></i>Ungroup</button>`;
+  // The action buttons share one right-aligned box (`.qb-group-actions`): when
+  // the header is too narrow they wrap among themselves, so the ✕ stays last
+  // on the right and is never left alone at the start of a new line, where it
+  // could be mistaken for the first condition's remove button.
   const joiner = `<span class="qb-joiner">${g.operator}</span>`;
   const children = g.children
     .map((child, i) => nodeHtml(ctx, child, false, { index: i + 1, count: g.children.length }))
@@ -420,10 +400,13 @@ export function groupHtml(
         <button type="button" class="qb-logic-btn${g.operator === "OR" ? " is-on" : ""}" data-action="set-or" aria-pressed="${g.operator === "OR"}">ANY</button>
       </span>
       <span class="qb-group-label">of the following</span>
-      <span class="qb-spacer"></span>
-      <button type="button" class="ui mini basic button" data-action="add-condition"><i class="plus icon"></i>Condition</button>
-      <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
-      ${remove}
+      <span class="qb-group-actions">
+        <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
+        <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
+        ${groupContentsButton}
+        ${ungroupButton}
+        ${remove}
+      </span>
     </div>
     ${issuesHtml(g.id, ctx.issues)}
     <div class="qb-children">${children}</div>
@@ -461,6 +444,39 @@ export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog)
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
+/**
+ * The query card's title row: "Query", the open saved query's name and
+ * "(edited)" once the query or the database selection differs from what was
+ * last saved or opened, then **Save…** and **Saved queries** (docs/ARCHITECTURE.md,
+ * "Saved queries — `savedQueries.ts`"). A logged-out user who presses either
+ * button is asked to log in first, in the saved-queries dialog (`loginHtml`,
+ * savedQueries.ts).
+ *
+ * The two buttons only exist once startup has loaded the databases and the
+ * field catalog: start() sets the query and selection when it ends, so a saved
+ * query opened before that would be overwritten.
+ */
+export function queryTitleHtml(state: AppState): string {
+  const open = state.openSaved;
+  const name = open
+    ? ` <span class="qb-open-name" title="${escapeHtml(open.name)}">· ${escapeHtml(open.name)}</span>`
+    : "";
+  const edited =
+    open && isEdited(open, state.query, state.selectedDatabaseIds)
+      ? ` <span class="qb-muted">(edited)</span>`
+      : "";
+  const drawn = Boolean(state.catalog && state.databases);
+  const buttons = drawn
+    ? `<button type="button" class="ui mini basic button" data-action="open-save-dialog" aria-haspopup="dialog">Save…</button>
+         <button type="button" class="ui mini basic button" data-action="open-saved-list" aria-haspopup="dialog">Saved queries</button>`
+    : "";
+  return `<div class="qb-query-head">
+      <h2 class="qb-card-title">Query${name}${edited}</h2>
+      <span class="qb-spacer"></span>
+      ${buttons}
+    </div>`;
+}
+
 function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
@@ -468,11 +484,16 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   }
   // Local issues (validate.ts) and the backend's, each on a node that is drawn.
   const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
-  const ctx: BuilderCtx = { catalog: state.catalog, facets: state.facets, issues };
+  const ctx: BuilderCtx = {
+    catalog: state.catalog,
+    facets: state.facets,
+    issues,
+    query: state.query,
+  };
   paint(
     el,
-    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" id="qb-query" tabindex="-1">
-       <h2 class="qb-card-title">Query</h2>
+    `${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
+       ${queryTitleHtml(state)}
        ${nodeHtml(ctx, state.query, true, null)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
      </div>`,
@@ -498,17 +519,20 @@ export function wireQueryBuilder(
     /** The Move up / Move down buttons: swap a node with its neighbour. */
     onMove(nodeId: string, direction: Direction): void;
     onDismissNotice(): void;
+    /** Show a warning above the query (a refused action, not a drop). */
+    onNotice(message: string): void;
     /** Say something to screen-reader users (the shell's live region). */
     announce(message: string): void;
+    /** The title's **Save…** and **Saved queries** (savedQueries.ts shows the dialogs). */
+    onOpenSaveDialog(): void;
+    onOpenSavedList(): void;
   },
 ): (state: AppState) => void {
-  /** What a change in `row` amounts to: the condition as it is on screen now
-   *  and the patch to apply. `changedPart`: the dropdown just used ("facet",
-   *  "field", …), if any. Null when the row is not a condition we know. */
-  function readRowEdit(row: HTMLElement, changedPart?: string) {
+  /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
+  function handleRowChange(row: HTMLElement, changedPart?: string): void {
     const { query, catalog } = getState();
     const cond = findNode(query, row.dataset.nodeId!);
-    if (!catalog || !cond || cond.kind !== "condition") return null;
+    if (!catalog || !cond || cond.kind !== "condition") return;
     const picked = (part: string) =>
       row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
     const { facetOperatorId, fieldId } = decodeFieldValue(picked("field"));
@@ -523,16 +547,9 @@ export function wireQueryBuilder(
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
-    // Read the changed dropdown now: the caller repaints at once and replaces
+    // Read the changed dropdown now: onChange repaints at once and replaces
     // this row, so it must not be read afterwards.
     const hasChoice = Boolean(changedPart && picked(changedPart));
-    return { query, catalog, cond, patch, hasChoice };
-  }
-
-  function handleRowChange(row: HTMLElement, changedPart?: string): void {
-    const edit = readRowEdit(row, changedPart);
-    if (!edit) return;
-    const { query, catalog, cond, patch, hasChoice } = edit;
     onChange(updateNode(query, cond.id, patch));
     // The repaint also lost the cursor: put it back where cursorAfterChange
     // says, judging by the committed patch (the row's dropdowns may still show
@@ -544,10 +561,23 @@ export function wireQueryBuilder(
     if (spoken) hooks.announce(spoken);
   }
 
-  // A typed value is committed later than the `change` that announced it; see
-  // the "Wiring" paragraphs in docs/ARCHITECTURE.md for why. These listeners
-  // are on `document` and never removed, which is fine because
-  // wireQueryBuilder is called once at startup.
+  /**
+   * Commit what was typed in `row`. A click on a dropdown is not flushed early
+   * (see `shouldFlushBeforeClick`), so its menu is already open when this runs,
+   * and the repaint closes it under the user's pointer. paint() puts the focus
+   * back in that dropdown, so its menu is opened again.
+   */
+  function commitTypedValue(row: HTMLElement): void {
+    const menuWasOpen = document.activeElement?.closest(".ui.dropdown.active") != null;
+    handleRowChange(row);
+    const dropdown = document.activeElement?.closest<HTMLElement>(".ui.dropdown");
+    if (menuWasOpen && dropdown && container.contains(dropdown)) openDropdown(dropdown);
+  }
+
+  // A typed value is committed later than the `change` that announced it, at
+  // the moment `afterPointer` picks (src/util/afterPointer.ts says why; so does
+  // "Centre — `queryBuilder.ts`" in docs/ARCHITECTURE.md). These listeners are on `document`
+  // and never removed, which is fine because wireQueryBuilder is called once.
   let pointerIsDown = false;
   const afterPointer = createAfterPointer({
     isPointerDown: () => pointerIsDown,
@@ -570,14 +600,15 @@ export function wireQueryBuilder(
   document.addEventListener("pointerup", pointerEnded, listenOptions);
   document.addEventListener("pointercancel", pointerEnded, listenOptions);
   // The pointer-up can also go missing when the window loses focus (a context
-  // menu, Alt+Tab): without this a keyboard user's edits would wait for ever.
+  // menu, Alt+Tab): without this the edit would wait for ever.
   window.addEventListener("blur", () => {
     pointerIsDown = false;
     afterPointer.flush();
   });
-  // A button or link must see the typed value when it reads the query, so a
-  // click on one applies the held edit first (the panels' delegated listeners
-  // survive the repaint, and the old button still answers `closest`). Which
+  // A button or link must see the typed value when it reads the query (Run
+  // would search without it, and the login / compliance links would save a
+  // query without it), so a click on one applies the held edit first.
+  // `capture`: before the handlers on the panels and on `document`. Which
   // clicks that covers is decided by `shouldFlushBeforeClick`.
   document.addEventListener(
     "click",
@@ -588,28 +619,17 @@ export function wireQueryBuilder(
     listenOptions,
   );
 
-  /**
-   * Commit a typed value. The patch was read when `change` fired (the row was
-   * still on screen), but it is applied to the LATEST query by node id: a click
-   * that happened in between may have changed the tree. A node removed in the
-   * meantime drops the edit silently.
-   */
-  function commitTypedValue(nodeId: string, patch: NodePatch): void {
-    const { query } = getState();
-    if (!findNode(query, nodeId)) return;
-    // By now the browser has moved the focus to where the user was going; the
-    // repaint destroys that control unless it is put back.
-    const spot = cursorSpot(container);
-    onChange(updateNode(query, nodeId, patch));
-    if (spot) restoreCursorSpot(container, spot);
-  }
-
-  /** Dismiss the warning. The repaint removes the ✕ the user was on, which
-   *  would drop their keyboard focus, so move focus to the query card. The card
-   *  has an id so that `paint` keeps the focus there on the next repaint too. */
+  /** Dismiss the warning. The repaint removes the ✕ the user was on, so
+   *  paint() moves their keyboard focus to the query card (its
+   *  `data-focus-landing`). */
   function dismissNotice(): void {
     hooks.onDismissNotice();
-    container.querySelector<HTMLElement>("#qb-query")?.focus();
+  }
+
+  /** An action that worked clears an older warning (such as a refused Ungroup),
+   *  the way a fully successful drop does: it is not about the query any more. */
+  function clearOldNotice(): void {
+    if (getState().dropNotice) hooks.onDismissNotice();
   }
 
   container.addEventListener("click", (e) => {
@@ -623,49 +643,65 @@ export function wireQueryBuilder(
     // that line: that is not a request to unfold it. (Only the header itself,
     // not a button of its own, is a toggle by a click anywhere on its line.)
     if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
+    // The title's buttons sit outside every row and group, so they are
+    // handled before the node lookup below.
+    if (btn?.dataset.action === "open-save-dialog") return hooks.onOpenSaveDialog();
+    if (btn?.dataset.action === "open-saved-list") return hooks.onOpenSavedList();
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
     // An unavailable Move button (an end of the list) must do nothing, not even
     // toggle the folded group whose header it sits in. It is `aria-disabled`
     // rather than `disabled` so that it keeps keyboard focus (see moveButtons).
-    if (btn.getAttribute("aria-disabled") === "true") return;
+    // (Only Move: an aria-disabled Ungroup is pressed to hear why it is refused.)
+    const isMove = btn.dataset.action === "move-up" || btn.dataset.action === "move-down";
+    if (isMove && btn.getAttribute("aria-disabled") === "true") return;
     const q = getState().query;
     switch (btn.dataset.action) {
+      // paint() keeps the keyboard focus on the "+" button, so pressing it
+      // again adds another; the new row itself is not visible to a screen
+      // reader user, so it is announced (like the dictionary's "+").
       case "add-condition":
-        return onChange(addChild(q, nodeId, newCondition()));
+        onChange(addChild(q, nodeId, newCondition()));
+        return hooks.announce(addedMessage(1));
       case "add-group":
-        return onChange(addChild(q, nodeId, newGroup()));
-      case "remove-node": {
-        // Find the parent first: the repaint removes the node from the page.
-        const groupId = nodeOf(container, nodeId)?.parentElement?.closest<HTMLElement>(
-          "[data-node-id]",
-        )?.dataset.nodeId;
-        onChange(removeNode(q, nodeId));
-        if (e.detail === 0 && groupId) focusAddConditionButton(container, groupId);
-        return;
+        onChange(addChild(q, nodeId, newGroup()));
+        return hooks.announce(ADDED_GROUP_MESSAGE);
+      case "group-contents": {
+        const node = findNode(q, nodeId);
+        // A click from a stale repaint (the group is gone): nothing to group,
+        // and "Grouped 0 items." would be wrong.
+        if (node?.kind !== "group") return;
+        onChange(groupContents(q, nodeId));
+        clearOldNotice();
+        return hooks.announce(groupedMessage(node.children.length));
       }
+      case "ungroup": {
+        const next = ungroup(q, nodeId);
+        // Refused: say why (the button is aria-disabled, not disabled, so
+        // keyboard and screen-reader users can reach it and hear the reason).
+        if (!next) return hooks.onNotice(ungroupBlocker(q, nodeId) ?? UNGROUP_BLOCKED_MESSAGE);
+        onChange(next);
+        clearOldNotice();
+        return hooks.announce(UNGROUPED_MESSAGE);
+      }
+      case "remove-node":
+        return onChange(removeNode(q, nodeId));
       case "set-and":
         return onChange(updateNode(q, nodeId, { operator: "AND" }));
       case "set-or":
         return onChange(updateNode(q, nodeId, { operator: "OR" }));
+      // paint() keeps the keyboard focus on the pressed button (the same node's
+      // button for the same direction), so pressing it again keeps moving.
       case "move-up":
-      case "move-down": {
-        const direction = btn.dataset.action === "move-up" ? "up" : "down";
-        hooks.onMove(nodeId, direction);
-        // The repaint replaced the pressed button: as for the collapse button,
-        // give the keyboard user's cursor back (a mouse click needs none).
-        if (e.detail === 0) focusMoveButton(container, nodeId, direction);
-        return;
-      }
+        return hooks.onMove(nodeId, "up");
+      case "move-down":
+        return hooks.onMove(nodeId, "down");
       case "toggle-collapse": {
+        // paint() puts the focus back on this group's (new) collapse button.
         const node = findNode(q, nodeId);
-        onChange(updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }));
-        // The repaint replaced the button that had focus; after a keyboard
-        // press (a click event with detail 0) put it back on the same group's
-        // (new) collapse button, as focusPart does for a condition. A mouse
-        // click (detail >= 1) needs no focus ring on the new button.
-        if (e.detail === 0) focusCollapseButton(container, nodeId);
-        return;
+        return onChange(
+          updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }),
+        );
       }
     }
   });
@@ -734,6 +770,18 @@ export function wireQueryBuilder(
 
   container.addEventListener("dragend", unmark);
 
+  // The hover title of a value box follows what is typed: the box is only
+  // repainted when the value is committed (on change), and until then the
+  // title would show the old value. An emptied box loses the attribute, as a
+  // box rendered empty has none.
+  container.addEventListener("input", (e) => {
+    const box = e.target;
+    if (!(box instanceof HTMLInputElement) || box.dataset.part !== "value") return;
+    const title = hoverTitle(box.value);
+    if (title) box.title = title;
+    else box.removeAttribute("title");
+  });
+
   container.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
     // Fomantic dispatches a native bubbling "change" on the <select> behind each
@@ -744,12 +792,15 @@ export function wireQueryBuilder(
     // it loses focus on the mousedown before a menu click; repainting then would
     // remove the item under the pointer before the click lands. So anything
     // inside a .ui.dropdown is skipped, and this listener handles only the plain
-    // <input>s (text/number, the range pair and the boolean toggle's checkbox),
-    // and those commit through afterPointer, not at once.
+    // <input>s (text/number, the range pair and the boolean toggle's checkbox).
     if (target instanceof HTMLSelectElement || target.closest(".ui.dropdown")) return;
     const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
-    const edit = row && readRowEdit(row);
-    if (edit) afterPointer.run(() => commitTypedValue(edit.cond.id, edit.patch));
+    // A box's "change" fires as it loses focus, before the user's next action
+    // has finished, so the commit is held (see afterPointer above). The row may
+    // be repainted by then; its boxes still hold what was typed, and the
+    // commit applies them to the latest query by the row's node id.
+    if (!row) return;
+    afterPointer.run(() => commitTypedValue(row));
   });
 
   return (state) => {

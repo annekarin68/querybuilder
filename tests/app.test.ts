@@ -1,10 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createApp, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
+import { createApp, previewAnnouncement, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
-import type { Database, DatabaseResult, EventRecord, Facet } from "../src/model";
+import type {
+  Database,
+  DatabaseResult,
+  EventRecord,
+  Facet,
+  SavedQuery,
+  SavedQueryDraft,
+} from "../src/model";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../src/query/tree";
 import type { Group } from "../src/query/types";
+import type { OpenSaved } from "../src/query/saved";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
 import { savePendingQuery, takePendingQuery } from "../src/util/pendingQuery";
@@ -16,6 +24,7 @@ const facets: Facet[] = [
   {
     id: "thing",
     name: "Thing",
+    number: 1,
     tags: [],
     group: "",
     comment: "",
@@ -61,7 +70,26 @@ function ready(query = runnableQuery()): Partial<AppState> {
   };
 }
 
-const events: EventRecord[] = [{ id: 1, values: {} }];
+const events: EventRecord[] = [{ id: "e-1", values: {} }];
+
+/** What the server answers for a saved draft. */
+function savedFrom(draft: SavedQueryDraft, id: string): SavedQuery {
+  return { ...draft, id, updatedAt: "2026-10-08T10:00:00Z" };
+}
+
+/** A saved query as the list holds it. */
+function savedQuery(id: string, name: string, overrides: Partial<SavedQuery> = {}): SavedQuery {
+  return savedFrom(
+    { name, note: "", databaseIds: ["alpha"], query: runnableQuery(7), ...overrides },
+    id,
+  );
+}
+
+/** The `openSaved` for a saved query that is on screen unchanged. */
+function openFrom(saved: SavedQuery): OpenSaved {
+  const { id, name, note, query, databaseIds } = saved;
+  return { id, name, note, query, databaseIds };
+}
 
 function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
   return {
@@ -70,13 +98,16 @@ function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
     getMe: vi.fn(async () => ({ name: "pat" })),
     getComplianceStatus: vi.fn(async () => ({
       status: "acknowledged" as const,
-      reason: "audit",
-      givenAt: "2026-09-23T10:00:00Z",
+      log: '{\n  "reason": "audit"\n}',
     })),
     getStats: vi.fn(async () => {}),
     runQuery: vi.fn(async () => events),
     logout: vi.fn(async () => {}),
     invalidateCompliance: vi.fn(async () => {}),
+    listSavedQueries: vi.fn(async () => []),
+    createSavedQuery: vi.fn(async (draft: SavedQueryDraft) => savedFrom(draft, "new")),
+    updateSavedQuery: vi.fn(async (id: string, draft: SavedQueryDraft) => savedFrom(draft, id)),
+    deleteSavedQuery: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -85,8 +116,9 @@ function setup(state: Partial<AppState> = {}, api: AppApi = fakeApi()) {
   const store = createStore({ ...initialState, ...state });
   const navigate = vi.fn();
   const announce = vi.fn();
-  const app = createApp({ store, api, navigate, announce });
-  return { store, api, navigate, announce, app };
+  const showError = vi.fn();
+  const app = createApp({ store, api, navigate, announce, showError });
+  return { store, api, navigate, announce, showError, app };
 }
 
 /** A promise the test settles by hand, to control when a response "arrives". */
@@ -150,7 +182,7 @@ describe("runPreview (the Run query button)", () => {
       expect.any(AbortSignal),
     );
     await flushPromises();
-    expect(store.getState().preview).toEqual({ status: "ok", events });
+    expect(store.getState().preview).toEqual({ status: "ok", events, page: 0 });
   });
 
   it("a 401 saves the query and goes to log in", async () => {
@@ -177,7 +209,7 @@ describe("runPreview (the Run query button)", () => {
     expect(takePendingQuery()).not.toBeNull();
   });
 
-  it("a 403 for another reason shows its message instead of redirecting", async () => {
+  it("a 403 for another reason shows a plain message instead of redirecting", async () => {
     const api = fakeApi({
       runQuery: vi.fn(async () => Promise.reject(new ApiError(403, "Not allowed here."))),
     });
@@ -185,10 +217,13 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
-    expect(store.getState().preview).toEqual({ status: "error", error: "Not allowed here." });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "You don't have permission to do this. If you think you should, contact support.",
+    });
   });
 
-  it("a 403 whose compliance check fails shows the 403's message", async () => {
+  it("a 403 whose compliance check fails shows the 403's plain message", async () => {
     const api = fakeApi({
       runQuery: vi.fn(async () => Promise.reject(new ApiError(403, "Forbidden."))),
       getComplianceStatus: vi.fn(async () => Promise.reject(new Error("down"))),
@@ -197,7 +232,10 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
-    expect(store.getState().preview).toEqual({ status: "error", error: "Forbidden." });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "You don't have permission to do this. If you think you should, contact support.",
+    });
   });
 
   it("ignores a 403 if the query changed while compliance was being checked", async () => {
@@ -231,7 +269,56 @@ describe("runPreview (the Run query button)", () => {
     const { app, store } = setup(ready(), api);
     app.runPreview();
     await flushPromises();
-    expect(store.getState().preview).toEqual({ status: "error", error: "boom" });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "Something went wrong. Try again; if it keeps happening, reload the page.",
+    });
+  });
+
+  // The panel repaints out of sight of a screen-reader user, and their focus
+  // may be elsewhere: they hear that the run started and how it ended.
+  it("tells screen-reader users the run started and what came back", async () => {
+    const { app, announce } = setup(ready());
+    app.runPreview();
+    expect(announce).toHaveBeenLastCalledWith("Fetching events…");
+    await flushPromises();
+    expect(announce.mock.calls).toEqual([["Fetching events…"], ["Showing 1 result."]]);
+  });
+
+  it("tells screen-reader users about a failed run", async () => {
+    const api = fakeApi({ runQuery: vi.fn(async () => Promise.reject(new Error("boom"))) });
+    const { app, announce } = setup(ready(), api);
+    app.runPreview();
+    await flushPromises();
+    expect(announce).toHaveBeenLastCalledWith(
+      "Could not load events: Something went wrong. Try again; if it keeps happening, reload the page.",
+    );
+  });
+
+  it("says nothing about a run the query has moved on from", async () => {
+    const response = deferred<EventRecord[]>();
+    const api = fakeApi({ runQuery: vi.fn(() => response.promise) });
+    const { app, announce } = setup(ready(), api);
+    app.runPreview();
+    app.onQueryChange(runnableQuery(4));
+    response.resolve(events);
+    await flushPromises();
+    expect(announce.mock.calls).toEqual([["Fetching events…"]]);
+  });
+});
+
+describe("previewAnnouncement", () => {
+  it("says nothing while no run is shown", () => {
+    expect(previewAnnouncement({ status: "idle" })).toBeNull();
+  });
+  it("counts the events, or says there are none", () => {
+    expect(previewAnnouncement({ status: "ok", events: [], page: 0 })).toBe(
+      "No events match this query.",
+    );
+    expect(previewAnnouncement({ status: "ok", events, page: 0 })).toBe("Showing 1 result.");
+    expect(previewAnnouncement({ status: "ok", events: [...events, ...events], page: 0 })).toBe(
+      "Showing 2 results.",
+    );
   });
 });
 
@@ -306,7 +393,7 @@ describe("statistics", () => {
     calls[0]!.onLine(failed("alpha", dbError("c1", "Too long.")));
     calls[0]!.onLine(failed("beta", dbError("c1", "Too long.")));
     expect(store.getState().serverIssues).toEqual([
-      { nodeId: "c1", message: "Too long.", kind: "invalid" },
+      { nodeId: "c1", message: "Too long.", kind: "invalid", fromServer: true },
     ]);
     // The second line reports the same problem: only `stats` is written, so
     // the query builder doesn't repaint.
@@ -344,7 +431,31 @@ describe("statistics", () => {
     app.onQueryChange(runnableQuery(5));
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     await flushPromises();
-    expect(store.getState().stats).toMatchObject({ status: "error", error: "down" });
+    expect(store.getState().stats).toMatchObject({
+      status: "error",
+      error: "Something went wrong. Try again; if it keeps happening, reload the page.",
+    });
+  });
+
+  it("fetches again on retryStats after a failed request", async () => {
+    vi.useFakeTimers();
+    const getStats = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("down"))
+      .mockImplementation(async (_q, _ids, onLine: (l: DatabaseResult) => void) => {
+        onLine(ok("alpha", 3));
+      });
+    const { app, store } = setup(ready(), fakeApi({ getStats }));
+    app.onQueryChange(runnableQuery(5));
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    await flushPromises();
+    expect(store.getState().stats.status).toBe("error");
+
+    app.retryStats();
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    await flushPromises();
+    expect(getStats).toHaveBeenCalledTimes(2);
+    expect(store.getState().stats).toMatchObject({ status: "ok", results: [ok("alpha", 3)] });
   });
 
   it("fetches nothing for an unfinished query", async () => {
@@ -357,10 +468,87 @@ describe("statistics", () => {
   });
 });
 
+describe("Matching events pages and the event dialog", () => {
+  const many: EventRecord[] = Array.from({ length: 250 }, (_, i) => ({ id: `e-${i}`, values: {} }));
+  const shownMany = (): Partial<AppState> => ({
+    ...ready(),
+    preview: { status: "ok", events: many, page: 0 },
+  });
+
+  it("a run starts at the first page", async () => {
+    const { app, store } = setup(ready(), fakeApi({ runQuery: vi.fn(async () => many) }));
+    app.runPreview();
+    await flushPromises();
+    expect(store.getState().preview).toEqual({ status: "ok", events: many, page: 0 });
+  });
+
+  it("shows another page and says which results are shown", () => {
+    const { app, store, announce } = setup(shownMany());
+    app.showEventPage(2);
+    expect(store.getState().preview).toMatchObject({ page: 2 });
+    expect(announce).toHaveBeenCalledWith("Showing results 201 to 250 of 250.");
+  });
+
+  // Numbers follow the viewer's language ("1,987" or "1.987"), like the paging line.
+  it("writes the numbers of the announcement in the viewer's format", () => {
+    const thousands: EventRecord[] = Array.from({ length: 2500 }, (_, i) => ({
+      id: `t-${i}`,
+      values: {},
+    }));
+    const { app, announce } = setup({
+      ...ready(),
+      preview: { status: "ok", events: thousands, page: 0 },
+    });
+    app.showEventPage(1);
+    expect(announce).toHaveBeenCalledWith(
+      `Showing results ${(101).toLocaleString()} to ${(200).toLocaleString()} of ${(2500).toLocaleString()}.`,
+    );
+    expect(previewAnnouncement({ status: "ok", events: thousands, page: 0 })).toBe(
+      `Showing ${(2500).toLocaleString()} results.`,
+    );
+  });
+
+  it("starting a run closes the open event with the results it showed", async () => {
+    const response = deferred<EventRecord[]>();
+    const { app, store } = setup(
+      { ...shownMany(), openEventId: "e-3" },
+      fakeApi({ runQuery: vi.fn(() => response.promise) }),
+    );
+    app.runPreview();
+    expect(store.getState()).toMatchObject({ preview: { status: "loading" }, openEventId: null });
+  });
+
+  it("clamps a page that does not exist, and does nothing for the page on screen", () => {
+    const { app, store, announce } = setup(shownMany());
+    app.showEventPage(9);
+    expect(store.getState().preview).toMatchObject({ page: 2 });
+    announce.mockClear();
+    app.showEventPage(2);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("a query edit resets the page and closes the dialog with the results", () => {
+    const { app, store } = setup({ ...shownMany(), openEventId: "e-3" });
+    app.onQueryChange(runnableQuery(9));
+    expect(store.getState().preview).toEqual({ status: "idle" });
+    expect(store.getState().openEventId).toBeNull();
+  });
+
+  it("opens the dialog for a shown event only, and closes it", () => {
+    const { app, store } = setup(shownMany());
+    app.openEvent("ghost");
+    expect(store.getState().openEventId).toBeNull();
+    app.openEvent("e-3");
+    expect(store.getState().openEventId).toBe("e-3");
+    app.closeEvent();
+    expect(store.getState().openEventId).toBeNull();
+  });
+});
+
 // ---- query and database changes -------------------------------------------
 
 describe("query and database changes", () => {
-  const shown: Partial<AppState> = { preview: { status: "ok", events } };
+  const shown: Partial<AppState> = { preview: { status: "ok", events, page: 0 } };
 
   it("an edit clears the preview at once and revalidates", () => {
     const { app, store } = setup({ ...ready(), ...shown });
@@ -399,9 +587,9 @@ describe("query and database changes", () => {
 describe("logging out and invalidating compliance", () => {
   const signedIn: Partial<AppState> = {
     ...ready(),
-    preview: { status: "ok", events },
+    preview: { status: "ok", events, page: 0 },
     auth: { status: "authenticated", user: { name: "pat" } },
-    compliance: { status: "acknowledged", reason: "audit", givenAt: null },
+    compliance: { status: "acknowledged", log: "{}" },
   };
 
   it("logout clears the preview at once, even if logging out fails", async () => {
@@ -412,6 +600,25 @@ describe("logging out and invalidating compliance", () => {
     await flushPromises();
     expect(store.getState().auth.status).toBe("authenticated");
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it("says so when logging out fails", async () => {
+    const api = fakeApi({ logout: vi.fn(async () => Promise.reject(new ApiError(500, "x"))) });
+    const { app, store, showError } = setup(signedIn, api);
+    app.onLogout();
+    await flushPromises();
+    expect(store.getState().auth.status).toBe("authenticated");
+    expect(showError).toHaveBeenCalledWith("Couldn't log out. Try again.");
+  });
+
+  it("says so when invalidating the compliance reason fails", async () => {
+    const api = fakeApi({
+      invalidateCompliance: vi.fn(async () => Promise.reject(new ApiError(500, "x"))),
+    });
+    const { app, showError } = setup(signedIn, api);
+    app.onInvalidateCompliance();
+    await flushPromises();
+    expect(showError).toHaveBeenCalledWith("Couldn't invalidate the compliance reason. Try again.");
   });
 
   it("a successful logout signs out and clears compliance", async () => {
@@ -447,7 +654,10 @@ describe("start", () => {
     expect(s.query.children).toHaveLength(1);
     expect(s.issues).toEqual([expect.objectContaining({ kind: "incomplete" })]);
     expect(s.auth).toMatchObject({ status: "authenticated", user: { name: "pat" } });
-    expect(s.compliance).toMatchObject({ status: "acknowledged", reason: "audit" });
+    expect(s.compliance).toMatchObject({
+      status: "acknowledged",
+      log: expect.stringContaining("audit"),
+    });
   });
 
   it("logs login and compliance failures and carries on", async () => {
@@ -468,7 +678,7 @@ describe("start", () => {
     await expect(app.start(false)).rejects.toThrow("down");
   });
 
-  it("after a login/compliance redirect, restores the saved query and fetches its statistics", async () => {
+  it("after a login/compliance redirect, restores the pending query and fetches its statistics", async () => {
     vi.useFakeTimers();
     const saved = runnableQuery(9);
     savePendingQuery(saved, ["beta", "no-longer-exists"]);
@@ -481,7 +691,7 @@ describe("start", () => {
     expect(api.getStats).toHaveBeenCalledTimes(1);
   });
 
-  it("a normal load ignores a leftover saved query, and clears it", async () => {
+  it("a normal load ignores a leftover pending query, and clears it", async () => {
     savePendingQuery(runnableQuery(9), ["beta"]);
     const { app, store } = setup();
     await app.start(false);
@@ -531,12 +741,58 @@ describe("dropping docs items", () => {
     expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition.");
   });
 
-  it("announces nothing when nothing was added or moved", () => {
+  it("announces no 'Added' or 'Moved' when nothing was added or moved", () => {
     const { store, app, announce } = setup({ ...ready(emptyQuery()) });
     app.onDropItem({ type: "facet", facetId: "ghost" }, store.getState().query.id);
     app.onDropItem({ type: "node", nodeId: "gone" }, store.getState().query.id);
     app.onDropItem(null, store.getState().query.id);
+    // Only the three warnings are spoken, in order (see the next test).
+    expect(announce.mock.calls).toEqual([
+      [expect.stringMatching(/^Couldn't add “ghost”: /)],
+      ["That item is no longer in the query."],
+      ["That item can't be added to a query."],
+    ]);
+  });
+
+  it("speaks a refused drop's warning, since its box appears with its text already in it", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("That item can't be added to a query.");
+    // The same refusal again is a new action: it is spoken again.
+    app.onDropItem(null, store.getState().query.id);
+    expect(announce).toHaveBeenCalledTimes(2);
+  });
+
+  it("showNotice shows a message as the warning and speaks it", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+    app.showNotice("Not allowed.");
+    expect(store.getState().dropNotice).toBe("Not allowed.");
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Not allowed.");
+  });
+
+  it("a drop that fully succeeds speaks no warning", () => {
+    const { store, app, announce } = setup({ ...ready(emptyQuery()), dropNotice: "old" });
+    app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 condition to the query.");
+  });
+
+  it("moving a node onto the spot it already holds changes and announces nothing", () => {
+    // The last child dropped on its own parent goes "to the end of the group":
+    // where it already is.
+    // (Finished conditions: a lone blank row would be replaced by the moved one.)
+    const done = { facetId: "thing", fieldId: "size", operatorId: "gt", value: 1 };
+    const root = emptyQuery();
+    const first = newCondition();
+    const last = newCondition();
+    const q = updateNode(
+      updateNode(addChild(addChild(root, root.id, first), root.id, last), first.id, done),
+      last.id,
+      done,
+    );
+    const { store, app, announce } = setup({ ...ready(q) });
+    app.onDropItem({ type: "node", nodeId: last.id }, root.id);
     expect(announce).not.toHaveBeenCalled();
+    expect(store.getState().query).toBe(q);
   });
 
   it("an unknown facet adds nothing and says why", () => {
@@ -556,6 +812,13 @@ describe("dropping docs items", () => {
   it("a successful drop clears an earlier warning", () => {
     const { store, app } = setup({ ...ready(emptyQuery()), dropNotice: "old" });
     app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
+    expect(store.getState().dropNotice).toBeNull();
+  });
+
+  it("a warning from showNotice is cleared again by dismissDropNotice (what a successful Group contents or Ungroup calls)", () => {
+    const { store, app } = setup({ ...ready(emptyQuery()) });
+    app.showNotice("Not allowed.");
+    app.dismissDropNotice();
     expect(store.getState().dropNotice).toBeNull();
   });
 
@@ -735,6 +998,27 @@ describe("dropping docs items", () => {
       expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
     });
 
+    it("is replaced by Add all on a tag: one group of the tag's facets, each present", () => {
+      const tagged: Facet[] = [
+        { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
+        { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
+      ];
+      const { store, app } = setup({
+        ...ready(startingQuery()),
+        facets: tagged,
+        catalog: buildFieldCatalog(tagged),
+      });
+      app.onAddItem({ type: "tag", tag: "t" });
+      const q = store.getState().query;
+      expect(q.children).toHaveLength(1);
+      const group = q.children[0];
+      expect(group).toMatchObject({ kind: "group", operator: "AND" });
+      expect(group?.kind === "group" && group.children).toEqual([
+        expect.objectContaining({ facetId: "one", fieldId: null, operatorId: "present" }),
+        expect.objectContaining({ facetId: "two", fieldId: null, operatorId: "present" }),
+      ]);
+    });
+
     it("stays when the drop fails", () => {
       const { store, app } = setup({ ...ready(startingQuery()) });
       app.onAddItem({ type: "facet", facetId: "ghost" });
@@ -757,12 +1041,713 @@ describe("dropping docs items", () => {
     expect(store.getState().query.children[0]).toMatchObject({ facetId: "thing", fieldId: "size" });
   });
 
+  it("Add all on a tag puts one ALL group at the end of the root and says so", () => {
+    const tagged: Facet[] = [
+      { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
+      { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
+    ];
+    const { app, store, announce } = setup({
+      ...ready(),
+      facets: tagged,
+      catalog: buildFieldCatalog(tagged),
+    });
+    const before = store.getState().query.children.length;
+    app.onAddItem({ type: "tag", tag: "t" });
+    const { children } = store.getState().query;
+    expect(children).toHaveLength(before + 1);
+    expect(children.at(-1)).toMatchObject({ kind: "group", operator: "AND" });
+    expect(announce).toHaveBeenCalledWith("Added a group of 2 conditions to the query.");
+  });
+
   it("with no docs loaded yet, says so instead of ignoring the drop", () => {
     const { store, app } = setup({});
     app.onAddItem({ type: "facet", facetId: "thing" });
     expect(store.getState().dropNotice).toBe(
       "The data dictionary is still loading; try again in a moment.",
     );
+  });
+});
+
+// ---- saved queries --------------------------------------------------------
+
+describe("saved queries: opening the dialogs", () => {
+  it("asks an anonymous visitor to log in first instead of leaving at once", () => {
+    const { app, navigate, store } = setup({
+      ...ready(emptyQuery()),
+      auth: { status: "anonymous" },
+    });
+    app.openSaveDialog();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(store.getState().savedDialog).toBe("login-to-save");
+  });
+
+  it("does the same for the list, without asking the server", () => {
+    const { app, navigate, api, store } = setup({ ...ready(), auth: { status: "anonymous" } });
+    app.openSavedList();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(api.listSavedQueries).not.toHaveBeenCalled();
+    expect(store.getState().savedDialog).toBe("login-to-list");
+  });
+
+  it("Log in in that dialog goes to log in, keeping the query (even a blank one)", () => {
+    const { app, navigate, store } = setup({
+      ...ready(emptyQuery()),
+      auth: { status: "anonymous" },
+      savedDialog: "login-to-save",
+    });
+    app.logInToSave();
+    expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
+    expect(takePendingQuery()).toEqual({
+      query: store.getState().query,
+      selectedDatabaseIds: ["alpha", "beta"],
+    });
+  });
+
+  it("opens the save dialog for a logged-in user, with a fresh save state", () => {
+    const { app, store } = setup({
+      ...ready(),
+      auth: { status: "authenticated", user: { name: "pat" } },
+      save: { status: "error", error: "old" },
+    });
+    app.openSaveDialog();
+    expect(store.getState().savedDialog).toBe("save");
+    expect(store.getState().save).toEqual({ status: "idle" });
+  });
+
+  it("treats a login that is still loading as logged in", () => {
+    const { app, store, navigate } = setup(ready()); // auth: loading
+    app.openSaveDialog();
+    expect(store.getState().savedDialog).toBe("save");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("loads the list when the list dialog opens", async () => {
+    const queries = [savedQuery("a", "Weekly")];
+    const { app, store } = setup(
+      ready(),
+      fakeApi({ listSavedQueries: vi.fn(async () => queries) }),
+    );
+    app.openSavedList();
+    expect(store.getState().savedDialog).toBe("list");
+    expect(store.getState().savedList).toEqual({ status: "loading" });
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries });
+  });
+
+  it("shows a failed list load and loads again on retry", async () => {
+    const list = vi
+      .fn<AppApi["listSavedQueries"]>()
+      .mockRejectedValueOnce(new ApiError(500, "down"))
+      .mockResolvedValueOnce([]);
+    const { app, store } = setup(ready(), fakeApi({ listSavedQueries: list }));
+    app.openSavedList();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({
+      status: "error",
+      error:
+        "The server ran into a problem. Try again in a moment; if it keeps happening, contact support.",
+    });
+    app.retrySavedList();
+    expect(store.getState().savedList).toEqual({ status: "loading" });
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [] });
+  });
+
+  it("a 401 on the list redirects to log in", async () => {
+    const api = fakeApi({
+      listSavedQueries: vi.fn(async () => Promise.reject(new ApiError(401, "no"))),
+    });
+    const { app, navigate } = setup(ready(), api);
+    app.openSavedList();
+    await flushPromises();
+    expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
+    expect(takePendingQuery()).not.toBeNull();
+  });
+
+  it("ignores a slow list answer once a newer load started", async () => {
+    const slow = deferred<SavedQuery[]>();
+    const list = vi
+      .fn<AppApi["listSavedQueries"]>()
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValueOnce([savedQuery("b", "Newer")]);
+    const { app, store } = setup(ready(), fakeApi({ listSavedQueries: list }));
+    app.openSavedList();
+    app.retrySavedList();
+    await flushPromises();
+    slow.resolve([savedQuery("a", "Older")]);
+    await flushPromises();
+    expect(store.getState().savedList).toMatchObject({ status: "ok", queries: [{ id: "b" }] });
+  });
+
+  it("closing the dialog resets it and drops a pending load", async () => {
+    const slow = deferred<SavedQuery[]>();
+    const { app, store } = setup(ready(), fakeApi({ listSavedQueries: vi.fn(() => slow.promise) }));
+    app.openSavedList();
+    app.closeSavedDialog();
+    slow.resolve([savedQuery("a", "Weekly")]);
+    await flushPromises();
+    expect(store.getState()).toMatchObject({
+      savedDialog: null,
+      savedConfirm: null,
+      save: { status: "idle" },
+      savedList: { status: "idle" },
+    });
+  });
+});
+
+describe("saved queries: saving", () => {
+  const loggedIn = { auth: { status: "authenticated", user: { name: "pat" } } } as const;
+
+  it("creates a new saved query from the query and selection on screen", async () => {
+    const { app, api, store, announce } = setup({ ...ready(), ...loggedIn, savedDialog: "save" });
+    app.saveQuery("  Weekly ", " note ");
+    expect(store.getState().save).toEqual({ status: "saving" });
+    await flushPromises();
+    const { query } = store.getState();
+    expect(api.createSavedQuery).toHaveBeenCalledWith({
+      name: "Weekly",
+      note: "note",
+      databaseIds: ["alpha", "beta"],
+      query,
+    });
+    expect(store.getState()).toMatchObject({
+      savedDialog: null,
+      save: { status: "idle" },
+      openSaved: { id: "new", name: "Weekly", note: "note", query, databaseIds: ["alpha", "beta"] },
+    });
+    expect(announce).toHaveBeenCalledWith("Saved “Weekly”.");
+  });
+
+  it("updates the open query when the name is its own", async () => {
+    const open = savedQuery("s1", "Weekly", { databaseIds: ["alpha", "beta"] });
+    const { app, api, store } = setup({
+      ...ready(),
+      ...loggedIn,
+      savedDialog: "save",
+      openSaved: openFrom(open),
+    });
+    app.saveQuery("weekly", "");
+    await flushPromises();
+    expect(api.updateSavedQuery).toHaveBeenCalledWith(
+      "s1",
+      expect.objectContaining({ name: "weekly" }),
+    );
+    expect(api.createSavedQuery).not.toHaveBeenCalled();
+    expect(store.getState().openSaved).toMatchObject({ id: "s1" });
+  });
+
+  it("creates it again when the open query was deleted elsewhere (the update answers 404)", async () => {
+    const open = savedQuery("gone", "Weekly", { databaseIds: ["alpha", "beta"] });
+    const api = fakeApi({
+      updateSavedQuery: vi.fn(async () =>
+        Promise.reject(new ApiError(404, "No saved query with that id.")),
+      ),
+      createSavedQuery: vi.fn(async (draft: SavedQueryDraft) => savedFrom(draft, "fresh")),
+    });
+    const { app, store, announce } = setup(
+      { ...ready(), ...loggedIn, savedDialog: "save", openSaved: openFrom(open) },
+      api,
+    );
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    expect(api.updateSavedQuery).toHaveBeenCalledWith("gone", expect.anything());
+    expect(api.createSavedQuery).toHaveBeenCalledWith(expect.objectContaining({ name: "Weekly" }));
+    expect(store.getState()).toMatchObject({
+      savedDialog: null,
+      save: { status: "idle" },
+      openSaved: { id: "fresh", name: "Weekly" },
+    });
+    expect(announce).toHaveBeenCalledWith("Saved “Weekly”.");
+  });
+
+  it("still shows another failed update in the dialog", async () => {
+    const open = savedQuery("s1", "Weekly");
+    const api = fakeApi({
+      updateSavedQuery: vi.fn(async () => Promise.reject(new ApiError(500, "Broken"))),
+    });
+    const { app, store } = setup(
+      { ...ready(), ...loggedIn, savedDialog: "save", openSaved: openFrom(open) },
+      api,
+    );
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    expect(api.createSavedQuery).not.toHaveBeenCalled();
+    expect(store.getState().save).toMatchObject({ status: "error" });
+  });
+
+  it("creates a copy when saved under another name", async () => {
+    const open = savedQuery("s1", "Weekly");
+    const { app, api } = setup({ ...ready(), ...loggedIn, openSaved: openFrom(open) });
+    app.saveQuery("Monthly", "");
+    await flushPromises();
+    expect(api.createSavedQuery).toHaveBeenCalled();
+    expect(api.updateSavedQuery).not.toHaveBeenCalled();
+  });
+
+  it("refuses an empty name without asking the backend", () => {
+    const { app, api, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" });
+    app.saveQuery("   ", "");
+    expect(api.createSavedQuery).not.toHaveBeenCalled();
+    expect(store.getState().save).toEqual({ status: "error", error: "Give the query a name." });
+  });
+
+  it("keeps the dialog open and asks to replace when the name clashes", async () => {
+    const api = fakeApi({
+      createSavedQuery: vi.fn(async () => Promise.reject(new ApiError(409, "exists"))),
+    });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "note");
+    await flushPromises();
+    expect(store.getState().save).toEqual({ status: "conflict", name: "Weekly", note: "note" });
+    expect(store.getState().savedDialog).toBe("save");
+  });
+
+  it("replaces the query that has the clashing name", async () => {
+    const clash = savedQuery("other", "weekly ");
+    const api = fakeApi({
+      createSavedQuery: vi.fn(async () => Promise.reject(new ApiError(409, "exists"))),
+      listSavedQueries: vi.fn(async () => [savedQuery("x", "Monthly"), clash]),
+    });
+    const { app, store, announce } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "note");
+    await flushPromises();
+    app.confirmReplace();
+    expect(store.getState().save).toEqual({ status: "saving" });
+    await flushPromises();
+    expect(api.updateSavedQuery).toHaveBeenCalledWith(
+      "other",
+      expect.objectContaining({ name: "Weekly", note: "note" }),
+    );
+    expect(store.getState()).toMatchObject({
+      savedDialog: null,
+      save: { status: "idle" },
+      openSaved: { id: "other" },
+    });
+    expect(announce).toHaveBeenCalledWith("Saved “Weekly”.");
+  });
+
+  it("creates after all when the clashing query is gone by the time of the replace", async () => {
+    const api = fakeApi({
+      createSavedQuery: vi
+        .fn<AppApi["createSavedQuery"]>()
+        .mockRejectedValueOnce(new ApiError(409, "exists"))
+        .mockImplementation(async (draft) => savedFrom(draft, "fresh")),
+      listSavedQueries: vi.fn(async () => []),
+    });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    app.confirmReplace();
+    await flushPromises();
+    expect(store.getState().openSaved).toMatchObject({ id: "fresh" });
+  });
+
+  it("cancelling the replace goes back to the form", async () => {
+    const api = fakeApi({
+      createSavedQuery: vi.fn(async () => Promise.reject(new ApiError(409, "exists"))),
+    });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    app.cancelReplace();
+    expect(store.getState().save).toEqual({ status: "idle" });
+    expect(store.getState().savedDialog).toBe("save");
+  });
+
+  it("confirmReplace does nothing when there is no clash to replace", () => {
+    const { app, api } = setup({ ...ready(), ...loggedIn, savedDialog: "save" });
+    app.confirmReplace();
+    expect(api.listSavedQueries).not.toHaveBeenCalled();
+  });
+
+  it("a 401 saves the query and goes to log in", async () => {
+    const api = fakeApi({
+      createSavedQuery: vi.fn(async () => Promise.reject(new ApiError(401, "no"))),
+    });
+    const { app, navigate } = setup({ ...ready(), savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
+    expect(takePendingQuery()).not.toBeNull();
+  });
+
+  it("shows any other error in the dialog", async () => {
+    const api = fakeApi({
+      createSavedQuery: vi.fn(async () => Promise.reject(new ApiError(500, "disk full"))),
+    });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    expect(store.getState().save).toEqual({
+      status: "error",
+      error:
+        "The server ran into a problem. Try again in a moment; if it keeps happening, contact support.",
+    });
+    expect(store.getState().savedDialog).toBe("save");
+  });
+
+  it("ignores a failure that arrives after the dialog was closed", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.closeSavedDialog();
+    slow.reject(new ApiError(500, "late"));
+    await flushPromises();
+    expect(store.getState().save).toEqual({ status: "idle" });
+  });
+
+  it("does not start a second save while one is running", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.saveQuery("Weekly", ""); // Enter pressed twice
+    expect(api.createSavedQuery).toHaveBeenCalledTimes(1);
+    slow.resolve(savedQuery("new", "Weekly"));
+    await flushPromises();
+    expect(store.getState().save).toEqual({ status: "idle" });
+    expect(store.getState().openSaved).toMatchObject({ id: "new" });
+  });
+
+  it("does not let a late save replace a query opened since", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const other = savedQuery("b", "Other");
+    const { app, store } = setup({ ...ready(emptyQuery()), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.closeSavedDialog();
+    store.setState({ savedList: { status: "ok", queries: [other] } });
+    app.askOpenSaved("b");
+    slow.resolve(savedQuery("a", "Weekly"));
+    await flushPromises();
+    expect(store.getState().openSaved).toMatchObject({ id: "b" });
+  });
+
+  it("remembers a save that finished after the dialog was closed", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.closeSavedDialog();
+    slow.resolve(savedQuery("late", "Weekly"));
+    await flushPromises();
+    expect(store.getState().openSaved).toMatchObject({ id: "late" });
+  });
+});
+
+describe("saved queries: opening one from the list", () => {
+  const loggedIn = { auth: { status: "authenticated", user: { name: "pat" } } } as const;
+  const target = savedQuery("t", "Weekly", { databaseIds: ["alpha", "gone"] });
+  const inList: Partial<AppState> = {
+    savedDialog: "list",
+    savedList: { status: "ok", queries: [target] },
+  };
+
+  it("opens at once when nothing would be lost, dropping databases that no longer exist", async () => {
+    vi.useFakeTimers();
+    const { app, api, store, announce } = setup({ ...loggedIn, ...inList, ...ready(emptyQuery()) });
+    app.askOpenSaved("t");
+    const state = store.getState();
+    expect(state.query).toBe(target.query);
+    expect(state.selectedDatabaseIds).toEqual(["alpha"]);
+    expect(state.issues).toEqual(validateQuery(target.query, catalog));
+    expect(state.savedDialog).toBeNull();
+    expect(state.savedConfirm).toBeNull();
+    expect(state.openSaved).toEqual({ ...openFrom(target), databaseIds: ["alpha"] });
+    expect(state.dropNotice).toBe("1 saved database no longer exists and was left out.");
+    expect(announce).toHaveBeenCalledWith("Opened “Weekly”.");
+    // Like any edit: statistics are fetched for the opened query.
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    expect(api.getStats).toHaveBeenCalledWith(
+      target.query,
+      ["alpha"],
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("resets the statistics and preview of the query it replaces", () => {
+    const { app, store } = setup({
+      ...loggedIn,
+      ...inList,
+      ...ready(emptyQuery()),
+      stats: { status: "ok", results: [] },
+      preview: { status: "ok", events, page: 0 },
+    });
+    app.askOpenSaved("t");
+    expect(store.getState().stats).toEqual({ status: "idle", results: [] });
+    expect(store.getState().preview).toEqual({ status: "idle" });
+  });
+
+  it("says how many databases were left out", () => {
+    const many = savedQuery("t", "Weekly", { databaseIds: ["alpha", "x", "y"] });
+    const { app, store } = setup({
+      ...loggedIn,
+      ...ready(emptyQuery()),
+      savedDialog: "list",
+      savedList: { status: "ok", queries: [many] },
+    });
+    app.askOpenSaved("t");
+    expect(store.getState().dropNotice).toBe(
+      "2 saved databases no longer exist and were left out.",
+    );
+  });
+
+  it("clears an old warning when nothing was left out", () => {
+    const whole = savedQuery("t", "Weekly", { databaseIds: ["alpha"] });
+    const { app, store } = setup({
+      ...loggedIn,
+      ...ready(emptyQuery()),
+      dropNotice: "old",
+      savedDialog: "list",
+      savedList: { status: "ok", queries: [whole] },
+    });
+    app.askOpenSaved("t");
+    expect(store.getState().dropNotice).toBeNull();
+  });
+
+  it("asks first when the query on screen has unsaved work", () => {
+    const { app, store } = setup({ ...loggedIn, ...inList, ...ready() });
+    app.askOpenSaved("t");
+    expect(store.getState().savedConfirm).toEqual({ action: "open", id: "t" });
+    expect(store.getState().query).not.toBe(target.query);
+  });
+
+  it("opens after the user confirms", () => {
+    const { app, store } = setup({ ...loggedIn, ...inList, ...ready() });
+    app.askOpenSaved("t");
+    app.confirmSavedAction();
+    expect(store.getState().query).toBe(target.query);
+    expect(store.getState().savedConfirm).toBeNull();
+    expect(store.getState().savedDialog).toBeNull();
+  });
+
+  it("keeps the query when the user cancels", () => {
+    const query = runnableQuery();
+    const { app, store } = setup({ ...loggedIn, ...inList, ...ready(query) });
+    app.askOpenSaved("t");
+    app.cancelSavedAction();
+    expect(store.getState().savedConfirm).toBeNull();
+    expect(store.getState().query).toBe(query);
+    expect(store.getState().savedDialog).toBe("list");
+  });
+
+  it("opens at once when the query on screen is the saved one, unedited", () => {
+    const current = savedQuery("c", "Current", { databaseIds: ["alpha", "beta"] });
+    const { app, store } = setup({
+      ...loggedIn,
+      ...inList,
+      ...ready(current.query),
+      openSaved: openFrom(current),
+    });
+    app.askOpenSaved("t");
+    expect(store.getState().openSaved).toMatchObject({ id: "t" });
+  });
+
+  it("ignores a query that is no longer in the list", () => {
+    const { app, store } = setup({ ...loggedIn, ...inList, ...ready(emptyQuery()) });
+    app.askOpenSaved("nope");
+    expect(store.getState().savedDialog).toBe("list");
+    expect(store.getState().openSaved).toBeNull();
+  });
+});
+
+describe("saved queries: deleting", () => {
+  const loggedIn = { auth: { status: "authenticated", user: { name: "pat" } } } as const;
+  const a = savedQuery("a", "Weekly");
+  const b = savedQuery("b", "Monthly");
+
+  it("asks first, then deletes and reloads the list", async () => {
+    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue([b]);
+    const { app, api, store, announce } = setup(
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a, b] },
+      },
+      fakeApi({ listSavedQueries: list }),
+    );
+    app.askDeleteSaved("a");
+    expect(store.getState().savedConfirm).toEqual({ action: "delete", id: "a" });
+    expect(api.deleteSavedQuery).not.toHaveBeenCalled();
+    app.confirmSavedAction();
+    expect(store.getState().savedConfirm).toBeNull();
+    await flushPromises();
+    expect(api.deleteSavedQuery).toHaveBeenCalledWith("a");
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b] });
+    expect(announce).toHaveBeenCalledWith("Deleted “Weekly”.");
+  });
+
+  // Sighted users otherwise only see the item vanish. The reload after the
+  // delete must not clear it.
+  it("shows the delete inside the dialog too, after the list reloads", async () => {
+    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue([b]);
+    const { app, store } = setup(
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a, b] },
+      },
+      fakeApi({ listSavedQueries: list }),
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b] });
+    expect(store.getState().savedListNotice).toEqual({ tone: "done", text: "Deleted “Weekly”." });
+  });
+
+  it("a delete that finishes after the dialog was closed leaves no notice behind", async () => {
+    const answer = deferred<void>();
+    const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
+    const { app, store } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    app.closeSavedDialog();
+    answer.resolve();
+    await flushPromises();
+    expect(store.getState().savedListNotice).toBeNull();
+  });
+
+  it("forgets the open query when it is the one deleted", async () => {
+    const { app, store } = setup({
+      ...loggedIn,
+      ...ready(a.query),
+      openSaved: openFrom(a),
+      savedDialog: "list",
+      savedList: { status: "ok", queries: [a] },
+    });
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().openSaved).toBeNull();
+  });
+
+  it("keeps the open query when another one is deleted", async () => {
+    const { app, store } = setup({
+      ...loggedIn,
+      ...ready(a.query),
+      openSaved: openFrom(a),
+      savedDialog: "list",
+      savedList: { status: "ok", queries: [a, b] },
+    });
+    app.askDeleteSaved("b");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().openSaved).toMatchObject({ id: "a" });
+  });
+
+  it("a delete whose query is already gone counts as deleted", async () => {
+    const api = fakeApi({
+      deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(404, "gone"))),
+      listSavedQueries: vi.fn(async () => []),
+    });
+    const { app, store, showError } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(showError).not.toHaveBeenCalled();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [] });
+  });
+
+  // The toast is drawn under the modal dialog's backdrop and the page's live
+  // region is inert while the dialog is open, so the notice lives in the dialog.
+  it("a failed delete keeps the list and says so inside the dialog", async () => {
+    const api = fakeApi({
+      deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
+    });
+    const { app, store, showError } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [a] });
+    expect(store.getState().savedListNotice).toEqual({
+      tone: "error",
+      text: `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
+    });
+    expect(showError).not.toHaveBeenCalled();
+  });
+
+  it("the delete notice goes away when the list reloads, another question is asked or the dialog closes", async () => {
+    const failing = () =>
+      fakeApi({
+        deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
+        listSavedQueries: vi.fn(async () => [a]),
+      });
+    const failedDelete = async () => {
+      const made = setup(
+        { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+        failing(),
+      );
+      made.app.askDeleteSaved("a");
+      made.app.confirmSavedAction();
+      await flushPromises();
+      expect(made.store.getState().savedListNotice).not.toBeNull();
+      return made;
+    };
+
+    const reload = await failedDelete();
+    reload.app.retrySavedList();
+    expect(reload.store.getState().savedListNotice).toBeNull();
+
+    const asking = await failedDelete();
+    asking.app.askDeleteSaved("a");
+    expect(asking.store.getState().savedListNotice).toBeNull();
+
+    const closing = await failedDelete();
+    closing.app.closeSavedDialog();
+    expect(closing.store.getState().savedListNotice).toBeNull();
+
+    const reopening = await failedDelete();
+    reopening.app.openSavedList();
+    expect(reopening.store.getState().savedListNotice).toBeNull();
+  });
+
+  it("a delete that fails after the dialog was closed leaves no notice behind", async () => {
+    const answer = deferred<void>();
+    const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
+    const { app, store } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    app.closeSavedDialog();
+    answer.reject(new ApiError(503, "down"));
+    await flushPromises();
+    expect(store.getState().savedListNotice).toBeNull();
+  });
+
+  it("a 401 on delete redirects to log in", async () => {
+    const api = fakeApi({
+      deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(401, "no"))),
+    });
+    const { app, navigate } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
+  });
+
+  it("confirmSavedAction does nothing without a pending action", () => {
+    const { app, api } = setup(ready());
+    app.confirmSavedAction();
+    expect(api.deleteSavedQuery).not.toHaveBeenCalled();
   });
 });
 

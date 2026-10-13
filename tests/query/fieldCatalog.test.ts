@@ -32,6 +32,7 @@ const facets: Facet[] = [
   {
     id: "engine_rpm",
     name: "Engine RPM",
+    number: 1,
     tags: [],
     group: "engine",
     comment: "",
@@ -46,6 +47,7 @@ const facets: Facet[] = [
   {
     id: "vehicle_identity",
     name: "Vehicle identity",
+    number: 2,
     tags: [],
     group: "metadata",
     comment: "",
@@ -92,6 +94,7 @@ describe("buildFieldCatalog", () => {
       {
         id: "a",
         name: "Alpha",
+        number: 1,
         tags: [],
         group: "",
         comment: "",
@@ -252,6 +255,16 @@ describe("valueTypeFor", () => {
     ["timestamp without time zone", "date"],
     ["VARCHAR(255)", "string"],
     ["something_new", "string"],
+    // Sign and padding words change how a number is stored, not that it is one.
+    ["INT UNSIGNED", "number"],
+    ["bigint unsigned", "number"],
+    ["DECIMAL(10,2) UNSIGNED", "number"],
+    ["INT(11) UNSIGNED ZEROFILL", "number"],
+    ["SMALLINT SIGNED", "number"],
+    ["DOUBLE PRECISION UNSIGNED", "number"],
+    // The words are removed as whole words only: other names stay as they were.
+    ["UNSIGNEDISH", "string"],
+    ["UNSIGNED", "string"],
   ] as const)("maps %s -> %s", (type, expected) => {
     expect(t(type)).toBe(expected);
   });

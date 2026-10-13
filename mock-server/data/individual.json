@@ -4,11 +4,11 @@
       "label": "observation_window",
       "group": "metadata",
       "tags": ["rear", "front", "hybrid"],
-      "idNumber": 1,
+      "id_number": 1,
       "name": "Observation window",
       "description": "The time span covered by a single telemetry entryset, marking when the reported values were captured.",
       "comment": "Always present; used to index entrysets by time",
-      "totalCount": 5769996496,
+      "total_count": 5769996496,
       "fields": [
         {
           "label": "from_timestamp",
@@ -36,11 +36,11 @@
       "label": "vehicle_identity",
       "group": "metadata",
       "tags": ["right"],
-      "idNumber": 2,
+      "id_number": 2,
       "name": "Vehicle identity",
       "description": "Identifying information for the specific vehicle a telemetry entryset belongs to.",
       "comment": "Always present; used to index entrysets by vehicle",
-      "totalCount": 5541815749,
+      "total_count": 5541815749,
       "fields": [
         {
           "label": "vin",
@@ -97,11 +97,11 @@
       "label": "trip_context",
       "group": "metadata",
       "tags": ["hybrid", "gasoline", "diagnostic", "aftermarket"],
-      "idNumber": 3,
+      "id_number": 3,
       "name": "Trip context",
       "description": "Identifiers linking a telemetry entryset to a specific trip, driver, and route.",
       "comment": "Usually present; missing for unattended or test drives",
-      "totalCount": 5730340368,
+      "total_count": 5730340368,
       "fields": [
         {
           "label": "trip_id",
@@ -138,11 +138,11 @@
       "label": "gps_position",
       "group": "metadata",
       "tags": ["requires_calibration", "critical"],
-      "idNumber": 4,
+      "id_number": 4,
       "name": "GPS position",
       "description": "The vehicle's geographic position at the time of the entryset, from its onboard GPS receiver.",
       "comment": "Nearly always present; occasionally missing on GPS signal loss",
-      "totalCount": 5885822143,
+      "total_count": 5885822143,
       "fields": [
         {
           "label": "latitude",
@@ -188,11 +188,11 @@
       "label": "engine_rpm",
       "group": "engine",
       "tags": ["safety_related", "high_frequency", "aftermarket"],
-      "idNumber": 5,
+      "id_number": 5,
       "name": "Engine RPM",
       "description": "The rotational speed of the engine's crankshaft, one of the most frequently sampled engine signals.",
       "comment": "Core engine load indicator",
-      "totalCount": 3015512373,
+      "total_count": 3015512373,
       "fields": [
         {
           "label": "value_rpm",
@@ -229,11 +229,11 @@
       "label": "engine_oil_temperature",
       "group": "engine",
       "tags": [],
-      "idNumber": 6,
+      "id_number": 6,
       "name": "Engine oil temperature",
       "description": "The temperature of the engine oil, used to gauge lubrication effectiveness and engine wear risk.",
       "comment": "Rises with sustained high load",
-      "totalCount": 908753287,
+      "total_count": 908753287,
       "fields": [
         {
           "label": "value_celsius",
@@ -270,11 +270,11 @@
       "label": "engine_oil_pressure",
       "group": "engine",
       "tags": ["critical", "diesel", "experimental", "oem"],
-      "idNumber": 7,
+      "id_number": 7,
       "name": "Engine oil pressure",
       "description": "The pressure of oil circulating through the engine, critical to preventing bearing and component wear.",
       "comment": "Low pressure can indicate a pump or leak fault",
-      "totalCount": 172459125,
+      "total_count": 172459125,
       "fields": [
         {
           "label": "value_kpa",
@@ -302,11 +302,11 @@
       "label": "engine_coolant_temperature",
       "group": "engine",
       "tags": ["gasoline", "low_frequency"],
-      "idNumber": 8,
+      "id_number": 8,
       "name": "Engine coolant temperature",
       "description": "The temperature of coolant flowing through the engine block, a key overheating indicator.",
       "comment": "Feeds the thermostat and cooling fan logic",
-      "totalCount": 1872070481,
+      "total_count": 1872070481,
       "fields": [
         {
           "label": "value_celsius",
@@ -334,11 +334,11 @@
       "label": "engine_load",
       "group": "engine",
       "tags": ["oem", "right", "front", "redundant"],
-      "idNumber": 9,
+      "id_number": 9,
       "name": "Engine load",
       "description": "The calculated percentage of available engine torque currently being used.",
       "comment": "Correlates with throttle position and fuel use",
-      "totalCount": 969901197,
+      "total_count": 969901197,
       "fields": [
         {
           "label": "load_percentage",
@@ -366,11 +366,11 @@
       "label": "turbocharger_boost_pressure",
       "group": "engine",
       "tags": ["diagnostic", "safety_related"],
-      "idNumber": 10,
+      "id_number": 10,
       "name": "Turbocharger boost pressure",
       "description": "The intake pressure produced by the turbocharger above atmospheric pressure.",
       "comment": "Higher boost means more power, more heat",
-      "totalCount": 2307925,
+      "total_count": 2307925,
       "fields": [
         {
           "label": "boost_psi",
@@ -398,11 +398,11 @@
       "label": "spark_plug_condition",
       "group": "engine",
       "tags": ["diagnostic"],
-      "idNumber": 11,
+      "id_number": 11,
       "name": "Spark plug condition",
       "description": "The wear and firing condition of an individual cylinder's spark plug.",
       "comment": "Worn plugs cause misfires",
-      "totalCount": 236839028,
+      "total_count": 236839028,
       "fields": [
         {
           "label": "cylinder_number",
@@ -439,11 +439,11 @@
       "label": "camshaft_position",
       "group": "engine",
       "tags": ["wear_item"],
-      "idNumber": 12,
+      "id_number": 12,
       "name": "Camshaft position",
       "description": "The rotational angle of the camshaft relative to top dead center, used for valve timing.",
       "comment": "Feeds variable valve timing control",
-      "totalCount": 187000353,
+      "total_count": 187000353,
       "fields": [
         {
           "label": "angle_deg",
@@ -471,11 +471,11 @@
       "label": "crankshaft_position",
       "group": "engine",
       "tags": [],
-      "idNumber": 13,
+      "id_number": 13,
       "name": "Crankshaft position",
       "description": "The rotational angle and speed of the crankshaft, the primary timing reference for engine control.",
       "comment": "Loss of signal typically stalls the engine",
-      "totalCount": 446206978,
+      "total_count": 446206978,
       "fields": [
         {
           "label": "angle_deg",
@@ -503,11 +503,11 @@
       "label": "transmission_gear",
       "group": "powertrain_transmission",
       "tags": ["critical"],
-      "idNumber": 14,
+      "id_number": 14,
       "name": "Transmission gear",
       "description": "The currently engaged gear in the transmission.",
       "comment": "Changes with speed and load demand",
-      "totalCount": 89879327,
+      "total_count": 89879327,
       "fields": [
         {
           "label": "current_gear",
@@ -535,11 +535,11 @@
       "label": "transmission_fluid_temperature",
       "group": "powertrain_transmission",
       "tags": [],
-      "idNumber": 15,
+      "id_number": 15,
       "name": "Transmission fluid temperature",
       "description": "The temperature of the fluid lubricating and cooling the transmission.",
       "comment": "Overheating shortens transmission life",
-      "totalCount": 421102585,
+      "total_count": 421102585,
       "fields": [
         {
           "label": "value_celsius",
@@ -567,11 +567,11 @@
       "label": "clutch_wear",
       "group": "powertrain_transmission",
       "tags": ["diesel", "high_frequency"],
-      "idNumber": 16,
+      "id_number": 16,
       "name": "Clutch wear",
       "description": "The estimated wear level of the clutch assembly based on engagement history.",
       "comment": "High engagement counts accelerate wear",
-      "totalCount": 435019059,
+      "total_count": 435019059,
       "fields": [
         {
           "label": "wear_percentage",
@@ -599,11 +599,11 @@
       "label": "differential_temperature",
       "group": "powertrain_transmission",
       "tags": ["critical"],
-      "idNumber": 17,
+      "id_number": 17,
       "name": "Differential temperature",
       "description": "The temperature of a drive axle's differential housing and gear oil.",
       "comment": "Tracked per axle on multi-axle vehicles",
-      "totalCount": 681983976,
+      "total_count": 681983976,
       "fields": [
         {
           "label": "value_celsius",
@@ -631,11 +631,11 @@
       "label": "driveshaft_torque",
       "group": "powertrain_transmission",
       "tags": [],
-      "idNumber": 18,
+      "id_number": 18,
       "name": "Driveshaft torque",
       "description": "The torque currently being transmitted through the driveshaft to the wheels.",
       "comment": "Spikes under hard acceleration or towing",
-      "totalCount": 178532440,
+      "total_count": 178532440,
       "fields": [
         {
           "label": "torque_nm",
@@ -654,11 +654,11 @@
       "label": "cv_joint_condition",
       "group": "powertrain_transmission",
       "tags": ["requires_calibration"],
-      "idNumber": 19,
+      "id_number": 19,
       "name": "CV joint condition",
       "description": "The condition of a constant-velocity joint's protective boot and grease seal.",
       "comment": "A torn boot leads to rapid joint failure",
-      "totalCount": 32135545,
+      "total_count": 32135545,
       "fields": [
         {
           "label": "side",
@@ -686,11 +686,11 @@
       "label": "transfer_case_mode",
       "group": "powertrain_transmission",
       "tags": ["safety_related", "wear_item", "gasoline", "regulatory"],
-      "idNumber": 20,
+      "id_number": 20,
       "name": "Transfer case mode",
       "description": "The currently selected drive mode on a vehicle's transfer case, for multi-axle drive vehicles.",
       "comment": "Relevant to 4x4 and AWD fleet vehicles",
-      "totalCount": 259924,
+      "total_count": 259924,
       "fields": [
         {
           "label": "mode",
@@ -718,11 +718,11 @@
       "label": "torque_converter_lockup",
       "group": "powertrain_transmission",
       "tags": ["wear_item", "aftermarket", "requires_calibration"],
-      "idNumber": 21,
+      "id_number": 21,
       "name": "Torque converter lockup",
       "description": "Whether the automatic transmission's torque converter is mechanically locked for direct drive.",
       "comment": "Improves efficiency once locked",
-      "totalCount": 2094493,
+      "total_count": 2094493,
       "fields": [
         {
           "label": "is_locked",
@@ -750,11 +750,11 @@
       "label": "fuel_level",
       "group": "fuel_system",
       "tags": ["aftermarket", "gasoline", "safety_related", "hybrid"],
-      "idNumber": 22,
+      "id_number": 22,
       "name": "Fuel level",
       "description": "The amount of fuel remaining in the tank.",
       "comment": "One of the most frequently reported signals",
-      "totalCount": 3667860170,
+      "total_count": 3667860170,
       "fields": [
         {
           "label": "percentage",
@@ -782,11 +782,11 @@
       "label": "fuel_pressure",
       "group": "fuel_system",
       "tags": ["requires_calibration", "electric"],
-      "idNumber": 23,
+      "id_number": 23,
       "name": "Fuel pressure",
       "description": "The pressure of fuel delivered to the injectors by the fuel pump.",
       "comment": "Out-of-spec pressure causes poor combustion",
-      "totalCount": 444052520,
+      "total_count": 444052520,
       "fields": [
         {
           "label": "value_kpa",
@@ -814,11 +814,11 @@
       "label": "fuel_injector_status",
       "group": "fuel_system",
       "tags": ["high_frequency"],
-      "idNumber": 24,
+      "id_number": 24,
       "name": "Fuel injector status",
       "description": "The operating condition and pulse timing of an individual fuel injector.",
       "comment": "Clogged injectors reduce efficiency",
-      "totalCount": 102733291,
+      "total_count": 102733291,
       "fields": [
         {
           "label": "cylinder_number",
@@ -855,11 +855,11 @@
       "label": "fuel_pump_status",
       "group": "fuel_system",
       "tags": ["high_frequency", "requires_calibration"],
-      "idNumber": 25,
+      "id_number": 25,
       "name": "Fuel pump status",
       "description": "The operating state and delivery rate of the fuel pump.",
       "comment": "A failing pump causes intermittent stalling",
-      "totalCount": 318272749,
+      "total_count": 318272749,
       "fields": [
         {
           "label": "is_running",
@@ -887,11 +887,11 @@
       "label": "fuel_consumption_rate",
       "group": "fuel_system",
       "tags": ["high_frequency"],
-      "idNumber": 26,
+      "id_number": 26,
       "name": "Fuel consumption rate",
       "description": "The rate at which the vehicle is currently consuming fuel.",
       "comment": "Key metric for fleet efficiency reporting",
-      "totalCount": 679015663,
+      "total_count": 679015663,
       "fields": [
         {
           "label": "liters_per_100km",
@@ -919,11 +919,11 @@
       "label": "fuel_tank_pressure",
       "group": "fuel_system",
       "tags": ["left"],
-      "idNumber": 27,
+      "id_number": 27,
       "name": "Fuel tank pressure",
       "description": "The internal pressure of the sealed fuel tank, monitored for evaporative emissions control.",
       "comment": "Abnormal pressure suggests a vapor leak",
-      "totalCount": 1206186416,
+      "total_count": 1206186416,
       "fields": [
         {
           "label": "value_kpa",
@@ -951,11 +951,11 @@
       "label": "fuel_type_detected",
       "group": "fuel_system",
       "tags": ["aftermarket"],
-      "idNumber": 28,
+      "id_number": 28,
       "name": "Fuel type detected",
       "description": "The type and quality grade of fuel identified in the tank.",
       "comment": "Relevant for flex-fuel fleet vehicles",
-      "totalCount": 1121241,
+      "total_count": 1121241,
       "fields": [
         {
           "label": "fuel_type",
@@ -983,11 +983,11 @@
       "label": "fuel_filter_status",
       "group": "fuel_system",
       "tags": ["front", "experimental", "rear"],
-      "idNumber": 29,
+      "id_number": 29,
       "name": "Fuel filter status",
       "description": "The restriction level of the fuel filter, indicating how soon it needs replacement.",
       "comment": "High restriction starves the engine of fuel",
-      "totalCount": 148956613,
+      "total_count": 148956613,
       "fields": [
         {
           "label": "restriction_percentage",
@@ -1015,11 +1015,11 @@
       "label": "exhaust_gas_temperature",
       "group": "exhaust_emissions",
       "tags": ["deprecated", "safety_related"],
-      "idNumber": 30,
+      "id_number": 30,
       "name": "Exhaust gas temperature",
       "description": "The temperature of exhaust gases leaving a cylinder bank.",
       "comment": "Used to protect the turbo and catalyst",
-      "totalCount": 83674442,
+      "total_count": 83674442,
       "fields": [
         {
           "label": "value_celsius",
@@ -1047,11 +1047,11 @@
       "label": "nox_emission_level",
       "group": "exhaust_emissions",
       "tags": ["gasoline", "oem"],
-      "idNumber": 31,
+      "id_number": 31,
       "name": "NOx emission level",
       "description": "The concentration of nitrogen oxides measured in the exhaust stream.",
       "comment": "Subject to regulatory emission limits",
-      "totalCount": 19245023,
+      "total_count": 19245023,
       "fields": [
         {
           "label": "value_ppm",
@@ -1079,11 +1079,11 @@
       "label": "particulate_filter_status",
       "group": "exhaust_emissions",
       "tags": ["experimental"],
-      "idNumber": 32,
+      "id_number": 32,
       "name": "Particulate filter status",
       "description": "The soot loading and regeneration state of the diesel particulate filter.",
       "comment": "Periodically self-cleans via regeneration",
-      "totalCount": 2088414,
+      "total_count": 2088414,
       "fields": [
         {
           "label": "soot_load_percentage",
@@ -1111,11 +1111,11 @@
       "label": "catalytic_converter_temperature",
       "group": "exhaust_emissions",
       "tags": ["hybrid"],
-      "idNumber": 33,
+      "id_number": 33,
       "name": "Catalytic converter temperature",
       "description": "The operating temperature of the catalytic converter, which must reach a threshold to be effective.",
       "comment": "Cold converters emit more pollutants",
-      "totalCount": 808911862,
+      "total_count": 808911862,
       "fields": [
         {
           "label": "value_celsius",
@@ -1143,11 +1143,11 @@
       "label": "co2_emission_rate",
       "group": "exhaust_emissions",
       "tags": ["high_frequency"],
-      "idNumber": 34,
+      "id_number": 34,
       "name": "CO2 emission rate",
       "description": "The estimated rate of carbon dioxide emitted per distance traveled.",
       "comment": "Reported for fleet sustainability tracking",
-      "totalCount": 1055198345,
+      "total_count": 1055198345,
       "fields": [
         {
           "label": "grams_per_km",
@@ -1166,11 +1166,11 @@
       "label": "exhaust_backpressure",
       "group": "exhaust_emissions",
       "tags": ["aftermarket", "redundant"],
-      "idNumber": 35,
+      "id_number": 35,
       "name": "Exhaust backpressure",
       "description": "The resistance to exhaust flow measured in the exhaust system.",
       "comment": "High backpressure reduces engine efficiency",
-      "totalCount": 240918327,
+      "total_count": 240918327,
       "fields": [
         {
           "label": "value_kpa",
@@ -1189,11 +1189,11 @@
       "label": "oxygen_sensor_reading",
       "group": "exhaust_emissions",
       "tags": ["regulatory", "experimental"],
-      "idNumber": 36,
+      "id_number": 36,
       "name": "Oxygen sensor reading",
       "description": "The voltage output of an exhaust oxygen sensor, used to trim the fuel mixture.",
       "comment": "Drives closed-loop fuel correction",
-      "totalCount": 1002623744,
+      "total_count": 1002623744,
       "fields": [
         {
           "label": "sensor_id",
@@ -1230,11 +1230,11 @@
       "label": "egr_valve_position",
       "group": "exhaust_emissions",
       "tags": ["redundant", "regulatory"],
-      "idNumber": 37,
+      "id_number": 37,
       "name": "EGR valve position",
       "description": "The position of the exhaust gas recirculation valve, used to reduce combustion temperatures.",
       "comment": "A stuck valve raises NOx output",
-      "totalCount": 2301087,
+      "total_count": 2301087,
       "fields": [
         {
           "label": "position_percentage",
@@ -1262,11 +1262,11 @@
       "label": "radiator_temperature",
       "group": "cooling_system",
       "tags": ["rear"],
-      "idNumber": 38,
+      "id_number": 38,
       "name": "Radiator temperature",
       "description": "The temperature of coolant as it passes through the radiator.",
       "comment": "Drives cooling fan activation",
-      "totalCount": 104880232,
+      "total_count": 104880232,
       "fields": [
         {
           "label": "value_celsius",
@@ -1294,11 +1294,11 @@
       "label": "coolant_level",
       "group": "cooling_system",
       "tags": ["aftermarket", "redundant"],
-      "idNumber": 39,
+      "id_number": 39,
       "name": "Coolant level",
       "description": "The level of coolant remaining in the reservoir.",
       "comment": "Low coolant risks overheating",
-      "totalCount": 148146937,
+      "total_count": 148146937,
       "fields": [
         {
           "label": "percentage",
@@ -1326,11 +1326,11 @@
       "label": "cooling_fan_status",
       "group": "cooling_system",
       "tags": ["deprecated", "front"],
-      "idNumber": 40,
+      "id_number": 40,
       "name": "Cooling fan status",
       "description": "The operating state and speed of the engine cooling fan.",
       "comment": "Activates under high coolant temperature",
-      "totalCount": 303889357,
+      "total_count": 303889357,
       "fields": [
         {
           "label": "is_running",
@@ -1358,11 +1358,11 @@
       "label": "thermostat_position",
       "group": "cooling_system",
       "tags": ["critical"],
-      "idNumber": 41,
+      "id_number": 41,
       "name": "Thermostat position",
       "description": "How far open the engine thermostat valve currently is.",
       "comment": "Controls coolant flow to the radiator",
-      "totalCount": 1615989551,
+      "total_count": 1615989551,
       "fields": [
         {
           "label": "percentage_open",
@@ -1381,11 +1381,11 @@
       "label": "water_pump_status",
       "group": "cooling_system",
       "tags": [],
-      "idNumber": 42,
+      "id_number": 42,
       "name": "Water pump status",
       "description": "The operating state and flow output of the coolant water pump.",
       "comment": "A failed pump causes rapid overheating",
-      "totalCount": 217839222,
+      "total_count": 217839222,
       "fields": [
         {
           "label": "is_running",
@@ -1413,11 +1413,11 @@
       "label": "radiator_cap_pressure",
       "group": "cooling_system",
       "tags": ["diesel", "critical"],
-      "idNumber": 43,
+      "id_number": 43,
       "name": "Radiator cap pressure",
       "description": "The pressure the radiator cap is maintaining in the cooling system.",
       "comment": "Maintains coolant boiling point under pressure",
-      "totalCount": 955065694,
+      "total_count": 955065694,
       "fields": [
         {
           "label": "value_kpa",
@@ -1436,11 +1436,11 @@
       "label": "coolant_leak_detected",
       "group": "cooling_system",
       "tags": ["deprecated"],
-      "idNumber": 44,
+      "id_number": 44,
       "name": "Coolant leak detected",
       "description": "Whether a coolant leak has been detected, and its approximate location.",
       "comment": "Early warning ahead of overheating",
-      "totalCount": 101592351,
+      "total_count": 101592351,
       "fields": [
         {
           "label": "is_detected",
@@ -1468,11 +1468,11 @@
       "label": "battery_12v_voltage",
       "group": "electrical_system",
       "tags": ["experimental", "critical"],
-      "idNumber": 45,
+      "id_number": 45,
       "name": "12V battery voltage",
       "description": "The voltage of the vehicle's low-voltage starting and accessory battery.",
       "comment": "Low voltage predicts starting failure",
-      "totalCount": 4634140002,
+      "total_count": 4634140002,
       "fields": [
         {
           "label": "voltage",
@@ -1500,11 +1500,11 @@
       "label": "alternator_output",
       "group": "electrical_system",
       "tags": ["hybrid", "wear_item", "safety_related", "rear"],
-      "idNumber": 46,
+      "id_number": 46,
       "name": "Alternator output",
       "description": "The current and voltage being generated by the alternator to power accessories and charge the battery.",
       "comment": "Falls off as the alternator wears",
-      "totalCount": 754781762,
+      "total_count": 754781762,
       "fields": [
         {
           "label": "current_amps",
@@ -1532,11 +1532,11 @@
       "label": "starter_motor_status",
       "group": "electrical_system",
       "tags": ["diesel"],
-      "idNumber": 47,
+      "id_number": 47,
       "name": "Starter motor status",
       "description": "The engagement state and current draw of the starter motor during engine start.",
       "comment": "High draw can indicate a failing starter",
-      "totalCount": 67478798,
+      "total_count": 67478798,
       "fields": [
         {
           "label": "is_engaged",
@@ -1564,11 +1564,11 @@
       "label": "fuse_box_status",
       "group": "electrical_system",
       "tags": ["oem", "electric", "diagnostic", "hybrid"],
-      "idNumber": 48,
+      "id_number": 48,
       "name": "Fuse box status",
       "description": "The status of an individual fuse in the vehicle's fuse box.",
       "comment": "A blown fuse disables its circuit",
-      "totalCount": 89443917,
+      "total_count": 89443917,
       "fields": [
         {
           "label": "fuse_id",
@@ -1596,11 +1596,11 @@
       "label": "wiring_harness_integrity",
       "group": "electrical_system",
       "tags": ["gasoline", "deprecated"],
-      "idNumber": 49,
+      "id_number": 49,
       "name": "Wiring harness integrity",
       "description": "The measured resistance of a monitored wiring circuit, used to detect chafing or corrosion.",
       "comment": "Rising resistance suggests a failing connection",
-      "totalCount": 137086543,
+      "total_count": 137086543,
       "fields": [
         {
           "label": "circuit_id",
@@ -1628,11 +1628,11 @@
       "label": "ground_connection_status",
       "group": "electrical_system",
       "tags": ["electric", "oem", "safety_related"],
-      "idNumber": 50,
+      "id_number": 50,
       "name": "Ground connection status",
       "description": "The resistance of a chassis ground connection point.",
       "comment": "Poor grounding causes intermittent faults",
-      "totalCount": 174668464,
+      "total_count": 174668464,
       "fields": [
         {
           "label": "location",
@@ -1660,11 +1660,11 @@
       "label": "voltage_regulator_status",
       "group": "electrical_system",
       "tags": [],
-      "idNumber": 51,
+      "id_number": 51,
       "name": "Voltage regulator status",
       "description": "The output stability of the alternator's voltage regulator.",
       "comment": "Instability can damage electronics",
-      "totalCount": 392616842,
+      "total_count": 392616842,
       "fields": [
         {
           "label": "output_voltage",
@@ -1692,11 +1692,11 @@
       "label": "ignition_switch_position",
       "group": "electrical_system",
       "tags": ["regulatory", "requires_calibration", "hybrid"],
-      "idNumber": 52,
+      "id_number": 52,
       "name": "Ignition switch position",
       "description": "The current position of the ignition switch (off, accessory, run, start).",
       "comment": "Basic vehicle power-state signal",
-      "totalCount": 4954525331,
+      "total_count": 4954525331,
       "fields": [
         {
           "label": "position",
@@ -1715,11 +1715,11 @@
       "label": "battery_state_of_charge",
       "group": "battery_ev",
       "tags": [],
-      "idNumber": 53,
+      "id_number": 53,
       "name": "Battery state of charge",
       "description": "The remaining usable energy in an electric vehicle's traction battery pack, as a percentage of capacity.",
       "comment": "Only reported by electric fleet vehicles",
-      "totalCount": 11050021,
+      "total_count": 11050021,
       "fields": [
         {
           "label": "percentage",
@@ -1747,11 +1747,11 @@
       "label": "battery_pack_temperature",
       "group": "battery_ev",
       "tags": ["critical"],
-      "idNumber": 54,
+      "id_number": 54,
       "name": "Battery pack temperature",
       "description": "The temperature of a cell group within the traction battery pack.",
       "comment": "Thermal management keeps this in a safe band",
-      "totalCount": 6644507,
+      "total_count": 6644507,
       "fields": [
         {
           "label": "value_celsius",
@@ -1779,11 +1779,11 @@
       "label": "battery_voltage",
       "group": "battery_ev",
       "tags": ["redundant"],
-      "idNumber": 55,
+      "id_number": 55,
       "name": "Battery voltage",
       "description": "The total voltage output of the traction battery pack.",
       "comment": "Drops slightly as the pack discharges",
-      "totalCount": 41364781,
+      "total_count": 41364781,
       "fields": [
         {
           "label": "value_volts",
@@ -1811,11 +1811,11 @@
       "label": "charging_status",
       "group": "battery_ev",
       "tags": ["redundant", "low_frequency", "safety_related"],
-      "idNumber": 56,
+      "id_number": 56,
       "name": "Charging status",
       "description": "Whether the vehicle is currently charging and at what rate.",
       "comment": "Reported while connected to a charger",
-      "totalCount": 1339067,
+      "total_count": 1339067,
       "fields": [
         {
           "label": "is_charging",
@@ -1843,11 +1843,11 @@
       "label": "regenerative_braking_output",
       "group": "battery_ev",
       "tags": ["redundant", "hybrid", "wear_item"],
-      "idNumber": 57,
+      "id_number": 57,
       "name": "Regenerative braking output",
       "description": "The power being recovered and returned to the battery during regenerative braking.",
       "comment": "Improves efficiency in stop-and-go driving",
-      "totalCount": 1637478,
+      "total_count": 1637478,
       "fields": [
         {
           "label": "power_kw",
@@ -1875,11 +1875,11 @@
       "label": "battery_health",
       "group": "battery_ev",
       "tags": ["deprecated"],
-      "idNumber": 58,
+      "id_number": 58,
       "name": "Battery health",
       "description": "The long-term degradation state of the traction battery relative to its original capacity.",
       "comment": "Declines gradually over the battery's life",
-      "totalCount": 2086601,
+      "total_count": 2086601,
       "fields": [
         {
           "label": "state_of_health_percentage",
@@ -1907,11 +1907,11 @@
       "label": "inverter_temperature",
       "group": "battery_ev",
       "tags": ["gasoline"],
-      "idNumber": 59,
+      "id_number": 59,
       "name": "Inverter temperature",
       "description": "The operating temperature of the power inverter converting battery DC to motor AC.",
       "comment": "Overheating triggers power derating",
-      "totalCount": 24532785,
+      "total_count": 24532785,
       "fields": [
         {
           "label": "value_celsius",
@@ -1939,11 +1939,11 @@
       "label": "charging_port_status",
       "group": "battery_ev",
       "tags": ["diesel", "requires_calibration", "rear", "deprecated"],
-      "idNumber": 60,
+      "id_number": 60,
       "name": "Charging port status",
       "description": "Whether a charging connector is plugged into the vehicle, and its type.",
       "comment": "Gates the charging_status item",
-      "totalCount": 13105489,
+      "total_count": 13105489,
       "fields": [
         {
           "label": "is_connected",
@@ -1971,11 +1971,11 @@
       "label": "tire_pressure_front_left",
       "group": "tires_wheels",
       "tags": ["deprecated"],
-      "idNumber": 61,
+      "id_number": 61,
       "name": "Tire pressure (front left)",
       "description": "The inflation pressure and tread depth of the front-left tire.",
       "comment": "One of the most commonly equipped sensors",
-      "totalCount": 3548366177,
+      "total_count": 3548366177,
       "fields": [
         {
           "label": "pressure_psi",
@@ -2012,11 +2012,11 @@
       "label": "tire_pressure_front_right",
       "group": "tires_wheels",
       "tags": ["deprecated"],
-      "idNumber": 62,
+      "id_number": 62,
       "name": "Tire pressure (front right)",
       "description": "The inflation pressure and tread depth of the front-right tire.",
       "comment": "Mirrors the front-left sensor",
-      "totalCount": 5328220152,
+      "total_count": 5328220152,
       "fields": [
         {
           "label": "pressure_psi",
@@ -2053,11 +2053,11 @@
       "label": "tire_pressure_rear_left",
       "group": "tires_wheels",
       "tags": ["diesel", "right", "safety_related"],
-      "idNumber": 63,
+      "id_number": 63,
       "name": "Tire pressure (rear left)",
       "description": "The inflation pressure and tread depth of the rear-left tire.",
       "comment": "Rear tires often wear differently than front",
-      "totalCount": 3968636421,
+      "total_count": 3968636421,
       "fields": [
         {
           "label": "pressure_psi",
@@ -2094,11 +2094,11 @@
       "label": "tire_pressure_rear_right",
       "group": "tires_wheels",
       "tags": [],
-      "idNumber": 64,
+      "id_number": 64,
       "name": "Tire pressure (rear right)",
       "description": "The inflation pressure and tread depth of the rear-right tire.",
       "comment": "Completes the four-corner pressure set",
-      "totalCount": 4945943800,
+      "total_count": 4945943800,
       "fields": [
         {
           "label": "pressure_psi",
@@ -2135,11 +2135,11 @@
       "label": "wheel_diameter",
       "group": "tires_wheels",
       "tags": ["requires_calibration"],
-      "idNumber": 65,
+      "id_number": 65,
       "name": "Wheel diameter",
       "description": "The diameter of the fitted wheel, used to calibrate speed and odometer readings.",
       "comment": "Changes if a different wheel size is fitted",
-      "totalCount": 284194532,
+      "total_count": 284194532,
       "fields": [
         {
           "label": "diameter_inches",
@@ -2167,11 +2167,11 @@
       "label": "wheel_speed",
       "group": "tires_wheels",
       "tags": [],
-      "idNumber": 66,
+      "id_number": 66,
       "name": "Wheel speed",
       "description": "The rotational speed of an individual wheel, used by ABS and traction control.",
       "comment": "Discrepancies between wheels indicate slip",
-      "totalCount": 3327120838,
+      "total_count": 3327120838,
       "fields": [
         {
           "label": "speed_kmh",
@@ -2199,11 +2199,11 @@
       "label": "wheel_alignment_angle",
       "group": "tires_wheels",
       "tags": ["right"],
-      "idNumber": 67,
+      "id_number": 67,
       "name": "Wheel alignment angle",
       "description": "The camber and toe angle of a wheel relative to the vehicle's chassis.",
       "comment": "Poor alignment causes uneven tire wear",
-      "totalCount": 296721640,
+      "total_count": 296721640,
       "fields": [
         {
           "label": "camber_deg",
@@ -2231,11 +2231,11 @@
       "label": "tire_temperature",
       "group": "tires_wheels",
       "tags": ["diagnostic"],
-      "idNumber": 68,
+      "id_number": 68,
       "name": "Tire temperature",
       "description": "The surface temperature of a tire, which rises with speed and load.",
       "comment": "Excess heat accelerates tire wear",
-      "totalCount": 124955610,
+      "total_count": 124955610,
       "fields": [
         {
           "label": "value_celsius",
@@ -2263,11 +2263,11 @@
       "label": "spare_tire_status",
       "group": "tires_wheels",
       "tags": ["high_frequency", "oem"],
-      "idNumber": 69,
+      "id_number": 69,
       "name": "Spare tire status",
       "description": "Whether a spare tire is present and its inflation pressure.",
       "comment": "Not all fleet vehicles carry a spare",
-      "totalCount": 4617133,
+      "total_count": 4617133,
       "fields": [
         {
           "label": "is_present",
@@ -2295,11 +2295,11 @@
       "label": "brake_pad_wear_front",
       "group": "brakes",
       "tags": ["safety_related", "hybrid", "redundant", "high_frequency"],
-      "idNumber": 70,
+      "id_number": 70,
       "name": "Brake pad wear (front)",
       "description": "The remaining thickness of the front brake pads, as a percentage of new.",
       "comment": "Front pads typically wear faster than rear",
-      "totalCount": 1374887322,
+      "total_count": 1374887322,
       "fields": [
         {
           "label": "wear_percentage",
@@ -2327,11 +2327,11 @@
       "label": "brake_pad_wear_rear",
       "group": "brakes",
       "tags": ["regulatory", "hybrid", "critical", "aftermarket"],
-      "idNumber": 71,
+      "id_number": 71,
       "name": "Brake pad wear (rear)",
       "description": "The remaining thickness of the rear brake pads, as a percentage of new.",
       "comment": "Wears more slowly than front pads",
-      "totalCount": 1293317777,
+      "total_count": 1293317777,
       "fields": [
         {
           "label": "wear_percentage",
@@ -2359,11 +2359,11 @@
       "label": "brake_fluid_level",
       "group": "brakes",
       "tags": ["electric"],
-      "idNumber": 72,
+      "id_number": 72,
       "name": "Brake fluid level",
       "description": "The level of brake fluid remaining in the reservoir.",
       "comment": "Low fluid can indicate a leak or worn pads",
-      "totalCount": 121697433,
+      "total_count": 121697433,
       "fields": [
         {
           "label": "percentage",
@@ -2391,11 +2391,11 @@
       "label": "brake_temperature",
       "group": "brakes",
       "tags": [],
-      "idNumber": 73,
+      "id_number": 73,
       "name": "Brake temperature",
       "description": "The temperature of a brake rotor or caliper, which rises under heavy or repeated braking.",
       "comment": "Excess heat can cause brake fade",
-      "totalCount": 377304070,
+      "total_count": 377304070,
       "fields": [
         {
           "label": "value_celsius",
@@ -2423,11 +2423,11 @@
       "label": "abs_activation_count",
       "group": "brakes",
       "tags": ["low_frequency", "hybrid", "gasoline", "deprecated"],
-      "idNumber": 74,
+      "id_number": 74,
       "name": "ABS activation count",
       "description": "The number of times the anti-lock braking system has intervened, and the speed of the last intervention.",
       "comment": "Frequent activation may indicate low-grip conditions",
-      "totalCount": 86111465,
+      "total_count": 86111465,
       "fields": [
         {
           "label": "count",
@@ -2455,11 +2455,11 @@
       "label": "brake_pressure",
       "group": "brakes",
       "tags": ["diesel"],
-      "idNumber": 75,
+      "id_number": 75,
       "name": "Brake pressure",
       "description": "The hydraulic pressure applied to the brakes, correlated with pedal position.",
       "comment": "Feeds brake force distribution logic",
-      "totalCount": 1546172337,
+      "total_count": 1546172337,
       "fields": [
         {
           "label": "value_kpa",
@@ -2487,11 +2487,11 @@
       "label": "parking_brake_status",
       "group": "brakes",
       "tags": ["gasoline"],
-      "idNumber": 76,
+      "id_number": 76,
       "name": "Parking brake status",
       "description": "Whether the parking brake is currently engaged.",
       "comment": "Simple engaged/disengaged signal",
-      "totalCount": 1524843014,
+      "total_count": 1524843014,
       "fields": [
         {
           "label": "is_engaged",
@@ -2510,11 +2510,11 @@
       "label": "brake_rotor_thickness",
       "group": "brakes",
       "tags": ["wear_item", "electric"],
-      "idNumber": 77,
+      "id_number": 77,
       "name": "Brake rotor thickness",
       "description": "The remaining thickness of a brake rotor, which thins over its service life.",
       "comment": "Below-minimum rotors require replacement",
-      "totalCount": 1294145390,
+      "total_count": 1294145390,
       "fields": [
         {
           "label": "thickness_mm",
@@ -2542,11 +2542,11 @@
       "label": "suspension_travel_front",
       "group": "suspension",
       "tags": ["diagnostic", "oem"],
-      "idNumber": 78,
+      "id_number": 78,
       "name": "Suspension travel (front)",
       "description": "The current vertical travel of a front suspension corner relative to its resting position.",
       "comment": "Large travel indicates rough terrain",
-      "totalCount": 214740023,
+      "total_count": 214740023,
       "fields": [
         {
           "label": "travel_mm",
@@ -2574,11 +2574,11 @@
       "label": "suspension_travel_rear",
       "group": "suspension",
       "tags": ["aftermarket", "diesel", "oem", "critical"],
-      "idNumber": 79,
+      "id_number": 79,
       "name": "Suspension travel (rear)",
       "description": "The current vertical travel of a rear suspension corner relative to its resting position.",
       "comment": "Tracks load and road surface response",
-      "totalCount": 382049014,
+      "total_count": 382049014,
       "fields": [
         {
           "label": "travel_mm",
@@ -2606,11 +2606,11 @@
       "label": "shock_absorber_condition",
       "group": "suspension",
       "tags": ["redundant", "regulatory"],
-      "idNumber": 80,
+      "id_number": 80,
       "name": "Shock absorber condition",
       "description": "The estimated wear level of a shock absorber based on its damping response.",
       "comment": "Worn shocks reduce ride control",
-      "totalCount": 71119972,
+      "total_count": 71119972,
       "fields": [
         {
           "label": "wear_percentage",
@@ -2638,11 +2638,11 @@
       "label": "ride_height",
       "group": "suspension",
       "tags": ["aftermarket", "deprecated"],
-      "idNumber": 81,
+      "id_number": 81,
       "name": "Ride height",
       "description": "The vehicle's current ground clearance, which can vary on adjustable suspension.",
       "comment": "Lowered ride height may indicate overload",
-      "totalCount": 869190665,
+      "total_count": 869190665,
       "fields": [
         {
           "label": "height_mm",
@@ -2670,11 +2670,11 @@
       "label": "sway_bar_load",
       "group": "suspension",
       "tags": [],
-      "idNumber": 82,
+      "id_number": 82,
       "name": "Sway bar load",
       "description": "The torsional load currently on the anti-roll (sway) bar during cornering.",
       "comment": "Rises with lateral load in turns",
-      "totalCount": 175046539,
+      "total_count": 175046539,
       "fields": [
         {
           "label": "load_nm",
@@ -2702,11 +2702,11 @@
       "label": "air_suspension_pressure",
       "group": "suspension",
       "tags": ["regulatory"],
-      "idNumber": 83,
+      "id_number": 83,
       "name": "Air suspension pressure",
       "description": "The air pressure in an air suspension bag, for vehicles so equipped.",
       "comment": "Only present on air-suspension-equipped vehicles",
-      "totalCount": 905,
+      "total_count": 905,
       "fields": [
         {
           "label": "pressure_kpa",
@@ -2734,11 +2734,11 @@
       "label": "strut_mount_condition",
       "group": "suspension",
       "tags": ["aftermarket", "gasoline", "diesel"],
-      "idNumber": 84,
+      "id_number": 84,
       "name": "Strut mount condition",
       "description": "Whether a strut mount bushing shows signs of wear or looseness.",
       "comment": "Worn mounts cause clunking noises",
-      "totalCount": 264608724,
+      "total_count": 264608724,
       "fields": [
         {
           "label": "is_worn",
@@ -2766,11 +2766,11 @@
       "label": "steering_angle",
       "group": "steering",
       "tags": ["diesel"],
-      "idNumber": 85,
+      "id_number": 85,
       "name": "Steering angle",
       "description": "The current angle of the steering wheel relative to center.",
       "comment": "Used by stability control and ADAS",
-      "totalCount": 230585518,
+      "total_count": 230585518,
       "fields": [
         {
           "label": "angle_deg",
@@ -2798,11 +2798,11 @@
       "label": "steering_torque",
       "group": "steering",
       "tags": ["rear", "regulatory", "redundant", "oem"],
-      "idNumber": 86,
+      "id_number": 86,
       "name": "Steering torque",
       "description": "The torque the driver is applying to the steering wheel.",
       "comment": "Feeds power steering assist calculation",
-      "totalCount": 525765853,
+      "total_count": 525765853,
       "fields": [
         {
           "label": "torque_nm",
@@ -2821,11 +2821,11 @@
       "label": "power_steering_fluid_level",
       "group": "steering",
       "tags": ["critical"],
-      "idNumber": 87,
+      "id_number": 87,
       "name": "Power steering fluid level",
       "description": "The level of hydraulic fluid in the power steering reservoir, for hydraulic-assist systems.",
       "comment": "Not applicable to electric power steering",
-      "totalCount": 2808726,
+      "total_count": 2808726,
       "fields": [
         {
           "label": "percentage",
@@ -2853,11 +2853,11 @@
       "label": "steering_response_time",
       "group": "steering",
       "tags": ["left"],
-      "idNumber": 88,
+      "id_number": 88,
       "name": "Steering response time",
       "description": "The measured delay between steering input and a change in vehicle heading.",
       "comment": "Increases can indicate a linkage issue",
-      "totalCount": 90701788,
+      "total_count": 90701788,
       "fields": [
         {
           "label": "milliseconds",
@@ -2876,11 +2876,11 @@
       "label": "steering_rack_condition",
       "group": "steering",
       "tags": ["rear", "regulatory"],
-      "idNumber": 89,
+      "id_number": 89,
       "name": "Steering rack condition",
       "description": "Whether the steering rack shows signs of a fluid leak.",
       "comment": "Leaks eventually cause assist loss",
-      "totalCount": 760591743,
+      "total_count": 760591743,
       "fields": [
         {
           "label": "is_leaking",
@@ -2899,11 +2899,11 @@
       "label": "steering_wheel_position_sensor",
       "group": "steering",
       "tags": ["gasoline", "wear_item"],
-      "idNumber": 90,
+      "id_number": 90,
       "name": "Steering wheel position sensor",
       "description": "The raw angle reading and calibration state of the steering position sensor.",
       "comment": "Must be recalibrated after alignment work",
-      "totalCount": 332796497,
+      "total_count": 332796497,
       "fields": [
         {
           "label": "angle_deg",
@@ -2931,11 +2931,11 @@
       "label": "chassis_stress_level",
       "group": "body_chassis",
       "tags": ["wear_item"],
-      "idNumber": 91,
+      "id_number": 91,
       "name": "Chassis stress level",
       "description": "The estimated structural stress on the chassis, from strain gauges on heavy-duty fleet vehicles.",
       "comment": "Relevant mainly to trucks and trailers",
-      "totalCount": 402,
+      "total_count": 402,
       "fields": [
         {
           "label": "stress_mpa",
@@ -2963,11 +2963,11 @@
       "label": "door_status",
       "group": "body_chassis",
       "tags": [],
-      "idNumber": 92,
+      "id_number": 92,
       "name": "Door status",
       "description": "Whether a specific door is currently open or closed.",
       "comment": "One entry per door on the vehicle",
-      "totalCount": 66829961,
+      "total_count": 66829961,
       "fields": [
         {
           "label": "door_id",
@@ -2995,11 +2995,11 @@
       "label": "window_position",
       "group": "body_chassis",
       "tags": [],
-      "idNumber": 93,
+      "id_number": 93,
       "name": "Window position",
       "description": "How far open a specific window currently is.",
       "comment": "Tracked per window",
-      "totalCount": 400080804,
+      "total_count": 400080804,
       "fields": [
         {
           "label": "window_id",
@@ -3027,11 +3027,11 @@
       "label": "sunroof_status",
       "group": "body_chassis",
       "tags": ["redundant"],
-      "idNumber": 94,
+      "id_number": 94,
       "name": "Sunroof status",
       "description": "Whether the sunroof is open and by how much.",
       "comment": "Only present on sunroof-equipped vehicles",
-      "totalCount": 10256651,
+      "total_count": 10256651,
       "fields": [
         {
           "label": "is_open",
@@ -3059,11 +3059,11 @@
       "label": "hood_latch_status",
       "group": "body_chassis",
       "tags": ["rear", "high_frequency", "requires_calibration"],
-      "idNumber": 95,
+      "id_number": 95,
       "name": "Hood latch status",
       "description": "Whether the hood latch is securely closed.",
       "comment": "Safety-relevant while driving",
-      "totalCount": 523038822,
+      "total_count": 523038822,
       "fields": [
         {
           "label": "is_closed",
@@ -3082,11 +3082,11 @@
       "label": "trunk_latch_status",
       "group": "body_chassis",
       "tags": ["aftermarket", "regulatory", "low_frequency"],
-      "idNumber": 96,
+      "id_number": 96,
       "name": "Trunk latch status",
       "description": "Whether the trunk or cargo door latch is securely closed.",
       "comment": "Important for cargo security",
-      "totalCount": 523991346,
+      "total_count": 523991346,
       "fields": [
         {
           "label": "is_closed",
@@ -3105,11 +3105,11 @@
       "label": "chassis_corrosion_level",
       "group": "body_chassis",
       "tags": ["requires_calibration", "regulatory", "low_frequency", "diesel"],
-      "idNumber": 97,
+      "id_number": 97,
       "name": "Chassis corrosion level",
       "description": "The estimated severity of corrosion detected at a monitored chassis location.",
       "comment": "More relevant to older fleet vehicles",
-      "totalCount": 3007237,
+      "total_count": 3007237,
       "fields": [
         {
           "label": "severity_percentage",
@@ -3137,11 +3137,11 @@
       "label": "frame_alignment",
       "group": "body_chassis",
       "tags": ["oem"],
-      "idNumber": 98,
+      "id_number": 98,
       "name": "Frame alignment",
       "description": "The measured deviation of the vehicle frame from factory specification.",
       "comment": "Large deviations suggest prior collision damage",
-      "totalCount": 28504238,
+      "total_count": 28504238,
       "fields": [
         {
           "label": "deviation_mm",
@@ -3169,11 +3169,11 @@
       "label": "headlight_status",
       "group": "lighting",
       "tags": ["wear_item"],
-      "idNumber": 99,
+      "id_number": 99,
       "name": "Headlight status",
       "description": "Whether a headlight is on and its current brightness.",
       "comment": "Tracked per side",
-      "totalCount": 3918737773,
+      "total_count": 3918737773,
       "fields": [
         {
           "label": "side",
@@ -3210,11 +3210,11 @@
       "label": "taillight_status",
       "group": "lighting",
       "tags": ["regulatory", "diesel", "left"],
-      "idNumber": 100,
+      "id_number": 100,
       "name": "Taillight status",
       "description": "Whether a taillight is currently on.",
       "comment": "Tracked per side",
-      "totalCount": 5299853082,
+      "total_count": 5299853082,
       "fields": [
         {
           "label": "side",
@@ -3242,11 +3242,11 @@
       "label": "turn_signal_status",
       "group": "lighting",
       "tags": ["high_frequency", "deprecated", "left"],
-      "idNumber": 101,
+      "id_number": 101,
       "name": "Turn signal status",
       "description": "Whether a turn signal is currently flashing.",
       "comment": "Tracked per side",
-      "totalCount": 4056172406,
+      "total_count": 4056172406,
       "fields": [
         {
           "label": "side",
@@ -3274,11 +3274,11 @@
       "label": "hazard_light_status",
       "group": "lighting",
       "tags": ["experimental"],
-      "idNumber": 102,
+      "id_number": 102,
       "name": "Hazard light status",
       "description": "Whether the hazard warning lights are currently active.",
       "comment": "Simple on/off signal",
-      "totalCount": 2055771741,
+      "total_count": 2055771741,
       "fields": [
         {
           "label": "is_active",
@@ -3297,11 +3297,11 @@
       "label": "interior_light_status",
       "group": "lighting",
       "tags": ["gasoline"],
-      "idNumber": 103,
+      "id_number": 103,
       "name": "Interior light status",
       "description": "Whether an interior cabin light zone is currently on.",
       "comment": "Tracked per cabin zone",
-      "totalCount": 4242083317,
+      "total_count": 4242083317,
       "fields": [
         {
           "label": "zone",
@@ -3329,11 +3329,11 @@
       "label": "fog_light_status",
       "group": "lighting",
       "tags": ["aftermarket", "safety_related", "deprecated"],
-      "idNumber": 104,
+      "id_number": 104,
       "name": "Fog light status",
       "description": "Whether a fog light is currently on.",
       "comment": "Only present on fog-light-equipped vehicles",
-      "totalCount": 1221972,
+      "total_count": 1221972,
       "fields": [
         {
           "label": "side",
@@ -3361,11 +3361,11 @@
       "label": "daytime_running_light_status",
       "group": "lighting",
       "tags": [],
-      "idNumber": 105,
+      "id_number": 105,
       "name": "Daytime running light status",
       "description": "Whether daytime running lights are active and their brightness.",
       "comment": "Active whenever the vehicle is running",
-      "totalCount": 4744944158,
+      "total_count": 4744944158,
       "fields": [
         {
           "label": "is_on",
@@ -3393,11 +3393,11 @@
       "label": "cabin_temperature",
       "group": "hvac_cabin",
       "tags": ["low_frequency", "left"],
-      "idNumber": 106,
+      "id_number": 106,
       "name": "Cabin temperature",
       "description": "The measured air temperature within a cabin climate zone.",
       "comment": "Tracked per zone on dual-zone systems",
-      "totalCount": 250156093,
+      "total_count": 250156093,
       "fields": [
         {
           "label": "value_celsius",
@@ -3425,11 +3425,11 @@
       "label": "hvac_fan_speed",
       "group": "hvac_cabin",
       "tags": [],
-      "idNumber": 107,
+      "id_number": 107,
       "name": "HVAC fan speed",
       "description": "The current blower fan speed setting for the climate control system.",
       "comment": "Discrete speed level, not continuous",
-      "totalCount": 297496277,
+      "total_count": 297496277,
       "fields": [
         {
           "label": "speed_level",
@@ -3448,11 +3448,11 @@
       "label": "air_conditioning_status",
       "group": "hvac_cabin",
       "tags": ["low_frequency", "aftermarket"],
-      "idNumber": 108,
+      "id_number": 108,
       "name": "Air conditioning status",
       "description": "Whether the air conditioning compressor is active and its current load.",
       "comment": "Increases engine or battery load when active",
-      "totalCount": 1679828413,
+      "total_count": 1679828413,
       "fields": [
         {
           "label": "is_active",
@@ -3480,11 +3480,11 @@
       "label": "cabin_humidity",
       "group": "hvac_cabin",
       "tags": ["experimental", "diesel"],
-      "idNumber": 109,
+      "id_number": 109,
       "name": "Cabin humidity",
       "description": "The relative humidity measured inside the cabin.",
       "comment": "Used for automatic defog control",
-      "totalCount": 129158174,
+      "total_count": 129158174,
       "fields": [
         {
           "label": "percentage",
@@ -3503,11 +3503,11 @@
       "label": "air_filter_status",
       "group": "hvac_cabin",
       "tags": [],
-      "idNumber": 110,
+      "id_number": 110,
       "name": "Cabin air filter status",
       "description": "The restriction level of the cabin air filter.",
       "comment": "High restriction reduces airflow",
-      "totalCount": 867908429,
+      "total_count": 867908429,
       "fields": [
         {
           "label": "restriction_percentage",
@@ -3535,11 +3535,11 @@
       "label": "defroster_status",
       "group": "hvac_cabin",
       "tags": ["experimental"],
-      "idNumber": 111,
+      "id_number": 111,
       "name": "Defroster status",
       "description": "Whether a defroster zone (windshield or rear) is currently active.",
       "comment": "Tracked per defroster zone",
-      "totalCount": 620470635,
+      "total_count": 620470635,
       "fields": [
         {
           "label": "is_active",
@@ -3567,11 +3567,11 @@
       "label": "seat_heater_status",
       "group": "hvac_cabin",
       "tags": ["experimental", "oem", "wear_item"],
-      "idNumber": 112,
+      "id_number": 112,
       "name": "Seat heater status",
       "description": "Whether a seat heater is active and at what level.",
       "comment": "Tracked per seat",
-      "totalCount": 20291459,
+      "total_count": 20291459,
       "fields": [
         {
           "label": "seat_id",
@@ -3608,11 +3608,11 @@
       "label": "infotainment_volume",
       "group": "infotainment_telematics",
       "tags": [],
-      "idNumber": 113,
+      "id_number": 113,
       "name": "Infotainment volume",
       "description": "The current audio volume level of the infotainment system.",
       "comment": "Simple in-cabin convenience signal",
-      "totalCount": 693321122,
+      "total_count": 693321122,
       "fields": [
         {
           "label": "level_percentage",
@@ -3640,11 +3640,11 @@
       "label": "gps_signal_strength",
       "group": "infotainment_telematics",
       "tags": ["rear", "requires_calibration"],
-      "idNumber": 114,
+      "id_number": 114,
       "name": "GPS signal strength",
       "description": "The strength of the GPS signal, distinct from the position fix itself.",
       "comment": "Low signal degrades gps_position accuracy",
-      "totalCount": 65613099,
+      "total_count": 65613099,
       "fields": [
         {
           "label": "signal_bars",
@@ -3672,11 +3672,11 @@
       "label": "cellular_signal_strength",
       "group": "infotainment_telematics",
       "tags": ["rear", "wear_item"],
-      "idNumber": 115,
+      "id_number": 115,
       "name": "Cellular signal strength",
       "description": "The strength of the cellular connection used for telematics reporting.",
       "comment": "Weak signal can delay entryset uploads",
-      "totalCount": 492560324,
+      "total_count": 492560324,
       "fields": [
         {
           "label": "signal_dbm",
@@ -3704,11 +3704,11 @@
       "label": "bluetooth_connection_status",
       "group": "infotainment_telematics",
       "tags": ["oem", "regulatory", "deprecated", "left"],
-      "idNumber": 116,
+      "id_number": 116,
       "name": "Bluetooth connection status",
       "description": "Whether a Bluetooth device is currently connected.",
       "comment": "Usually a paired driver phone",
-      "totalCount": 1956203607,
+      "total_count": 1956203607,
       "fields": [
         {
           "label": "is_connected",
@@ -3736,11 +3736,11 @@
       "label": "software_version",
       "group": "infotainment_telematics",
       "tags": ["safety_related"],
-      "idNumber": 117,
+      "id_number": 117,
       "name": "Infotainment software version",
       "description": "The currently installed software version of the infotainment head unit.",
       "comment": "Used to track fleet-wide rollout status",
-      "totalCount": 261633267,
+      "total_count": 261633267,
       "fields": [
         {
           "label": "version",
@@ -3768,11 +3768,11 @@
       "label": "wifi_hotspot_status",
       "group": "infotainment_telematics",
       "tags": ["rear"],
-      "idNumber": 118,
+      "id_number": 118,
       "name": "WiFi hotspot status",
       "description": "Whether the vehicle's onboard WiFi hotspot is active and how many devices are connected.",
       "comment": "Only present on hotspot-equipped vehicles",
-      "totalCount": 1186053,
+      "total_count": 1186053,
       "fields": [
         {
           "label": "is_active",
@@ -3800,11 +3800,11 @@
       "label": "voice_assistant_status",
       "group": "infotainment_telematics",
       "tags": ["aftermarket", "hybrid"],
-      "idNumber": 119,
+      "id_number": 119,
       "name": "Voice assistant status",
       "description": "Whether the voice assistant is actively listening and its most recent recognized command.",
       "comment": "Reflects in-cabin voice interaction",
-      "totalCount": 6197636,
+      "total_count": 6197636,
       "fields": [
         {
           "label": "is_listening",
@@ -3832,11 +3832,11 @@
       "label": "media_playback_status",
       "group": "infotainment_telematics",
       "tags": ["rear", "safety_related", "experimental", "high_frequency"],
-      "idNumber": 120,
+      "id_number": 120,
       "name": "Media playback status",
       "description": "The current media source and whether playback is active.",
       "comment": "Cabin entertainment state",
-      "totalCount": 66953353,
+      "total_count": 66953353,
       "fields": [
         {
           "label": "source",
@@ -3864,11 +3864,11 @@
       "label": "lane_departure_warning_status",
       "group": "adas_safety",
       "tags": [],
-      "idNumber": 121,
+      "id_number": 121,
       "name": "Lane departure warning status",
       "description": "Whether the lane departure warning system has recently triggered, and on which side.",
       "comment": "Camera-based lane tracking feature",
-      "totalCount": 8301965,
+      "total_count": 8301965,
       "fields": [
         {
           "label": "is_active",
@@ -3896,11 +3896,11 @@
       "label": "forward_collision_warning_status",
       "group": "adas_safety",
       "tags": ["rear", "safety_related"],
-      "idNumber": 122,
+      "id_number": 122,
       "name": "Forward collision warning status",
       "description": "Whether a forward collision warning is active and the estimated time to collision.",
       "comment": "Precedes automatic emergency braking",
-      "totalCount": 4806917,
+      "total_count": 4806917,
       "fields": [
         {
           "label": "is_active",
@@ -3928,11 +3928,11 @@
       "label": "blind_spot_monitor_status",
       "group": "adas_safety",
       "tags": ["electric", "hybrid"],
-      "idNumber": 123,
+      "id_number": 123,
       "name": "Blind spot monitor status",
       "description": "Whether an object has been detected in a blind spot zone.",
       "comment": "Tracked per side",
-      "totalCount": 25642535,
+      "total_count": 25642535,
       "fields": [
         {
           "label": "side",
@@ -3960,11 +3960,11 @@
       "label": "adaptive_cruise_control_status",
       "group": "adas_safety",
       "tags": ["right", "safety_related", "diagnostic", "aftermarket"],
-      "idNumber": 124,
+      "id_number": 124,
       "name": "Adaptive cruise control status",
       "description": "Whether adaptive cruise control is engaged and its currently set speed.",
       "comment": "Maintains following distance automatically",
-      "totalCount": 1500899,
+      "total_count": 1500899,
       "fields": [
         {
           "label": "is_engaged",
@@ -3992,11 +3992,11 @@
       "label": "driver_attention_level",
       "group": "adas_safety",
       "tags": ["aftermarket", "deprecated"],
-      "idNumber": 125,
+      "id_number": 125,
       "name": "Driver attention level",
       "description": "An estimated attentiveness score derived from driver-facing camera monitoring.",
       "comment": "Low scores can trigger an alert",
-      "totalCount": 33558196,
+      "total_count": 33558196,
       "fields": [
         {
           "label": "score_percentage",
@@ -4024,11 +4024,11 @@
       "label": "automatic_emergency_braking_status",
       "group": "adas_safety",
       "tags": [],
-      "idNumber": 126,
+      "id_number": 126,
       "name": "Automatic emergency braking status",
       "description": "Whether automatic emergency braking has been triggered, and the resulting deceleration.",
       "comment": "A last-resort collision mitigation feature",
-      "totalCount": 5241195,
+      "total_count": 5241195,
       "fields": [
         {
           "label": "is_triggered",
@@ -4056,11 +4056,11 @@
       "label": "parking_assist_status",
       "group": "adas_safety",
       "tags": ["critical"],
-      "idNumber": 127,
+      "id_number": 127,
       "name": "Parking assist status",
       "description": "Whether parking assist is active and the distance to the nearest detected object.",
       "comment": "Combines ultrasonic sensor readings",
-      "totalCount": 29713974,
+      "total_count": 29713974,
       "fields": [
         {
           "label": "is_active",
@@ -4088,11 +4088,11 @@
       "label": "traffic_sign_recognition",
       "group": "adas_safety",
       "tags": ["safety_related", "deprecated"],
-      "idNumber": 128,
+      "id_number": 128,
       "name": "Traffic sign recognition",
       "description": "The most recently recognized traffic sign and its associated speed limit.",
       "comment": "Feeds speed limit warnings",
-      "totalCount": 29854402,
+      "total_count": 29854402,
       "fields": [
         {
           "label": "sign_type",
@@ -4120,11 +4120,11 @@
       "label": "radar_front",
       "group": "radar_lidar_sensors",
       "tags": ["redundant", "experimental", "regulatory", "front"],
-      "idNumber": 129,
+      "id_number": 129,
       "name": "Front radar",
       "description": "Readings from the forward-facing radar unit used for object detection and ranging.",
       "comment": "Only present on ADAS-equipped vehicles",
-      "totalCount": 30020,
+      "total_count": 30020,
       "fields": [
         {
           "label": "frequency_ghz",
@@ -4161,11 +4161,11 @@
       "label": "radar_rear",
       "group": "radar_lidar_sensors",
       "tags": ["hybrid", "right", "redundant", "wear_item"],
-      "idNumber": 130,
+      "id_number": 130,
       "name": "Rear radar",
       "description": "Readings from the rear-facing radar unit used for blind spot and cross-traffic detection.",
       "comment": "Complements the front radar unit",
-      "totalCount": 18842,
+      "total_count": 18842,
       "fields": [
         {
           "label": "frequency_ghz",
@@ -4202,11 +4202,11 @@
       "label": "lidar_roof",
       "group": "radar_lidar_sensors",
       "tags": [],
-      "idNumber": 131,
+      "id_number": 131,
       "name": "Roof-mounted lidar",
       "description": "Readings from a roof-mounted lidar unit, producing a 3D point cloud of the surroundings.",
       "comment": "Rare; present only on advanced test vehicles",
-      "totalCount": 347,
+      "total_count": 347,
       "fields": [
         {
           "label": "scan_rate_hz",
@@ -4234,11 +4234,11 @@
       "label": "ultrasonic_sensor_front",
       "group": "radar_lidar_sensors",
       "tags": ["electric", "left", "wear_item", "oem"],
-      "idNumber": 132,
+      "id_number": 132,
       "name": "Front ultrasonic sensor",
       "description": "Short-range ultrasonic distance readings from the front bumper.",
       "comment": "Used for parking assist",
-      "totalCount": 468,
+      "total_count": 468,
       "fields": [
         {
           "label": "range_cm",
@@ -4266,11 +4266,11 @@
       "label": "ultrasonic_sensor_rear",
       "group": "radar_lidar_sensors",
       "tags": ["rear", "safety_related", "electric", "deprecated"],
-      "idNumber": 133,
+      "id_number": 133,
       "name": "Rear ultrasonic sensor",
       "description": "Short-range ultrasonic distance readings from the rear bumper.",
       "comment": "Used for parking assist and reversing",
-      "totalCount": 388695,
+      "total_count": 388695,
       "fields": [
         {
           "label": "range_cm",
@@ -4298,11 +4298,11 @@
       "label": "camera_front_vision",
       "group": "radar_lidar_sensors",
       "tags": [],
-      "idNumber": 134,
+      "id_number": 134,
       "name": "Front vision camera",
       "description": "Readings from the forward-facing vision camera used for lane and object detection.",
       "comment": "Feeds several ADAS features",
-      "totalCount": 183658,
+      "total_count": 183658,
       "fields": [
         {
           "label": "resolution_mp",
@@ -4330,11 +4330,11 @@
       "label": "camera_surround_view",
       "group": "radar_lidar_sensors",
       "tags": ["front", "critical"],
-      "idNumber": 135,
+      "id_number": 135,
       "name": "Surround view camera system",
       "description": "The status of the multi-camera surround view system used for low-speed maneuvering.",
       "comment": "Combines several camera feeds into one view",
-      "totalCount": 50850,
+      "total_count": 50850,
       "fields": [
         {
           "label": "active_cameras",
@@ -4362,11 +4362,11 @@
       "label": "engine_control_unit_status",
       "group": "diagnostics_control_units",
       "tags": ["gasoline", "oem"],
-      "idNumber": 136,
+      "id_number": 136,
       "name": "Engine control unit status",
       "description": "The health and firmware version of the engine control unit.",
       "comment": "Central controller for engine management",
-      "totalCount": 3498709750,
+      "total_count": 3498709750,
       "fields": [
         {
           "label": "is_faulty",
@@ -4394,11 +4394,11 @@
       "label": "transmission_control_unit_status",
       "group": "diagnostics_control_units",
       "tags": [],
-      "idNumber": 137,
+      "id_number": 137,
       "name": "Transmission control unit status",
       "description": "The health and firmware version of the transmission control unit.",
       "comment": "Manages shift timing and logic",
-      "totalCount": 2352974459,
+      "total_count": 2352974459,
       "fields": [
         {
           "label": "is_faulty",
@@ -4426,11 +4426,11 @@
       "label": "body_control_unit_status",
       "group": "diagnostics_control_units",
       "tags": ["left", "deprecated", "redundant"],
-      "idNumber": 138,
+      "id_number": 138,
       "name": "Body control unit status",
       "description": "The health and firmware version of the body control unit, which manages lighting, locks, and windows.",
       "comment": "A common point of integration for body electronics",
-      "totalCount": 3625157783,
+      "total_count": 3625157783,
       "fields": [
         {
           "label": "is_faulty",
@@ -4458,11 +4458,11 @@
       "label": "fault_code_count",
       "group": "diagnostics_control_units",
       "tags": ["deprecated"],
-      "idNumber": 139,
+      "id_number": 139,
       "name": "Fault code count",
       "description": "The number of active and pending diagnostic trouble codes currently stored.",
       "comment": "A quick fleet health summary metric",
-      "totalCount": 3610340858,
+      "total_count": 3610340858,
       "fields": [
         {
           "label": "active_codes",
@@ -4490,11 +4490,11 @@
       "label": "diagnostic_trouble_code",
       "group": "diagnostics_control_units",
       "tags": ["hybrid", "wear_item", "gasoline", "safety_related"],
-      "idNumber": 140,
+      "id_number": 140,
       "name": "Diagnostic trouble code",
       "description": "An individual stored diagnostic trouble code and its severity.",
       "comment": "One entry per distinct fault code",
-      "totalCount": 3096846078,
+      "total_count": 3096846078,
       "fields": [
         {
           "label": "code",
@@ -4522,11 +4522,11 @@
       "label": "can_bus_status",
       "group": "diagnostics_control_units",
       "tags": ["front", "critical", "redundant"],
-      "idNumber": 141,
+      "id_number": 141,
       "name": "CAN bus status",
       "description": "The error rate and health of a controller area network bus segment.",
       "comment": "High error counts suggest wiring issues",
-      "totalCount": 4190523115,
+      "total_count": 4190523115,
       "fields": [
         {
           "label": "bus_id",
@@ -4563,11 +4563,11 @@
       "label": "telematics_control_unit_status",
       "group": "diagnostics_control_units",
       "tags": ["rear", "left", "experimental"],
-      "idNumber": 142,
+      "id_number": 142,
       "name": "Telematics control unit status",
       "description": "Whether the telematics control unit is online and its firmware version.",
       "comment": "Responsible for uploading entrysets",
-      "totalCount": 5234296080,
+      "total_count": 5234296080,
       "fields": [
         {
           "label": "is_online",
@@ -4595,11 +4595,11 @@
       "label": "onboard_diagnostics_port_status",
       "group": "diagnostics_control_units",
       "tags": ["left", "redundant"],
-      "idNumber": 143,
+      "id_number": 143,
       "name": "Onboard diagnostics port status",
       "description": "Whether an external diagnostic tool is currently connected to the OBD port.",
       "comment": "Typically only active during service visits",
-      "totalCount": 12798563,
+      "total_count": 12798563,
       "fields": [
         {
           "label": "is_connected",
@@ -4618,11 +4618,11 @@
       "label": "harsh_braking_event",
       "group": "driver_behavior",
       "tags": ["regulatory"],
-      "idNumber": 144,
+      "id_number": 144,
       "name": "Harsh braking event",
       "description": "A detected instance of unusually hard braking, with its measured deceleration.",
       "comment": "Fleet safety scorecards track these events",
-      "totalCount": 1385538312,
+      "total_count": 1385538312,
       "fields": [
         {
           "label": "deceleration_g",
@@ -4650,11 +4650,11 @@
       "label": "harsh_acceleration_event",
       "group": "driver_behavior",
       "tags": ["low_frequency"],
-      "idNumber": 145,
+      "id_number": 145,
       "name": "Harsh acceleration event",
       "description": "A detected instance of unusually hard acceleration.",
       "comment": "Also feeds fleet safety scoring",
-      "totalCount": 569693231,
+      "total_count": 569693231,
       "fields": [
         {
           "label": "acceleration_g",
@@ -4682,11 +4682,11 @@
       "label": "seatbelt_status",
       "group": "driver_behavior",
       "tags": ["diagnostic"],
-      "idNumber": 146,
+      "id_number": 146,
       "name": "Seatbelt status",
       "description": "Whether a specific seat's seatbelt is currently fastened.",
       "comment": "Tracked per seat position",
-      "totalCount": 2571472209,
+      "total_count": 2571472209,
       "fields": [
         {
           "label": "seat_id",
@@ -4714,11 +4714,11 @@
       "label": "speeding_event",
       "group": "",
       "tags": [],
-      "idNumber": 147,
+      "id_number": 147,
       "name": "Speeding event",
       "description": "",
       "comment": "Compares vehicle speed to sign recognition data",
-      "totalCount": 846764974,
+      "total_count": 846764974,
       "fields": [
         {
           "label": "speed_kmh",
@@ -4746,11 +4746,11 @@
       "label": "idle_time",
       "group": "driver_behavior",
       "tags": ["aftermarket"],
-      "idNumber": 148,
+      "id_number": 148,
       "name": "Idle time",
       "description": "The duration the engine has been idling without the vehicle moving.",
       "comment": "Excessive idling wastes fuel",
-      "totalCount": 577359371,
+      "total_count": 577359371,
       "fields": [
         {
           "label": "minutes",
@@ -4778,11 +4778,11 @@
       "label": "harsh_cornering_event",
       "group": "driver_behavior",
       "tags": ["critical", "aftermarket", "safety_related"],
-      "idNumber": 149,
+      "id_number": 149,
       "name": "Harsh cornering event",
       "description": "A detected instance of unusually high lateral force while cornering.",
       "comment": "High lateral g suggests aggressive driving",
-      "totalCount": 75341524,
+      "total_count": 75341524,
       "fields": [
         {
           "label": "lateral_g",
@@ -4810,11 +4810,11 @@
       "label": "phone_usage_detected",
       "group": "driver_behavior",
       "tags": ["wear_item"],
-      "idNumber": 150,
+      "id_number": 150,
       "name": "Phone usage detected",
       "description": "Whether driver phone use was detected while the vehicle was in motion.",
       "comment": "A distracted-driving safety signal",
-      "totalCount": 14239000,
+      "total_count": 14239000,
       "fields": [
         {
           "label": "is_detected",
@@ -4842,11 +4842,11 @@
       "label": "ambient_temperature",
       "group": "environment_context",
       "tags": [],
-      "idNumber": 151,
+      "id_number": 151,
       "name": "Ambient temperature",
       "description": "The outside air temperature measured near the vehicle.",
       "comment": "Affects tire pressure and battery performance",
-      "totalCount": 4744906117,
+      "total_count": 4744906117,
       "fields": [
         {
           "label": "value_celsius",
@@ -4865,11 +4865,11 @@
       "label": "road_surface_condition",
       "group": "environment_context",
       "tags": ["electric"],
-      "idNumber": 152,
+      "id_number": 152,
       "name": "Road surface condition",
       "description": "The estimated condition of the road surface currently being driven on.",
       "comment": "Feeds traction control strategy",
-      "totalCount": 381642670,
+      "total_count": 381642670,
       "fields": [
         {
           "label": "condition",
@@ -4897,11 +4897,11 @@
       "label": "precipitation_detected",
       "group": "environment_context",
       "tags": ["gasoline", "aftermarket"],
-      "idNumber": 153,
+      "id_number": 153,
       "name": "Precipitation detected",
       "description": "Whether precipitation is currently detected, and its intensity.",
       "comment": "Typically from a rain sensor",
-      "totalCount": 433073090,
+      "total_count": 433073090,
       "fields": [
         {
           "label": "is_detected",
@@ -4929,11 +4929,11 @@
       "label": "wind_speed_relative",
       "group": "environment_context",
       "tags": ["safety_related", "low_frequency"],
-      "idNumber": 154,
+      "id_number": 154,
       "name": "Relative wind speed",
       "description": "The wind speed and direction relative to the moving vehicle.",
       "comment": "Affects fuel efficiency at highway speed",
-      "totalCount": 275100705,
+      "total_count": 275100705,
       "fields": [
         {
           "label": "speed_kmh",
@@ -4961,11 +4961,11 @@
       "label": "visibility_range",
       "group": "environment_context",
       "tags": ["requires_calibration", "diagnostic", "rear"],
-      "idNumber": 155,
+      "id_number": 155,
       "name": "Visibility range",
       "description": "The estimated visibility distance, reduced by fog, rain, or darkness.",
       "comment": "Feeds automatic headlight and fog light logic",
-      "totalCount": 465908177,
+      "total_count": 465908177,
       "fields": [
         {
           "label": "distance_m",
@@ -4993,11 +4993,11 @@
       "label": "ambient_light_level",
       "group": "environment_context",
       "tags": ["aftermarket", "diesel"],
-      "idNumber": 156,
+      "id_number": 156,
       "name": "Ambient light level",
       "description": "The measured ambient light level outside the vehicle.",
       "comment": "Drives automatic headlight activation",
-      "totalCount": 113776276,
+      "total_count": 113776276,
       "fields": [
         {
           "label": "lux",
@@ -5025,11 +5025,11 @@
       "label": "barometric_pressure",
       "group": "environment_context",
       "tags": ["experimental", "regulatory"],
-      "idNumber": 157,
+      "id_number": 157,
       "name": "Barometric pressure",
       "description": "The ambient atmospheric pressure, used to correct altitude and engine air intake calculations.",
       "comment": "Also varies with weather and elevation",
-      "totalCount": 4600081739,
+      "total_count": 4600081739,
       "fields": [
         {
           "label": "value_hpa",

@@ -1,7 +1,16 @@
 import type { Group, Issue } from "./query/types";
 import { countConditions, emptyQuery } from "./query/tree";
-import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "./model";
+import type {
+  Compliance,
+  Database,
+  DatabaseResult,
+  EventRecord,
+  Facet,
+  SavedQuery,
+  User,
+} from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
+import type { OpenSaved } from "./query/saved";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 
@@ -21,12 +30,39 @@ export type StatsState =
   | { status: "idle" | "loading" | "ok"; results: DatabaseResult[] }
   | { status: "error"; error: string };
 
-/** The Matching events request. Only "ok" carries events, only "error" a message. */
+/** The Matching events request. Only "ok" carries events (and which page of
+ *  them is on screen, 0-based: src/util/paging.ts), only "error" a message. */
 export type PreviewState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ok"; events: EventRecord[] }
+  | { status: "ok"; events: EventRecord[]; page: number }
   | { status: "error"; error: string };
+
+/** Which saved-queries dialog is open: "save" (name and note), "list", or, for
+ *  a logged-out user, the question whether to log in first ("login-to-save" /
+ *  "login-to-list" say which button asked, so the focus can go back to it). */
+export type SavedDialog = null | "save" | "list" | "login-to-save" | "login-to-list";
+
+/** Saving the query on screen, as the save dialog shows it. */
+export type SaveState =
+  | { status: "idle" }
+  | { status: "saving" }
+  /** The name belongs to another saved query: ask "Replace it?" */
+  | { status: "conflict"; name: string; note: string }
+  | { status: "error"; error: string };
+
+/** The logged-in user's saved queries, newest first, as the list dialog shows them. */
+export type SavedListState =
+  | { status: "idle" | "loading" }
+  | { status: "ok"; queries: SavedQuery[] }
+  | { status: "error"; error: string };
+
+/** A line above the saved-queries list: a delete that failed ("error",
+ *  spoken as an alert) or succeeded ("done", spoken through `announce`). */
+export type SavedListNotice = { tone: "error" | "done"; text: string } | null;
+
+/** An action in the list waiting for the user's yes. */
+export type SavedConfirm = null | { action: "open" | "delete"; id: string };
 
 export interface AppState {
   /** The queryable fields, derived from `facets` at startup (there is
@@ -36,11 +72,12 @@ export interface AppState {
   databases: Database[] | null;
   /** The data model backing the docs sidebar (loaded once). */
   facets: Facet[] | null;
-  /** Who's logged in, if anyone — loaded once at startup via GET /api/auth/me. */
+  /** Who's logged in, if anyone — loaded once at startup via GET /api/users/me. */
   auth: AuthState;
-  /** Compliance acknowledgment for this session — loaded once at startup via
-   *  GET /api/compliance/status. Display-only, same as `auth`: it drives the
-   *  account menu and an advisory hint, never gating logic. */
+  /** The session's compliance log — loaded once at startup via
+   *  GET /api/log/status (a 403 there means "required"). Display-only, same as
+   *  `auth`: it drives the account menu and an advisory hint, never gating
+   *  logic. */
   compliance: ComplianceState;
   /** The `Database.id`s of the databases the query runs against. Empty =
    *  nothing runs. */
@@ -58,11 +95,35 @@ export interface AppState {
 
   stats: StatsState;
   preview: PreviewState;
+  /** The event whose JSON dialog is open (an `EventRecord.id` of the results
+   *  on screen), or null. Closed with the results whenever they reset. */
+  openEventId: string | null;
 
   sidebarCollapsed: boolean;
-  /** Why the last drop (or "Add to query") couldn't be done in full, shown as
-   *  a dismissible warning above the query; null when there is nothing to say. */
+  /** A warning about the last change to the query, shown dismissible above it;
+   *  null when there is nothing to say. Named for its first use, a drop (or
+   *  "Add to query") that couldn't be done in full; it also carries a refused
+   *  Ungroup and "N saved databases no longer exist…" after opening a saved
+   *  query. */
   dropNotice: string | null;
+  /** Whether the hidden easter-egg mascot set is showing. Display only: five
+   *  clicks on the logo toggle it. It is not stored, so a reload brings back
+   *  the normal pickle (decided by the maintainers, 2026-10-08). */
+  easterEgg: boolean;
+
+  /** The saved query on screen, as it was when last opened or saved; null for a
+   *  query that was never saved. Whether the user changed it since is worked
+   *  out (`isEdited`), never stored. */
+  openSaved: OpenSaved | null;
+  savedDialog: SavedDialog;
+  save: SaveState;
+  savedList: SavedListState;
+  savedConfirm: SavedConfirm;
+  /** How the last delete in the Saved queries dialog went, shown above the
+   *  list; null when there is nothing to say. It lives in the state, not in the
+   *  toast, because the toast is drawn under the open dialog's backdrop. Cleared
+   *  by the next action in the dialog and when it closes. */
+  savedListNotice: SavedListNotice;
 }
 
 export const initialState: AppState = {
@@ -78,9 +139,17 @@ export const initialState: AppState = {
   serverIssues: [],
   stats: { status: "idle", results: [] },
   preview: { status: "idle" },
+  openEventId: null,
   // The docs are the main way to build a query, so they start open.
   sidebarCollapsed: false,
   dropNotice: null,
+  easterEgg: false,
+  openSaved: null,
+  savedDialog: null,
+  save: { status: "idle" },
+  savedList: { status: "idle" },
+  savedConfirm: null,
+  savedListNotice: null,
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */

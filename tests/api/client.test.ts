@@ -2,21 +2,28 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   ApiError,
   COMPLIANCE_START_URL,
+  createSavedQuery,
+  deleteSavedQuery,
   getComplianceStatus,
   getDatabases,
   getFacets,
   getMe,
   getStats,
   invalidateCompliance,
+  listSavedQueries,
   LOGIN_URL,
   logout,
+  NetworkError,
   REQUEST_TIMEOUT_MS,
   runQuery,
   TimeoutError,
+  updateSavedQuery,
 } from "../../src/api/client";
 import { ContractError } from "../../src/api/contract";
 import { toQueryRequest } from "../../src/api/request";
+import { toSavedQueryRequest } from "../../src/api/request";
 import type { Group } from "../../src/query/types";
+import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
 
 const query: Group = {
   kind: "group",
@@ -65,21 +72,48 @@ function hangingFetch() {
   );
 }
 
+/**
+ * A fetch whose streamed body the test feeds by hand, chunk by chunk, so it can
+ * wait (with fake timers) between chunks. Like a real fetch, aborting the
+ * request's signal makes the body stream fail, which is what ends a stalled read.
+ */
+function feedableStreamFetch() {
+  const encoder = new TextEncoder();
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+    },
+  });
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+    init?.signal?.addEventListener("abort", () => controller.error(init.signal!.reason));
+    return new Response(body, { status: 200 });
+  });
+  return {
+    fetchMock,
+    send: (text: string) => controller.enqueue(encoder.encode(text)),
+    sendBytes: (bytes: Uint8Array) => controller.enqueue(bytes),
+    close: () => controller.close(),
+  };
+}
+
+const alphaLine = JSON.stringify({ label: "alpha", success: true, match_count: 1 });
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
 describe("api client", () => {
-  it("getDatabases GETs /api/databases and returns the databases in the frontend's model", async () => {
+  it("getDatabases GETs /api/documentation/databases and returns the databases in the frontend's model", async () => {
     const f = mockFetchOnce(200, [
       {
         label: "alpha",
         name: "ALPHA",
         description: "",
         owner: "",
-        totalEntrysets: 1,
-        percentageOfTotal: 100,
+        total_entrysets: 1,
+        percentage_of_total: 100,
       },
     ]);
     vi.stubGlobal("fetch", f);
@@ -87,23 +121,23 @@ describe("api client", () => {
     expect(out).toEqual([
       { id: "alpha", name: "ALPHA", description: "", owner: "", eventCount: 1 },
     ]);
-    expect(f).toHaveBeenCalledWith("/api/v1/databases", {
+    expect(f).toHaveBeenCalledWith("/api/v1/documentation/databases", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
   });
 
-  it("getFacets GETs /api/individuals and returns the facets in the frontend's model", async () => {
+  it("getFacets GETs /api/documentation/individuals and returns the facets in the frontend's model", async () => {
     const f = mockFetchOnce(200, [
       {
         label: "engine_rpm",
         group: "engine",
         tags: [],
-        idNumber: 1,
+        id_number: 1,
         name: "Engine RPM",
         description: "",
         comment: "",
-        totalCount: 100,
+        total_count: 100,
         fields: [],
       },
     ]);
@@ -112,7 +146,7 @@ describe("api client", () => {
     expect(Array.isArray(out)).toBe(true);
     expect(out).toHaveLength(1);
     expect(out[0]?.id).toBe("engine_rpm");
-    expect(f).toHaveBeenCalledWith("/api/v1/individuals", {
+    expect(f).toHaveBeenCalledWith("/api/v1/documentation/individuals", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
@@ -123,15 +157,19 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     await getStats(query, databaseIds, () => {});
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/v1/stats");
+    expect(url).toBe("/api/v1/filter/validate");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual(body);
   });
 
   it("getStats streams NDJSON lines, calling onResult once per line, even split across chunks", async () => {
     const lines = [
-      { label: "alpha", success: true, matchCount: 1 },
-      { label: "beta", success: false, errorMessages: [{ message: "bad query", kind: "invalid" }] },
+      { label: "alpha", success: true, match_count: 1 },
+      {
+        label: "beta",
+        success: false,
+        error_messages: [{ message: "bad query", kind: "invalid" }],
+      },
     ];
     const ndjson = lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
     const splitAt = ndjson.indexOf("\n") + 3; // cut mid-way into the second line
@@ -159,21 +197,22 @@ describe("api client", () => {
   });
 
   it("runQuery POSTs the request body as JSON", async () => {
-    const f = mockFetchOnce(200, { entrysets: [] });
+    const f = mockFetchOnce(200, { events: [] });
     vi.stubGlobal("fetch", f);
     await runQuery(query, databaseIds);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/v1/query");
+    expect(url).toBe("/api/v1/filter/execute");
     expect(JSON.parse(init.body as string)).toEqual(body);
   });
 
   it("runQuery returns the events in the frontend's model", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce(200, { entrysets: [{ id: 4, items: { a: { b: 1 } } }] }));
-    expect(await runQuery(query, databaseIds)).toEqual([{ id: 4, values: { a: { b: 1 } } }]);
+    const events = [{ id: "e4", items: [{ facet_label: "a", values: [{ b: 1 }] }] }];
+    vi.stubGlobal("fetch", mockFetchOnce(200, { events }));
+    expect(await runQuery(query, databaseIds)).toEqual([{ id: "e4", values: { a: [{ b: 1 }] } }]);
   });
 
   it("an unfinished query rejects without sending anything", async () => {
-    const f = mockFetchOnce(200, { entrysets: [] });
+    const f = mockFetchOnce(200, { events: [] });
     vi.stubGlobal("fetch", f);
     const unfinished: Group = {
       ...query,
@@ -195,23 +234,77 @@ describe("api client", () => {
 
   it("falls back to the request and status line when there is no error field", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(500, {}));
-    await expect(getDatabases()).rejects.toThrow("GET /api/v1/databases failed: 500 STATUS");
+    await expect(getDatabases()).rejects.toThrow(
+      "GET /api/v1/documentation/databases failed: 500 STATUS",
+    );
     vi.stubGlobal("fetch", mockFetchOnce(502, "<html>Bad Gateway</html>"));
-    await expect(getDatabases()).rejects.toThrow("GET /api/v1/databases failed: 502 STATUS");
+    await expect(getDatabases()).rejects.toThrow(
+      "GET /api/v1/documentation/databases failed: 502 STATUS",
+    );
   });
 
-  it("throws an ApiError carrying the response status", async () => {
+  it("throws an ApiError whose message carries everything the console needs", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(401, { error: "nope" }));
     await expect(getDatabases()).rejects.toBeInstanceOf(ApiError);
-    await expect(getDatabases()).rejects.toMatchObject({ status: 401, message: "nope" });
+    await expect(getDatabases()).rejects.toMatchObject({
+      status: 401,
+      message: "GET /api/v1/documentation/databases failed: 401 STATUS: nope",
+    });
+  });
+
+  it("turns a request that got no answer into a NetworkError naming it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))),
+    );
+    await expect(getDatabases()).rejects.toBeInstanceOf(NetworkError);
+    await expect(getDatabases()).rejects.toThrow(
+      "GET /api/v1/documentation/databases failed: no answer from the server (Failed to fetch)",
+    );
+  });
+
+  // The answer started, then the connection broke: the browser rejects the
+  // body's read with a TypeError, as it does fetch() itself.
+  it("turns a body that breaks off while it is read into a NetworkError", async () => {
+    const broken = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.error(new TypeError("network error"));
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(broken, { status: 200 })),
+    );
+    await expect(getDatabases()).rejects.toBeInstanceOf(NetworkError);
+  });
+
+  it("turns a statistics stream that breaks off mid-way into a NetworkError, after the lines before it", async () => {
+    const line = JSON.stringify({ label: "db1", success: true, match_count: 3 });
+    let sent = false;
+    const breaking = new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (sent) return c.error(new TypeError("network error"));
+        sent = true;
+        c.enqueue(new TextEncoder().encode(`${line}\n`));
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(breaking, { status: 200 })),
+    );
+    const received: unknown[] = [];
+    await expect(getStats(query, ["db1"], (r) => received.push(r))).rejects.toBeInstanceOf(
+      NetworkError,
+    );
+    expect(received).toHaveLength(1);
   });
 
   it("getMe returns the user when logged in", async () => {
-    const f = mockFetchOnce(200, { name: "demo.user" });
+    const f = mockFetchOnce(200, { sub: "u-1", authorizations: [], display_name: "demo.user" });
     vi.stubGlobal("fetch", f);
     const out = await getMe();
     expect(out).toEqual({ name: "demo.user" });
-    expect(f).toHaveBeenCalledWith("/api/v1/auth/me", {
+    expect(f).toHaveBeenCalledWith("/api/v1/users/me", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
@@ -241,23 +334,49 @@ describe("api client", () => {
     await expect(logout()).rejects.toThrow("boom");
   });
 
-  it("getComplianceStatus GETs /api/compliance/status and returns the frontend's model", async () => {
-    const f = mockFetchOnce(200, { status: "required" });
+  it("getComplianceStatus GETs /api/log/status; a 200 is the log, shown whole as formatted JSON", async () => {
+    const f = mockFetchOnce(200, {
+      user: "Ada",
+      reason: "audit",
+      logged_at: "2026-10-13T09:00:00Z",
+    });
     vi.stubGlobal("fetch", f);
     const out = await getComplianceStatus();
-    expect(out).toEqual({ status: "required" });
-    expect(f).toHaveBeenCalledWith("/api/v1/compliance/status", {
+    expect(out).toEqual({
+      status: "acknowledged",
+      log: JSON.stringify(
+        { user: "Ada", reason: "audit", logged_at: "2026-10-13T09:00:00Z" },
+        null,
+        2,
+      ),
+    });
+    expect(f).toHaveBeenCalledWith("/api/v1/log/status", {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
   });
 
-  it("invalidateCompliance POSTs to /api/compliance/invalidate", async () => {
+  it("getComplianceStatus resolves a 403 (no compliance log) to required, like getMe's 401", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(403, { error: "No compliance log for this session." }));
+    expect(await getComplianceStatus()).toEqual({ status: "required" });
+  });
+
+  it("getComplianceStatus still rejects on any other failure", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(500, { error: "boom" }));
+    await expect(getComplianceStatus()).rejects.toThrow("boom");
+  });
+
+  it("getComplianceStatus rejects when the log is not a JSON object", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, ["not", "an", "object"]));
+    await expect(getComplianceStatus()).rejects.toBeInstanceOf(ContractError);
+  });
+
+  it("invalidateCompliance POSTs to /api/log/invalidate", async () => {
     const f = mockFetchOnce(200, {});
     vi.stubGlobal("fetch", f);
     await invalidateCompliance();
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/v1/compliance/invalidate");
+    expect(url).toBe("/api/v1/log/invalidate");
     expect(init.method).toBe("POST");
   });
 
@@ -268,7 +387,7 @@ describe("api client", () => {
 
   it("builds the login / compliance redirect URLs from the same API base as fetches", () => {
     expect(LOGIN_URL).toBe("/api/v1/auth/login");
-    expect(COMPLIANCE_START_URL).toBe("/api/v1/compliance/start");
+    expect(COMPLIANCE_START_URL).toBe("/api/v1/log/build");
   });
 
   it("rejects with a TimeoutError when the server stays silent past REQUEST_TIMEOUT_MS", async () => {
@@ -295,47 +414,134 @@ describe("api client", () => {
     await expect(pending).rejects.toThrow("superseded");
   });
 
+  it("getStats: the timeout clock restarts on every chunk, so a slow stream is never cut off", async () => {
+    vi.useFakeTimers();
+    const stream = feedableStreamFetch();
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const received: unknown[] = [];
+    const pending = getStats(query, databaseIds, (r) => received.push(r));
+    // Three chunks, each well inside the timeout, together longer than it.
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1_000);
+      stream.send(i === 0 ? alphaLine + "\n" : "\n");
+    }
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1_000);
+    stream.close();
+    await pending;
+    expect(received).toHaveLength(1);
+  });
+
+  it("getStats: a stream that goes silent after some chunks times out", async () => {
+    vi.useFakeTimers();
+    const stream = feedableStreamFetch();
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const pending = expect(getStats(query, databaseIds, () => {})).rejects.toBeInstanceOf(
+      TimeoutError,
+    );
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1_000);
+    stream.send(alphaLine + "\n");
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await pending;
+  });
+
+  it("a body that stalls after the headers arrived times out too", async () => {
+    vi.useFakeTimers();
+    const stream = feedableStreamFetch(); // headers are answered at once, no chunk ever follows
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const pending = expect(getStats(query, databaseIds, () => {})).rejects.toBeInstanceOf(
+      TimeoutError,
+    );
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await pending;
+  });
+
+  it("getStats delivers a last line that has no trailing newline", async () => {
+    vi.stubGlobal("fetch", mockStreamFetch(200, [alphaLine]));
+    const received: unknown[] = [];
+    await getStats(query, databaseIds, (r) => received.push(r));
+    expect(received).toEqual([{ databaseId: "alpha", status: "ok", matchCount: 1, notes: [] }]);
+  });
+
+  it("getStats keeps a multi-byte character that is split across two chunks", async () => {
+    // "é" is two bytes in UTF-8; cut between them. Decoding each chunk on its
+    // own would turn both halves into U+FFFD.
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({ label: "caf\u00e9", success: true, match_count: 1 }) + "\n",
+    );
+    const cut = bytes.indexOf(0xc3) + 1;
+    const stream = feedableStreamFetch();
+    vi.stubGlobal("fetch", stream.fetchMock);
+    const received: { databaseId: string }[] = [];
+    const pending = getStats(query, databaseIds, (r) => received.push(r));
+    stream.sendBytes(bytes.slice(0, cut));
+    stream.sendBytes(bytes.slice(cut));
+    stream.close();
+    await pending;
+    expect(received.map((r) => r.databaseId)).toEqual(["caf\u00e9"]);
+  });
+
+  it("getStats accepts \\r\\n line endings", async () => {
+    const beta = JSON.stringify({ label: "beta", success: true, match_count: 2 });
+    vi.stubGlobal("fetch", mockStreamFetch(200, [`${alphaLine}\r\n${beta}\r\n`]));
+    const received: { databaseId: string }[] = [];
+    await getStats(query, databaseIds, (r) => received.push(r));
+    expect(received.map((r) => r.databaseId)).toEqual(["alpha", "beta"]);
+  });
+
+  it("a signal that is already aborted rejects with its reason instead of hanging", async () => {
+    // Like a real fetch: an already-aborted signal rejects at once. (An abort
+    // *event* would never fire for it, so a mock that only listens would hang.)
+    const f = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.signal?.aborted) throw init.signal.reason;
+      return new Response("[]");
+    });
+    vi.stubGlobal("fetch", f);
+    const ctrl = new AbortController();
+    ctrl.abort(new Error("superseded"));
+    await expect(getStats(query, databaseIds, () => {}, ctrl.signal)).rejects.toThrow("superseded");
+  });
+
   it("getStats throws a readable error when a 2xx response has no body", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(null, { status: 204 })),
     );
     await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
-      "Unexpected response from POST /api/v1/stats: the body is empty.",
+      "Unexpected response from POST /api/v1/filter/validate: the body is empty.",
     );
   });
 });
 
 describe("a response that breaks the API contract", () => {
   it("rejects with a ContractError naming the request and the field", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce(200, [{ name: "ALPHA", totalEntrysets: 1 }]));
+    vi.stubGlobal("fetch", mockFetchOnce(200, [{ name: "ALPHA", total_entrysets: 1 }]));
     const err = await getDatabases().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ContractError);
     expect((err as Error).message).toBe(
-      'Unexpected response from GET /api/v1/databases: "[0].label" should be non-blank text, but it is missing.',
+      'Unexpected response from GET /api/v1/documentation/databases: "[0].label" should be non-blank text, but it is missing.',
     );
   });
 
   it("a web page instead of JSON says so, and what to check", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(200, "<!doctype html><title>Query Builder</title>"));
     await expect(getFacets()).rejects.toThrow(
-      /GET \/api\/v1\/individuals: the body should be JSON.*check VITE_API_BASE/,
+      /GET \/api\/v1\/documentation\/individuals: the body should be JSON.*check VITE_API_BASE/,
     );
   });
 
   it("an events answer without its list", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(200, []));
     await expect(runQuery(query, databaseIds)).rejects.toThrow(
-      "Unexpected response from POST /api/v1/query: the response should be an object, but it is a list.",
+      "Unexpected response from POST /api/v1/filter/execute: the response should be an object, but it is a list.",
     );
   });
 
   it("a statistics line that isn't JSON names its line, and stops the stream", async () => {
-    const ok = JSON.stringify({ label: "alpha", success: true, matchCount: 1 });
+    const ok = JSON.stringify({ label: "alpha", success: true, match_count: 1 });
     vi.stubGlobal("fetch", mockStreamFetch(200, [`${ok}\nnot json\n${ok}\n`]));
     const onResult = vi.fn();
     await expect(getStats(query, databaseIds, onResult)).rejects.toThrow(
-      'Unexpected response from POST /api/v1/stats, line 2: the body should be JSON, but it starts with "not json".',
+      'Unexpected response from POST /api/v1/filter/validate, line 2: the body should be JSON, but it starts with "not json".',
     );
     expect(onResult).toHaveBeenCalledOnce();
   });
@@ -343,7 +549,83 @@ describe("a response that breaks the API contract", () => {
   it("a statistics line without a database names its line and field", async () => {
     vi.stubGlobal("fetch", mockStreamFetch(200, [JSON.stringify({ success: true }) + "\n"]));
     await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
-      'POST /api/v1/stats, line 1: "label" should be non-blank text, but it is missing.',
+      'POST /api/v1/filter/validate, line 1: "label" should be non-blank text, but it is missing.',
+    );
+  });
+});
+
+describe("saved queries", () => {
+  /** What the client should send for `unfinishedDraft`. */
+  const sentBody = JSON.stringify(toSavedQueryRequest(unfinishedDraft));
+  const sentInit = (method: string) => ({
+    method,
+    signal: expect.any(AbortSignal),
+    headers: { "content-type": "application/json" },
+    body: sentBody,
+  });
+  /** The saved query in the frontend's model, as every function returns it. */
+  const saved = { id: "sq-1", updatedAt: "2026-10-08T09:30:00.000Z", name: "Slow trips" };
+
+  it("listSavedQueries GETs the list and returns it in the frontend's model", async () => {
+    const f = mockFetchOnce(200, [unfinishedResponse]);
+    vi.stubGlobal("fetch", f);
+    const out = await listSavedQueries();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved", {
+      method: "GET",
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("createSavedQuery POSTs the draft's wire form and returns the saved query", async () => {
+    const f = mockFetchOnce(201, unfinishedResponse);
+    vi.stubGlobal("fetch", f);
+    expect(await createSavedQuery(unfinishedDraft)).toMatchObject(saved);
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved", sentInit("POST"));
+  });
+
+  it("updateSavedQuery PUTs to the id's path, encoded, and returns the saved query", async () => {
+    const f = mockFetchOnce(200, unfinishedResponse);
+    vi.stubGlobal("fetch", f);
+    expect(await updateSavedQuery("a/b", unfinishedDraft)).toMatchObject(saved);
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved/a%2Fb", sentInit("PUT"));
+  });
+
+  it("deleteSavedQuery DELETEs the id's path, encoded, and resolves with nothing on 204", async () => {
+    const f = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", f);
+    await expect(deleteSavedQuery("a/b")).resolves.toBeUndefined();
+    expect(f).toHaveBeenCalledWith("/api/v1/filter/saved/a%2Fb", {
+      method: "DELETE",
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("a 409 becomes an ApiError with the server's message", async () => {
+    const message = 'A saved query called "Slow trips" already exists.';
+    vi.stubGlobal("fetch", mockFetchOnce(409, { error: message }));
+    const err = await createSavedQuery(unfinishedDraft).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 409 });
+    expect((err as ApiError).message).toBe(
+      `POST /api/v1/filter/saved failed: 409 STATUS: ${message}`,
+    );
+  });
+
+  it.each([400, 401, 404])("a %i becomes an ApiError with that status", async (status) => {
+    vi.stubGlobal("fetch", mockFetchOnce(status, { error: "Nope." }));
+    await expect(updateSavedQuery("sq-1", unfinishedDraft)).rejects.toMatchObject({
+      name: "ApiError",
+      status,
+      message: `PUT /api/v1/filter/saved/sq-1 failed: ${status} STATUS: Nope.`,
+    });
+  });
+
+  it("an answer that breaks the contract is a ContractError naming the field", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(200, [{ ...unfinishedResponse, id: undefined }]));
+    await expect(listSavedQueries()).rejects.toThrow(
+      'GET /api/v1/filter/saved: "[0].id" should be non-blank text, but it is missing.',
     );
   });
 });

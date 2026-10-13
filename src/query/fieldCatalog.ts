@@ -162,19 +162,25 @@ const TYPE_NAMES: Record<string, ValueType> = {
   BOOL: "boolean",
   DATE: "date",
   DATETIME: "date",
-  TIMESTAMP: "date",
+  // No plain TIMESTAMP here: `valueTypeFor` treats every TIMESTAMP... as a date.
 };
 
 /**
  * A field's `typeName` (as the backend spells it) -> this catalog's valueType.
  * Never inferred from a field's name or its values. Case-insensitive, ignores
- * size/precision parameters (`DECIMAL(10,2)`, `VARCHAR(255)`), and treats any
- * `TIMESTAMP …` variant (`TIMESTAMP WITH TIME ZONE`) as a date.
+ * size/precision parameters (`DECIMAL(10,2)`, `VARCHAR(255)`) and the words
+ * UNSIGNED, SIGNED and ZEROFILL (`INT UNSIGNED` is still a number), and treats
+ * any `TIMESTAMP …` variant (`TIMESTAMP WITH TIME ZONE`) as a date.
+ *
+ * Only spellings common across SQL dialects are covered. Vendor aliases such
+ * as `INT4` are not guessed: add one to TYPE_NAMES when a real backend sends it.
  */
 export function valueTypeFor(typeName: string): ValueType {
   const declared = typeName
     .toUpperCase()
     .replace(/\(.*?\)/g, "")
+    // Sign and padding change how a number is stored, not that it is one.
+    .replace(/\b(?:UNSIGNED|SIGNED|ZEROFILL)\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (declared.startsWith("TIMESTAMP")) return "date";

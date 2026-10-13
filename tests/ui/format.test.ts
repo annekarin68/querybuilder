@@ -6,7 +6,9 @@ import {
   databaseTitle,
   displayLabel,
   exact,
+  formatDate,
   formatWhen,
+  hoverTitle,
   matchRatio,
 } from "../../src/ui/format";
 
@@ -98,6 +100,16 @@ describe("formatWhen", () => {
   });
 });
 
+describe("formatDate", () => {
+  it("the day only, in the given locale", () => {
+    expect(formatDate("2026-10-08T09:30:00.000Z", "en-GB", "UTC")).toBe("08/10/2026");
+    expect(formatDate("2026-10-08T09:30:00.000Z", "en-US", "UTC")).toBe("10/8/2026");
+  });
+  it("the raw text when it is not a date, so nothing is hidden", () => {
+    expect(formatDate("not a date")).toBe("not a date");
+  });
+});
+
 describe("databaseTitle", () => {
   it("joins owner and description", () => {
     expect(databaseTitle({ owner: "Acme", description: "Trucks." })).toBe("Acme: Trucks.");
@@ -110,5 +122,24 @@ describe("databaseTitle", () => {
 
   it("is empty when both are blank", () => {
     expect(databaseTitle({ owner: "", description: "" })).toBe("");
+  });
+});
+
+describe("hoverTitle (the full text of a cut-off choice or value)", () => {
+  it("is the text, trimmed", () => {
+    expect(hoverTitle("  a long value ")).toBe("a long value");
+  });
+
+  // null: no title attribute at all. An empty title="" still hides a
+  // parent's title and is an odd thing to leave behind.
+  it("is null when there is nothing to show", () => {
+    expect(hoverTitle("")).toBeNull();
+    expect(hoverTitle("   ")).toBeNull();
+    expect(hoverTitle(null)).toBeNull();
+    expect(hoverTitle(undefined)).toBeNull();
+  });
+
+  it("is null for a placeholder: it is not a choice", () => {
+    expect(hoverTitle("Choose…", true)).toBeNull();
   });
 });

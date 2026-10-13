@@ -1,6 +1,8 @@
 import type { ActiveView } from "../state";
-import { MASCOT } from "../config";
+import { EASTER_EGG_MASCOT, MASCOT } from "../config";
 import type { MascotState } from "./mascot";
+import { SAVED_TITLE_ID } from "./savedQueries";
+import { EVENT_TITLE_ID } from "./eventDialog";
 
 const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "filter", label: "Filter" },
@@ -8,6 +10,30 @@ const VIEWS: { id: ActiveView; label: string }[] = [
   { id: "approval", label: "Approval" },
   { id: "done", label: "Done" },
 ];
+
+/**
+ * The file for `face`, from the easter-egg set while it is on. A file that
+ * failed to load falls back to its set's neutral face, then to the normal
+ * neutral face (which is never given up on: it is the last resort).
+ */
+export function mascotFile(
+  face: MascotState,
+  easterEgg: boolean,
+  failed: ReadonlySet<string>,
+): string {
+  const set = easterEgg ? EASTER_EGG_MASCOT : MASCOT;
+  for (const file of [set[face], set.neutral]) if (!failed.has(file)) return file;
+  return MASCOT.neutral;
+}
+
+/**
+ * The app name with the pickle logo, as markup. `draggable="false"` is on the
+ * logo for the pickle rain's sake: a browser turns a click whose pointer moves
+ * a few pixels over a draggable image into an image drag, and the click is
+ * lost (Chromium from 4 px, Firefox from 6 px), so five quick clicks rarely
+ * all counted.
+ */
+export const BRAND_HTML = `<span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" draggable="false" />Query Builder</span>`;
 
 /**
  * What the rail along the docs' left edge offers: its arrow points the way the
@@ -41,14 +67,20 @@ export interface Shell {
   };
   /** Show the Filter view, or the "Coming soon" placeholder for the other steps. */
   setActiveView(v: ActiveView): void;
+  /** The Save… / Saved queries dialog (savedQueries.ts). Never replaced: only
+   *  its contents are repainted, and it is opened and closed to match the state. */
+  savedDialog: HTMLDialogElement;
+  /** The event JSON dialog (eventDialog.ts). Never replaced, like `savedDialog`. */
+  eventDialog: HTMLDialogElement;
   /** The sidebar's drag handle; wire it with wireDocsResize. */
   docsResizeHandle: HTMLElement;
   /** The pickle in the top bar. */
   logo: HTMLImageElement;
   /** Show the pickle with the face for `state`. */
-  setMascot(state: MascotState): void;
+  setMascot(face: MascotState, easterEgg: boolean): void;
   /** Say `message` to screen-reader users (a polite live region that is never
-   *  repainted, so repeating a message is heard again). */
+   *  repainted, so repeating a message is heard again). While a dialog is
+   *  open, its own region speaks: a modal dialog makes the page's one inert. */
   announce(message: string): void;
   /** Fold the data dictionary into its rail, or open it. */
   setSidebarCollapsed(collapsed: boolean): void;
@@ -57,20 +89,35 @@ export interface Shell {
 }
 
 /**
+ * What each shell `<dialog>` holds: the body its panel paints (`dialogBody`)
+ * and, beside it, the dialog's own live region. A modal dialog makes the rest
+ * of the page inert, so the page's region would not be heard while one is
+ * open; and a region inside the body would be wiped by every repaint.
+ */
+const DIALOG_INSIDE = `<div class="qb-dialog-body" data-dialog-body></div><div class="qb-sr-only" role="status" aria-live="polite" data-dialog-announcer></div>`;
+
+/**
  * The page frame, rendered once: a top bar (app name, workflow steps, account
  * area), then a docs rail + three columns — the data dictionary (collapsible,
  * open by default, resizable), the main column (databases, query, matching events)
- * and the pinned statistics column. Panels paint into the data-panel slots.
+ * and the statistics column (pinned beside the main column on wide screens,
+ * between the query and Run query on narrow ones). Panels paint into the
+ * data-panel slots.
  */
 export function renderShell(root: HTMLElement): Shell {
   const openToggle = docsToggle(false); // the page starts with the docs open
+  // The narrow-screen grid in styles.css (`@media (max-width: 900px)`) counts
+  // the three <main> sections below plus the stats aside, and orders them by
+  // position and `data-panel`. Adding or removing a panel here means updating
+  // that CSS block too. (A comment cannot go inside the template: it would
+  // end up in the page.)
   root.innerHTML = `
     <header class="qb-topbar">
-      <span class="qb-brand"><img class="qb-logo" src="${MASCOT.neutral}" alt="" width="28" height="28" />Query Builder</span>
+      ${BRAND_HTML}
       <nav class="qb-steps" data-menu="views" aria-label="Workflow">
         ${VIEWS.map(
           (v, i) =>
-            `<a class="qb-step${v.id === "filter" ? " is-active" : ""}" href="#" data-view="${v.id}"${v.id === "filter" ? ' aria-current="step"' : ""}><span class="qb-step-num">${i + 1}</span>${v.label}</a>`,
+            `<a class="qb-step${v.id === "filter" ? " is-active" : ""}" href="#" data-view="${v.id}" title="${v.label}"${v.id === "filter" ? ' aria-current="step"' : ""}><span class="qb-step-num">${i + 1}</span><span class="qb-step-label">${v.label}</span></a>`,
         ).join("")}
       </nav>
       <div class="qb-topbar-right">
@@ -93,6 +140,8 @@ export function renderShell(root: HTMLElement): Shell {
       <aside class="qb-col-stats" data-panel="stats"></aside>
     </div>
     <div class="qb-sr-only" role="status" aria-live="polite" data-announcer></div>
+    <dialog class="qb-dialog" data-panel="saved" aria-labelledby="${SAVED_TITLE_ID}">${DIALOG_INSIDE}</dialog>
+    <dialog class="qb-dialog qb-event-dialog" data-panel="event" aria-labelledby="${EVENT_TITLE_ID}">${DIALOG_INSIDE}</dialog>
   `;
   const find = <T extends HTMLElement = HTMLElement>(selector: string) =>
     root.querySelector<T>(selector)!;
@@ -104,15 +153,30 @@ export function renderShell(root: HTMLElement): Shell {
   const steps = find('[data-menu="views"]');
   const logo = find<HTMLImageElement>(".qb-logo");
   const announcer = find("[data-announcer]");
+  /** Where `announce` speaks: the open dialog's region, else the page's. */
+  const liveRegion = () =>
+    root.querySelector<HTMLElement>("dialog[open] [data-dialog-announcer]") ?? announcer;
+  /** Messages for the live region, collected until it is filled (see `announce`). */
+  let waiting: string[] = [];
   // Face files that failed to load: never asked for again, so a missing file is
   // requested once, not on every repaint.
   const failed = new Set<string>();
+  // What the logo was last asked to show, so a failed file can be replaced by
+  // the right fallback for the same face and set.
+  let shownFace: MascotState = "neutral";
+  let shownEasterEgg = false;
+  const showMascot = () => {
+    // Panels repaint often; only touch the image when the file changes.
+    const wanted = mascotFile(shownFace, shownEasterEgg, failed);
+    if (logo.getAttribute("src") !== wanted) logo.src = wanted;
+  };
   logo.addEventListener("error", () => {
-    // A missing face falls back to the normal face; never loop.
+    // Never loop: the normal neutral face is never added to `failed`, and
+    // `mascotFile` always ends there.
     const src = logo.getAttribute("src");
     if (src && src !== MASCOT.neutral) {
       failed.add(src);
-      logo.src = MASCOT.neutral;
+      showMascot();
     }
   });
 
@@ -126,15 +190,18 @@ export function renderShell(root: HTMLElement): Shell {
       account: find('[data-panel="account"]'),
     },
 
+    savedDialog: find<HTMLDialogElement>('[data-panel="saved"]'),
+    eventDialog: find<HTMLDialogElement>('[data-panel="event"]'),
+
     docsResizeHandle: find(".qb-docs-resize"),
 
     logo,
 
-    setMascot(state) {
-      logo.dataset.state = state;
-      // Panels repaint often; only touch the image when the face changes.
-      const wanted = failed.has(MASCOT[state]) ? MASCOT.neutral : MASCOT[state];
-      if (logo.getAttribute("src") !== wanted) logo.src = wanted;
+    setMascot(face, easterEgg) {
+      logo.dataset.state = face;
+      shownFace = face;
+      shownEasterEgg = easterEgg;
+      showMascot();
     },
 
     setActiveView(v) {
@@ -158,12 +225,23 @@ export function renderShell(root: HTMLElement): Shell {
     },
 
     announce(message) {
-      // Emptied first, then filled on the next tick: a screen reader only speaks
+      // Emptied first, then filled a moment later: a screen reader only speaks
       // a change, so the same message twice in a row would otherwise be silent.
-      announcer.textContent = "";
-      setTimeout(() => {
-        announcer.textContent = message;
-      }, 50);
+      // Messages sent while it waits are read together, in order: a drop that
+      // is only partly done says what it could not do and what it did, and the
+      // second text would otherwise replace the first before it was spoken.
+      // The region is picked when the text goes in, 50 ms later: a dialog may
+      // have opened or closed by then.
+      if (waiting.length === 0) {
+        for (const region of root.querySelectorAll("[data-announcer], [data-dialog-announcer]")) {
+          region.textContent = "";
+        }
+        setTimeout(() => {
+          liveRegion().textContent = waiting.join(" ");
+          waiting = [];
+        }, 50);
+      }
+      waiting.push(message);
     },
 
     setSidebarCollapsed(collapsed) {

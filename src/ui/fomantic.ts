@@ -2,6 +2,7 @@
 // merely publishes the global for Fomantic). See docs/ARCHITECTURE.md,
 // "The Fomantic discipline".
 import $ from "jquery";
+import { hoverTitle } from "./format";
 
 /**
  * Settings for every dropdown. A search dropdown shows only the items
@@ -38,8 +39,9 @@ const FREE_ENTRY_DROPDOWN = { ...DROPDOWN, allowAdditions: true, delimiter: "\u0
  * - Its typing box (`input.search`) is what has the keyboard focus, and it has
  *   no accessible name, so a screen reader says only "edit text". Give it the
  *   <select>'s aria-label.
- * - The shown choice is cut off with "…" when it is longer than the dropdown.
- *   Put its full text in a `title` so hovering reads it.
+ * - The shown choice, and in a multi-select each chosen label, is cut off with
+ *   "…" when it is longer than the dropdown. showFullChoice puts the full text
+ *   in a `title` on what the pointer is over, and removes it from a placeholder.
  */
 function describeDropdown(node: HTMLElement): void {
   // `node` was the <select> carrying the `ui dropdown` classes; Fomantic wraps
@@ -50,11 +52,34 @@ function describeDropdown(node: HTMLElement): void {
   showFullChoice(dropdown);
 }
 
-/** (Re)write the title of the dropdown's shown text. Called on activation and
- *  after every change, so the title follows the selected choice. */
+/**
+ * (Re)write the hover title that shows a dropdown's full choice: the shown text
+ * is cut off with "…" when it is longer than the box. Called on activation and
+ * after every change.
+ *
+ * In a search dropdown the typing box (`input.search`) lies on top of the
+ * shown text, so the pointer is always over the box: the title must be there
+ * too (a title on the text alone never showed). A placeholder ("Choose…") gets
+ * no title: it is not a choice. In a multi-select each chosen value is a
+ * label, cut off the same way, so each label gets its own.
+ */
 function showFullChoice(node: HTMLElement): void {
   const shown = node.querySelector<HTMLElement>(":scope > .text");
-  if (shown) shown.title = shown.textContent ?? "";
+  const title = hoverTitle(shown?.textContent, !shown || shown.classList.contains("default"));
+  setTitle(shown, title);
+  setTitle(node.querySelector<HTMLElement>(":scope > input.search"), title);
+  node.querySelectorAll<HTMLElement>(":scope > a.ui.label").forEach((label) => {
+    // The shown text, not data-value: Fomantic stores data-value HTML-escaped
+    // (`"` becomes the literal `&quot;`), while the label shows it decoded.
+    setTitle(label, hoverTitle(label.textContent));
+  });
+}
+
+/** Set `el`'s title, or remove the attribute for null (`hoverTitle`). */
+function setTitle(el: HTMLElement | null, title: string | null): void {
+  if (!el) return;
+  if (title) el.title = title;
+  else el.removeAttribute("title");
 }
 
 export function activate(container: HTMLElement): void {
@@ -99,13 +124,15 @@ export function onDropdownChange(container: HTMLElement, handler: (el: HTMLEleme
     });
 }
 
-/** A small, self-dismissing message at the top of the page. */
-export function showToast(message: string): void {
+/** A small, self-dismissing message at the top of the page. `kind` sets its
+ *  colour: green for good news, red for a failure. */
+export function showToast(message: string, kind: "success" | "error" = "success"): void {
   // preserveHTML: false shows the message as plain text, never as markup.
   $("body").toast({
     message,
-    class: "success",
-    displayTime: 3000,
+    class: kind,
+    // An error stays longer: it has to be read, not just noticed.
+    displayTime: kind === "error" ? 6000 : 3000,
     showProgress: false,
     preserveHTML: false,
   });

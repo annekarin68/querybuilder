@@ -9,6 +9,8 @@
     "noImplicitOverride": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
+    // Lets tests import scripts/check-offline.mjs with the types from its JSDoc.
+    "allowJs": true,
     "types": ["vite/client", "node"]
   },
   "include": ["src", "mock-server", "tests", "vite.config.ts", "vitest.config.ts"]

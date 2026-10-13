@@ -1,12 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { DOCS_HINT, dragData, facetHtml, groupHtml } from "../../src/ui/docsSidebar";
+import {
+  DOCS_HINT,
+  dragData,
+  escapeClosesDocs,
+  facetHtml,
+  groupHtml,
+  sourceLogo,
+  valuesHeadingId,
+} from "../../src/ui/docsSidebar";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { parseDragItem } from "../../src/query/drop";
+import { TEXT_SOURCES } from "../../src/config";
 import type { Facet } from "../../src/model";
 
 const facet: Facet = {
   id: "a&b",
   name: "Alpha <b>",
+  number: 1,
   tags: ["t"],
   group: "",
   comment: "backend note",
@@ -24,7 +34,7 @@ const facet: Facet = {
     { id: "flag", name: "Flag", typeName: "BOOLEAN", comment: "", description: "", values: [] },
   ],
 };
-const html = facetHtml(facet, 100, buildFieldCatalog([facet]));
+const html = facetHtml(facet, 100, buildFieldCatalog([facet]), "t");
 
 describe("data dictionary markup", () => {
   it("escapes names", () => {
@@ -52,7 +62,7 @@ describe("data dictionary markup", () => {
     expect(html).toContain('data-field-id="flag"');
   });
 
-  it("only fields with a pick-list get value chips", () => {
+  it("only fields with a pick-list get a list of values", () => {
     expect(html.match(/qb-doc-value"/g)).toHaveLength(2);
   });
 
@@ -74,17 +84,78 @@ describe("data dictionary markup", () => {
   it("long value lists are capped, with a count of the rest", () => {
     const many: Facet = {
       ...facet,
-      fields: [{ ...facet.fields[0]!, values: Array.from({ length: 70 }, (_, i) => String(i)) }],
+      fields: [{ ...facet.fields[0]!, values: Array.from({ length: 40 }, (_, i) => String(i)) }],
     };
-    const out = facetHtml(many, 1, buildFieldCatalog([many]));
+    const out = facetHtml(many, 1, buildFieldCatalog([many]), "t");
     expect(out.match(/qb-doc-value"/g)).toHaveLength(30);
-    expect(out).toContain("and 40 more");
+    expect(out).toContain("and 10 more");
+    // The heading counts every known value, not only the shown ones.
+    expect(out).toContain("Previously seen values (40)");
   });
 
   it("dragData round-trips through the attribute", () => {
     expect(dragData({ type: "tag", tag: 'x"y' })).toBe(
       "{&quot;type&quot;:&quot;tag&quot;,&quot;tag&quot;:&quot;x\\&quot;y&quot;}",
     );
+  });
+});
+
+describe("previously seen values", () => {
+  it("an opened field with 3 known values has a labelled list with the count", () => {
+    const three: Facet = {
+      ...facet,
+      fields: [{ ...facet.fields[0]!, values: ["3", "7", "9"] }],
+    };
+    const out = facetHtml(three, 1, buildFieldCatalog([three]), "t");
+    const id = valuesHeadingId("t", "a&b", "size");
+    // A group labelled by its heading, not a <section>: one landmark per open
+    // field, all named alike, would clutter the landmark list.
+    expect(out).toContain(`<div class="qb-doc-values" role="group" aria-labelledby="${id}">`);
+    expect(out).not.toContain("<section");
+    // h3: under the panel title (h2), not skipping a level.
+    expect(out).toContain(
+      `<h3 class="qb-doc-values-title" id="${id}">Previously seen values (3)</h3>`,
+    );
+    expect(out.match(/<li class="qb-doc-value"/g)).toHaveLength(3);
+  });
+
+  it("the heading's id is safe in HTML and differs per section, facet and field", () => {
+    const id = valuesHeadingId("t", "a&b", "size");
+    expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
+    // A facet is listed under each of its tags, so the section is part of the
+    // id; otherwise two headings on the page would share it.
+    expect(valuesHeadingId("u", "a&b", "size")).not.toBe(id);
+    expect(valuesHeadingId("t", "a&b", "flag")).not.toBe(id);
+    expect(valuesHeadingId("t", "a", "b-size")).not.toBe(valuesHeadingId("t", "a-b", "size"));
+  });
+
+  it("the hint names the field (escaped) and says other values may work", () => {
+    const odd: Facet = {
+      ...facet,
+      fields: [{ ...facet.fields[0]!, name: "Size <i>", values: ["3"] }],
+    };
+    const out = facetHtml(odd, 1, buildFieldCatalog([odd]), "t");
+    expect(out).toContain(
+      "Drag one or press + to add <em>Size &lt;i&gt;</em> equals <em>value</em>. Other values may work too.",
+    );
+  });
+
+  it("each row keeps its drag payload, grip and icon-only Add button", () => {
+    const row = html.match(/<li class="qb-doc-value" data-item="([^"]*)">([\s\S]*?)<\/li>/)!;
+    expect(parseDragItem(row[1]!.replace(/&quot;/g, '"').replace(/&amp;/g, "&"))).toEqual({
+      type: "value",
+      facetId: "a&b",
+      fieldId: "size",
+      value: "3",
+    });
+    expect(row[2]).toContain('class="qb-grip" draggable="true"');
+    expect(row[2]).toContain('aria-label="Add 3 to the query"');
+  });
+
+  it("a field without known values has no heading", () => {
+    const none: Facet = { ...facet, fields: [facet.fields[1]!] };
+    const out = facetHtml(none, 1, buildFieldCatalog([none]), "t");
+    expect(out).not.toContain("Previously seen values");
   });
 });
 
@@ -156,17 +227,16 @@ describe("expand and add affordances", () => {
       ...facet,
       fields: [{ ...facet.fields[1]!, typeName: "BIGINT", values: ["3"] }],
     };
-    const out = facetHtml(f, 1, buildFieldCatalog([f]));
+    const out = facetHtml(f, 1, buildFieldCatalog([f]), "t");
     expect(out).toContain('<details class="qb-doc-field"');
   });
 
-  it("add buttons on cards and rows say 'Add'; value chips stay icon-only", () => {
-    // facet + two fields have the visible label, the two value chips don't
+  it("add buttons on cards and rows say 'Add'; value rows stay icon-only", () => {
+    // facet + two fields have the visible label, the two value rows don't
     expect(html.match(/<span class="qb-add-label">Add<\/span>/g)).toHaveLength(3);
-    const chips =
-      html.match(/<span class="qb-doc-value" data-item[\s\S]*?<\/button><\/span>/g) ?? [];
-    expect(chips).toHaveLength(2);
-    for (const chip of chips) expect(chip).not.toContain("qb-add-label");
+    const rows = html.match(/<li class="qb-doc-value" data-item[\s\S]*?<\/button><\/li>/g) ?? [];
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row).not.toContain("qb-add-label");
   });
 
   it("the accessible name of an add button is unchanged by the visible label", () => {
@@ -212,5 +282,170 @@ describe("expand and add affordances", () => {
     expect(DOCS_HINT).toMatch(/expand/i);
     expect(DOCS_HINT).toMatch(/\+ Add/);
     expect(DOCS_HINT).toMatch(/with an arrow/);
+  });
+});
+
+describe("escapeClosesDocs", () => {
+  const closing = {
+    key: "Escape",
+    defaultPrevented: false,
+    floating: true,
+    collapsed: false,
+    focusInDocs: true,
+  };
+
+  it("closes the floating docs when Escape is pressed inside them", () => {
+    expect(escapeClosesDocs(closing)).toBe(true);
+  });
+
+  it("leaves Escape alone when the search box has already used it to clear its text", () => {
+    // The search box calls preventDefault() when it clears; the first Escape
+    // clears the search, only a second one closes the dictionary.
+    expect(escapeClosesDocs({ ...closing, defaultPrevented: true })).toBe(false);
+  });
+
+  it("ignores other keys, wide screens, folded docs and focus outside the docs", () => {
+    expect(escapeClosesDocs({ ...closing, key: "Enter" })).toBe(false);
+    expect(escapeClosesDocs({ ...closing, floating: false })).toBe(false);
+    expect(escapeClosesDocs({ ...closing, collapsed: true })).toBe(false);
+    expect(escapeClosesDocs({ ...closing, focusInDocs: false })).toBe(false);
+  });
+});
+
+describe("source logos", () => {
+  const facetWithField = (over: Partial<Facet["fields"][number]>): Facet => ({
+    id: "thing",
+    name: "Thing",
+    number: 1,
+    tags: ["t"],
+    group: "",
+    comment: "",
+    description: "",
+    eventCount: 1,
+    fields: [
+      {
+        id: "size",
+        name: "size",
+        typeName: "BIGINT",
+        comment: "",
+        description: "",
+        values: [],
+        ...over,
+      },
+    ],
+  });
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  it("a logo names its source for screen readers and on hover", () => {
+    const html = sourceLogo("thirdParty");
+    expect(html).toContain(`src="${TEXT_SOURCES.thirdParty.logo}"`);
+    expect(html).toContain(`alt="${TEXT_SOURCES.thirdParty.label}"`);
+    expect(html).toContain(`title="${TEXT_SOURCES.thirdParty.label}"`);
+  });
+
+  // The row's grip is what drags: a draggable image would start a drag of
+  // its own, carrying no item.
+  it("a logo is not draggable", () => {
+    expect(sourceLogo("ours")).toContain('draggable="false"');
+  });
+
+  // A deployment writes its own labels and paths in src/config.ts.
+  it("escapes a configured logo path and label", () => {
+    const sources = {
+      ...TEXT_SOURCES,
+      ours: { logo: '/a"b.svg', label: 'R&D "notes"' },
+    };
+    const html = sourceLogo("ours", sources);
+    expect(html).toContain('src="/a&quot;b.svg"');
+    expect(html).toContain('alt="R&amp;D &quot;notes&quot;"');
+    expect(html).toContain('title="R&amp;D &quot;notes&quot;"');
+  });
+
+  it("an opened field's texts start with their source's logo, without the word 'Third-party:'", () => {
+    const html = facetHtml(
+      facetWithField({ comment: "Ours.", description: "Theirs." }),
+      10,
+      null,
+      "t",
+    );
+    expect(html).toContain(`${sourceLogo("ours")}Ours.`);
+    expect(html).toContain(`${sourceLogo("thirdParty")}Theirs.`);
+    expect(html).not.toContain("Third-party:");
+  });
+
+  it("a facet's own texts and its third-party group get logos too", () => {
+    const html = facetHtml(
+      { ...facetWithField({}), comment: "Ours.", description: "Theirs.", group: "grp" },
+      10,
+      null,
+      "t",
+    );
+    expect(html).toContain(`${sourceLogo("ours")}Ours.`);
+    expect(html).toContain(`${sourceLogo("thirdParty")}Theirs.`);
+    expect(html).toMatch(
+      new RegExp(`qb-doc-source[^>]*>${escapeRegExp(sourceLogo("thirdParty"))}Group:`),
+    );
+  });
+});
+
+describe("field rows", () => {
+  const facetWithField = (over: Partial<Facet["fields"][number]>): Facet => ({
+    id: "thing",
+    name: "Thing",
+    number: 1,
+    tags: ["t"],
+    group: "",
+    comment: "",
+    description: "",
+    eventCount: 1,
+    fields: [
+      {
+        id: "size",
+        name: "size",
+        typeName: "BIGINT",
+        comment: "",
+        description: "",
+        values: [],
+        ...over,
+      },
+    ],
+  });
+
+  it("a field with one text and no values is a plain row showing the whole text", () => {
+    const out = facetHtml(
+      facetWithField({ description: "A long text. ".repeat(20) }),
+      10,
+      null,
+      "t",
+    );
+    expect(out).toContain('class="qb-doc-field is-leaf"');
+    expect(out).toContain(`class="qb-doc-field-text">${sourceLogo("thirdParty")}A long text.`);
+    expect(out).not.toContain('<details class="qb-doc-field"');
+    expect(out).not.toContain("qb-doc-field-more");
+  });
+
+  it("a field with only our comment is a plain row too", () => {
+    const out = facetHtml(facetWithField({ comment: "Ours." }), 10, null, "t");
+    expect(out).toContain('class="qb-doc-field is-leaf"');
+    expect(out).toContain(`class="qb-doc-field-text">${sourceLogo("ours")}Ours.`);
+  });
+
+  it("a field that opens says what opening adds", () => {
+    const out = facetHtml(
+      facetWithField({ comment: "Ours.", description: "Theirs." }),
+      10,
+      null,
+      "t",
+    );
+    expect(out).toContain('<details class="qb-doc-field"');
+    expect(out).toContain(`class="qb-doc-field-blurb">${sourceLogo("ours")}Ours.`);
+    expect(out).toContain('class="qb-doc-field-more">More: third-party description</span>');
+  });
+
+  it("known values are counted in the hint and listed when opened", () => {
+    const f = facetWithField({ comment: "Ours.", values: ["3", "7"] });
+    const out = facetHtml(f, 10, buildFieldCatalog([f]), "t");
+    expect(out).toContain('class="qb-doc-field-more">More: 2 previously seen values</span>');
+    expect(out).toContain("Previously seen values (2)");
   });
 });

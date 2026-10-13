@@ -20,16 +20,19 @@
   --qb-track: #e5e1c8; /* the empty part of a statistics bar */
   --qb-selected-bg: #e3eecb;
   --qb-selected-text: #2b5319;
-  --qb-open-row: #f0efd9;
   --qb-shadow: 0 8px 24px rgba(35, 48, 31, 0.2);
+  --qb-backdrop: rgba(35, 48, 31, 0.45); /* the page behind an open dialog */
 
   --qb-topbar: #2c4a26;
   --qb-topbar-2: #44683a;
   --qb-topbar-text: #eef3dc;
   --qb-topbar-muted: #b9cba0;
-  --qb-topbar-ok-bg: rgba(168, 220, 120, 0.25);
+  /* Compliance badges inside the account chip. Opaque #rrggbb on purpose:
+     a see-through tint over --qb-topbar-2 left the text at about 3.5:1, and
+     themeContrast.test.ts can only check opaque colours. */
+  --qb-topbar-ok-bg: #1f3a1a;
   --qb-topbar-ok-text: #d6f2b0;
-  --qb-topbar-warn-bg: rgba(240, 196, 60, 0.25);
+  --qb-topbar-warn-bg: #4a3a0c;
   --qb-topbar-warn-text: #ffe9a0;
 
   /* ALL / AND: pickle green */
@@ -45,6 +48,7 @@
   --qb-or-tint-strong: rgba(217, 160, 10, 0.17);
 
   --qb-danger: #b03a1e;
+  --qb-danger-stripe: #e7b3a4; /* the light stripes of a failed (red) bar segment */
   --qb-warn: #7d5800;
 
   --qb-radius: 6px;
@@ -93,11 +97,13 @@ body {
   font-size: 1.05rem;
   white-space: nowrap;
 }
+/* The steps neither shrink nor scroll: when the bar is tight it is the account
+   name that gives way (see .qb-account-name), never the workflow. No overflow
+   either, so a step's focus ring is not clipped at the nav's edge. */
 .qb-steps {
   display: flex;
   gap: 0.25rem;
-  min-width: 0;
-  overflow-x: auto;
+  flex: none;
 }
 .qb-step {
   display: inline-flex;
@@ -131,6 +137,16 @@ body {
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
+}
+/* A flex item cannot shrink below its content unless told so: without this
+   the account chip would keep the name's full width and push the page wider. */
+.qb-topbar-right > [data-panel="account"] {
+  min-width: 0;
+}
+/* Log in is one word: if the bar is ever too tight, overflowing beats a
+   two-line button. */
+.qb-login-btn {
+  white-space: nowrap;
 }
 
 /* ---- Body: docs rail | docs | main | stats ---- */
@@ -230,20 +246,66 @@ body {
   font-size: 1.2rem;
   color: var(--qb-muted);
 }
-/* Below the minimum supported window width (1024 px, desktop browsers only) the
-   stats drop under the main column, so a squeezed window stays usable. */
+/* Split-screen widths (the app supports down to 512 px, half of a 1024 px
+   screen). The stats leave their column and sit between the query and the
+   Run query card: they answer the query just built, and the user sees them
+   before the button that acts on them. The rail keeps its own column and the
+   four panels stack in the other one. `display: contents` on <main> makes its
+   sections grid items beside the stats, so `order` can put the stats between
+   them; the DOM order (stats last) is unchanged.
+
+   Coupling: this block counts the panels. The three <main> sections and the
+   stats make `repeat(4, auto)`, `grid-row: 1 / -1` makes the rail span them,
+   and `:first-child`, `[data-panel="preview"]` and the `order` values name
+   particular sections. Adding or removing a panel needs the row count and the
+   `order` values updated (the template is in src/ui/layout.ts).
+   It also relies on the 1100px rule further down making the open
+   `.qb-col-docs` `position: fixed`, so it is out of the grid's flow; without
+   that rule the docs would become a grid item and take a row. */
 @media (max-width: 900px) {
   .qb-body {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: var(--qb-rail-w) minmax(0, 1fr);
+    /* Four rows for the panels, then a spare 1fr row. The full-height rail
+       spans every row, and a grid shares a spanning item's height out among
+       the rows it spans: without a flexible row to take it, each panel's row
+       would grow by a quarter of the rail and gaps would open between panels. */
+    grid-template-rows: repeat(4, auto) 1fr;
+    padding-bottom: 0; /* the spare row's gap is the bottom margin */
+  }
+  .qb-docs-rail {
+    grid-column: 1;
+    grid-row: 1 / -1;
   }
   .qb-col-main {
-    flex-basis: calc(100% - var(--qb-rail-w) - var(--qb-gap));
+    display: contents;
+  }
+  .qb-col-main > section,
+  .qb-col-stats {
+    grid-column: 2;
+  }
+  /* <main>'s own top margin is gone with its box; the first panel keeps the gap. */
+  .qb-col-main > section:first-child {
+    margin-top: var(--qb-gap);
+  }
+  .qb-col-main > [data-panel="preview"] {
+    order: 2; /* Run query and the events come after the stats */
   }
   .qb-col-stats {
+    order: 1;
     position: static;
-    flex: 1 1 100%;
     max-height: none;
-    margin-left: calc(var(--qb-rail-w) + var(--qb-gap));
+    /* Nothing needs to scroll (no max-height), and a scroll container
+       (`overflow-y: auto` above) is left out when the grid sizes the rail's
+       spare 1fr row, which leaves blank scroll space under the last card. */
+    overflow: visible;
+    margin-top: 0; /* the grid's row gap spaces it */
+  }
+  /* Until the data dictionary has loaded the panel has no content, but an empty
+     grid item still takes a row, which would double the gap between the query
+     and Run query. */
+  .qb-col-stats:empty {
+    display: none;
   }
 }
 
@@ -347,6 +409,10 @@ body {
 .qb-dbpicker .qb-card-title .ui.button {
   margin: 0;
 }
+/* All, None and Deselect failing wrap under the count on a narrow window. */
+.qb-dbpicker .qb-card-title {
+  flex-wrap: wrap;
+}
 .qb-db-pills {
   display: flex;
   flex-wrap: wrap;
@@ -363,7 +429,9 @@ body {
   height: 1px;
   opacity: 0;
 }
-.qb-db-pill span {
+/* "> span": only the pill itself, not the hidden "failed for this query" text
+   inside it, which must keep the .qb-sr-only rules. */
+.qb-db-pill > span {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -375,7 +443,7 @@ body {
   font-size: 0.85rem;
   user-select: none;
 }
-.qb-db-pill span::before {
+.qb-db-pill > span::before {
   content: "";
   width: 0.5rem;
   height: 0.5rem;
@@ -394,6 +462,18 @@ body {
 .qb-db-pill input:focus-visible + span {
   outline: 2px solid var(--qb-and);
   outline-offset: 2px;
+}
+/* A selected database that failed for this query (databasePicker.ts): a danger
+   outline and icon. The text keeps the checked colours, so no new text/background
+   pair; the icon and a hidden text carry the meaning without the colour. */
+/* "input + span" matches the specificity of the checked rule above, which would
+   otherwise keep the green border. */
+.qb-db-pill.is-failed input + span {
+  border-color: var(--qb-danger);
+}
+.qb-db-pill.is-failed .icon {
+  margin: 0;
+  color: var(--qb-danger);
 }
 .qb-db-warn {
   margin: 0.5rem 0 0;
@@ -425,6 +505,8 @@ body {
 .qb-account-chip:focus-visible {
   outline: 2px solid var(--qb-text-on-fill);
 }
+/* The one part of the top bar that gives way when it is tight: it shrinks, with
+   an ellipsis (the full name is its tooltip), before anything else moves. */
 .qb-account-name {
   max-width: 12rem;
   overflow: hidden;
@@ -443,6 +525,11 @@ body {
 .qb-badge .icon {
   margin: 0;
   font-size: 0.8em;
+}
+/* Only for the narrow-screen badge (see the end of this section): at full width
+   the "needed" badge is text alone, as it always was. */
+.qb-badge .qb-badge-narrow-icon {
+  display: none;
 }
 .qb-badge-ok {
   background: var(--qb-topbar-ok-bg);
@@ -486,15 +573,86 @@ body {
   letter-spacing: 0.05em;
   color: var(--qb-muted);
 }
-.qb-account-reason {
-  margin: 0 0 0.25rem;
-  font-style: italic;
-  overflow-wrap: anywhere;
+/* The compliance log, as the backend sent it (formatted JSON). Lines are never
+   wrapped: wrapped JSON is hard to read, so a long line scrolls sideways. The
+   box scrolls both ways and is focusable (tabindex in accountMenu.ts), so the
+   keyboard can scroll it. */
+.qb-account-log {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem;
+  max-height: 16rem;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 0.75rem;
+  white-space: pre;
+  color: var(--qb-text);
+  background: var(--qb-surface-2);
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+}
+.qb-account-log:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 1px;
 }
 .qb-account-meta {
   margin: 0 0 0.6rem;
   font-size: 0.8rem;
   color: var(--qb-muted);
+}
+
+/* ---- Narrow top bar (docs/ARCHITECTURE.md, "Screen layout") ----
+   The app supports windows down to 512 px. At 801 px the logged-in bar with all
+   four labels still fits, but only because the name gives way: it keeps about
+   90 px, and loses a pixel for every pixel the window loses, so below about
+   760 px it would be cut to a few letters. 800 px leaves a margin for fonts
+   wider than ours. Below it the bar spends less: tighter spacing; only the
+   active step keeps its label (the others are their number, with the label as
+   hidden text and a title tooltip); the compliance badge is its icon alone
+   (same treatment). Spacing alone was tried first and is not enough: with every
+   label shown, the logged-in bar needs over 600 px at the spacing below (about
+   625 px with the widest badge text) even with the name cut to nothing, and the
+   anonymous bar only just fits at 512 px even with smaller type as well. The
+   logo and the app name stay.
+   The 800 px figure follows from the widest badge text ("Compliance needed")
+   and from the parts of the bar that do not shrink (logo, app name, step
+   labels, spacing); the 12rem cap of `.qb-account-name` only decides where the
+   name starts to shrink (about 875 px), so recheck 800 if any of those change.
+   This block comes after the account rules above so that it overrides them. */
+@media (max-width: 800px) {
+  .qb-topbar {
+    gap: 0.75rem;
+    padding: 0 0.75rem;
+  }
+  .qb-steps {
+    gap: 0.15rem;
+  }
+  .qb-step {
+    padding: 0.3rem 0.5rem;
+  }
+  .qb-account-chip {
+    padding: 0.3rem 0.6rem;
+    gap: 0.3rem;
+  }
+  .qb-badge {
+    padding: 0.15rem 0.4rem;
+  }
+  .qb-badge .qb-badge-narrow-icon {
+    display: inline-block;
+  }
+  /* Visually hidden, not display:none: it must stay in the accessible name
+     (the same rules as .qb-sr-only). */
+  .qb-step:not(.is-active) .qb-step-label,
+  .qb-badge-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 
 /* ---- Query builder (src/ui/queryBuilder.ts + valueControl.ts) ---- */
@@ -553,6 +711,22 @@ body {
 }
 .qb-group-head .ui.mini.button {
   margin: 0;
+}
+/* The header's action buttons: pushed to the right, wrapping among themselves
+   and staying right-aligned, so the group's remove button is always last. */
+.qb-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+/* A refused action (Ungroup that would change the query) looks like Fomantic's
+ * .disabled but stays clickable and focusable, so the click can say why. */
+.qb-group-head .ui.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .qb-group-label {
   font-size: 0.85rem;
@@ -620,9 +794,6 @@ body {
   font-style: italic;
   color: var(--qb-muted);
 }
-.is-collapsed > .qb-group-head {
-  flex-wrap: nowrap;
-}
 .qb-collapse-btn {
   border: 1px solid var(--qb-border-strong);
   background: var(--qb-surface);
@@ -634,6 +805,7 @@ body {
 }
 /* A folded group opens when you click anywhere on its line. */
 .is-collapsed > .qb-group-head {
+  flex-wrap: nowrap;
   cursor: pointer;
   border-radius: var(--qb-radius);
   padding: 0.15rem 0.35rem;
@@ -644,6 +816,15 @@ body {
 .is-collapsed > .qb-group-head:hover .qb-collapse-btn {
   background: var(--qb-selected-bg);
   color: var(--qb-selected-text);
+}
+
+/* "Show" in the statistics panel focuses a row or group by script
+   (revealNode, tabindex="-1"). A mouse click does not match :focus-visible, so
+   plain :focus is styled here: without a ring the user sees only a scroll. */
+.qb-condition[tabindex="-1"]:focus,
+.qb-group[tabindex="-1"]:focus {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
 }
 
 /* One condition = one grid row. Container query: a row squeezed below ~640px
@@ -686,13 +867,35 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* On a narrow row the row's three dropdowns (Facet, Field, Operator) get about
+   114px each at a 512px window. Fomantic pads a selection dropdown 1em on the
+   left and 3.2em on the right, which left only 54px for text, less than
+   "Operator…" (about 66px) and "Choose…" (about 57px) need: both were cut off
+   with an ellipsis before the user had typed anything. The arrow sits in the
+   last ~22px, so 2em on the right still keeps text clear of it. The search
+   input is laid over the dropdown and gets the same padding, so what the user
+   types lines up with the text it replaces. Wide rows (container over 640px)
+   keep Fomantic's own padding, so nothing changes there.
+   Only the grid's direct children (`>`): the Value box lives inside
+   `.qb-value`, and its multi-select ("Is any of") needs Fomantic's own padding:
+   its search input has none and is a small typing area after the tags, so
+   padding it like a row dropdown would leave no room to show what is typed. */
+@container (max-width: 640px) {
+  .qb-cond-grid > .ui.search.selection.dropdown,
+  .qb-cond-grid > .ui.search.selection.dropdown > input.search {
+    padding-left: 0.8em;
+    padding-right: 2em;
+  }
+}
 /* A whole-facet condition ("Is present") has no Operator or Value slot, so its
    row has its own, shorter template: the facet NAME takes the spare room (a
    long one was cut off beside a wide, mostly empty "Is present" box), the
    Field dropdown keeps just enough for "Is present" / "Is absent" to be read
    whole, and the ✕ is in the last column, at the row's end like the ✕ of the
-   rows above it. Wide and narrow rows alike: the narrow rule above would put
-   the ✕ on a second line, and this rule (more specific) wins over it. */
+   rows above it. Wide and narrow rows alike: the narrow-grid rule near the top of
+   this section (the first `@container (max-width: 640px)` block, which moves
+   the ✕ to row 2) would put the ✕ on a second line, and this rule (more
+   specific) wins over it. */
 .qb-cond-grid.is-facet-level {
   grid-template-columns: minmax(0, 18rem) minmax(9rem, 9.5rem) 1fr;
 }
@@ -771,6 +974,15 @@ body {
   font-weight: 600;
   color: var(--qb-danger);
 }
+/* A problem a database found that is "incomplete" rather than "invalid"
+   (queryBuilder.ts issuesHtml): highlighted, not a grey hint. Mustard, not
+   yellow: yellow text on the cream cards would be unreadable (about 1.5:1). */
+.qb-server-warning {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--qb-warn);
+}
 .qb-query-foot {
   margin: 0.75rem -1rem -0.75rem;
   padding: 0.5rem 1rem;
@@ -785,6 +997,40 @@ body {
   display: block;
   overflow-wrap: anywhere;
   font-style: italic;
+}
+/* The card's title row: "Query · <name> (edited)", then Save… and Saved
+   queries. On a narrow card the buttons wrap under the title, and a long name
+   is cut with "…" (its full text is the tooltip). */
+.qb-query-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.qb-query-head .qb-card-title {
+  min-width: 0;
+  margin: 0;
+}
+.qb-query-head .ui.button {
+  margin: 0;
+}
+/* The user's own words keep their casing (the title is upper case). */
+.qb-open-name,
+.qb-query-head .qb-muted {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.qb-open-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qb-query-head .qb-muted {
+  flex: none;
+  font-style: italic;
+  font-weight: 400;
 }
 
 /* ---- Statistics (src/ui/statsPanel.ts + format.ts) — must fit ~15rem ---- */
@@ -807,25 +1053,44 @@ body {
   font-size: 0.85rem;
   color: var(--qb-muted);
 }
-.qb-stat-failed {
-  margin-top: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--qb-danger);
-}
 .qb-bar {
-  display: block;
+  display: flex;
   height: 6px;
   overflow: hidden;
   border-radius: 3px;
   background: var(--qb-track);
 }
 .qb-bar > i {
-  display: block;
+  flex: none;
   height: 100%;
   background: var(--qb-and);
 }
+/* Data from databases that failed: red with stripes, so it is told apart from
+   the green without relying on colour (WCAG 1.4.1). It sits at the right end. */
+.qb-bar > .qb-bar-failed,
+.qb-bar.is-failed {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--qb-danger) 0 3px,
+    var(--qb-danger-stripe) 3px 5px
+  );
+}
+.qb-bar > .qb-bar-failed {
+  margin-left: auto;
+}
 .qb-stat-headline .qb-bar {
+  height: 10px; /* tall enough for the stripes to show */
   margin-top: 0.4rem;
+}
+.qb-db-failed-icon.icon {
+  margin: 0;
+  color: var(--qb-danger);
+}
+.qb-show-problem.ui.button {
+  margin: 0 0 0.6rem;
+}
+.qb-show-problem .icon {
+  color: var(--qb-warn);
 }
 .qb-stat-subtitle {
   margin: 0.25rem 0 0.35rem;
@@ -858,8 +1123,23 @@ body {
   font-size: 0.75rem;
   color: var(--qb-muted);
 }
-.qb-db-error {
+/* Why a database failed (statsPanel.ts failureRowHtml): one line under its red
+   bar, cut off with "…"; the row's tooltip holds all of it. Dark red like the
+   bar, so it reads as part of the failure (--qb-danger passes AA on the card). */
+.qb-db-reason {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
   color: var(--qb-danger);
+}
+/* A database that did not run the query because the query has a problem
+   (notRunRowHtml): an empty bar and a mustard warning icon, not red, because
+   the database did not fail. */
+.qb-db-not-run-icon.icon {
+  margin: 0;
+  color: var(--qb-warn);
 }
 .qb-stat-pending {
   display: flex;
@@ -899,87 +1179,139 @@ body {
 .qb-preview .ui.negative.message {
   margin: 0 0 0.75rem;
 }
-.qb-preview-note {
+/* ---- Matching events table (src/ui/eventTable.ts) ----
+   A plain table in its own scroll box. The header row sticks to the top of
+   the box and moves sideways with its columns; the id column sticks to the
+   left; the corner cell sits above both. Sticky cells need an opaque
+   background, or the scrolled cells show through them. border-collapse must
+   be "separate": collapsed borders do not move with sticky cells. */
+.qb-et-paging {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0 0 0.5rem;
   font-size: 0.85rem;
+  color: var(--qb-muted);
 }
-.qb-event-list {
+.qb-et-paging .ui.button {
+  margin: 0;
+}
+/* Previous on the first page, Next on the last: looks like Fomantic's
+ * .disabled but stays focusable (the same pattern as the group's Ungroup). */
+.qb-et-paging .ui.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.qb-et-scroll {
+  max-height: 70vh;
+  overflow: auto;
   border: 1px solid var(--qb-border);
   border-radius: var(--qb-radius);
 }
-.qb-event-row {
+.qb-et-scroll:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+.qb-et {
+  border-collapse: separate;
+  border-spacing: 0;
+  /* Each column takes the width of its content (up to the td's max-width)
+     and the box scrolls. Without this, a table wider than the box squeezes
+     every column to its narrowest word. */
+  width: max-content;
+  font-size: 0.8rem;
+}
+.qb-et th,
+.qb-et td {
+  padding: 0.4rem 0.5rem;
+  border-right: 1px solid var(--qb-border);
   border-bottom: 1px solid var(--qb-border);
+  background: var(--qb-surface);
+  text-align: left;
+  vertical-align: top;
 }
-.qb-event-row:last-child {
-  border-bottom: none;
+/* A cell is as wide as its widest block, at least 8rem. The 16rem cap sits on
+   the blocks inside the cells (below), not on the td: CSS does not define
+   max-width for table cells, and Firefox ignores it. */
+.qb-et td {
+  min-width: 8rem;
+  overflow-wrap: anywhere;
 }
-.qb-event-row summary {
-  display: grid;
-  /* Set inline by dataPreview.ts from the configured ROW_COLUMNS. */
-  grid-template-columns: var(--qb-er-grid, 3rem minmax(0, 1fr) auto);
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
+.qb-et thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--qb-surface-2);
+}
+.qb-et .qb-et-id {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  white-space: nowrap;
+}
+.qb-et thead .qb-et-id {
+  z-index: 2; /* the corner: above the sticky header row and the id column */
+}
+.qb-et-facet {
+  display: block;
+  max-width: 16rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.qb-et-count {
+  display: block;
+  max-width: 16rem;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--qb-muted);
+}
+.qb-et-id-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--qb-and);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
   cursor: pointer;
+}
+.qb-et-id-btn:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+.qb-et-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 16rem;
+  margin: 0;
+  padding: 0;
   list-style: none;
 }
-.qb-event-row summary::-webkit-details-marker {
-  display: none;
-}
-.qb-event-row summary:hover {
-  background: var(--qb-surface-2);
-}
-.qb-event-row[open] summary {
-  background: var(--qb-open-row);
-}
-.qb-er-id {
-  font-weight: 700;
-}
-.qb-er-count {
-  color: var(--qb-muted);
-  white-space: nowrap;
-}
-.qb-er-cell {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--qb-muted);
-}
-.qb-er-groups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  min-width: 0;
-}
-.qb-group-badge {
-  display: inline-block;
-  padding: 0 0.45rem;
-  border: 1px dashed var(--qb-border);
-  border-radius: 999px;
-  color: var(--qb-subtle);
-  font-size: 0.72rem;
-  line-height: calc(1.5em - 2px);
-  white-space: nowrap;
-}
-/* A little extra space where the tags end and the groups begin. */
-.qb-er-groups > :not(.qb-group-badge) + .qb-group-badge {
-  margin-left: 0.4rem;
-}
-.qb-er-more {
-  font-size: 0.8rem;
-  color: var(--qb-subtle);
-}
-.qb-er-count {
-  text-align: right;
-}
-.qb-er-json {
-  max-height: 24rem;
+/* One occurrence: its fields as a small two-column box, so the values that
+   belong together read as one set. */
+.qb-et-set {
+  display: grid;
+  /* A field name is as wide as it needs, up to 7rem; the value takes the rest
+     and breaks anywhere, so a long unbroken value never widens the cell. */
+  grid-template-columns: fit-content(7rem) minmax(0, 1fr);
+  gap: 0 0.4rem;
   margin: 0;
-  padding: 0.75rem;
-  overflow: auto;
-  border-top: 1px solid var(--qb-border);
-  background: var(--qb-surface-2);
-  font-size: 0.8em;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 4px;
+}
+.qb-et-set dt {
+  color: var(--qb-muted);
+  overflow-wrap: break-word;
+}
+.qb-et-set dd {
+  margin: 0;
+}
+.qb-et-empty {
+  color: var(--qb-muted);
 }
 
 /* ---- Data dictionary (src/ui/docsSidebar.ts + docsFilter.ts) ---- */
@@ -996,7 +1328,7 @@ body {
   right: 0.2rem;
   transform: translateY(-50%);
 }
-.qb-docs-empty {
+.qb-docs-status {
   margin: 0.25rem 0 0.5rem;
   font-size: 0.85rem;
   color: var(--qb-muted);
@@ -1039,6 +1371,7 @@ body {
 .qb-doc-count {
   margin: 0.25rem 0;
   font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 .qb-doc-comment {
   font-style: italic;
@@ -1047,14 +1380,22 @@ body {
 .qb-doc-count {
   color: var(--qb-muted);
 }
+/* Who wrote a text (docsSidebar.ts sourceLogo): a small logo in front of it,
+   on the text's first line. */
+.qb-source-logo {
+  width: 14px;
+  height: 14px;
+  margin-right: 0.35em;
+  vertical-align: -2px;
+}
 .qb-docs-hint {
   margin: 0 0 0.5rem;
   font-size: 0.8rem;
   color: var(--qb-muted);
 }
-.qb-muted {
+/* "and N more" under a field's known values: smaller than the rows above it. */
+.qb-doc-more {
   font-size: 0.78rem;
-  color: var(--qb-muted);
 }
 .qb-docs-resize {
   position: absolute;
@@ -1065,9 +1406,13 @@ body {
   cursor: col-resize;
   touch-action: none;
 }
-.qb-docs-resize:hover,
-.qb-docs-resize:focus-visible {
+.qb-docs-resize:hover {
   background: var(--qb-border-strong);
+}
+/* Keyboard focus needs 3:1 against both neighbours (WCAG 1.4.11);
+   --qb-border-strong gives only about 1.7:1, so use the green. */
+.qb-docs-resize:focus-visible {
+  background: var(--qb-and);
   outline: none;
 }
 .qb-doc-facets {
@@ -1137,11 +1482,20 @@ body {
 }
 .qb-doc-field-blurb {
   flex: 1 0 100%;
+  /* The 100% basis must include the indent below, or the text sticks out of
+     the row by that much. RULE: an element inside a <details> body that has
+     width 100% plus padding needs `box-sizing: border-box`. Why: the
+     <details> content wrapper (::details-content) is not matched by
+     Fomantic's `* { box-sizing: inherit }` reset, so its descendants fall
+     back to content-box (observed in Chromium). */
+  box-sizing: border-box;
   /* Lines up under the field name: the row's padding (0.5rem) + this = the name's
      left edge (chevron + grip + their gaps; measured in the browser). */
   padding-left: 3rem;
   font-size: 0.8rem;
   color: var(--qb-muted);
+  /* A long word (an identifier, a URL) breaks instead of widening the row. */
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1150,31 +1504,72 @@ body {
 .qb-doc-field[open] .qb-doc-field-blurb {
   display: none; /* the full text is in the body below */
 }
+/* A plain field row's only text, in full: nothing is hidden behind an arrow,
+   so nothing may be cut off either. Same indent as the blurb. */
+.qb-doc-field-text {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  padding-left: 3rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+  overflow-wrap: anywhere;
+}
+/* What opening a field adds ("More: 12 previously seen values"): says that the
+   arrow shows something new. Gone once the row is open. */
+.qb-doc-field-more {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  padding-left: 3rem;
+  font-size: 0.72rem;
+  /* Muted, not subtle: subtle is under 4.5:1 on the row's hover tint. */
+  color: var(--qb-muted);
+}
+.qb-doc-field[open] .qb-doc-field-more {
+  display: none;
+}
 .qb-doc-field-body {
   /* Starts at the field name's left edge (3.5rem from the row's edge, as above). */
   padding: 0 0.6rem 0.6rem 3.5rem;
 }
+/* "Previously seen values": a small labelled table, one value per row. It is
+   deliberately not pill-shaped (no rounded tinted background): the facet's tags
+   are pills, and values that looked like them were mistaken for tags. */
 .qb-doc-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.4rem;
+  margin-top: 0.6rem;
+}
+.qb-doc-values-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--qb-muted);
+}
+.qb-doc-values-hint {
+  margin: 0.15rem 0 0.3rem;
+  font-size: 0.78rem;
+  color: var(--qb-muted);
+}
+.qb-doc-value-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--qb-border);
 }
 .qb-doc-value {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.2rem;
-  max-width: 100%;
-  padding: 0 0.2rem;
-  border: 1px solid var(--qb-border);
-  border-radius: 4px;
-  background: var(--qb-surface);
-  font-size: 0.78rem;
+  gap: 0.3rem;
+  padding: 0.1rem 0.2rem;
+  border-bottom: 1px solid var(--qb-border);
+  font-size: 0.8rem;
+}
+.qb-doc-value:hover {
+  background: var(--qb-hover);
 }
 .qb-doc-value-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: monospace;
+  overflow-wrap: anywhere; /* a long value wraps instead of pushing the + out of the row */
 }
 .qb-grip {
   display: inline-flex;
@@ -1188,7 +1583,7 @@ body {
   cursor: grabbing;
 }
 .qb-doc-value .qb-add-btn {
-  margin-left: 0;
+  margin-left: auto; /* the + sits at the right edge of the row */
 }
 
 /* ---- "This row opens when you click it" ---- */
@@ -1267,14 +1662,38 @@ details[open] > summary > .qb-chevron {
     margin-right: 0;
   }
 }
+/* Keep this 1100px in step with NARROW_SCREEN in src/main.ts: the script
+   decides from the same width when Escape and an outside click close the
+   floating docs, and CSS cannot share a constant with it. */
 @media (max-width: 1100px) {
-  /* Narrow desktop windows: the docs float over the page instead of squeezing the builder. */
+  /* Narrow screens: the docs float over the page instead of squeezing the builder.
+     The 900px grid block above relies on the open docs column being
+     `position: fixed`, which takes it out of the grid's flow: do not drop
+     `fixed`, or move this breakpoint below 900px, without updating that block. */
   .qb-body:not(.qb-docs-collapsed) .qb-col-docs {
     position: fixed;
     left: var(--qb-rail-w);
     z-index: 15;
     width: var(--qb-docs-w);
-    max-width: calc(100vw - var(--qb-rail-w));
+    /* In a window narrower than the column's width plus the rail plus one gap
+       (at the 40rem maximum: 560 + 28 + 14 = 602px; without the gap it would be
+       588px) the column is cut to fit, and it leaves one gap of the page
+       showing on its right. The gap is needed twice over: the resize handle
+       sticks out 0.4rem past the column's right edge, so with no margin most of
+       it would be off screen and could not be grabbed (at 512px only 1.4px of
+       it was on screen); and a strip of the page shows the user that the
+       dictionary floats over something, and is a click target that closes it.
+       The stored width is not changed. Percent, not `100vw`: for a fixed box
+       `100%` is the window without the page's scrollbar, and `100vw` includes
+       the scrollbar, which would eat the whole gap on a desktop browser. */
+    max-width: calc(100% - var(--qb-rail-w) - var(--qb-gap));
+    /* The gap above the column is counted twice once it is fixed: in its `top`
+       (topbar + gap) and in the `margin-top: var(--qb-gap)` it shares with the
+       other columns. Sticky, that margin only places the column in the flow;
+       fixed, it is added to `top`, so the dictionary would sit one gap too low
+       and its panel's max-height (which leaves a gap above and below) would
+       run to the window's bottom edge. */
+    margin-top: 0;
     box-shadow: var(--qb-shadow);
     background: var(--qb-bg);
   }
@@ -1357,24 +1776,180 @@ details[open] > summary > .qb-chevron {
   width: 28px;
   height: 28px;
   cursor: pointer;
-  transform-origin: 50% 90%;
+  /* Turns around its middle: the normal logo may be round. */
+  transform-origin: 50% 50%;
 }
+/* Busy: the loading face turns, so the user sees the app is working. Done
+   here, not inside the SVG: the files are meant to be replaced, and an
+   animation inside one would be lost with it. */
 .qb-logo[data-state="loading"] {
-  animation: qb-wobble 1s ease-in-out infinite;
+  animation: qb-spin 1.2s linear infinite;
 }
-@keyframes qb-wobble {
-  0%,
-  100% {
-    transform: rotate(-8deg);
-  }
-  50% {
-    transform: rotate(8deg);
+@keyframes qb-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
+/* No turning for people who ask for less motion; a slow fade still says "busy". */
 @media (prefers-reduced-motion: reduce) {
   .qb-logo[data-state="loading"] {
-    animation: none;
+    animation: qb-pulse 1.6s ease-in-out infinite alternate;
   }
+}
+@keyframes qb-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+/* ---- Saved queries dialog (src/ui/savedQueries.ts) ----
+   A native <dialog>: the browser puts it above the page, centres it and
+   draws the backdrop. Fomantic's CSS styles the form, buttons and messages
+   inside it (no Fomantic plugin). */
+.qb-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  background: var(--qb-surface);
+  color: var(--qb-text);
+  box-shadow: var(--qb-shadow);
+}
+.qb-dialog::backdrop {
+  background: var(--qb-backdrop);
+}
+.qb-dialog-title {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+}
+.qb-dialog-hint {
+  margin: 0.3rem 0 0;
+  color: var(--qb-muted);
+  font-size: 0.85rem;
+}
+/* Read-only while saving or while "Replace it?" is asked. */
+.ui.form .field input[readonly] {
+  background: var(--qb-surface-2);
+  color: var(--qb-muted);
+}
+.qb-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.qb-dialog .ui.button {
+  margin: 0;
+}
+.qb-dialog .ui.basic.button:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 1px;
+}
+/* Fomantic's red Delete only darkens on focus: add a ring a keyboard user can see. */
+.qb-dialog .ui.negative.button:focus-visible {
+  outline: 2px solid var(--qb-danger);
+  outline-offset: 2px;
+}
+/* A question ("Replace it?", "Delete …?") and its two buttons. */
+.qb-dialog-question {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.qb-dialog-question p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.qb-dialog-status {
+  margin: 0.5rem 0;
+  color: var(--qb-muted);
+}
+.qb-saved-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.qb-saved-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--qb-border);
+}
+.qb-saved-item:first-child {
+  border-top: 0;
+}
+.qb-saved-info {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+/* Names and notes are the user's own: a long word breaks rather than widening the dialog. */
+.qb-saved-name,
+.qb-saved-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.qb-saved-name {
+  font-weight: 700;
+}
+.qb-saved-meta {
+  margin: 0.15rem 0 0;
+  color: var(--qb-muted);
+  font-size: 0.85rem;
+}
+.qb-saved-actions {
+  display: flex;
+  flex: none;
+  gap: 0.4rem;
+}
+.qb-saved-item .qb-dialog-question {
+  flex: 1 1 100%;
+  margin-top: 0;
+}
+
+/* The event JSON dialog (src/ui/eventDialog.ts): wider than the saved-queries
+   one, the JSON scrolls inside it. A column whose JSON shrinks to what is left
+   of the dialog's max-height: on a short window, the JSON scrolls, not the
+   dialog too (two scroll bars). Only while [open]: display: flex on a closed
+   <dialog> would show it. */
+.qb-event-dialog {
+  width: min(48rem, calc(100vw - 2rem));
+}
+.qb-event-dialog[open],
+.qb-event-dialog .qb-dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.qb-event-json {
+  min-height: 4rem;
+  max-height: 60vh;
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--qb-border);
+  border-radius: 4px;
+  background: var(--qb-surface-2);
+  font-size: 0.8rem;
+}
+.qb-event-json:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
+}
+
+/* Toasts (showToast in src/ui/fomantic.ts) start below the top bar, not on
+   it: there a failed Log out or Invalidate covered the account chip, which
+   then has the keyboard focus, or the open account menu. */
+.ui.toast-container.top.right {
+  top: calc(var(--qb-topbar-h) + 0.5rem);
 }
 
 /* ---- Fomantic's own blue, recoloured to the pickle palette ---- */
@@ -1419,6 +1994,7 @@ a {
 .ui.selection.active.dropdown:hover,
 .ui.input.focus > input,
 .ui.input > input:focus,
+.ui.form input[type="text"]:focus,
 .ui.selection.dropdown:focus {
   border-color: var(--qb-and);
 }

@@ -1,17 +1,34 @@
 import type {
-  AuthUser,
-  ComplianceStatus,
   DatabasesResponse,
-  EntrysetResponse,
+  EventResponse,
   EventsResponse,
   IndividualResponse,
+  SavedQueryResponse,
   StatsResponse,
+  UserResponse,
 } from "./types";
-import type { Compliance, Database, DatabaseResult, EventRecord, Facet, User } from "../model";
+import type {
+  Compliance,
+  Database,
+  DatabaseResult,
+  EventRecord,
+  Facet,
+  SavedQuery,
+  SavedQueryDraft,
+  User,
+} from "../model";
 import type { Group } from "../query/types";
 import { ContractError, ResponseValue } from "./contract";
-import { toQueryRequest } from "./request";
-import { toCompliance, toDatabase, toDatabaseResult, toEvent, toFacet, toUser } from "./response";
+import { toQueryRequest, toSavedQueryRequest } from "./request";
+import {
+  toCompliance,
+  toDatabase,
+  toDatabaseResult,
+  toEvent,
+  toFacet,
+  toSavedQuery,
+  toUser,
+} from "./response";
 
 // The only file that calls fetch(): one function per endpoint. Every one of
 // them speaks the frontend's model (src/model.ts): request bodies are built by
@@ -29,17 +46,20 @@ const BASE = import.meta.env.VITE_API_BASE;
  * a non-default VITE_API_BASE moves these links too.
  */
 export const LOGIN_URL = `${BASE}/auth/login`;
-export const COMPLIANCE_START_URL = `${BASE}/compliance/start`;
+export const COMPLIANCE_START_URL = `${BASE}/log/build`;
 
 /**
  * How long a request may go without the server sending anything before it is
  * abandoned. For plain JSON requests that's the whole request; for the streamed
- * /stats body the clock restarts on every chunk, so a slow-but-progressing
+ * /filter/validate body the clock restarts on every chunk, so a slow-but-progressing
  * stream is never cut off — only a silent one.
  */
 export const REQUEST_TIMEOUT_MS = 60_000;
 
-/** The server answered with an HTTP error status (4xx/5xx). */
+/** The server answered with an HTTP error status (4xx/5xx). The message is for
+ *  the console: the request, the status code and text, and the server's own
+ *  `{ "error": … }` text if it sent one. Users are shown `userMessage`
+ *  (src/api/errorText.ts) instead. */
 export class ApiError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -57,23 +77,41 @@ export class TimeoutError extends Error {
   }
 }
 
+/** No answer at all: the server is down or unreachable, or the connection
+ *  broke. (fetch rejects with a bare TypeError, "Failed to fetch", for all of
+ *  these; this names the request so the console says which one.) */
+export class NetworkError extends Error {
+  constructor(source: string, cause: unknown) {
+    const why = cause instanceof Error ? cause.message : String(cause);
+    super(`${source} failed: no answer from the server (${why})`);
+    this.name = "NetworkError";
+  }
+}
+
+/** `err` as a NetworkError if it is fetch's "no answer" TypeError. An abort
+ *  (ours, or the timeout's TimeoutError) is not a TypeError and passes through. */
+function asNetworkError(err: unknown, source: string): unknown {
+  return err instanceof TypeError ? new NetworkError(source, err) : err;
+}
+
 // ---- the endpoints ----------------------------------------------------------
 //
-// Each one rejects with an ApiError (an HTTP error status), a TimeoutError, or a
-// ContractError (the answer doesn't match src/api/types.ts, src/api/contract.ts).
+// Each one rejects with an ApiError (an HTTP error status), a NetworkError (no
+// answer), a TimeoutError, or a ContractError (the answer doesn't match
+// src/api/types.ts, src/api/contract.ts).
 
 export async function getDatabases(): Promise<Database[]> {
-  const body = await getJson("/databases");
+  const body = await getJson("/documentation/databases");
   return body.list<DatabasesResponse>().map(toDatabase);
 }
 
 export async function getFacets(): Promise<Facet[]> {
-  const body = await getJson("/individuals");
+  const body = await getJson("/documentation/individuals");
   return body.list<IndividualResponse>().map(toFacet);
 }
 
 /**
- * POST …/stats streams newline-delimited JSON: one line per database in
+ * POST …/filter/validate streams newline-delimited JSON: one line per database in
  * `databaseIds`, as soon as that database's result is ready. `onResult` is
  * called once per line, in arrival order; the returned promise resolves when
  * the stream ends, or rejects (before any line is read) on a non-2xx response.
@@ -90,7 +128,7 @@ export async function getStats(
   signal?: AbortSignal,
 ): Promise<void> {
   const body = toQueryRequest(query, databaseIds);
-  await send("POST", "/stats", { body, signal }, async (res, source, touch) => {
+  await send("POST", "/filter/validate", { body, signal }, async (res, source, touch) => {
     let lineNumber = 0;
     await readLines(res, source, touch, (line) => {
       lineNumber += 1;
@@ -100,15 +138,16 @@ export async function getStats(
   });
 }
 
-/** POST …/query: the events matching `query` in `databaseIds` (capped by the
- *  backend). Like getStats, an unfinished query rejects without sending. */
+/** POST …/filter/execute: the events matching `query` in `databaseIds` (a random
+ *  sample of up to 2,000; the backend decides the size). Like getStats, an
+ *  unfinished query rejects without sending. */
 export async function runQuery(
   query: Group,
   databaseIds: string[],
   signal?: AbortSignal,
 ): Promise<EventRecord[]> {
-  const body = await postJson("/query", toQueryRequest(query, databaseIds), signal);
-  return body.object<EventsResponse>().list<EntrysetResponse>("entrysets").map(toEvent);
+  const body = await postJson("/filter/execute", toQueryRequest(query, databaseIds), signal);
+  return body.object<EventsResponse>().list<EventResponse>("events").map(toEvent);
 }
 
 /**
@@ -118,8 +157,8 @@ export async function runQuery(
  */
 export async function getMe(): Promise<User | null> {
   try {
-    const body = await getJson("/auth/me");
-    return toUser(body.object<AuthUser>());
+    const body = await getJson("/users/me");
+    return toUser(body.object<UserResponse>());
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return null;
     throw err;
@@ -130,13 +169,54 @@ export function logout(): Promise<void> {
   return post("/auth/logout");
 }
 
+/**
+ * The session's compliance log, if there is one. A 403 here is a normal answer
+ * (no compliance log yet), so it resolves to "required" rather than throwing,
+ * the same way getMe turns a 401 into `null`. Any other failure rejects.
+ */
 export async function getComplianceStatus(): Promise<Compliance> {
-  const body = await getJson("/compliance/status");
-  return toCompliance(body.object<ComplianceStatus>());
+  try {
+    const body = await getJson("/log/status");
+    return toCompliance(body);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 403) return { status: "required" };
+    throw err;
+  }
 }
 
 export function invalidateCompliance(): Promise<void> {
-  return post("/compliance/invalidate");
+  return post("/log/invalidate");
+}
+
+// ---- saved queries: the logged-in user's own list ---------------------------
+//
+// Each one also rejects with an ApiError of status 401 (not logged in); an
+// update or delete adds 404 (no such saved query), a create or update 409 (the
+// name is taken) and 400 (a malformed body, which is a bug on our side).
+
+export async function listSavedQueries(): Promise<SavedQuery[]> {
+  const body = await getJson("/filter/saved");
+  return body.list<SavedQueryResponse>().map(toSavedQuery);
+}
+
+export async function createSavedQuery(draft: SavedQueryDraft): Promise<SavedQuery> {
+  const body = await postJson("/filter/saved", toSavedQueryRequest(draft));
+  return toSavedQuery(body.object<SavedQueryResponse>());
+}
+
+/** Replaces the saved query `id` with `draft` (a rename included). */
+export async function updateSavedQuery(id: string, draft: SavedQueryDraft): Promise<SavedQuery> {
+  const body = await putJson(savedQueryPath(id), toSavedQueryRequest(draft));
+  return toSavedQuery(body.object<SavedQueryResponse>());
+}
+
+export function deleteSavedQuery(id: string): Promise<void> {
+  return del(savedQueryPath(id));
+}
+
+/** The id may hold any character (it is the server's), so it is encoded. */
+function savedQueryPath(id: string): string {
+  return `/filter/saved/${encodeURIComponent(id)}`;
 }
 
 // ---- how a request is sent --------------------------------------------------
@@ -151,25 +231,38 @@ function postJson(path: string, body: unknown, signal?: AbortSignal): Promise<Re
   return send("POST", path, { body, signal }, readJson);
 }
 
+/** PUT `body` as JSON to `path` and return the JSON answer, not checked yet. */
+function putJson(path: string, body: unknown): Promise<ResponseValue> {
+  return send("PUT", path, { body }, readJson);
+}
+
+/** DELETE `path`, ignoring whatever the answer's body holds. */
+function del(path: string): Promise<void> {
+  return send("DELETE", path, {}, async () => {});
+}
+
 /** POST to `path` with no body, ignoring whatever the answer's body holds. */
 function post(path: string): Promise<void> {
   return send("POST", path, {}, async () => {});
 }
 
 async function readJson(res: Response, source: string): Promise<ResponseValue> {
-  return ResponseValue.parse(await res.text(), source);
+  const text = await res.text().catch((err: unknown) => {
+    throw asNetworkError(err, source);
+  });
+  return ResponseValue.parse(text, source);
 }
 
 /**
  * Send one request under the API prefix, with the shared timeout, and hand a
  * successful response to `read`. Any other status rejects with an ApiError.
  *
- * `read` gets `source` ("GET /api/v1/databases", for error messages) and runs
+ * `read` gets `source` ("GET /api/v1/documentation/databases", for error messages) and runs
  * inside the timeout, so a body that never finishes arriving times out too. A
  * streaming reader calls `touch()` whenever data arrives, to restart the clock.
  */
 async function send<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   { body, signal }: { body?: unknown; signal?: AbortSignal },
   read: (res: Response, source: string, touch: () => void) => Promise<T>,
@@ -183,7 +276,9 @@ async function send<T>(
     init.body = JSON.stringify(body);
   }
   try {
-    const res = await fetch(url, init);
+    const res = await fetch(url, init).catch((err: unknown) => {
+      throw asNetworkError(err, source);
+    });
     if (!res.ok) throw await errorFromResponse(res, source);
     return await read(res, source, d.touch);
   } finally {
@@ -191,17 +286,18 @@ async function send<T>(
   }
 }
 
-/** Every JSON endpoint answers an error with `{ "error": "…" }`; use that
- *  message when it is there, else the status line. */
+/** The request, the status line and, when the answer has the usual
+ *  `{ "error": "…" }` body, that text: everything someone debugging needs. */
 async function errorFromResponse(res: Response, source: string): Promise<ApiError> {
-  let message = `${source} failed: ${res.status} ${res.statusText}`.trim();
+  const statusLine = `${source} failed: ${res.status} ${res.statusText}`.trim();
+  let serverText = "";
   try {
     const error = (JSON.parse(await res.text()) as { error?: unknown } | null)?.error;
-    if (typeof error === "string" && error.trim()) message = error;
+    if (typeof error === "string") serverText = error.trim();
   } catch {
-    /* no JSON error body: keep the status line */
+    /* no JSON error body: the status line says enough */
   }
-  return new ApiError(res.status, message);
+  return new ApiError(res.status, serverText ? `${statusLine}: ${serverText}` : statusLine);
 }
 
 /**
@@ -247,7 +343,9 @@ async function readLines(
   let buffer = "";
   try {
     for (;;) {
-      const { value, done } = await reader.read();
+      const { value, done } = await reader.read().catch((err: unknown) => {
+        throw asNetworkError(err, source); // the connection broke mid-stream
+      });
       if (done) break;
       touch();
       buffer += decoder.decode(value, { stream: true });

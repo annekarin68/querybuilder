@@ -1,4 +1,5 @@
 import type { Scalar } from "../model";
+import type { SavedValue } from "./types";
 
 /**
  * Checks the backend's responses against the API contract (src/api/types.ts)
@@ -15,15 +16,17 @@ import type { Scalar } from "../model";
  * and not three files later as "Cannot read properties of undefined".
  *
  * There are two kinds of read:
- * - **Required**: `id`, `number`, `boolean`, `list`, `optionalList`, `object`.
- *   The app cannot work without these. A missing or wrong value throws a
+ * - **Required**: `id`, `ids`, `nullableId`, `oneOf`, `savedValue`,
+ *   `number`, `boolean`, `list`, `optionalList`, `object`. The app cannot work without
+ *   these. A missing or wrong value throws a
  *   `ContractError`. (`optionalList` allows a missing one.)
- * - **Display-only**: `text`, `strings` and the `optional…` reads. The app
- *   only shows these. A missing or wrong value becomes blank ("" or []) and is
- *   logged once as a console warning, so a small backend change can't take the
- *   whole app down. Use an `optional…` read for a key marked `?` in
- *   src/api/types.ts: the backend may leave those out, so their absence is not
- *   warned about.
+ * - **Display-only**: `text`, `strings`, `formatted` and the `optional…`
+ *   reads. The app only shows these. A missing or wrong value becomes blank
+ *   ("" or []) and is logged once as a console warning, so a small backend
+ *   change can't take the whole app down. Use an `optional…` read for a key
+ *   marked `?` in src/api/types.ts: the backend may leave those out, so their
+ *   absence is not warned about. (`formatted` checks nothing: it shows a
+ *   whole message whose fields the backend owns.)
  *
  * Keys the app doesn't read are never checked, and unknown keys are ignored.
  */
@@ -52,6 +55,10 @@ function isAbsent(v: unknown): boolean {
   return v === undefined || v === null;
 }
 
+function isJsonScalar(v: unknown): v is Scalar {
+  return typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+}
+
 function shorten(s: string): string {
   return s.length > 40 ? `${s.slice(0, 40)}…` : s;
 }
@@ -71,6 +78,16 @@ function whatIs(v: unknown): string {
 function mismatch(path: string, expected: string, v: unknown): string {
   const where = path ? `"${path}"` : "the response";
   return `${where} should be ${expected}, but ${whatIs(v)}.`;
+}
+
+/**
+ * Sets `obj[key] = value` for a key that comes from the backend. A plain
+ * assignment goes wrong for the key "__proto__": it changes the object's
+ * prototype instead of adding the key, so the value would silently vanish.
+ * defineProperty always adds an ordinary key.
+ */
+export function setOwnKey<V>(obj: Record<string, V>, key: string, value: V): void {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
 }
 
 /** The path of `key` inside the object at `path`: "[3]" + "fields" → "[3].fields". */
@@ -107,7 +124,7 @@ function warnOnce(message: string): void {
 export class ResponseValue {
   constructor(
     private readonly value: unknown,
-    /** The request it came from, e.g. "GET /api/v1/databases". */
+    /** The request it came from, e.g. "GET /api/v1/documentation/databases". */
     private readonly source: string,
     /** Where it sits in the body, e.g. "[3].fields". "" for the whole body. */
     private readonly path = "",
@@ -139,6 +156,12 @@ export class ResponseValue {
     );
   }
 
+  /** This whole value as indented JSON, for showing a message whose fields
+   *  belong to the backend. Reads nothing and checks nothing. */
+  formatted(): string {
+    return JSON.stringify(this.value, null, 2);
+  }
+
   private error(expected: string): ContractError {
     return new ContractError(this.source, mismatch(this.path, expected, this.value));
   }
@@ -160,6 +183,47 @@ export class ResponseObject<T> {
     const v = this.fields[key];
     if (typeof v === "string" && v.trim() !== "") return v;
     throw this.error(key, "non-blank text");
+  }
+
+  /** A list of machine ids (see `id`): every item must be non-blank text.
+   *  A missing key, a value that isn't a list, or a bad item throws; the
+   *  message names the item, e.g. `"[0].databases[1]"`. */
+  ids(key: Key<T>): string[] {
+    const v = this.fields[key];
+    const path = join(this.path, key);
+    if (!Array.isArray(v)) throw new ContractError(this.source, mismatch(path, "a list of ids", v));
+    return v.map((item, i) => {
+      if (typeof item === "string" && item.trim() !== "") return item;
+      throw new ContractError(this.source, mismatch(`${path}[${i}]`, "non-blank text", item));
+    });
+  }
+
+  /** Like `id`, for a machine id that may be unset: `null` when the key is
+   *  `null` or left out (a JSON writer may drop nulls). Text that is blank,
+   *  or a value that isn't text, still throws. */
+  nullableId(key: Key<T>): string | null {
+    return isAbsent(this.fields[key]) ? null : this.id(key);
+  }
+
+  /** Exactly one of the texts in `allowed`: a discriminator such as a
+   *  node's `kind` or a group's `operator`. Anything else throws, and the
+   *  message lists what was expected. */
+  oneOf<V extends string>(key: Key<T>, allowed: readonly V[]): V {
+    const v = this.fields[key];
+    const match = allowed.find((a) => a === v);
+    if (match !== undefined) return match;
+    throw this.error(key, allowed.map((a) => JSON.stringify(a)).join(" or "));
+  }
+
+  /** A saved condition's value: `null` (also when left out), text, a number,
+   *  true or false, or a list of those in which an item may be `null` (an
+   *  unfinished from–to pair). It is copied exactly as sent. */
+  savedValue(key: Key<T>): SavedValue {
+    const v = this.fields[key];
+    if (isAbsent(v)) return null;
+    if (isJsonScalar(v)) return v;
+    if (Array.isArray(v) && v.every((item) => item === null || isJsonScalar(item))) return [...v];
+    throw this.error(key, "null, text, a number, true or false, or a list of those");
   }
 
   /** A number (not NaN or Infinity). */
@@ -236,8 +300,11 @@ export class ResponseObject<T> {
   scalars(): Record<string, Scalar> {
     const out: Record<string, Scalar> = {};
     for (const [key, v] of Object.entries(this.fields)) {
-      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") out[key] = v;
-      else if (v !== null) this.warn(join(this.path, key), "text, a number, true or false", v);
+      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        setOwnKey(out, key, v);
+      } else if (v !== null) {
+        this.warn(join(this.path, key), "text, a number, true or false", v);
+      }
     }
     return out;
   }

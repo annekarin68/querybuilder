@@ -13,7 +13,7 @@ export interface AuditEntry {
  */
 const AUDIT_LOG: AuditEntry[] = [];
 
-/** Called once per successful POST /api/query (queryEvents in mock-server/server.ts). */
+/** Called once per successful POST /api/filter/execute (queryEvents in mock-server/server.ts). */
 export function logQueryAudit(name: string, reason: string): void {
   AUDIT_LOG.push({ name, reason, timestamp: new Date().toISOString() });
 }

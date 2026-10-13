@@ -2,9 +2,9 @@
 // src/api/types.ts) before anything reads it. The body is untrusted JSON; this
 // is also a working reference for the real backend's own check.
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
+export const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
-const isScalar = (v: unknown) =>
+export const isScalar = (v: unknown) =>
   typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 const isNonEmptyString = (v: unknown) => typeof v === "string" && v !== "";
 
@@ -31,11 +31,11 @@ export function queryProblem(node: unknown, at = "query"): string | null {
     }
     return null;
   }
-  for (const key of ["facetId", "operatorId"] as const) {
+  for (const key of ["facet_id", "operator_id"] as const) {
     if (!isNonEmptyString(node[key])) return `${at}.${key} must be a non-empty string.`;
   }
-  if (node.fieldId !== null && !isNonEmptyString(node.fieldId)) {
-    return `${at}.fieldId must be a non-empty string or null.`;
+  if (node.field_id !== null && !isNonEmptyString(node.field_id)) {
+    return `${at}.field_id must be a non-empty string or null.`;
   }
   const v = node.value;
   if (v === null || isScalar(v) || (Array.isArray(v) && v.every(isScalar))) return null;

@@ -92,3 +92,22 @@ export function formatWhen(iso: string | undefined, locale?: string, timeZone?: 
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short", timeZone });
 }
+
+/** The day only, in the viewer's locale ("08/10/2026" in en-GB): a saved
+ *  query's date. Unparseable → returned unchanged, so nothing is hidden. */
+export function formatDate(iso: string, locale?: string, timeZone?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(locale, { timeZone });
+}
+
+/**
+ * The hover title that shows the full text of a dropdown's choice or a value
+ * box, which is cut off with "…" when it is longer than the box: the text,
+ * trimmed. null means "no title attribute at all": there is nothing to show,
+ * or the text is only a placeholder ("Choose…"), which is not a choice.
+ */
+export function hoverTitle(text: string | null | undefined, placeholder = false): string | null {
+  const trimmed = (text ?? "").trim();
+  return placeholder || trimmed === "" ? null : trimmed;
+}

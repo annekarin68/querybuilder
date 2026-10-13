@@ -12,6 +12,8 @@
  * blank is "" (already trimmed), never missing.
  */
 
+import type { Group } from "./query/types";
+
 /** A partition of the events the query can be scoped to. */
 export interface Database {
   id: string;
@@ -48,6 +50,9 @@ export interface Field {
 export interface Facet {
   id: string;
   name: string;
+  /** The backend's number for this facet. The Matching events table orders
+   *  its columns by it (after the facets in `FIRST_COLUMNS`). */
+  number: number;
   /** Our own tags: trimmed, no blanks, no repeats. May be empty. */
   tags: string[];
   /** A third-party grouping; "" when there is none. Less useful than `tags`. */
@@ -66,9 +71,11 @@ export type Scalar = string | number | boolean;
 
 /** One record: something that happened, holding values for some facets. */
 export interface EventRecord {
-  id: number;
-  /** Keyed by `Facet.id`, then by `Field.id` within that facet. */
-  values: Record<string, Record<string, Scalar>>;
+  /** The event's own id (a GUID): long, so the panel shows its start. */
+  id: string;
+  /** Keyed by `Facet.id`: one entry per occurrence of the facet in this event
+   *  (usually one), each keyed by `Field.id` within that facet. */
+  values: Record<string, Record<string, Scalar>[]>;
 }
 
 /** One problem a database found in the query. */
@@ -108,12 +115,29 @@ export interface User {
   name: string;
 }
 
-/** Whether this session has given a compliance reason. */
+/** Whether this session has a compliance log. */
 export type Compliance =
   | { status: "required" }
   | {
       status: "acknowledged";
-      reason: string;
-      /** When the reason was given (an ISO timestamp), if the backend says. */
-      givenAt: string | null;
+      /** The session's compliance log as the backend sent it, formatted as
+       *  indented JSON for display. The frontend reads no field of it. */
+      log: string;
     };
+
+/** A query the user saved (GET/POST/PUT …/filter/saved). It may be unfinished
+ *  or invalid: saving never checks what the query means. */
+export interface SavedQuery {
+  /** Made by the server (not a backend `label`); never shown to the user. */
+  id: string;
+  name: string;
+  /** A few words to recognise it by; "" when none. Never the query itself. */
+  note: string;
+  databaseIds: string[];
+  query: Group;
+  /** ISO 8601 UTC. */
+  updatedAt: string;
+}
+
+/** What is sent to save a query. */
+export type SavedQueryDraft = Omit<SavedQuery, "id" | "updatedAt">;

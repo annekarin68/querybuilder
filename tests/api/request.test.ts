@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { toQueryRequest } from "../../src/api/request";
+import { toQueryRequest, toSavedQueryRequest } from "../../src/api/request";
+import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
+import type { Group } from "../../src/query/types";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
 import type { NodePatch } from "../../src/query/tree";
 import type { RequestCondition } from "../../src/api/types";
@@ -44,9 +46,9 @@ describe("toQueryRequest", () => {
           {
             kind: "condition",
             id: ids.c1,
-            facetId: "thing",
-            fieldId: "size",
-            operatorId: "gt",
+            facet_id: "thing",
+            field_id: "size",
+            operator_id: "gt",
             value: 3,
           },
           {
@@ -57,9 +59,9 @@ describe("toQueryRequest", () => {
               {
                 kind: "condition",
                 id: ids.c2,
-                facetId: "thing",
-                fieldId: "color",
-                operatorId: "in",
+                facet_id: "thing",
+                field_id: "color",
+                operator_id: "in",
                 value: ["red", "blue"],
               },
             ],
@@ -98,7 +100,7 @@ describe("toQueryRequest", () => {
       value: false,
     });
     const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
-    expect(sent.map((c) => [c.operatorId, c.value])).toEqual([
+    expect(sent.map((c) => [c.operator_id, c.value])).toEqual([
       ["eq", "2024-11"],
       ["absent", null],
       ["eq", false],
@@ -121,7 +123,7 @@ describe("toQueryRequest", () => {
     expect(() => toQueryRequest(oneCondition(patch), ["alpha"])).toThrow(/cannot be sent/);
   });
 
-  it("sends a facet-level condition with fieldId null", () => {
+  it("sends a facet-level condition with field_id null", () => {
     const t = oneCondition({
       facetId: "thing",
       fieldId: null,
@@ -130,9 +132,9 @@ describe("toQueryRequest", () => {
     });
     const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
     expect(sent[0]).toMatchObject({
-      facetId: "thing",
-      fieldId: null,
-      operatorId: "present",
+      facet_id: "thing",
+      field_id: null,
+      operator_id: "present",
       value: null,
     });
   });
@@ -140,5 +142,38 @@ describe("toQueryRequest", () => {
   it("still rejects a condition with no facet", () => {
     const t = oneCondition({ operatorId: "present", value: null });
     expect(() => toQueryRequest(t, ["alpha"])).toThrow(/unfinished/);
+  });
+});
+
+describe("toSavedQueryRequest", () => {
+  it("keeps every unfinished part, trims name and note, and leaves display state out", () => {
+    expect(toSavedQueryRequest(unfinishedDraft)).toEqual(unfinishedRequest);
+    expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft))).not.toContain("collapsed");
+  });
+
+  it("does not change the draft it is given", () => {
+    const before = JSON.stringify(unfinishedDraft);
+    toSavedQueryRequest(unfinishedDraft);
+    expect(JSON.stringify(unfinishedDraft)).toBe(before);
+  });
+
+  it("sends a note of only spaces as an empty note", () => {
+    expect(toSavedQueryRequest({ ...unfinishedDraft, note: "   " }).note).toBe("");
+  });
+
+  it.each([
+    ["an object", { from: 1 }],
+    ["a list holding an object", [1, {}]],
+    ["undefined", undefined],
+  ])("throws on a value that is %s", (_label, value) => {
+    const query: Group = {
+      kind: "group",
+      id: "g1",
+      operator: "AND",
+      children: [
+        { kind: "condition", id: "c1", facetId: null, fieldId: null, operatorId: null, value },
+      ],
+    };
+    expect(() => toSavedQueryRequest({ ...unfinishedDraft, query })).toThrow(/cannot be sent/);
   });
 });

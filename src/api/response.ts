@@ -1,14 +1,19 @@
 import type {
-  AuthUser,
-  ComplianceStatus,
+  ComplianceLogResponse,
   DatabasesResponse,
-  EntrysetResponse,
+  EventItemResponse,
+  EventResponse,
   IndividualFieldResponse,
   IndividualResponse,
+  SavedCondition,
+  SavedGroup,
+  SavedNode,
+  SavedQueryResponse,
   StatsErrorMessage,
   StatsResponse,
+  UserResponse,
 } from "./types";
-import type { ResponseObject } from "./contract";
+import { setOwnKey, type ResponseObject, type ResponseValue } from "./contract";
 import type {
   Compliance,
   Database,
@@ -17,9 +22,11 @@ import type {
   EventRecord,
   Facet,
   Field,
+  SavedQuery,
   Scalar,
   User,
 } from "../model";
+import type { Condition, Group, QueryNode } from "../query/types";
 
 /**
  * Backend response → the frontend's own model (src/model.ts). client.ts runs
@@ -29,8 +36,14 @@ import type {
  *
  * Each function reads one object of a response key by key, through the checks
  * in src/api/contract.ts (docs/ARCHITECTURE.md, "Reading responses"): `id`,
- * `number`, `boolean` and `list` are required and throw a ContractError naming
- * the field; `text` and `strings` are only shown, so they fall back to blank.
+ * `ids`, `nullableId`, `oneOf`, `savedValue`, `number`, `boolean`, `list` and
+ * `object` are required and throw a ContractError naming the field (a saved
+ * query's tree and database ids are read with these); `text` and `strings` are
+ * only shown, so they fall back to blank.
+ *
+ * The wire is snake_case and the model camelCase: the keys read here are the
+ * backend's (`total_entrysets`), the properties built are ours
+ * (`eventCount`), and this file is the only place that knows both.
  *
  * This is also where the backend's quirks are smoothed out once, instead of in
  * every panel: text may arrive padded, a facet or field may have no name, and a
@@ -44,7 +57,7 @@ export function toDatabase(d: ResponseObject<DatabasesResponse>): Database {
     name: d.text("name") || id,
     description: d.text("description"),
     owner: d.text("owner"),
-    eventCount: d.number("totalEntrysets"),
+    eventCount: d.number("total_entrysets"),
   };
 }
 
@@ -71,68 +84,126 @@ export function toFacet(i: ResponseObject<IndividualResponse>): Facet {
   return {
     id,
     name: i.text("name") || id,
+    number: i.number("id_number"),
     tags: [...new Set(tags)],
     group: i.text("group"),
     comment: i.text("comment"),
     description: i.text("description"),
-    eventCount: i.number("totalCount"),
+    eventCount: i.number("total_count"),
     fields: i.list<IndividualFieldResponse>("fields").map(toField),
   };
 }
 
-export function toEvent(e: ResponseObject<EntrysetResponse>): EventRecord {
-  // `items` is keyed by facet id, then by field id: the backend's own ids,
-  // so the keys are read as they come rather than by name.
-  const items = e.object<EntrysetResponse["items"]>("items");
+export function toEvent(e: ResponseObject<EventResponse>): EventRecord {
   const values: EventRecord["values"] = {};
-  for (const facetId of items.keys()) {
-    values[facetId] = items.object<Record<string, Scalar>>(facetId).scalars();
+  for (const item of e.list<EventItemResponse>("items")) {
+    const facetId = item.id("facet_label");
+    // Each occurrence is keyed by the backend's own field ids, so its keys are
+    // read as they come rather than by name; the backend leaves an empty field out, and a null
+    // value (tolerated, never expected) is dropped too.
+    const occurrences = item
+      .list<Record<string, Scalar | null>>("values")
+      .map((occurrence) => occurrence.scalars());
+    // The same facet listed twice: keep every occurrence rather than drop one.
+    // Checked with hasOwn: a facet named like a built-in ("constructor") would
+    // otherwise pick up Object.prototype's value here. Set with setOwnKey, so
+    // that a facet named "__proto__" is kept too.
+    const earlier = Object.hasOwn(values, facetId) ? values[facetId]! : [];
+    setOwnKey(values, facetId, [...earlier, ...occurrences]);
   }
-  return { id: e.number("id"), values };
+  return { id: e.id("id"), values };
 }
 
 /**
- * One item of a stats line's `errorMessages`. These decide whether Run is
+ * One item of a stats line's `error_messages`. These decide whether Run is
  * allowed (src/state.ts), so the item must be an object; within it, a kind
  * this app doesn't know is "invalid" (the safe choice, as in toCompliance).
  */
-export function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
+function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
   return {
     message: e.text("message") || "The server found a problem in the query.",
     kind: e.text("kind") === "incomplete" ? "incomplete" : "invalid",
-    nodeId: e.optionalText("nodeId") || null,
+    nodeId: e.optionalText("node_id") || null,
   };
 }
 
 /**
- * One line of the /stats stream. A line that claims success but carries no
+ * One line of the /filter/validate stream. A line that claims success but carries no
  * count is treated as a failure: showing it as "0 matched" would be a guess.
  */
 export function toDatabaseResult(line: ResponseObject<StatsResponse>): DatabaseResult {
   const databaseId = line.id("label");
   const success = line.boolean("success");
-  const matchCount = line.optionalNumber("matchCount");
-  const notes = line.optionalStrings("infoMessages");
+  const matchCount = line.optionalNumber("match_count");
+  const notes = line.optionalStrings("info_messages");
   if (success && matchCount !== undefined) {
     return { databaseId, status: "ok", matchCount, notes };
   }
   const errors: DatabaseError[] = success
     ? [{ message: "The server sent no count for this database.", kind: "invalid", nodeId: null }]
-    : line.optionalList<StatsErrorMessage>("errorMessages").map(toDatabaseError);
+    : line.optionalList<StatsErrorMessage>("error_messages").map(toDatabaseError);
   return { databaseId, status: "failed", errors, notes };
 }
 
-export function toUser(u: ResponseObject<AuthUser>): User {
-  return { name: u.text("name") };
+export function toUser(u: ResponseObject<UserResponse>): User {
+  // The backend already picked the best name (username, else email, else id).
+  // A blank one shows the id, as a nameless database does.
+  return { name: u.text("display_name") || u.optionalText("sub") || u.optionalText("user_id") };
 }
 
-export function toCompliance(c: ResponseObject<ComplianceStatus>): Compliance {
-  // Anything but "acknowledged" — even a status this app doesn't know yet —
-  // means a reason is still needed.
-  if (c.text("status") !== "acknowledged") return { status: "required" };
+/**
+ * A 200 from GET /api/log/status: the session has a compliance log. Its fields
+ * belong to the backend, so none is read; the whole message is kept as
+ * formatted JSON for display. Only the shape is checked: a log that is not a
+ * JSON object is a ContractError.
+ */
+export function toCompliance(body: ResponseValue): Compliance {
+  body.object<ComplianceLogResponse>();
+  return { status: "acknowledged", log: body.formatted() };
+}
+
+/**
+ * A saved query. The tree is required data (a malformed one throws a
+ * ContractError naming the node, e.g. "query.children[0].kind"): loading half
+ * of a user's query would be worse than saying it cannot be read. The note is
+ * only shown, so a missing one becomes ""; the database ids are required like every id. The tree comes back exactly as it
+ * was saved, unfinished parts included; the backend never rewrites it.
+ */
+export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery {
+  const root = q.object<SavedGroup>("query");
+  root.oneOf("kind", ["group"]); // a saved query's root is always a group
   return {
-    status: "acknowledged",
-    reason: c.optionalText("reason"),
-    givenAt: c.optionalText("ackedAt") || null,
+    id: q.id("id"),
+    name: q.id("name").trim(),
+    note: q.text("note"),
+    databaseIds: q.ids("databases"),
+    query: toSavedGroup(root),
+    updatedAt: q.id("updated_at"),
+  };
+}
+
+function toSavedNode(n: ResponseObject<SavedNode>): QueryNode {
+  return n.oneOf("kind", ["group", "condition"]) === "group"
+    ? toSavedGroup(n)
+    : toSavedCondition(n);
+}
+
+function toSavedGroup(g: ResponseObject<SavedGroup>): Group {
+  return {
+    kind: "group",
+    id: g.id("id"),
+    operator: g.oneOf("operator", ["AND", "OR"]),
+    children: g.list<SavedNode>("children").map(toSavedNode),
+  };
+}
+
+function toSavedCondition(c: ResponseObject<SavedCondition>): Condition {
+  return {
+    kind: "condition",
+    id: c.id("id"),
+    facetId: c.nullableId("facet_id"),
+    fieldId: c.nullableId("field_id"),
+    operatorId: c.nullableId("operator_id"),
+    value: c.savedValue("value"),
   };
 }

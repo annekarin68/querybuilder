@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check:offline": "node scripts/check-offline.mjs",
-    "lint": "eslint . && prettier --check ."
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "fomantic-ui-css": "^2.9.3",

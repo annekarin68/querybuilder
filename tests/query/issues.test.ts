@@ -12,6 +12,10 @@ const group = (id: string, children: QueryNode[], collapsed = false): Group => (
   collapsed,
 });
 const issue = (nodeId: string, message = "Bad."): Issue => ({ nodeId, message, kind: "invalid" });
+const serverIssue = (nodeId: string, message = "Bad."): Issue => ({
+  ...issue(nodeId, message),
+  fromServer: true,
+});
 
 describe("serverIssues", () => {
   it("turns every error that names a node into an issue, once", () => {
@@ -19,7 +23,10 @@ describe("serverIssues", () => {
       failed("a", dbError("c1")),
       failed("b", dbError("c1"), dbError("c1", "Other.")),
     ];
-    expect(serverIssues({ status: "ok", results })).toEqual([issue("c1"), issue("c1", "Other.")]);
+    expect(serverIssues({ status: "ok", results })).toEqual([
+      serverIssue("c1"),
+      serverIssue("c1", "Other."),
+    ]);
   });
 
   it("keeps the same message with another kind or node apart", () => {
@@ -27,9 +34,24 @@ describe("serverIssues", () => {
       failed("a", dbError("c1"), dbError("c1", "Bad.", "incomplete"), dbError("c2")),
     ];
     expect(serverIssues({ status: "ok", results })).toEqual([
-      issue("c1"),
-      { nodeId: "c1", message: "Bad.", kind: "incomplete" },
-      issue("c2"),
+      serverIssue("c1"),
+      { nodeId: "c1", message: "Bad.", kind: "incomplete", fromServer: true },
+      serverIssue("c2"),
+    ]);
+  });
+
+  it("marks every issue as found by the server", () => {
+    const stats = {
+      status: "ok" as const,
+      results: [failed("a", dbError("g1", "Group contains no valid conditions.", "incomplete"))],
+    };
+    expect(serverIssues(stats)).toEqual([
+      {
+        nodeId: "g1",
+        message: "Group contains no valid conditions.",
+        kind: "incomplete",
+        fromServer: true,
+      },
     ]);
   });
 
@@ -41,7 +63,7 @@ describe("serverIssues", () => {
 
   it("works while the stream is still loading, and is [] when stats failed", () => {
     expect(serverIssues({ status: "loading", results: [failed("a", dbError("c1"))] })).toEqual([
-      issue("c1"),
+      serverIssue("c1"),
     ]);
     expect(serverIssues({ status: "error", error: "down" })).toEqual([]);
   });
@@ -71,6 +93,13 @@ describe("placeIssues", () => {
       issue("g3"),
       issue("g3", "Other."),
     ]);
+  });
+
+  // The server's flag changes how it is drawn (a warning, not a hint), so a
+  // local twin that comes first must not hide it.
+  it("keeps one of a local and a server issue with the same text, as the server's", () => {
+    expect(placeIssues(query, [issue("c1"), serverIssue("c1")])).toEqual([serverIssue("c1")]);
+    expect(placeIssues(query, [serverIssue("c1"), issue("c1")])).toEqual([serverIssue("c1")]);
   });
 
   it("moves an issue with an unknown id to the root group", () => {

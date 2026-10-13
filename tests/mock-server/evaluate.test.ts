@@ -27,17 +27,17 @@ const row = {
 const cond = (fieldId: string, operatorId: string, value: RequestValue) => ({
   kind: "condition" as const,
   id: "c",
-  facetId: "thing",
-  fieldId,
-  operatorId,
+  facet_id: "thing",
+  field_id: fieldId,
+  operator_id: operatorId,
   value,
 });
 const facetCond = (facetId: string, operatorId: string) => ({
   kind: "condition" as const,
   id: "x",
-  facetId,
-  fieldId: null,
-  operatorId,
+  facet_id: facetId,
+  field_id: null,
+  operator_id: operatorId,
   value: null,
 });
 const group = (operator: "AND" | "OR", ...children: RequestNode[]) => ({
@@ -109,7 +109,7 @@ describe("matches", () => {
   });
   it("reads the value stored under rowKey(facetId, fieldId)", () => {
     expect(rowKey("thing", "color")).toBe("thing.color");
-    expect(matches({ ...cond("color", "eq", "red"), facetId: "other" }, row)).toBe(false);
+    expect(matches({ ...cond("color", "eq", "red"), facet_id: "other" }, row)).toBe(false);
   });
 
   it("typed values match typed stored values, not their text", () => {
@@ -209,9 +209,9 @@ const countGte10: RequestNode = {
     {
       kind: "condition",
       id: "c",
-      facetId: "thing",
-      fieldId: "count",
-      operatorId: "gte",
+      facet_id: "thing",
+      field_id: "count",
+      operator_id: "gte",
       value: 10,
     },
   ],
@@ -266,40 +266,40 @@ describe("scaleCount", () => {
   });
 });
 
-// ---- /api/stats lines ---------------------------------------------------------
+// ---- /api/filter/validate lines ---------------------------------------------------------
 
 describe("buildStatsLine", () => {
-  it("builds a successful line with matchCount", () => {
+  it("builds a successful line with match_count", () => {
     expect(buildStatsLine({ label: "alpha", matchCount: 3 })).toEqual({
       label: "alpha",
       success: true,
-      matchCount: 3,
+      match_count: 3,
     });
   });
 
-  it("builds a failure line when fail is given, omitting matchCount entirely", () => {
+  it("builds a failure line when fail is given, omitting match_count entirely", () => {
     const line = buildStatsLine({
       label: "beta",
       matchCount: 999, // must be ignored/dropped
       fail: {
-        errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
+        errorMessages: [{ node_id: "c", message: "bad field", kind: "invalid" }],
         infoMessages: [],
       },
     });
     expect(line).toEqual({
       label: "beta",
       success: false,
-      errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
-      infoMessages: [],
+      error_messages: [{ node_id: "c", message: "bad field", kind: "invalid" }],
+      info_messages: [],
     });
-    expect(line).not.toHaveProperty("matchCount");
+    expect(line).not.toHaveProperty("match_count");
   });
 });
 
 describe("queryErrors", () => {
   const tooLong = "x".repeat(MAX_TEXT_LENGTH + 1);
   const problem = (nodeId: string) => ({
-    nodeId,
+    node_id: nodeId,
     kind: "invalid",
     message: "Text is too long (at most 100 characters).",
   });
@@ -308,12 +308,55 @@ describe("queryErrors", () => {
     const query = group(
       "AND",
       { ...cond("note", "eq", tooLong), id: "c1" },
+      cond("note", "eq", "fine"),
       {
-        ...group("OR", { ...cond("note", "in", ["ok", tooLong]), id: "c2" }),
+        ...group(
+          "OR",
+          { ...cond("note", "in", ["ok", tooLong]), id: "c2" },
+          cond("note", "eq", ""),
+        ),
         id: "g2",
       },
     );
     expect(queryErrors(query)).toEqual([problem("c1"), problem("c2")]);
+  });
+
+  const noValidConditions = (groupId: string) => ({
+    node_id: groupId,
+    kind: "incomplete",
+    message: "Group contains no valid conditions.",
+  });
+  const bad = (id: string) => ({ ...cond("note", "eq", tooLong), id });
+  const good = (id: string) => ({ ...cond("note", "eq", "fine"), id });
+
+  it("reports a group whose every child has an error, as incomplete", () => {
+    const query = { ...group("AND", bad("c1"), bad("c2")), id: "g1" };
+    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2"), noValidConditions("g1")]);
+  });
+
+  it("does not report a group with one good child", () => {
+    const query = { ...group("OR", bad("c1"), good("c2")), id: "g1" };
+    expect(queryErrors(query)).toEqual([problem("c1")]);
+  });
+
+  it("reports an all-bad inner group but not a root that has another good child", () => {
+    const inner = { ...group("AND", bad("c1"), bad("c2")), id: "inner" };
+    const query = { ...group("AND", inner, good("c3")), id: "root" };
+    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2"), noValidConditions("inner")]);
+  });
+
+  it("reports the root too when its only child is an all-bad group", () => {
+    const inner = { ...group("AND", bad("c1")), id: "inner" };
+    const query = { ...group("AND", inner), id: "root" };
+    expect(queryErrors(query)).toEqual([
+      problem("c1"),
+      noValidConditions("inner"),
+      noValidConditions("root"),
+    ]);
+  });
+
+  it("does not report an empty group (the frontend's own validation does)", () => {
+    expect(queryErrors({ ...group("AND"), id: "g1" })).toEqual([]);
   });
 
   it("accepts text up to the limit, and values that aren't text", () => {

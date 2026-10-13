@@ -10,8 +10,18 @@ import {
   type DatabaseOutcome,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
+import { sampleOf, toEventResponse } from "./events";
 import { ROWS } from "./rows";
 import { queryProblem } from "./requestBody";
+import { httpErrorFor, type HttpErrorRule } from "./httpErrors";
+import { pathBelow } from "./paths";
+import {
+  createSavedQueryStore,
+  readSavedQueryBody,
+  savedQueryIdFrom,
+  savedQueryOwner,
+  type SavedQueryAnswer,
+} from "./savedQueries";
 import type { QueryRequest, StatsErrorMessage } from "../src/api/types";
 import {
   startLogin,
@@ -27,7 +37,7 @@ import {
   startCompliance,
   issueFakeComplianceToken,
   exchangeComplianceToken,
-  complianceStatusFor,
+  complianceLogFor,
   clearCompliance,
   complianceStateCookieHeader,
   clearComplianceStateCookieHeader,
@@ -49,14 +59,16 @@ import { logQueryAudit } from "./audit";
 export interface MockConfig {
   /** The API prefix every route and redirect goes under, e.g. "/api/v1" (VITE_API_BASE in .env). */
   apiBase: string;
-  /** Share (0–1) of /api/stats lines that simulate an unreachable database. */
+  /** Share (0–1) of /api/filter/validate lines that simulate an unreachable database. */
   failRate: number;
-  /** Pause before each streamed /api/stats line, in ms. */
+  /** Pause before each streamed /api/filter/validate line, in ms. */
   lineDelayMs(): number;
+  /** Routes that answer with an HTTP error instead (MOCK_HTTP_ERRORS, httpErrors.ts). */
+  httpErrors?: HttpErrorRule[];
 }
 
-/** POST /api/query returns at most this many events. There is no pagination. */
-export const QUERY_RESULT_CAP = 25;
+/** POST /api/filter/execute returns a random sample of at most this many events. There is no pagination. */
+export const QUERY_RESULT_CAP = 2000;
 
 // ---- responses ------------------------------------------------------------
 
@@ -117,6 +129,18 @@ function sendFlowError(res: ServerResponse, message: string, clearCookie: string
   sendHtml(res, 400, page("Something went wrong", body), clearCookie);
 }
 
+/** A failure MOCK_HTTP_ERRORS asked for: JSON like every API error, or an
+ *  HTML page like a proxy in front of the backend would send. */
+function sendSimulatedError(res: ServerResponse, rule: HttpErrorRule, request: string): void {
+  if (rule.html) {
+    sendHtml(res, rule.status, page(`${rule.status}`, `<h1>${rule.status}</h1><p>Simulated.</p>`));
+    return;
+  }
+  sendJson(res, rule.status, {
+    error: `Simulated HTTP ${rule.status} for ${request} (MOCK_HTTP_ERRORS).`,
+  });
+}
+
 // ---- requests -------------------------------------------------------------
 
 async function readBody(req: IncomingMessage): Promise<string> {
@@ -140,7 +164,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 }
 
 /**
- * Reads and checks a …/stats or …/query body: `query` must be a well-formed
+ * Reads and checks a …/filter/validate or …/filter/execute body: `query` must be a well-formed
  * query tree whose root is a group (requestBody.ts), and `databases` a
  * non-empty string[]. For a bad body this sends the 400 itself and returns
  * null.
@@ -175,6 +199,16 @@ async function readQueryBody(
   return { query: query as QueryRequest["query"], databases };
 }
 
+/** Sends a store's answer; a 204 has no body at all. */
+function sendAnswer(res: ServerResponse, answer: SavedQueryAnswer): void {
+  if (answer.body === undefined) {
+    res.writeHead(answer.status);
+    res.end();
+  } else {
+    sendJson(res, answer.status, answer.body);
+  }
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -182,7 +216,7 @@ function delay(ms: number): Promise<void> {
 // ---- data and queries -----------------------------------------------------
 
 /**
- * One database's outcome for /api/stats. A query with problems (queryErrors)
+ * One database's outcome for /api/filter/validate. A query with problems (queryErrors)
  * fails in every database, with the problems. Otherwise, dev-only: now and
  * then (failRate) simulate a database that can't answer, so the UI's
  * per-database failure path gets exercised.
@@ -204,14 +238,14 @@ function statsOutcome(
       },
     };
   }
-  const totalEntrysets = DATABASES.find((d) => d.label === c.label)?.totalEntrysets ?? 0;
-  // The sample drives match RATES; DATABASES[].totalEntrysets drives the
+  const totalEntrysets = DATABASES.find((d) => d.label === c.label)?.total_entrysets ?? 0;
+  // The sample drives match RATES; DATABASES[].total_entrysets drives the
   // MAGNITUDE the API reports, so the UI sees realistic numbers.
   return { label: c.label, matchCount: scaleCount(c.matchCount, c.totalCount, totalEntrysets) };
 }
 
 /**
- * POST /api/stats: newline-delimited JSON, one StatsResponse line per selected
+ * POST /api/filter/validate: newline-delimited JSON, one StatsResponse line per selected
  * database, written one at a time with a short pause so the streaming is
  * visible in dev.
  */
@@ -232,7 +266,7 @@ async function streamStats(req: IncomingMessage, res: ServerResponse, config: Mo
   res.end();
 }
 
-/** POST /api/query: the matching events. Needs a session and a compliance reason. */
+/** POST /api/filter/execute: a random sample of the matching events. Needs a session and a compliance reason. */
 async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   const session = sessionFor(req.headers.cookie);
   if (!session) return sendJson(res, 401, { error: "Log in to preview data." });
@@ -241,13 +275,65 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   }
   const body = await readQueryBody(req, res);
   if (!body) return;
-  const entrysets = filterByDatabases(ROWS, body.databases)
+  const matching = filterByDatabases(ROWS, body.databases)
     .filter((row) => matches(body.query, row))
     .map((row) => ENTRYSETS[String(row.id)])
-    .filter((e): e is Entryset => e !== undefined)
-    .slice(0, QUERY_RESULT_CAP);
-  logQueryAudit(session.user.name, session.compliance.reason);
-  sendJson(res, 200, { entrysets });
+    .filter((e): e is Entryset => e !== undefined);
+  const events = sampleOf(matching, QUERY_RESULT_CAP, Math.random).map(toEventResponse);
+  logQueryAudit(session.user.display_name, session.compliance.reason);
+  sendJson(res, 200, { events });
+}
+
+// ---- saved queries: the logged-in user's own list --------------------------
+
+type SavedQueryStore = ReturnType<typeof createSavedQueryStore>;
+
+/** What a saved-queries handler does once it knows whose list it is. */
+type ForUser = (
+  userId: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+) => SavedQueryAnswer | null | Promise<SavedQueryAnswer | null>;
+
+/**
+ * A saved-queries route: needs a session (401 without), then runs `act` with
+ * the user's key and sends its answer. The key is the user's id
+ * (`savedQueryOwner`), the stable identifier a real backend has. Two logins of
+ * the same mock user share one list. A user without an id is refused (500):
+ * every such user would otherwise share one list. `act` returns null after
+ * sending a 400 itself.
+ */
+function forSessionUser(act: ForUser): Handler {
+  return async (req, res) => {
+    const session = sessionFor(req.headers.cookie);
+    if (!session) return sendJson(res, 401, { error: "Log in to use saved queries." });
+    const owner = savedQueryOwner(session.user);
+    if (owner === null) {
+      return sendJson(res, 500, { error: "The logged-in user has no id (sub or user_id)." });
+    }
+    const answer = await act(owner, req, res);
+    if (answer) sendAnswer(res, answer);
+  };
+}
+
+/** Reads and checks a POST/PUT body (savedQueries.ts). For a bad body this sends the 400 itself and returns null. */
+async function readSavedQuery(req: IncomingMessage, res: ServerResponse) {
+  const checked = readSavedQueryBody(await readJson(req));
+  if (checked.ok) return checked.body;
+  sendJson(res, 400, { error: checked.error });
+  return null;
+}
+
+/** The PUT and DELETE routes of `…/filter/saved/{id}`; undefined for any other method. */
+function savedQueryIdHandler(method: string | undefined, id: string, store: SavedQueryStore) {
+  if (method === "PUT") {
+    return forSessionUser(async (userId, req, res) => {
+      const body = await readSavedQuery(req, res);
+      return body && store.update(userId, id, body);
+    });
+  }
+  if (method === "DELETE") return forSessionUser((userId) => store.remove(userId, id));
+  return undefined;
 }
 
 // ---- login: app → …/auth/login → mock IdP page → confirm → callback → app
@@ -307,7 +393,7 @@ function logOut(req: IncomingMessage, res: ServerResponse) {
   res.end();
 }
 
-// ---- compliance: app → …/compliance/start → mock form → submit → callback → app
+// ---- compliance: app → …/log/build → mock form → submit → callback → app
 
 function startComplianceFlow(req: IncomingMessage, res: ServerResponse, apiBase: string) {
   // A navigation: without a session (e.g. it expired, or the mock was
@@ -348,7 +434,7 @@ async function submitComplianceForm(req: IncomingMessage, res: ServerResponse, a
   const token = issueFakeComplianceToken(reason);
   redirect(
     res,
-    `${apiBase}/compliance/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
+    `${apiBase}/log/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`,
   );
 }
 
@@ -367,6 +453,14 @@ function finishCompliance(req: IncomingMessage, res: ServerResponse, url: URL) {
   redirect(res, "/?resume=1", clearComplianceStateCookieHeader());
 }
 
+/** GET …/log/status: 403 without a compliance log (the real backend's way of
+ *  saying "required"), else the log itself. */
+function complianceLog(req: IncomingMessage, res: ServerResponse) {
+  const log = complianceLogFor(req.headers.cookie);
+  if (!log) return sendJson(res, 403, { error: "No compliance log for this session." });
+  sendJson(res, 200, log);
+}
+
 function invalidateCompliance(req: IncomingMessage, res: ServerResponse) {
   clearCompliance(req.headers.cookie);
   res.writeHead(204);
@@ -379,44 +473,66 @@ type Handler = (req: IncomingMessage, res: ServerResponse, url: URL) => void | P
 
 /** Every route, keyed by "METHOD /path". Add a route here. All of them sit
  *  under `config.apiBase`, the stand-in services' pages included. */
-function routes(config: MockConfig): Record<string, Handler> {
+function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<string, Handler> {
   const api = config.apiBase;
   return {
-    [`GET ${api}/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
-    [`GET ${api}/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
-    [`POST ${api}/stats`]: (req, res) => streamStats(req, res, config),
-    [`POST ${api}/query`]: queryEvents,
+    [`GET ${api}/documentation/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
+    [`GET ${api}/documentation/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
+    [`POST ${api}/filter/validate`]: (req, res) => streamStats(req, res, config),
+    [`POST ${api}/filter/execute`]: queryEvents,
+
+    [`GET ${api}/filter/saved`]: forSessionUser((userId) => savedQueries.list(userId)),
+    [`POST ${api}/filter/saved`]: forSessionUser(async (userId, req, res) => {
+      const body = await readSavedQuery(req, res);
+      return body && savedQueries.create(userId, body);
+    }),
 
     [`GET ${api}/auth/login`]: (req, res) => startLoginFlow(req, res, api),
     [`GET ${api}/mock-idp/authorize`]: (req, res, url) => showIdpPage(req, res, url, api),
     [`GET ${api}/mock-idp/authorize/confirm`]: (req, res, url) =>
       confirmIdpLogin(req, res, url, api),
     [`GET ${api}/auth/callback`]: finishLogin,
-    [`GET ${api}/auth/me`]: currentUser,
+    [`GET ${api}/users/me`]: currentUser,
     [`POST ${api}/auth/logout`]: logOut,
 
-    [`GET ${api}/compliance/start`]: (req, res) => startComplianceFlow(req, res, api),
+    [`GET ${api}/log/build`]: (req, res) => startComplianceFlow(req, res, api),
     [`GET ${api}/mock-compliance/submit`]: (req, res, url) =>
       showComplianceForm(req, res, url, api),
     [`POST ${api}/mock-compliance/submit`]: (req, res) => submitComplianceForm(req, res, api),
-    [`GET ${api}/compliance/callback`]: finishCompliance,
-    [`GET ${api}/compliance/status`]: (req, res) =>
-      sendJson(res, 200, complianceStatusFor(req.headers.cookie)),
-    [`POST ${api}/compliance/invalidate`]: invalidateCompliance,
+    [`GET ${api}/log/callback`]: finishCompliance,
+    [`GET ${api}/log/status`]: complianceLog,
+    [`POST ${api}/log/invalidate`]: invalidateCompliance,
   };
 }
 
 /** The dev-only mock API. Not listening yet: call `.listen(port)`. */
 export function createMockServer(config: MockConfig) {
-  const table = routes(config);
+  // One store per server: the saved queries live as long as this instance.
+  const savedQueries = createSavedQueryStore();
+  const table = routes(config, savedQueries);
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    const handler = table[`${req.method} ${url.pathname}`];
+    // A simulated failure wins over the real route (MOCK_HTTP_ERRORS).
+    const below = pathBelow(url.pathname, config.apiBase);
+    const simulated =
+      below === null ? undefined : httpErrorFor(config.httpErrors ?? [], req.method ?? "", below);
+    if (simulated) {
+      sendSimulatedError(res, simulated, `${req.method} ${url.pathname}`);
+      return;
+    }
+    // The table matches exact paths; a saved query's id is part of its path,
+    // so those routes get a second look before the 404.
+    const savedQueryId = savedQueryIdFrom(url.pathname, config.apiBase);
+    const handler =
+      table[`${req.method} ${url.pathname}`] ??
+      (savedQueryId === null
+        ? undefined
+        : savedQueryIdHandler(req.method, savedQueryId, savedQueries));
     try {
       if (handler) await handler(req, res, url);
       else sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });
     } catch (err) {
-      // A throw after /api/stats has already written its 200 NDJSON header
+      // A throw after /api/filter/validate has already written its 200 NDJSON header
       // (e.g. mid-stream) can't be turned into a JSON error response —
       // sendJson's own res.writeHead would throw ERR_HTTP_HEADERS_SENT. Just end
       // the response instead of trying (and failing) to report the error.

@@ -2,9 +2,26 @@ import type { AppState } from "../state";
 import type { Database, Facet } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { compact, countLabel, displayLabel, exact, matchRatio } from "./format";
-import { groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
+import { fieldPreview } from "./docsField";
+import { filterStatus, groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
+import { TEXT_SOURCES, type TextSource } from "../config";
 import { findField, type FieldCatalog } from "../query/fieldCatalog";
+
+/**
+ * The small logo in front of a text, saying who wrote it (`TEXT_SOURCES` in
+ * src/config.ts). Its label is both the hover text and the `alt`, so a
+ * screen reader reads "Third-party text; may contain errors" before
+ * the text. Not draggable: the row's grip is what drags. `sources` is only
+ * for tests: a deployment's own labels are escaped too.
+ */
+export function sourceLogo(
+  source: TextSource,
+  sources: Record<TextSource, { logo: string; label: string }> = TEXT_SOURCES,
+): string {
+  const { logo, label } = sources[source];
+  return `<img class="qb-source-logo" src="${escapeHtml(logo)}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="14" height="14" draggable="false" />`;
+}
 
 /** Total events across every loaded database — the denominator for a
  * facet's percentage. The backend sends no percentage: a Facet only carries
@@ -14,7 +31,7 @@ function totalEvents(databases: Database[] | null): number {
 }
 
 /** Most sample values shown per field; the rest are counted, not listed. */
-const MAX_VALUE_CHIPS = 30;
+const MAX_VALUES_SHOWN = 30;
 
 /** The JSON for an element's `data-item` attribute (already HTML-escaped). It
  *  is what dragging the element carries, and what its "Add to query" button adds. */
@@ -41,7 +58,7 @@ export const DOCS_HINT =
 /**
  * The "Add to query" button. With `text` it is a labelled button, like the
  * builder's "+ Condition", so a "+" is never mistaken for "expand"; without it
- * (the small value chips) it is icon-only. Either way `label` names it for
+ * (the small value rows) it is icon-only. Either way `label` names it for
  * screen readers.
  */
 function addButton(label: string, text?: string): string {
@@ -52,54 +69,102 @@ function addButton(label: string, text?: string): string {
   return `<button type="button" class="ui mini basic button qb-add-btn" data-action="add-item" ${aria}><i class="plus icon"></i><span class="qb-add-label">${escapeHtml(text)}</span></button>`;
 }
 
-function valuesHtml(facet: Facet, fieldId: string, catalog: FieldCatalog | null): string {
-  const options =
-    findField(catalog ?? { facets: [], fields: [] }, facet.id, fieldId)?.options ?? [];
-  if (options.length === 0) return "";
-  const shown = options.slice(0, MAX_VALUE_CHIPS).map((value) => {
-    const item = dragData({ type: "value", facetId: facet.id, fieldId, value });
-    return `<span class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</span>`;
-  });
-  const more = options.length - shown.length;
-  return `<div class="qb-doc-values" role="group" aria-label="Known values">${shown.join("")}${more > 0 ? `<span class="qb-muted">and ${more} more</span>` : ""}</div>`;
+/** One part of an element id: letters and digits stay, every other character
+ *  becomes `_<hex code>_` (so "-" can separate the parts and two different
+ *  texts never give the same id). */
+function idPart(text: string): string {
+  return text.replace(/[^A-Za-z0-9]/g, (c) => `_${c.charCodeAt(0).toString(16)}_`);
 }
 
-function fieldHtml(facet: Facet, f: Facet["fields"][number], catalog: FieldCatalog | null): string {
+/**
+ * The id of a field's "Previously seen values" heading, which labels its
+ * block. Unique on the page: a facet is listed once per tag (`section`, the
+ * tag's key), so the same facet and field can be on screen twice.
+ */
+export function valuesHeadingId(section: string, facetId: string, fieldId: string): string {
+  return `qb-values-${idPart(section)}-${idPart(facetId)}-${idPart(fieldId)}`;
+}
+
+/**
+ * The field's known values as a labelled list, one per row. They used to be
+ * chips, which people took for the facet's tags; a heading, a hint and rows
+ * make clear they are suggestions to add, not labels.
+ */
+function valuesHtml(
+  facet: Facet,
+  field: Facet["fields"][number],
+  options: string[],
+  section: string,
+): string {
+  if (options.length === 0) return "";
+  const shown = options.slice(0, MAX_VALUES_SHOWN).map((value) => {
+    const item = dragData({ type: "value", facetId: facet.id, fieldId: field.id, value });
+    return `<li class="qb-doc-value" data-item="${item}">${grip}<span class="qb-doc-value-text">${escapeHtml(value)}</span>${addButton(value)}</li>`;
+  });
+  const more = options.length - shown.length;
+  const headingId = valuesHeadingId(section, facet.id, field.id);
+  // The heading counts every known value, not only the shown ones. A group
+  // labelled by the heading, not a <section>: that would be a landmark, and
+  // every open field adding one more, all named alike, would clutter the
+  // landmark list. h3: the panel title is the h2.
+  return `<div class="qb-doc-values" role="group" aria-labelledby="${headingId}">
+      <h3 class="qb-doc-values-title" id="${headingId}">Previously seen values (${options.length})</h3>
+      <p class="qb-doc-values-hint">Drag one or press + to add <em>${escapeHtml(field.name)}</em> equals <em>value</em>. Other values may work too.</p>
+      <ul class="qb-doc-value-list">${shown.join("")}</ul>
+      ${more > 0 ? `<p class="qb-muted qb-doc-more">and ${more} more</p>` : ""}
+    </div>`;
+}
+
+function fieldHtml(
+  facet: Facet,
+  f: Facet["fields"][number],
+  catalog: FieldCatalog | null,
+  section: string,
+): string {
   const item = dragData({ type: "field", facetId: facet.id, fieldId: f.id });
-  const blurb = f.comment || f.description;
-  const values = valuesHtml(facet, f.id, catalog);
-  // A field with nothing to show when opened is a plain row, not a <details>:
-  // an arrow that opens onto nothing would teach people to distrust the arrows.
-  if (!blurb && !values) {
-    return `<div class="qb-doc-field is-leaf" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
-      <div class="qb-doc-field-row">
-        ${chevronSpacer}
+  const options = findField(catalog ?? { facets: [], fields: [] }, facet.id, f.id)?.options ?? [];
+  const { text, more } = fieldPreview(f, options.length);
+  const textHtml = (cls: string) =>
+    text ? `<span class="${cls}">${sourceLogo(text.source)}${escapeHtml(text.body)}</span>` : "";
+  const head = `
         ${grip}
         <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
         <span class="qb-field-type">${escapeHtml(f.typeName)}</span>
-        ${addButton(f.name, "Add")}
+        ${addButton(f.name, "Add")}`;
+  // Nothing more to see when opened: a plain row, not a <details>, showing
+  // its text in full. An arrow that opens onto the same text again taught
+  // users to distrust the arrows (2026-10-13).
+  if (more.length === 0) {
+    return `<div class="qb-doc-field is-leaf" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
+      <div class="qb-doc-field-row">
+        ${chevronSpacer}${head}
+        ${textHtml("qb-doc-field-text")}
       </div>
     </div>`;
   }
   return `<details class="qb-doc-field" data-field-id="${escapeHtml(f.id)}" data-item="${item}">
       <summary>
-        ${chevron}
-        ${grip}
-        <code class="qb-doc-field-name">${escapeHtml(f.name)}</code>
-        <span class="qb-field-type">${escapeHtml(f.typeName)}</span>
-        ${addButton(f.name, "Add")}
-        ${blurb ? `<span class="qb-doc-field-blurb">${escapeHtml(blurb)}</span>` : ""}
+        ${chevron}${head}
+        ${textHtml("qb-doc-field-blurb")}
+        <span class="qb-doc-field-more">More: ${escapeHtml(more.join(" · "))}</span>
       </summary>
       <div class="qb-doc-field-body">
-        ${f.comment ? `<p class="qb-doc-comment">${escapeHtml(f.comment)}</p>` : ""}
-        ${f.description ? `<p class="qb-doc-desc" title="Third-party description; may contain errors">Third-party: ${escapeHtml(f.description)}</p>` : ""}
-        ${values}
+        ${f.comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(f.comment)}</p>` : ""}
+        ${f.description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(f.description)}</p>` : ""}
+        ${valuesHtml(facet, f, options, section)}
       </div>
     </details>`;
 }
 
-/** One facet card: a draggable header, then (when opened) its details and fields. */
-export function facetHtml(facet: Facet, total: number, catalog: FieldCatalog | null): string {
+/** One facet card: a draggable header, then (when opened) its details and
+ *  fields. `section`: the key of the tag section it is drawn in (see
+ *  `valuesHeadingId`). */
+export function facetHtml(
+  facet: Facet,
+  total: number,
+  catalog: FieldCatalog | null,
+  section: string,
+): string {
   const tags = facet.tags.length
     ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
     : "";
@@ -114,11 +179,11 @@ export function facetHtml(facet: Facet, total: number, catalog: FieldCatalog | n
       </summary>
       <div class="qb-doc-facet-body">
         ${tags}
-        ${group ? `<p class="qb-doc-source" title="Third-party group">Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
-        ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
-        ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
+        ${group ? `<p class="qb-doc-source">${sourceLogo("thirdParty")}Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
+        ${comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(comment)}</p>` : ""}
+        ${description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(description)}</p>` : ""}
         <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>
-        <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog)).join("")}</div>
+        <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog, section)).join("")}</div>
       </div>
     </details>`;
 }
@@ -150,7 +215,7 @@ export function groupHtml(
         <span class="qb-count" data-group-count title="${countLabel(facets.length, "facet")}">${facets.length}</span>
         ${tagAdd}
       </summary>
-      <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total, catalog)).join("")}</div>
+      <div class="qb-doc-facets">${facets.map((facet) => facetHtml(facet, total, catalog, tag)).join("")}</div>
     </details>`;
 }
 
@@ -161,7 +226,8 @@ export function groupHtml(
  *
  * This is the one place a panel changes its painted DOM directly instead of
  * repainting: the filter text is local to this panel (not AppState), and a
- * repaint on every keystroke would throw away the input's focus and caret.
+ * repaint on every keystroke would rebuild the whole dictionary each time and
+ * throw away which cards the user has open and where the list is scrolled.
  */
 function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
   const match = matchDocs(facets, query);
@@ -190,10 +256,34 @@ function applyFilter(el: HTMLElement, facets: Facet[], query: string): void {
     group.open = n > 0;
     count.textContent = countLabel(n, "match", "matches");
   });
-  const empty = el.querySelector<HTMLElement>(".qb-docs-empty")!;
-  empty.hidden = !match || match.facets.size > 0;
-  empty.textContent = `No facets match “${query.trim()}”.`;
+  // The status line is a live region that was painted empty, so a change to its
+  // text is spoken. It is shown only when nothing matches; otherwise it is for
+  // screen readers alone (the group counts already tell sighted users).
+  const status = el.querySelector<HTMLElement>(".qb-docs-status")!;
+  status.textContent = filterStatus(match, query);
+  status.classList.toggle("qb-sr-only", !match || match.facets.size > 0);
   el.querySelector<HTMLElement>("[data-action='clear-filter']")!.hidden = query === "";
+}
+
+/** What decides whether Escape closes the floating dictionary. */
+export interface EscapeContext {
+  key: string;
+  /** The search box calls `preventDefault()` when its Escape cleared the text. */
+  defaultPrevented: boolean;
+  /** The screen is narrow, so the open dictionary floats over the page. */
+  floating: boolean;
+  collapsed: boolean;
+  focusInDocs: boolean;
+}
+
+/**
+ * Whether this key press should fold the floating dictionary away. Escape
+ * first clears a search that has text in it (the search box handles that and
+ * marks the event as used), and only the next Escape closes the dictionary:
+ * a user who wanted to clear their search must not lose the whole panel.
+ */
+export function escapeClosesDocs(c: EscapeContext): boolean {
+  return c.key === "Escape" && !c.defaultPrevented && c.floating && !c.collapsed && c.focusInDocs;
 }
 
 export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
@@ -220,7 +310,7 @@ export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
          <input type="text" id="qb-docs-filter" placeholder="Search facets and fields…" aria-label="Search the data dictionary" autocomplete="off" />
          <button type="button" class="qb-icon-btn qb-docs-clear" data-action="clear-filter" aria-label="Clear search" hidden><i class="times icon"></i></button>
        </div>
-       <p class="qb-docs-empty" hidden></p>
+       <p class="qb-docs-status qb-sr-only" role="status"></p>
        <div class="qb-doc-groups">
          ${[...groups.entries()].map(([group, facets]) => groupHtml(group, facets, total, state.catalog)).join("")}
        </div>
@@ -253,6 +343,8 @@ export function wireDocsSidebar(
     if (e.key !== "Escape" || !isSearch(e.target) || !e.target.value) return;
     e.target.value = "";
     filter("");
+    // Tell main.ts's Escape handler this key press is spent (escapeClosesDocs).
+    e.preventDefault();
   });
   /** The drag/add data of the nearest item at or above `el`, if it parses. */
   const itemOf = (el: EventTarget | null): { node: HTMLElement; item: DragItem } | null => {
@@ -265,6 +357,9 @@ export function wireDocsSidebar(
     const grabbed =
       e.target instanceof Element && e.target.closest(".qb-grip") ? itemOf(e.target) : null;
     if (!grabbed || !e.dataTransfer) {
+      // Only the grips drag, so a <summary> row or a value row is never picked
+      // up by accident. (A side effect: selected text can't be dragged out of
+      // the dictionary, e.g. into the search box.)
       e.preventDefault();
       return;
     }

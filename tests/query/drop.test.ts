@@ -1,19 +1,25 @@
 import { describe, it, expect } from "vitest";
 import {
+  ADDED_GROUP_MESSAGE,
   addedMessage,
+  addedNodesMessage,
   dropNotice,
+  groupedMessage,
   movedMessage,
   reorderedMessage,
   nodesForItem,
   parseDragItem,
+  UNGROUPED_MESSAGE,
 } from "../../src/query/drop";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
+import { newCondition, newGroup } from "../../src/query/tree";
 import type { Condition } from "../../src/query/types";
 import type { Facet } from "../../src/model";
 
-const facet = (id: string, tags: string[], fields: Facet["fields"] = []): Facet => ({
+const facet = (id: string, tags: string[], fields: Facet["fields"] = [], number = 1): Facet => ({
   id,
   name: id.toUpperCase(),
+  number,
   tags,
   group: "",
   comment: "",
@@ -122,14 +128,36 @@ describe("nodesForItem", () => {
     );
     expect(conds(r)[0]).toMatchObject({ operatorId: "eq", value: 3 });
   });
-  it("a tag becomes one 'present' per facet carrying it", () => {
+  it("a tag with several facets becomes one ALL group of 'present' conditions", () => {
     const r = nodesForItem({ type: "tag", tag: "t1" }, facets, catalog);
-    expect(conds(r).map((c) => c.facetId)).toEqual(["a", "b"]);
     expect(r.problems).toEqual([]);
+    expect(r.nodes).toHaveLength(1);
+    const group = r.nodes[0]!;
+    if (group.kind !== "group") throw new Error("expected a group");
+    expect(group.operator).toBe("AND");
+    expect(conds({ nodes: group.children }).map((c) => [c.facetId, c.operatorId])).toEqual([
+      ["a", "present"],
+      ["b", "present"],
+    ]);
+    expect(new Set(group.children.map((c) => c.id)).size).toBe(2);
   });
-  it("every created condition has its own id", () => {
-    const ids = conds(nodesForItem({ type: "tag", tag: "t1" }, facets, catalog)).map((c) => c.id);
-    expect(new Set(ids).size).toBe(2);
+  it("a tag with one facet adds just that condition", () => {
+    const withSolo = [...facets, facet("solo", ["only"])];
+    const r = nodesForItem({ type: "tag", tag: "only" }, withSolo, buildFieldCatalog(withSolo));
+    expect(conds(r).map((c) => c.facetId)).toEqual(["solo"]);
+  });
+  it("says a group was added, and how many conditions it holds", () => {
+    const r = nodesForItem({ type: "tag", tag: "t1" }, facets, catalog);
+    expect(addedNodesMessage(r.nodes)).toBe("Added a group of 2 conditions to the query.");
+    expect(addedNodesMessage([newCondition(), newCondition()])).toBe(
+      "Added 2 conditions to the query.",
+    );
+  });
+  // Unreachable today (a tag group always holds two or more), but the
+  // sentence must stay right if that changes.
+  it("says 'condition', not 'conditions', for a group of one", () => {
+    const one = { ...newGroup(), children: [newCondition()] };
+    expect(addedNodesMessage([one])).toBe("Added a group of 1 condition to the query.");
   });
   it("reports an unknown facet", () => {
     const r = nodesForItem({ type: "facet", facetId: "zzz" }, facets, catalog);
@@ -172,9 +200,22 @@ describe("addedMessage / movedMessage (read out to screen readers)", () => {
     expect(addedMessage(1)).toBe("Added 1 condition to the query.");
     expect(addedMessage(3)).toBe("Added 3 conditions to the query.");
   });
+  it("says a group was added (the query builder's own + Group)", () => {
+    expect(ADDED_GROUP_MESSAGE).toBe("Added a group to the query.");
+  });
   it("says what was moved", () => {
     expect(movedMessage("condition")).toBe("Moved the condition.");
     expect(movedMessage("group")).toBe("Moved the group.");
+  });
+});
+
+describe("groupedMessage / UNGROUPED_MESSAGE (read out to screen readers)", () => {
+  it("says how many items were grouped", () => {
+    expect(groupedMessage(1)).toBe("Grouped 1 item.");
+    expect(groupedMessage(3)).toBe("Grouped 3 items.");
+  });
+  it("says a group was dissolved", () => {
+    expect(UNGROUPED_MESSAGE).toBe("Ungrouped.");
   });
 });
 

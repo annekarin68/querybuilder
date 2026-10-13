@@ -6,10 +6,10 @@ requires login (OAuth2, via the backend) and a compliance reason for the session
 
 All data comes from our API, under the API prefix `VITE_API_BASE`, set in
 `.env` (`/api/v1`): the facets
-of the data model (`GET /individuals` — the backend's name for them), the
-databases a query can be scoped to (`GET /databases`), live statistics
-(`POST /stats`), the matching events (`POST /query`), and the login and
-compliance flows (`/auth/*`, `/compliance/*`). The full contract is in
+of the data model (`GET /documentation/individuals` — the backend's name for them), the
+databases a query can be scoped to (`GET /documentation/databases`), live statistics
+(`POST /filter/validate`), the matching events (`POST /filter/execute`), and the login and
+compliance flows (`/auth/*`, `/log/*`). The full contract is in
 `docs/ARCHITECTURE.md` ("API contract"). A dev-only mock server implements all of it so the app
 runs end to end locally, on fictional vehicle-telemetry sample data.
 
@@ -19,8 +19,9 @@ Needs **Node 22.12 or newer**. CI runs Node 22, and Node 20 reached end of life
 in April 2026.
 
 It is a **desktop-browser tool**: phones and tablets are not supported and never
-will be (decided 2026-10-07). The minimum is a desktop browser window 1024 px
-wide. See `docs/ARCHITECTURE.md`, "Supported screens".
+will be (decided 2026-10-07). The minimum is a desktop browser window 512 px
+wide, half of a 1024 px screen in a split screen. See `docs/ARCHITECTURE.md`,
+"Supported screens".
 
 ```bash
 npm ci
@@ -54,7 +55,8 @@ Other scripts:
 | `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client and its contract checks (also against the mock server), the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint + Prettier check. |
-| `npm run check:offline` | Scan `dist/` for off-origin `http(s)` URLs. |
+| `npm run format` | Rewrite files with Prettier. Run it when `npm run lint` fails on formatting. |
+| `npm run check:offline` | Scan the text files in `dist/` for off-origin URLs (`http(s)`, `ws(s)`, protocol-relative `//host`). |
 
 ## Must-know rules for maintainers
 

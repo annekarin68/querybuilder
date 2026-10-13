@@ -10,6 +10,26 @@ export function clampDocsWidth(rem: number): number {
   return Math.min(DOCS_MAX_REM, Math.max(DOCS_MIN_REM, rem));
 }
 
+/**
+ * The width after one Left / Right press (`stepRem` is negative for Left).
+ *
+ * Shrinking steps from the smaller of the stored width and the width on screen:
+ * under 1100 px CSS can cut the column to fit the window, so what the user sees
+ * is not the stored width, and stepping from the stored one would change
+ * nothing visible for the first few presses. Growing steps from the stored
+ * width, so a grow key can never lower the remembered width (or the announced
+ * aria-valuenow); in a cut column it may change nothing on screen, because
+ * there is no room to grow into. An unusable visible width (0, NaN: not
+ * measured, or the panel is folded) means "use the stored width". Where nothing
+ * is cut the two widths are equal and this is plain stored + step.
+ */
+export function docsWidthAfterKey(storedRem: number, visibleRem: number, stepRem: number): number {
+  const visibleIsKnown = Number.isFinite(visibleRem) && visibleRem > 0;
+  const isShrinking = stepRem < 0;
+  const startRem = visibleIsKnown && isShrinking ? Math.min(storedRem, visibleRem) : storedRem;
+  return clampDocsWidth(startRem + stepRem);
+}
+
 const remPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
 function applyWidth(rem: number): number {
@@ -70,7 +90,8 @@ export function wireDocsResize(handle: HTMLElement): void {
     const step = e.key === "ArrowRight" ? KEY_STEP_REM : e.key === "ArrowLeft" ? -KEY_STEP_REM : 0;
     if (!step) return;
     e.preventDefault();
-    current = applyWidth(current + step);
+    const visibleRem = handle.parentElement!.getBoundingClientRect().width / remPx();
+    current = applyWidth(docsWidthAfterKey(current, visibleRem, step));
     show();
     remember(current);
   });

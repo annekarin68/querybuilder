@@ -1,4 +1,5 @@
 import type { Facet } from "../model";
+import { countLabel } from "./format";
 
 /** Section key for facets with no tags. Never a real tag: `Facet.tags` holds
  *  no blanks. */
@@ -70,4 +71,16 @@ export function matchDocs(all: Facet[], text: string): DocsMatch | null {
     for (const tag of tagsOf(facet)) groups.set(tag, (groups.get(tag) ?? 0) + 1);
   }
   return { facets, groups, openFacets, fields };
+}
+
+/**
+ * What the search box says about its result, for the status line under it
+ * (a live region, so a screen-reader user hears it as they type). "" while
+ * nothing is being filtered. `text` is what was typed.
+ */
+export function filterStatus(match: DocsMatch | null, text: string): string {
+  if (!match) return "";
+  const n = match.facets.size;
+  if (n === 0) return `No facets match “${text.trim()}”.`;
+  return n === 1 ? "1 facet matches." : `${countLabel(n, "facet")} match.`;
 }

@@ -29,6 +29,12 @@ const PAIRS: [string, string][] = [
   ["qb-muted", "qb-surface"],
   ["qb-muted", "qb-bg"],
   ["qb-subtle", "qb-surface"],
+  // A field row's background: its "More:" hint (muted: subtle was under 4.5:1
+  // on the row's hover tint) and its text sit on it.
+  ["qb-subtle", "qb-surface-2"],
+  ["qb-muted", "qb-surface-2"],
+  // The compliance log in the account menu.
+  ["qb-text", "qb-surface-2"],
   ["qb-text-on-fill", "qb-topbar"],
   ["qb-topbar-text", "qb-topbar"],
   ["qb-topbar-muted", "qb-topbar"],
@@ -36,12 +42,48 @@ const PAIRS: [string, string][] = [
   ["qb-selected-text", "qb-selected-bg"],
   ["qb-selected-text", "qb-chip"],
   ["qb-or-text", "qb-surface"],
+  // The id link in the Matching events table (.qb-et-id-btn).
+  ["qb-and", "qb-surface"],
   ["qb-danger", "qb-surface"],
   ["qb-warn", "qb-surface"],
+  // The compliance badges inside the account chip. Their backgrounds must be
+  // opaque tokens: a see-through tint was once 3.5:1 on the green chip.
+  ["qb-topbar-ok-text", "qb-topbar-ok-bg"],
+  ["qb-topbar-warn-text", "qb-topbar-warn-bg"],
+];
+
+// Not text: a colour that marks keyboard focus must stand out (WCAG 1.4.11, 3:1)
+// from what is on both sides of it.
+const FOCUS_INDICATORS: [string, string][] = [
+  ["qb-and", "qb-bg"], // the dictionary resize handle (.qb-docs-resize:focus-visible)
+  ["qb-and", "qb-surface"],
 ];
 
 describe("pickle palette", () => {
   it.each(PAIRS)("%s on %s meets WCAG AA (4.5:1)", (fg, bg) => {
     expect(ratio(token(fg), token(bg))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("keyboard focus indicators", () => {
+  it.each(FOCUS_INDICATORS)("%s against %s meets WCAG 1.4.11 (3:1)", (indicator, neighbour) => {
+    expect(ratio(token(indicator), token(neighbour))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// Not text: the statistics bars carry meaning by colour and must stand out
+// 3:1 from the empty track and the card (WCAG 1.4.11).
+const GRAPHICS: [string, string][] = [
+  ["qb-and", "qb-track"],
+  ["qb-danger", "qb-track"],
+  ["qb-danger", "qb-surface"],
+  // A failed bar is striped, so "failed" is not told by colour alone: its two
+  // stripe colours must be told apart from each other.
+  ["qb-danger", "qb-danger-stripe"],
+];
+
+describe("statistics bars", () => {
+  it.each(GRAPHICS)("%s against %s meets WCAG 1.4.11 (3:1)", (mark, neighbour) => {
+    expect(ratio(token(mark), token(neighbour))).toBeGreaterThanOrEqual(3);
   });
 });

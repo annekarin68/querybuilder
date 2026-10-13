@@ -12,21 +12,24 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import * as api from "./api/client";
-import { EASTER_EGG_TOAST, MASCOT } from "./config";
-import { createApp, errorMessage } from "./app";
+import { EASTER_EGG_MASCOT, EASTER_EGG_TOAST, MASCOT } from "./config";
+import { createApp } from "./app";
+import { startupFailure } from "./api/errorText";
 import { store, type AppState } from "./state";
 import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
 import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
-import { renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
+import { escapeClosesDocs, renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
-import { wireQueryBuilder } from "./ui/queryBuilder";
-import { renderStatsPanel } from "./ui/statsPanel";
+import { revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
-import { createClickCounter, startRain } from "./ui/pickleRain";
+import { renderSavedDialog, wireSavedDialog } from "./ui/savedQueries";
+import { renderEventDialog, wireEventDialog } from "./ui/eventDialog";
+import { createClickCounter, easterEggReaction, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
 // `app` (src/app.ts, where everything the app DOES lives) and repaints panels
@@ -43,6 +46,12 @@ const app = createApp({
     window.location.href = url;
   },
   announce: shell.announce,
+  // A failure with no panel to show it in: a red toast, and the same words
+  // for screen readers (a Fomantic toast is not a live region).
+  showError: (message) => {
+    showToast(message, "error");
+    shell.announce(message);
+  },
 });
 
 // Links straight into the login or compliance flow (marked data-flow-link)
@@ -51,13 +60,18 @@ document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest("a[data-flow-link]")) app.saveQueryBeforeRedirect();
 });
 
-// Hidden: five quick clicks on the logo make it rain pickles (instead, a toast
-// for people who prefer reduced motion).
+// Hidden: five quick clicks on the logo switch the mascot to the easter-egg set
+// (five more switch back) and make it rain with the new set (instead, a toast
+// when switching on, for people who prefer reduced motion).
 const logoClicked = createClickCounter();
 shell.logo.addEventListener("click", () => {
   if (!logoClicked()) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) showToast(EASTER_EGG_TOAST);
-  else startRain(Object.values(MASCOT));
+  const easterEgg = !store.getState().easterEgg;
+  store.setState({ easterEgg });
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reaction = easterEggReaction(easterEgg, reduceMotion);
+  if (reaction === "rain") startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
+  else if (reaction === "toast") showToast(EASTER_EGG_TOAST);
 });
 
 // Wire every panel once. The listeners are delegated to the panel containers
@@ -68,8 +82,16 @@ shell.onMenu({
 });
 wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
 wireDocsResize(shell.docsResizeHandle);
-wireDataPreview(panels.preview, app.runPreview);
+wireDataPreview(panels.preview, {
+  onRun: app.runPreview,
+  onPage: app.showEventPage,
+  onOpenEvent: app.openEvent,
+});
 wireDatabasePicker(panels.dbpicker, app.onDatabasesChange);
+wireStatsPanel(panels.stats, {
+  onRetry: app.retryStats,
+  onShowIssue: (nodeId) => revealNode(panels.center, nodeId),
+});
 wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onInvalidate: app.onInvalidateCompliance,
@@ -78,8 +100,13 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   onDrop: app.onDropItem,
   onMove: app.onMoveNode,
   onDismissNotice: app.dismissDropNotice,
+  onNotice: app.showNotice,
   announce: shell.announce,
+  onOpenSaveDialog: app.openSaveDialog,
+  onOpenSavedList: app.openSavedList,
 });
+wireSavedDialog(shell.savedDialog, app);
+wireEventDialog(shell.eventDialog, app.closeEvent);
 
 /**
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
@@ -87,15 +114,28 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
   { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
-  { keys: ["issues", "stats", "preview"], run: (s) => shell.setMascot(mascotFor(s)) },
+  {
+    keys: ["issues", "stats", "preview", "easterEgg"],
+    run: (s) => shell.setMascot(mascotFor(s), s.easterEgg),
+  },
   { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
-    keys: ["databases", "selectedDatabaseIds"],
+    keys: ["databases", "selectedDatabaseIds", "stats"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
   {
-    keys: ["catalog", "query", "issues", "serverIssues", "facets", "dropNotice"],
+    keys: [
+      "catalog",
+      "databases",
+      "query",
+      "issues",
+      "serverIssues",
+      "facets",
+      "dropNotice",
+      "openSaved",
+      "selectedDatabaseIds",
+    ],
     run: renderQueryBuilder,
   },
   {
@@ -125,20 +165,49 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     run: (s) => renderDataPreview(panels.preview, s),
   },
   { keys: ["auth", "compliance"], run: (s) => renderAccountMenu(panels.account, s) },
+  // Last: when a dialog closes, the focus goes back to its button in the query
+  // card, which must already be repainted (opening a saved query repaints it).
+  {
+    keys: ["savedDialog", "save", "savedList", "savedConfirm", "savedListNotice", "openSaved"],
+    run: (s) => renderSavedDialog(shell.savedDialog, s),
+  },
+  // After the preview row, which repaints the id buttons that closing this
+  // dialog gives the focus to. `issues` and `serverIssues` are what can block
+  // Run (and so hide the table) while `preview` stays "ok": see openEventOf.
+  {
+    keys: [
+      "openEventId",
+      "preview",
+      "catalog",
+      "selectedDatabaseIds",
+      "query",
+      "issues",
+      "serverIssues",
+    ],
+    run: (s) => renderEventDialog(shell.eventDialog, s),
+  },
 ];
 
 // Below this width the open docs float over the page (styles.css), so start
 // with them folded away instead of covering the builder on first load. Set
-// before the first paint below, so nothing flickers.
+// before the first paint below, so nothing flickers. Keep the number in step
+// with the `@media (max-width: 1100px)` rule in styles.css (CSS cannot import it).
 const NARROW_SCREEN = "(max-width: 1100px)";
 if (window.matchMedia(NARROW_SCREEN).matches) store.setState({ sidebarCollapsed: true });
 
-// Escape closes the floating docs (only while focus is inside them), and
+// Escape closes the floating docs (only while focus is inside them, and not
+// when the search box just used it to clear its text), and
 // focus moves to the rail button so keyboard users are not left on a hidden panel.
 const docsColumn = root.querySelector<HTMLElement>("#qb-docs")!;
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !window.matchMedia(NARROW_SCREEN).matches) return;
-  if (store.getState().sidebarCollapsed || !docsColumn.contains(document.activeElement)) return;
+  const closes = escapeClosesDocs({
+    key: e.key,
+    defaultPrevented: e.defaultPrevented,
+    floating: window.matchMedia(NARROW_SCREEN).matches,
+    collapsed: store.getState().sidebarCollapsed,
+    focusInDocs: docsColumn.contains(document.activeElement),
+  });
+  if (!closes) return;
   store.setState({ sidebarCollapsed: true });
   root.querySelector<HTMLElement>(".qb-docs-rail")?.focus();
 });
@@ -157,18 +226,34 @@ document.addEventListener("click", (e) => {
   store.setState({ sidebarCollapsed: true });
 });
 
+/**
+ * Repaint one panel. A renderer that throws (say, on data it did not expect)
+ * is logged and skipped, so the panels after it still repaint: otherwise the
+ * Matching events panel could keep showing the previous query's rows next to
+ * new statistics, and the error would reach whoever called `setState`
+ * (app.ts), which may report it as an unrelated failure.
+ */
+function repaintPanel(run: (state: AppState) => void, state: AppState): void {
+  try {
+    run(state);
+  } catch (err) {
+    console.error("Could not repaint a panel:", err);
+  }
+}
+
 store.subscribe((state, changed) => {
   for (const { keys, run } of panelRenderers) {
-    if (keys.some((k) => changed.has(k))) run(state);
+    if (keys.some((k) => changed.has(k))) repaintPanel(run, state);
   }
 });
 
 /**
  * `?resume=1` marks a load as the direct return-hop from the login or
  * compliance callback (both redirect here) — the ONE signal that tells this
- * load to restore a saved query, as opposed to a generic revisit finding a
- * stale leftover sessionStorage entry from an abandoned attempt. Stripped
- * from the URL immediately so a manual refresh doesn't re-trigger this.
+ * load to restore the pending query (src/util/pendingQuery.ts), as opposed to
+ * a generic revisit finding a stale leftover sessionStorage entry from an
+ * abandoned attempt. Stripped from the URL immediately so a manual refresh
+ * doesn't re-trigger this.
  */
 function consumeResumeParam(): boolean {
   const url = new URL(window.location.href);
@@ -180,23 +265,36 @@ function consumeResumeParam(): boolean {
 
 /**
  * Databases or facets could not be loaded: nothing can work, so replace the
- * page with the error and a Reload button. The message can come from the
- * server's `{ error }` body — escape it like every panel does. No inline
- * onclick either: a strict Content-Security-Policy would block it.
+ * page with the error and one button: Log in when the backend wants a login,
+ * Reload otherwise (`startupFailure`). The text is plain words for the kind
+ * of failure, the details are in the console; it is still escaped, like every
+ * panel's text. No inline onclick either: a strict Content-Security-Policy
+ * would block it.
  */
 function showFatalError(err: unknown): void {
   console.error("Could not load the app:", err);
-  root.innerHTML = `<div class="ui negative message" style="margin:2rem">
+  const { message, action } = startupFailure(err);
+  // Log in is a plain link, without data-flow-link: there is no query on
+  // screen to keep for the return trip.
+  const button =
+    action === "log-in"
+      ? `<a class="ui primary button" href="${escapeHtml(api.LOGIN_URL)}" data-fatal-action>Log in</a>`
+      : `<button type="button" class="ui button" data-fatal-action>Reload</button>`;
+  // role="alert" makes a screen reader read the message at once, and the focus
+  // goes to the button: the page the user was on has just vanished, so without
+  // this their focus is on nothing and the only action is out of reach.
+  root.innerHTML = `<div class="ui negative message" style="margin:2rem" role="alert">
       <div class="header">Could not load the app</div>
-      <p>${escapeHtml(errorMessage(err))}</p>
-      <button class="ui button" data-action="reload">Reload</button>
+      <p>${escapeHtml(message)}</p>
+      <p class="qb-muted">Technical details are in the browser console.</p>
+      ${button}
     </div>`;
-  root
-    .querySelector('[data-action="reload"]')
-    ?.addEventListener("click", () => window.location.reload());
+  const actionButton = root.querySelector<HTMLElement>("[data-fatal-action]");
+  if (action === "reload") actionButton?.addEventListener("click", () => window.location.reload());
+  actionButton?.focus();
 }
 
 const resumed = consumeResumeParam();
 // First paint: loaders/placeholders until the startup requests finish.
-for (const { run } of panelRenderers) run(store.getState());
+for (const { run } of panelRenderers) repaintPanel(run, store.getState());
 app.start(resumed).catch(showFatalError);

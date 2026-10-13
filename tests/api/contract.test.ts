@@ -16,6 +16,8 @@ interface Thing {
   count?: number;
   parts: Thing[];
   extraParts?: Thing[];
+  kind: "a" | "b";
+  value: null;
 }
 
 const thing = (body: unknown) => new ResponseValue(body, "GET /api/v1/things").object<Thing>();
@@ -115,6 +117,99 @@ describe("required reads", () => {
   });
 });
 
+describe("ids", () => {
+  it("returns the ids as sent, untrimmed, and an empty list", () => {
+    expect(thing({ tags: ["a", " b "] }).ids("tags")).toEqual(["a", " b "]);
+    expect(thing({ tags: [] }).ids("tags")).toEqual([]);
+  });
+
+  it.each([
+    ["missing", {}, '"tags" should be a list of ids, but it is missing.'],
+    ["null", { tags: null }, '"tags" should be a list of ids, but it is null.'],
+    ["not a list", { tags: "a" }, '"tags" should be a list of ids, but it is the text "a".'],
+    [
+      "a blank item",
+      { tags: ["a", " "] },
+      '"tags[1]" should be non-blank text, but it is the text " ".',
+    ],
+    [
+      "a number item",
+      { tags: ["a", 2] },
+      '"tags[1]" should be non-blank text, but it is the number 2.',
+    ],
+    ["a null item", { tags: [null] }, '"tags[0]" should be non-blank text, but it is null.'],
+  ])("%s throws, naming the place", (_what, body, message) => {
+    expect(() => thing(body).ids("tags")).toThrow(ContractError);
+    expect(() => thing(body).ids("tags")).toThrow(message);
+  });
+});
+
+describe("nullableId", () => {
+  it("returns an id, and null when the key is null or left out", () => {
+    expect(thing({ label: "a" }).nullableId("label")).toBe("a");
+    expect(thing({ label: null }).nullableId("label")).toBeNull();
+    expect(thing({}).nullableId("label")).toBeNull();
+  });
+
+  it.each([
+    ["blank", { label: " " }, 'it is the text " "'],
+    ["a number", { label: 3 }, "it is the number 3"],
+  ])("%s throws", (_what, body, found) => {
+    expect(() => thing(body).nullableId("label")).toThrow(
+      `"label" should be non-blank text, but ${found}.`,
+    );
+  });
+});
+
+describe("oneOf", () => {
+  it("returns the value when it is allowed", () => {
+    expect(thing({ kind: "b" }).oneOf("kind", ["a", "b"])).toBe("b");
+  });
+
+  it.each([
+    ["missing", {}, "it is missing"],
+    ["another text", { kind: "c" }, 'it is the text "c"'],
+    ["a number", { kind: 1 }, "it is the number 1"],
+  ])("%s throws, listing what was expected", (_what, body, found) => {
+    expect(() => thing(body).oneOf("kind", ["a", "b"])).toThrow(
+      `"kind" should be "a" or "b", but ${found}.`,
+    );
+  });
+});
+
+describe("savedValue", () => {
+  it.each([
+    ["null", null],
+    ["text", "x"],
+    ["a number", 0],
+    ["false", false],
+    ["a list", [1, "b", true]],
+    ["a list with a null", [3, null]],
+    ["an empty list", []],
+  ])("accepts %s as it is", (_what, value) => {
+    expect(thing({ value }).savedValue("value")).toEqual(value);
+  });
+
+  it("reads a left-out value as null", () => {
+    expect(thing({}).savedValue("value")).toBeNull();
+  });
+
+  it("returns a copy of a list", () => {
+    const list = [1, 2];
+    expect(thing({ value: list }).savedValue("value")).not.toBe(list);
+  });
+
+  it.each([
+    ["an object", { from: 1 }],
+    ["a list holding an object", [1, {}]],
+    ["a list holding a list", [[1]]],
+  ])("%s throws", (_what, value) => {
+    expect(() => thing({ value }).savedValue("value")).toThrow(
+      '"value" should be null, text, a number, true or false, or a list of those',
+    );
+  });
+});
+
 describe("optionalList", () => {
   it("is [] when the key is missing or null, without a warning", () => {
     expect(thing({}).optionalList<Thing>("extraParts")).toEqual([]);
@@ -170,6 +265,13 @@ describe("display-only reads", () => {
     expect(console.warn).not.toHaveBeenCalled();
     expect(thing({ tags: "a,b" }).strings("tags")).toEqual([]);
     expect(console.warn).toHaveBeenCalledOnce();
+  });
+
+  it("formatted shows any value as indented JSON, without reading or checking it", () => {
+    const value = { user: "Ada", nested: { list: [1, 2] }, nothing: null };
+    expect(new ResponseValue(value, "GET /log").formatted()).toBe(JSON.stringify(value, null, 2));
+    expect(new ResponseValue([1], "GET /log").formatted()).toBe("[\n  1\n]");
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it("optionalNumber is undefined when missing or not a number", () => {
