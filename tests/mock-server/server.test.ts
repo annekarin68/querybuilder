@@ -169,31 +169,35 @@ describe("POST /api/stats", () => {
   });
 });
 
-describe("POST /api/query", () => {
+describe("POST /api/filter/execute", () => {
   it("needs a session (401)", async () => {
-    const res = await post(`${API}/query`, body(["alpha"]));
+    const res = await post(`${API}/filter/execute`, body(["alpha"]));
     expect(res.status).toBe(401);
   });
 
   it("needs a compliance reason (403)", async () => {
-    const res = await post(`${API}/query`, body(["alpha"]), loggedIn());
+    const res = await post(`${API}/filter/execute`, body(["alpha"]), loggedIn());
     expect(res.status).toBe(403);
   });
 
   it("returns the matching events, capped, and writes an audit entry", async () => {
     const before = auditLogSnapshot().length;
     const all = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"];
-    const res = await post(`${API}/query`, body(all), compliant());
+    const res = await post(`${API}/filter/execute`, body(all), compliant());
     expect(res.status).toBe(200);
-    const { entrysets } = (await res.json()) as { entrysets: { id: number }[] };
-    expect(entrysets.length).toBeGreaterThan(0);
-    expect(entrysets.length).toBeLessThanOrEqual(QUERY_RESULT_CAP);
+    const json = (await res.json()) as { events: { id: string; items: unknown[] }[] };
+    expect(json.events.length).toBeGreaterThan(0);
+    expect(json.events.length).toBeLessThanOrEqual(QUERY_RESULT_CAP);
+    for (const event of json.events) {
+      expect(event.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(Array.isArray(event.items)).toBe(true);
+    }
     expect(auditLogSnapshot()).toHaveLength(before + 1);
     expect(auditLogSnapshot().at(-1)).toMatchObject({ name: "demo.user", reason: "testing" });
   });
 
   it("checks the body after the session", async () => {
-    const res = await post(`${API}/query`, "{", compliant());
+    const res = await post(`${API}/filter/execute`, "{", compliant());
     expect(res.status).toBe(400);
   });
 });

@@ -27,7 +27,8 @@ the app runs end to end during development.
 ### Terminology
 
 - **Event** — one record: something that happened, holding values for some
-  facets. The backend calls these *entrysets*.
+  facets. The events API calls them *events*; the databases' `totalEntrysets`
+  and the mock's stored sample data still say *entrysets*.
 - **Facet** — one described aspect of an event (a signal, a reading, a piece
   of context), with its own fields, tags and group. The backend calls these
   *individuals*.
@@ -58,7 +59,7 @@ Three conventions that the code relies on everywhere:
    `…Response` type is one record from a response, not the whole body:
    `GET /api/databases` returns a `DatabasesResponse[]`, and each line of the
    `/api/stats` stream is one `StatsResponse`. (`EventsResponse` is the
-   exception: it is the whole `/api/query` body.)
+   exception: it is the whole `/api/filter/execute` body.)
 
 The same things have different names in the UI and `src/`, on the wire (named
 by the real backend, so they stay) and inside the mock server (which speaks
@@ -66,10 +67,10 @@ the backend's vocabulary):
 
 | UI and `src/` (`src/model.ts`) | Wire (`src/api/types.ts`) | Mock server |
 |---|---|---|
-| event, `EventRecord` | `EntrysetResponse`, `EventsResponse.entrysets` | `Entryset`, `ENTRYSETS`, `data/entrysets.json` |
+| event, `EventRecord` | `EventResponse`, `EventsResponse.events` | `Entryset`, `ENTRYSETS`, `data/entrysets.json` (stored format; answered as `EventResponse`, `events.ts`) |
 | facet, `Facet` | `IndividualResponse`, `GET /api/individuals` | `Individual`, `INDIVIDUALS`, `data/individual.json` |
 | field, `Field` | `IndividualFieldResponse` | same |
-| an event's values, `EventRecord.values` (by facet id, then field id) | `EntrysetResponse.items` (by facet label, then field label) | same |
+| an event's values, `EventRecord.values` (by facet id, then a list of occurrences keyed by field id) | `EventResponse.items` (`facet_label` + `values`, one object per occurrence) | `Entryset.items` |
 | a database's `eventCount` | `DatabasesResponse.totalEntrysets` | same |
 | one database's statistics, `DatabaseResult` | `StatsResponse` | same |
 
@@ -372,7 +373,7 @@ src/
     contract.ts        Checks each response value against the contract as it is read: ResponseValue,
                        ResponseObject, ContractError ("Reading responses").
     response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, …).
-    request.ts         toQueryRequest(query, databaseIds) — the body sent to /stats and /query;
+    request.ts         toQueryRequest(query, databaseIds) — the body sent to /stats and /filter/execute;
                        toSavedQueryRequest(draft) — the body of a saved query.
   query/
     types.ts           Condition, Group, QueryNode, Issue.
@@ -431,6 +432,7 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   httpErrors.ts        MOCK_HTTP_ERRORS rules: parseHttpErrors, httpErrorFor.
   databases.ts, rows.ts, evaluate.ts, requestBody.ts, vehicleData.ts
                        The 7 mock databases, the flattened rows, the query evaluator, the request-body check, the data loader.
+  events.ts            eventGuid, toEventResponse: a stored event as POST /filter/execute answers it.
   savedQueries.ts      The in-memory saved-queries store and its body check ("Saved queries").
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
@@ -663,7 +665,7 @@ comments, `/api/stats` and the like are short for `{prefix}/stats`.
 | `GET {prefix}/databases` | The databases to scope to — a bare array. |
 | `GET {prefix}/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
 | `POST {prefix}/stats` | Body: a `QueryRequest` ("Wire format of the query"). Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
-| `POST {prefix}/query` | Body: a `QueryRequest` ("Wire format of the query"). The matching events, capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
+| `POST {prefix}/filter/execute` | Body: a `QueryRequest` ("Wire format of the query"). The matching events (`EventsResponse`: `{ events: [{ id, items: [{ facet_label, values: [ … ] }] }] }`), capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
 | `GET {prefix}/users/me` | Who's logged in (`UserResponse`; the app shows `display_name`). `401` when anonymous. |
 | `GET {prefix}/auth/login`, `/callback`, `POST /logout` | Login (below). |
 | `GET {prefix}/compliance/start`, `/callback`, `/status`, `POST /invalidate` | Compliance (below). |
@@ -710,6 +712,8 @@ The mapping is also where the backend's quirks are dealt with, once:
   (with a `matchCount`) or `"failed"` (with `errors`, each a `DatabaseError`:
   `message`, `kind`, and the `nodeId` it points at or `null`): see below.
 
+- **An event's id** is a GUID (text); its values are kept per occurrence,
+  because the backend may list a facet more than once in one event.
 - **A missing name.** A database or facet with a blank `name` shows its id.
 - **The user's name** is the backend's `display_name` (it already falls back from
   the username to the email to the id); a blank one shows `sub` / `user_id`.
@@ -835,7 +839,7 @@ tokens. The backend sets an `HttpOnly`, `SameSite=Lax` (and, in production,
 `Secure`) session cookie and redirects to `/?resume=1`. `GET /api/users/me`
 answers `200 UserResponse` or `401`.
 
-Everything except `POST /api/query` is anonymous. The UI's login state is
+Everything except `POST /api/filter/execute` is anonymous. The UI's login state is
 **display-only**: Run is never disabled for it, and `runBlocker` knows nothing
 about auth. Run always attempts the request and `app.ts` reacts to the answer:
 
@@ -858,7 +862,7 @@ browser navigation: without a session it redirects to login rather than
 answering with JSON, and a failed callback shows a small HTML page instead of
 JSON. `GET /api/compliance/status` never errors (`"required"` without a
 session). `POST /api/compliance/invalidate` clears the reason but keeps the
-session. Every successful `POST /api/query` is logged with the user and reason
+session. Every successful `POST /api/filter/execute` is logged with the user and reason
 (in the mock: `mock-server/audit.ts`).
 
 What a real backend must add (a real IdP and audit service, durable sessions,
@@ -968,7 +972,7 @@ This is the mock's reading; the real backend owns the rule.
 
 ### Wire format of the query
 
-Both `/stats` and `/query` take a `QueryRequest` (`src/api/types.ts`):
+`/stats` and `/filter/execute` take a `QueryRequest` (`src/api/types.ts`):
 `{ databases, query }`. `databases` holds the databases' `label`s (the model's
 `Database.id`s), and
 `query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
@@ -1612,9 +1616,10 @@ query can't run; enabled with an advisory note ("You'll be asked to log in
 first.", the exported `LOGIN_FIRST_NOTE`, which the query card's **Save…** and
 **Saved queries** show too) when ready; a loader; an error with **Try again**;
 or the result. The result is a list of compact rows, one native `<details>`
-per event: id, one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by
-default), up to 3 tag and 2 group badges ranked by how many of the event's
-facets carry them (values in `HIDDEN_ROW_BADGES` left out), and the facet
+per event: the id's first 8 characters (all of it in the tooltip and the
+JSON), one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default; a
+cell joins the values of every occurrence of its facet), up to 3 tag and 2
+group badges ranked by how many of the event's facets carry them (values in `HIDDEN_ROW_BADGES` left out), and the facet
 count; expanding a row shows the event's JSON.
 
 Pressing **Run query** from the keyboard leaves the focus on this card (the
@@ -1753,8 +1758,9 @@ to a named handler function — add a route there, and a test in
   as the real backend does. It is `incomplete` so that it shows as a grey
   hint while the condition errors that cause it stay red. An empty group gets
   none: the frontend's own validation reports it.
-- **`/api/query`** returns the matching events themselves, at most
-  `QUERY_RESULT_CAP` (25).
+- **`/api/filter/execute`** returns the matching events themselves, as
+  `EventResponse`s (`events.ts`: a GUID made from the stored numeric id, one
+  occurrence per individual), at most `QUERY_RESULT_CAP` (25).
 - **`present` / `absent`** work at both levels (`conditionMatches` in
   `evaluate.ts`). On a field, `present` matches a non-blank value (not `null`,
   missing or `""`) and `absent` a blank one. With `fieldId: null`, `present`

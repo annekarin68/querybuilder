@@ -18,7 +18,7 @@ import { isEdited, type OpenSaved } from "../../src/query/saved";
 import type {
   ComplianceStatus,
   DatabasesResponse,
-  EntrysetResponse,
+  EventResponse,
   IndividualFieldResponse,
   IndividualResponse,
   SavedQueryResponse,
@@ -170,22 +170,46 @@ describe("toFacet", () => {
 });
 
 describe("toEvent", () => {
-  it("keeps the id and the values, keyed by facet id then field id", () => {
-    expect(toEvent(read<EntrysetResponse>({ id: 3, items: { thing: { size: 5 } } }))).toEqual({
-      id: 3,
-      values: { thing: { size: 5 } },
+  it("keeps the id and every occurrence of each facet, keyed by facet id then field id", () => {
+    const body: EventResponse = {
+      id: "6f1c2a9e-0b7d-4c55-9a43-2f0e8d1b7c10",
+      items: [{ facet_label: "thing", values: [{ size: 5 }, { size: 7, color: "red" }] }],
+    };
+    expect(toEvent(read<EventResponse>(body))).toEqual({
+      id: "6f1c2a9e-0b7d-4c55-9a43-2f0e8d1b7c10",
+      values: { thing: [{ size: 5 }, { size: 7, color: "red" }] },
     });
   });
 
   it("leaves out a null value", () => {
-    const body = { id: 3, items: { thing: { size: 5, color: null } } };
-    expect(toEvent(readBroken<EntrysetResponse>(body)).values).toEqual({ thing: { size: 5 } });
+    const body = {
+      id: "e1",
+      items: [{ facet_label: "thing", values: [{ size: 5, color: null }] }],
+    };
+    expect(toEvent(readBroken<EventResponse>(body)).values).toEqual({ thing: [{ size: 5 }] });
   });
 
-  it("throws a ContractError when a facet's values are not an object", () => {
-    const body = { id: 3, items: { thing: [1, 2] } };
-    expect(() => toEvent(readBroken<EntrysetResponse>(body))).toThrow(
-      '"items.thing" should be an object, but it is a list.',
+  it("merges a facet listed twice instead of losing one", () => {
+    const body: EventResponse = {
+      id: "e1",
+      items: [
+        { facet_label: "thing", values: [{ size: 5 }] },
+        { facet_label: "thing", values: [{ size: 6 }] },
+      ],
+    };
+    expect(toEvent(read<EventResponse>(body)).values).toEqual({
+      thing: [{ size: 5 }, { size: 6 }],
+    });
+  });
+
+  it("throws a ContractError when the id is missing", () => {
+    expect(() => toEvent(readBroken<EventResponse>({ items: [] }))).toThrow('"id"');
+  });
+
+  it("throws a ContractError when a facet's values are not a list", () => {
+    const body = { id: "e1", items: [{ facet_label: "thing", values: { size: 5 } }] };
+    expect(() => toEvent(readBroken<EventResponse>(body))).toThrow(
+      '"items[0].values" should be a list, but it is an object.',
     );
   });
 });

@@ -101,7 +101,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   const saveSlot = requestSlot();
 
   /**
-   * A 403 from /api/query means "authenticated, but some requirement is unmet" —
+   * A 403 from /api/filter/execute means "authenticated, but some requirement is unmet" —
    * compliance is one such requirement, but not necessarily the only one (e.g. a
    * user not permitted to query a database). Redirecting into the compliance flow
    * on every 403 would send such a user round in circles with no error ever shown,

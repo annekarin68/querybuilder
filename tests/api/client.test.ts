@@ -193,21 +193,22 @@ describe("api client", () => {
   });
 
   it("runQuery POSTs the request body as JSON", async () => {
-    const f = mockFetchOnce(200, { entrysets: [] });
+    const f = mockFetchOnce(200, { events: [] });
     vi.stubGlobal("fetch", f);
     await runQuery(query, databaseIds);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/v1/query");
+    expect(url).toBe("/api/v1/filter/execute");
     expect(JSON.parse(init.body as string)).toEqual(body);
   });
 
   it("runQuery returns the events in the frontend's model", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce(200, { entrysets: [{ id: 4, items: { a: { b: 1 } } }] }));
-    expect(await runQuery(query, databaseIds)).toEqual([{ id: 4, values: { a: { b: 1 } } }]);
+    const events = [{ id: "e4", items: [{ facet_label: "a", values: [{ b: 1 }] }] }];
+    vi.stubGlobal("fetch", mockFetchOnce(200, { events }));
+    expect(await runQuery(query, databaseIds)).toEqual([{ id: "e4", values: { a: [{ b: 1 }] } }]);
   });
 
   it("an unfinished query rejects without sending anything", async () => {
-    const f = mockFetchOnce(200, { entrysets: [] });
+    const f = mockFetchOnce(200, { events: [] });
     vi.stubGlobal("fetch", f);
     const unfinished: Group = {
       ...query,
@@ -461,7 +462,7 @@ describe("a response that breaks the API contract", () => {
   it("an events answer without its list", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(200, []));
     await expect(runQuery(query, databaseIds)).rejects.toThrow(
-      "Unexpected response from POST /api/v1/query: the response should be an object, but it is a list.",
+      "Unexpected response from POST /api/v1/filter/execute: the response should be an object, but it is a list.",
     );
   });
 

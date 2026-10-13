@@ -1,7 +1,7 @@
 import type {
   ComplianceStatus,
   DatabasesResponse,
-  EntrysetResponse,
+  EventResponse,
   EventsResponse,
   IndividualResponse,
   SavedQueryResponse,
@@ -139,15 +139,15 @@ export async function getStats(
   });
 }
 
-/** POST …/query: the events matching `query` in `databaseIds` (capped by the
+/** POST …/filter/execute: the events matching `query` in `databaseIds` (capped by the
  *  backend). Like getStats, an unfinished query rejects without sending. */
 export async function runQuery(
   query: Group,
   databaseIds: string[],
   signal?: AbortSignal,
 ): Promise<EventRecord[]> {
-  const body = await postJson("/query", toQueryRequest(query, databaseIds), signal);
-  return body.object<EventsResponse>().list<EntrysetResponse>("entrysets").map(toEvent);
+  const body = await postJson("/filter/execute", toQueryRequest(query, databaseIds), signal);
+  return body.object<EventsResponse>().list<EventResponse>("events").map(toEvent);
 }
 
 /**

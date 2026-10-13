@@ -68,9 +68,11 @@ export type Scalar = string | number | boolean;
 
 /** One record: something that happened, holding values for some facets. */
 export interface EventRecord {
-  id: number;
-  /** Keyed by `Facet.id`, then by `Field.id` within that facet. */
-  values: Record<string, Record<string, Scalar>>;
+  /** The event's own id (a GUID): long, so the panel shows its start. */
+  id: string;
+  /** Keyed by `Facet.id`: one entry per occurrence of the facet in this event
+   *  (usually one), each keyed by `Field.id` within that facet. */
+  values: Record<string, Record<string, Scalar>[]>;
 }
 
 /** One problem a database found in the query. */

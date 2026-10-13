@@ -1,7 +1,8 @@
 import type {
   ComplianceStatus,
   DatabasesResponse,
-  EntrysetResponse,
+  EventItemResponse,
+  EventResponse,
   IndividualFieldResponse,
   IndividualResponse,
   SavedCondition,
@@ -88,15 +89,19 @@ export function toFacet(i: ResponseObject<IndividualResponse>): Facet {
   };
 }
 
-export function toEvent(e: ResponseObject<EntrysetResponse>): EventRecord {
-  // `items` is keyed by facet id, then by field id: the backend's own ids,
-  // so the keys are read as they come rather than by name.
-  const items = e.object<EntrysetResponse["items"]>("items");
+export function toEvent(e: ResponseObject<EventResponse>): EventRecord {
   const values: EventRecord["values"] = {};
-  for (const facetId of items.keys()) {
-    values[facetId] = items.object<Record<string, Scalar>>(facetId).scalars();
+  for (const item of e.list<EventItemResponse>("items")) {
+    const facetId = item.id("facet_label");
+    // Each occurrence is keyed by the backend's own field ids, so its keys are
+    // read as they come rather than by name; a null value is left out.
+    const occurrences = item
+      .list<Record<string, Scalar | null>>("values")
+      .map((occurrence) => occurrence.scalars());
+    // The same facet listed twice: keep every occurrence rather than drop one.
+    values[facetId] = [...(values[facetId] ?? []), ...occurrences];
   }
-  return { id: e.number("id"), values };
+  return { id: e.id("id"), values };
 }
 
 /**

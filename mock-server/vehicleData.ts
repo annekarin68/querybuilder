@@ -8,14 +8,16 @@ const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 // build time, so the mock still shares no runtime code with src/). The mock
 // speaks the backend's vocabulary: the frontend's events and facets are its
 // entrysets and individuals.
-export type {
-  EntrysetResponse as Entryset,
-  IndividualResponse as Individual,
-} from "../src/api/types";
-import type {
-  EntrysetResponse as Entryset,
-  IndividualResponse as Individual,
-} from "../src/api/types";
+export type { IndividualResponse as Individual } from "../src/api/types";
+import type { IndividualResponse as Individual } from "../src/api/types";
+
+/** One event as stored in data/entrysets.json: the mock's own format, kept as
+ *  it was. The API answers with `EventResponse` (src/api/types.ts), built by
+ *  `toEventResponse` (events.ts). */
+export interface Entryset {
+  id: number;
+  items: Record<string, Record<string, string | number | boolean>>;
+}
 
 function loadIndividuals(): Individual[] {
   const raw = JSON.parse(readFileSync(path.join(dataDir, "individual.json"), "utf8")) as Record<

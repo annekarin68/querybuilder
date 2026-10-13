@@ -154,29 +154,36 @@ export interface IndividualResponse {
 }
 
 /**
- * An entryset (an event, in the frontend's words): one record, holding values
- * for a subset of the individuals returned by GET /api/individuals. `items` is
- * keyed by an individual's `label`; each value object is keyed by one of that
- * individual's field labels.
+ * An event matching the query (POST /api/filter/execute): one record, holding
+ * values for some of the individuals returned by GET /api/individuals.
  */
-export interface EntrysetResponse {
-  id: number;
-  items: Record<string, Record<string, string | number | boolean>>;
+export interface EventResponse {
+  /** The event's unique id (a GUID), read by the backend from a metadata individual. */
+  id: string;
+  /** One item per individual the event holds values for. */
+  items: EventItemResponse[];
 }
 
-/**
- * The events matching the current query, scoped to the selected
- * databases, capped at 25. No pagination.
- */
+export interface EventItemResponse {
+  /** `IndividualResponse.label`. */
+  facet_label: string;
+  /** One object per occurrence of the individual in this event (usually
+   *  one), each keyed by `IndividualFieldResponse.label`. A field without a
+   *  value is left out or `null`. */
+  values: Record<string, string | number | boolean | null>[];
+}
+
+/** The events matching the current query in the selected databases, capped
+ *  by the backend. No pagination. */
 export interface EventsResponse {
-  entrysets: EntrysetResponse[];
+  events: EventResponse[];
 }
 
-// ---- the body of POST …/stats and POST …/query ------------------------------
+// ---- the body of POST …/stats and POST …/filter/execute ---------------------
 
 /**
  * The query and where to run it — the body of POST {prefix}/stats and POST
- * {prefix}/query (docs/ARCHITECTURE.md, "Wire format of the query"). Built by
+ * {prefix}/filter/execute (docs/ARCHITECTURE.md, "Wire format of the query"). Built by
  * `toQueryRequest` (src/api/request.ts) from the query on screen.
  */
 export interface QueryRequest {

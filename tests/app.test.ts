@@ -69,7 +69,7 @@ function ready(query = runnableQuery()): Partial<AppState> {
   };
 }
 
-const events: EventRecord[] = [{ id: 1, values: {} }];
+const events: EventRecord[] = [{ id: "e-1", values: {} }];
 
 /** What the server answers for a saved draft. */
 function savedFrom(draft: SavedQueryDraft, id: string): SavedQuery {

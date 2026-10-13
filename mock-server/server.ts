@@ -10,6 +10,7 @@ import {
   type DatabaseOutcome,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
+import { toEventResponse } from "./events";
 import { ROWS } from "./rows";
 import { queryProblem } from "./requestBody";
 import { httpErrorFor, type HttpErrorRule } from "./httpErrors";
@@ -64,7 +65,7 @@ export interface MockConfig {
   httpErrors?: HttpErrorRule[];
 }
 
-/** POST /api/query returns at most this many events. There is no pagination. */
+/** POST /api/filter/execute returns at most this many events. There is no pagination. */
 export const QUERY_RESULT_CAP = 25;
 
 // ---- responses ------------------------------------------------------------
@@ -161,7 +162,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 }
 
 /**
- * Reads and checks a …/stats or …/query body: `query` must be a well-formed
+ * Reads and checks a …/stats or …/filter/execute body: `query` must be a well-formed
  * query tree whose root is a group (requestBody.ts), and `databases` a
  * non-empty string[]. For a bad body this sends the 400 itself and returns
  * null.
@@ -263,7 +264,7 @@ async function streamStats(req: IncomingMessage, res: ServerResponse, config: Mo
   res.end();
 }
 
-/** POST /api/query: the matching events. Needs a session and a compliance reason. */
+/** POST /api/filter/execute: the matching events. Needs a session and a compliance reason. */
 async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   const session = sessionFor(req.headers.cookie);
   if (!session) return sendJson(res, 401, { error: "Log in to preview data." });
@@ -272,13 +273,14 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   }
   const body = await readQueryBody(req, res);
   if (!body) return;
-  const entrysets = filterByDatabases(ROWS, body.databases)
+  const events = filterByDatabases(ROWS, body.databases)
     .filter((row) => matches(body.query, row))
     .map((row) => ENTRYSETS[String(row.id)])
     .filter((e): e is Entryset => e !== undefined)
-    .slice(0, QUERY_RESULT_CAP);
+    .slice(0, QUERY_RESULT_CAP)
+    .map(toEventResponse);
   logQueryAudit(session.user.display_name, session.compliance.reason);
-  sendJson(res, 200, { entrysets });
+  sendJson(res, 200, { events });
 }
 
 // ---- saved queries: the logged-in user's own list --------------------------
@@ -294,9 +296,9 @@ type ForUser = (
 
 /**
  * A saved-queries route: needs a session (401 without), then runs `act` with
- * the user's key and sends its answer. The key is the user's name: the mock
- * has no other stable user id, so two logins of the same mock user share one
- * list, as they would with a real backend. `act` returns null after sending a
+ * the user's key and sends its answer. The key is the user's id (`sub`), the
+ * stable identifier a real backend has. Two logins of the same mock user share
+ * one list. `act` returns null after sending a
  * 400 itself.
  */
 function forSessionUser(act: ForUser): Handler {
@@ -463,7 +465,7 @@ function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<strin
     [`GET ${api}/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
     [`GET ${api}/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
     [`POST ${api}/stats`]: (req, res) => streamStats(req, res, config),
-    [`POST ${api}/query`]: queryEvents,
+    [`POST ${api}/filter/execute`]: queryEvents,
 
     [`GET ${api}/saved-queries`]: forSessionUser((userId) => savedQueries.list(userId)),
     [`POST ${api}/saved-queries`]: forSessionUser(async (userId, req, res) => {

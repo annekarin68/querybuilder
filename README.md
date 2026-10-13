@@ -8,7 +8,7 @@ All data comes from our API, under the API prefix `VITE_API_BASE`, set in
 `.env` (`/api/v1`): the facets
 of the data model (`GET /individuals` — the backend's name for them), the
 databases a query can be scoped to (`GET /databases`), live statistics
-(`POST /stats`), the matching events (`POST /query`), and the login and
+(`POST /stats`), the matching events (`POST /filter/execute`), and the login and
 compliance flows (`/auth/*`, `/compliance/*`). The full contract is in
 `docs/ARCHITECTURE.md` ("API contract"). A dev-only mock server implements all of it so the app
 runs end to end locally, on fictional vehicle-telemetry sample data.
