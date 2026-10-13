@@ -13,7 +13,8 @@ import "./styles.css";
 
 import * as api from "./api/client";
 import { EASTER_EGG_MASCOT, EASTER_EGG_TOAST, MASCOT } from "./config";
-import { createApp, errorMessage } from "./app";
+import { createApp } from "./app";
+import { userMessage } from "./api/errorText";
 import { store, type AppState } from "./state";
 import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
@@ -44,6 +45,12 @@ const app = createApp({
     window.location.href = url;
   },
   announce: shell.announce,
+  // A failure with no panel to show it in: a red toast, and the same words
+  // for screen readers (a Fomantic toast is not a live region).
+  showError: (message) => {
+    showToast(message, "error");
+    shell.announce(message);
+  },
 });
 
 // Links straight into the login or compliance flow (marked data-flow-link)
@@ -237,9 +244,10 @@ function consumeResumeParam(): boolean {
 
 /**
  * Databases or facets could not be loaded: nothing can work, so replace the
- * page with the error and a Reload button. The message can come from the
- * server's `{ error }` body — escape it like every panel does. No inline
- * onclick either: a strict Content-Security-Policy would block it.
+ * page with the error and a Reload button. The text is plain words for the
+ * kind of failure (`userMessage`), the details are in the console; it is still
+ * escaped, like every panel's text. No inline onclick either: a strict
+ * Content-Security-Policy would block it.
  */
 function showFatalError(err: unknown): void {
   console.error("Could not load the app:", err);
@@ -248,7 +256,8 @@ function showFatalError(err: unknown): void {
   // this their focus is on nothing and the only action is out of reach.
   root.innerHTML = `<div class="ui negative message" style="margin:2rem" role="alert">
       <div class="header">Could not load the app</div>
-      <p>${escapeHtml(errorMessage(err))}</p>
+      <p>${escapeHtml(userMessage(err))}</p>
+      <p class="qb-muted">Technical details are in the browser console.</p>
       <button class="ui button" data-action="reload">Reload</button>
     </div>`;
   const reload = root.querySelector<HTMLButtonElement>('[data-action="reload"]');

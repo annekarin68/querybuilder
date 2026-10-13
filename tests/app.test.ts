@@ -116,8 +116,9 @@ function setup(state: Partial<AppState> = {}, api: AppApi = fakeApi()) {
   const store = createStore({ ...initialState, ...state });
   const navigate = vi.fn();
   const announce = vi.fn();
-  const app = createApp({ store, api, navigate, announce });
-  return { store, api, navigate, announce, app };
+  const showError = vi.fn();
+  const app = createApp({ store, api, navigate, announce, showError });
+  return { store, api, navigate, announce, showError, app };
 }
 
 /** A promise the test settles by hand, to control when a response "arrives". */
@@ -208,7 +209,7 @@ describe("runPreview (the Run query button)", () => {
     expect(takePendingQuery()).not.toBeNull();
   });
 
-  it("a 403 for another reason shows its message instead of redirecting", async () => {
+  it("a 403 for another reason shows a plain message instead of redirecting", async () => {
     const api = fakeApi({
       runQuery: vi.fn(async () => Promise.reject(new ApiError(403, "Not allowed here."))),
     });
@@ -216,10 +217,13 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
-    expect(store.getState().preview).toEqual({ status: "error", error: "Not allowed here." });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "You don't have permission to do this. If you think you should, contact support.",
+    });
   });
 
-  it("a 403 whose compliance check fails shows the 403's message", async () => {
+  it("a 403 whose compliance check fails shows the 403's plain message", async () => {
     const api = fakeApi({
       runQuery: vi.fn(async () => Promise.reject(new ApiError(403, "Forbidden."))),
       getComplianceStatus: vi.fn(async () => Promise.reject(new Error("down"))),
@@ -228,7 +232,10 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
-    expect(store.getState().preview).toEqual({ status: "error", error: "Forbidden." });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "You don't have permission to do this. If you think you should, contact support.",
+    });
   });
 
   it("ignores a 403 if the query changed while compliance was being checked", async () => {
@@ -262,7 +269,10 @@ describe("runPreview (the Run query button)", () => {
     const { app, store } = setup(ready(), api);
     app.runPreview();
     await flushPromises();
-    expect(store.getState().preview).toEqual({ status: "error", error: "boom" });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "Something went wrong. Try again; if it keeps happening, reload the page.",
+    });
   });
 
   // The panel repaints out of sight of a screen-reader user, and their focus
@@ -280,7 +290,9 @@ describe("runPreview (the Run query button)", () => {
     const { app, announce } = setup(ready(), api);
     app.runPreview();
     await flushPromises();
-    expect(announce).toHaveBeenLastCalledWith("Could not load events: boom");
+    expect(announce).toHaveBeenLastCalledWith(
+      "Could not load events: Something went wrong. Try again; if it keeps happening, reload the page.",
+    );
   });
 
   it("says nothing about a run the query has moved on from", async () => {
@@ -417,7 +429,10 @@ describe("statistics", () => {
     app.onQueryChange(runnableQuery(5));
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     await flushPromises();
-    expect(store.getState().stats).toMatchObject({ status: "error", error: "down" });
+    expect(store.getState().stats).toMatchObject({
+      status: "error",
+      error: "Something went wrong. Try again; if it keeps happening, reload the page.",
+    });
   });
 
   it("fetches again on retryStats after a failed request", async () => {
@@ -506,6 +521,25 @@ describe("logging out and invalidating compliance", () => {
     await flushPromises();
     expect(store.getState().auth.status).toBe("authenticated");
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it("says so when logging out fails", async () => {
+    const api = fakeApi({ logout: vi.fn(async () => Promise.reject(new ApiError(500, "x"))) });
+    const { app, store, showError } = setup(signedIn, api);
+    app.onLogout();
+    await flushPromises();
+    expect(store.getState().auth.status).toBe("authenticated");
+    expect(showError).toHaveBeenCalledWith("Couldn't log out. Try again.");
+  });
+
+  it("says so when invalidating the compliance reason fails", async () => {
+    const api = fakeApi({
+      invalidateCompliance: vi.fn(async () => Promise.reject(new ApiError(500, "x"))),
+    });
+    const { app, showError } = setup(signedIn, api);
+    app.onInvalidateCompliance();
+    await flushPromises();
+    expect(showError).toHaveBeenCalledWith("Couldn't invalidate the compliance reason. Try again.");
   });
 
   it("a successful logout signs out and clears compliance", async () => {
@@ -976,7 +1010,11 @@ describe("saved queries: opening the dialogs", () => {
     const { app, store } = setup(ready(), fakeApi({ listSavedQueries: list }));
     app.openSavedList();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "error", error: "down" });
+    expect(store.getState().savedList).toEqual({
+      status: "error",
+      error:
+        "The server ran into a problem. Try again in a moment; if it keeps happening, contact support.",
+    });
     app.retrySavedList();
     expect(store.getState().savedList).toEqual({ status: "loading" });
     await flushPromises();
@@ -1208,7 +1246,11 @@ describe("saved queries: saving", () => {
     const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
     app.saveQuery("Weekly", "");
     await flushPromises();
-    expect(store.getState().save).toEqual({ status: "error", error: "disk full" });
+    expect(store.getState().save).toEqual({
+      status: "error",
+      error:
+        "The server ran into a problem. Try again in a moment; if it keeps happening, contact support.",
+    });
     expect(store.getState().savedDialog).toBe("save");
   });
 
@@ -1434,18 +1476,37 @@ describe("saved queries: deleting", () => {
     expect(store.getState().openSaved).toMatchObject({ id: "a" });
   });
 
-  it("shows a failed delete in the list", async () => {
+  it("a delete whose query is already gone counts as deleted", async () => {
     const api = fakeApi({
       deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(404, "gone"))),
+      listSavedQueries: vi.fn(async () => []),
     });
-    const { app, store } = setup(
+    const { app, store, showError } = setup(
       { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
       api,
     );
     app.askDeleteSaved("a");
     app.confirmSavedAction();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "error", error: "gone" });
+    expect(showError).not.toHaveBeenCalled();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [] });
+  });
+
+  it("a failed delete keeps the list and says so in a toast", async () => {
+    const api = fakeApi({
+      deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
+    });
+    const { app, store, showError } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [a] });
+    expect(showError).toHaveBeenCalledWith(
+      `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
+    );
   });
 
   it("a 401 on delete redirects to log in", async () => {

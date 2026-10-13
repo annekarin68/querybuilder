@@ -365,8 +365,9 @@ src/
                        ("Pickle theme and mascot").
   vendor.d.ts          Types for the Fomantic plugins we call, and VITE_API_BASE.
   api/                 The only place that knows the backend's names ("Data model").
-    client.ts          The ONLY file that calls fetch(). One function per endpoint; timeouts; ApiError.
+    client.ts          The ONLY file that calls fetch(). One function per endpoint; timeouts; ApiError, NetworkError.
                        Takes and returns the model, never the backend's types.
+    errorText.ts       userMessage(err) — the plain words a panel shows for a failed request.
     types.ts           The backend's request/response types. This IS the API contract.
     contract.ts        Checks each response value against the contract as it is read: ResponseValue,
                        ResponseObject, ContractError ("Reading responses").
@@ -637,9 +638,11 @@ model ("Data model"). It is the only file that calls `fetch()`: one function
 per endpoint, all under one **API prefix**,
 `VITE_API_BASE`. Every JSON endpoint answers a 4xx/5xx with
 `{ "error": "human readable message" }`, which the client throws as an
-`ApiError` carrying the HTTP `status` (without such a body, the message names
-the request and the status line: `GET /api/v1/databases failed: 502 Bad
-Gateway`). A 2xx answer that doesn't match the contract is thrown as a
+`ApiError` carrying the HTTP `status`. Its message is for the console: the
+request, the status line and the server's text (`POST /api/v1/saved-queries
+failed: 500 Internal Server Error: …`). A request that gets no answer at all
+(server down, network gone) rejects with a `NetworkError` that names the
+request. A 2xx answer that doesn't match the contract is thrown as a
 `ContractError` ("Reading responses"). Every request has a 60 s timeout
 (`REQUEST_TIMEOUT_MS`, rejecting with a `TimeoutError`); for the streamed
 `/stats` body the clock restarts on every chunk, so a slow stream that is
@@ -742,12 +745,12 @@ Unexpected response from POST /api/v1/stats, line 2: "label" should be non-blank
 Unexpected response from GET /api/v1/databases: the body should be JSON, but it starts with "<!doctype html>…". That looks like a web page, not the API: check VITE_API_BASE in .env, and that the backend (or `npm run mock`) is running.
 ```
 
-It is shown where any failed request is shown (the full-page startup error,
-the statistics panel, Matching events) and logged to the console with its
-stack. **Decision: only break on what the app needs.** A missing description
-leaves a blank and a warning, not a dead app; keys the app doesn't read are
-never checked; unknown keys are ignored. A warning is logged once per page
-load, not once per item, so the console stays readable.
+It is logged to the console with its stack; the panel that made the request
+shows the plain message for it ("Error and loading model"). **Decision: only
+break on what the app needs.** A missing description leaves a blank and a
+warning, not a dead app; keys the app doesn't read are never checked; unknown
+keys are ignored. A warning is logged once per page load, not once per item,
+so the console stays readable.
 
 `tests/api/mockContract.test.ts` runs the real client against the mock server
 and fails on any `ContractError` or warning, so the mock and `response.ts`
@@ -1581,7 +1584,7 @@ Each kind of error is shown once, where the person who can fix it looks:
 |---|---|---|
 | Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder (when only some databases report it, those databases' pills are also marked, with the message in the tooltip: "Above the builder — `databasePicker.ts`"); here one line, "Not counted: N problem(s) are marked in the query." (`queryProblemsLine`), with a **Show** button; each such database's row says "Not counted" in muted text |
 | Database error without a `nodeId` | the user (deselect the database) or the service | in that database's row, in red; a failed row with no error at all says "Failed." |
-| The statistics request itself failed (`ApiError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with the error and **Try again** |
+| The statistics request itself failed (`ApiError`, `NetworkError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with `userMessage(err)` and **Try again** |
 
 N is `AppState.serverIssues.length`, already de-duplicated across databases.
 **Show** carries the id `placeIssues` drew the first problem on, so a problem
@@ -1797,12 +1800,21 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   `idle` → `loading` → `ok` or `error`. Panels render every status, including
   a placeholder saying why they are empty.
 - `client.ts` throws an `ApiError` (with the HTTP `status`) on any non-2xx,
-  a `ContractError` when a response doesn't match the contract ("Reading
-  responses"), and a `TimeoutError` when the server goes silent, so no panel
-  can sit on "Loading" forever. The panel then shows a `ui negative message`
-  with the text; no old data is kept ("Correctness invariant"). The error
-  itself, with its stack, is logged to the console. Errors of requests
-  aborted because they were superseded never reach a panel.
+  a `NetworkError` when there is no answer at all, a `ContractError` when a
+  response doesn't match the contract ("Reading responses"), and a
+  `TimeoutError` when the server goes silent, so no panel can sit on "Loading"
+  forever. The panel then shows a `ui negative message` with
+  `userMessage(err)` (`src/api/errorText.ts`): plain words for the kind of
+  failure (no answer, too slow, an answer the app can't read, or the HTTP
+  status's meaning), never the server's text, a status code or a URL (users
+  found those confusing, 2026-10-13). No old data is kept ("Correctness
+  invariant"). The error itself, with the request, the status code and text,
+  the server's text and the stack, is logged to the console. Errors of
+  requests aborted because they were superseded never reach a panel.
+- An action with no panel of its own (**Log out**, **Invalidate**, **Delete**
+  in the saved-queries list) reports a failure with a red toast, also spoken
+  (`AppDeps.showError`). Deleting a saved query that is already gone (`404`)
+  counts as deleted.
 - A database that finds a problem in the query reports it in its stats
   line, not as an HTTP error: the statistics panel shows it in that
   database's row if it points at no query node; an error that points at a
@@ -1812,10 +1824,10 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   again** (`app.retryStats`).
 - Failing to load databases or facets at startup is fatal: `#app` is replaced
   by an error (`role="alert"`) and a **Reload** button that takes the focus
-  (the message escaped like every
-  server-supplied string; no inline `onclick`, so a strict
-  Content-Security-Policy allows it). Login and compliance status failures are
-  not fatal.
+  (it shows `userMessage` and "Technical details are in the browser
+  console."; the text is escaped like every panel's, and there is no inline
+  `onclick`, so a strict Content-Security-Policy allows it). Login and
+  compliance status failures are not fatal.
 - Drops never fail silently: whatever a drop or "Add to query" can't do is
   explained in `AppState.dropNotice`, a dismissible warning above the query
   ("Centre — `queryBuilder.ts`" has the list, which also holds the refused
@@ -1904,12 +1916,13 @@ the old name, and at the mock server. Fix those and their tests in
 `tests/api/`. Nothing outside `src/api/` and `mock-server/` should need a
 change. See "Data model".
 
-**…find out why the app says "Unexpected response from …"?** That is a
-`ContractError`: the backend sent something `src/api/types.ts` doesn't allow.
-The message names the request and the field. Look at the real response in the
-browser's Network tab: if the backend changed on purpose, follow the rename
-above; otherwise it is a backend bug. A console warning of the same form means
-a display-only value was missing and is shown blank. See "Reading responses".
+**…find out why the app says "The server sent an answer this app doesn't understand"?**
+Open the browser console: the `ContractError` logged there names the request
+and the field. It means the backend sent something `src/api/types.ts` doesn't
+allow. Look at the real response in the browser's Network tab: if the backend
+changed on purpose, follow the rename above; otherwise it is a backend bug. A
+console warning of the same form means a display-only value was missing and is
+shown blank. See "Reading responses".
 
 **…support another backend type name** (say `SMALLSERIAL`)? Add it to
 `TYPE_NAMES` in `src/query/fieldCatalog.ts` and a case to the `valueTypeFor`

@@ -57,7 +57,10 @@ export const COMPLIANCE_START_URL = `${BASE}/compliance/start`;
  */
 export const REQUEST_TIMEOUT_MS = 60_000;
 
-/** The server answered with an HTTP error status (4xx/5xx). */
+/** The server answered with an HTTP error status (4xx/5xx). The message is for
+ *  the console: the request, the status code and text, and the server's own
+ *  `{ "error": … }` text if it sent one. Users are shown `userMessage`
+ *  (src/api/errorText.ts) instead. */
 export class ApiError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -75,10 +78,28 @@ export class TimeoutError extends Error {
   }
 }
 
+/** No answer at all: the server is down or unreachable, or the connection
+ *  broke. (fetch rejects with a bare TypeError, "Failed to fetch", for all of
+ *  these; this names the request so the console says which one.) */
+export class NetworkError extends Error {
+  constructor(source: string, cause: unknown) {
+    const why = cause instanceof Error ? cause.message : String(cause);
+    super(`${source} failed: no answer from the server (${why})`);
+    this.name = "NetworkError";
+  }
+}
+
+/** `err` as a NetworkError if it is fetch's "no answer" TypeError. An abort
+ *  (ours, or the timeout's TimeoutError) is not a TypeError and passes through. */
+function asNetworkError(err: unknown, source: string): unknown {
+  return err instanceof TypeError ? new NetworkError(source, err) : err;
+}
+
 // ---- the endpoints ----------------------------------------------------------
 //
-// Each one rejects with an ApiError (an HTTP error status), a TimeoutError, or a
-// ContractError (the answer doesn't match src/api/types.ts, src/api/contract.ts).
+// Each one rejects with an ApiError (an HTTP error status), a NetworkError (no
+// answer), a TimeoutError, or a ContractError (the answer doesn't match
+// src/api/types.ts, src/api/contract.ts).
 
 export async function getDatabases(): Promise<Database[]> {
   const body = await getJson("/databases");
@@ -216,7 +237,10 @@ function post(path: string): Promise<void> {
 }
 
 async function readJson(res: Response, source: string): Promise<ResponseValue> {
-  return ResponseValue.parse(await res.text(), source);
+  const text = await res.text().catch((err: unknown) => {
+    throw asNetworkError(err, source);
+  });
+  return ResponseValue.parse(text, source);
 }
 
 /**
@@ -242,7 +266,9 @@ async function send<T>(
     init.body = JSON.stringify(body);
   }
   try {
-    const res = await fetch(url, init);
+    const res = await fetch(url, init).catch((err: unknown) => {
+      throw asNetworkError(err, source);
+    });
     if (!res.ok) throw await errorFromResponse(res, source);
     return await read(res, source, d.touch);
   } finally {
@@ -250,17 +276,18 @@ async function send<T>(
   }
 }
 
-/** Every JSON endpoint answers an error with `{ "error": "…" }`; use that
- *  message when it is there, else the status line. */
+/** The request, the status line and, when the answer has the usual
+ *  `{ "error": "…" }` body, that text: everything someone debugging needs. */
 async function errorFromResponse(res: Response, source: string): Promise<ApiError> {
-  let message = `${source} failed: ${res.status} ${res.statusText}`.trim();
+  const statusLine = `${source} failed: ${res.status} ${res.statusText}`.trim();
+  let serverText = "";
   try {
     const error = (JSON.parse(await res.text()) as { error?: unknown } | null)?.error;
-    if (typeof error === "string" && error.trim()) message = error;
+    if (typeof error === "string") serverText = error.trim();
   } catch {
-    /* no JSON error body: keep the status line */
+    /* no JSON error body: the status line says enough */
   }
-  return new ApiError(res.status, message);
+  return new ApiError(res.status, serverText ? `${statusLine}: ${serverText}` : statusLine);
 }
 
 /**
@@ -306,7 +333,9 @@ async function readLines(
   let buffer = "";
   try {
     for (;;) {
-      const { value, done } = await reader.read();
+      const { value, done } = await reader.read().catch((err: unknown) => {
+        throw asNetworkError(err, source); // the connection broke mid-stream
+      });
       if (done) break;
       touch();
       buffer += decoder.decode(value, { stream: true });

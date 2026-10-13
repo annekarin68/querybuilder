@@ -184,7 +184,7 @@ describe("saved queries through the client", () => {
     await client.createSavedQuery(unfinishedDraft);
     await expect(client.createSavedQuery(unfinishedDraft)).rejects.toMatchObject({
       status: 409,
-      message: 'A saved query called "Slow trips" already exists.',
+      message: expect.stringContaining('A saved query called "Slow trips" already exists.'),
     });
     await expect(client.deleteSavedQuery("nope")).rejects.toMatchObject({ status: 404 });
     await expect(client.updateSavedQuery("a/b", unfinishedDraft)).rejects.toMatchObject({

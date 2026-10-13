@@ -13,6 +13,7 @@ import {
   listSavedQueries,
   LOGIN_URL,
   logout,
+  NetworkError,
   REQUEST_TIMEOUT_MS,
   runQuery,
   TimeoutError,
@@ -233,10 +234,24 @@ describe("api client", () => {
     await expect(getDatabases()).rejects.toThrow("GET /api/v1/databases failed: 502 STATUS");
   });
 
-  it("throws an ApiError carrying the response status", async () => {
+  it("throws an ApiError whose message carries everything the console needs", async () => {
     vi.stubGlobal("fetch", mockFetchOnce(401, { error: "nope" }));
     await expect(getDatabases()).rejects.toBeInstanceOf(ApiError);
-    await expect(getDatabases()).rejects.toMatchObject({ status: 401, message: "nope" });
+    await expect(getDatabases()).rejects.toMatchObject({
+      status: 401,
+      message: "GET /api/v1/databases failed: 401 STATUS: nope",
+    });
+  });
+
+  it("turns a request that got no answer into a NetworkError naming it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))),
+    );
+    await expect(getDatabases()).rejects.toBeInstanceOf(NetworkError);
+    await expect(getDatabases()).rejects.toThrow(
+      "GET /api/v1/databases failed: no answer from the server (Failed to fetch)",
+    );
   });
 
   it("getMe returns the user when logged in", async () => {
@@ -521,7 +536,10 @@ describe("saved queries", () => {
     vi.stubGlobal("fetch", mockFetchOnce(409, { error: message }));
     const err = await createSavedQuery(unfinishedDraft).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect(err).toMatchObject({ status: 409, message });
+    expect(err).toMatchObject({ status: 409 });
+    expect((err as ApiError).message).toBe(
+      `POST /api/v1/saved-queries failed: 409 STATUS: ${message}`,
+    );
   });
 
   it.each([400, 401, 404])("a %i becomes an ApiError with that status", async (status) => {
@@ -529,7 +547,7 @@ describe("saved queries", () => {
     await expect(updateSavedQuery("sq-1", unfinishedDraft)).rejects.toMatchObject({
       name: "ApiError",
       status,
-      message: "Nope.",
+      message: `PUT /api/v1/saved-queries/sq-1 failed: ${status} STATUS: Nope.`,
     });
   });
 

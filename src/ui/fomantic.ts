@@ -99,13 +99,15 @@ export function onDropdownChange(container: HTMLElement, handler: (el: HTMLEleme
     });
 }
 
-/** A small, self-dismissing message at the top of the page. */
-export function showToast(message: string): void {
+/** A small, self-dismissing message at the top of the page. `kind` sets its
+ *  colour: green for good news, red for a failure. */
+export function showToast(message: string, kind: "success" | "error" = "success"): void {
   // preserveHTML: false shows the message as plain text, never as markup.
   $("body").toast({
     message,
-    class: "success",
-    displayTime: 3000,
+    class: kind,
+    // An error stays longer: it has to be read, not just noticed.
+    displayTime: kind === "error" ? 6000 : 3000,
     showProgress: false,
     preserveHTML: false,
   });
