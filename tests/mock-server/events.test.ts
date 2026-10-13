@@ -3,7 +3,7 @@ import { eventGuid, toEventResponse } from "../../mock-server/events";
 
 describe("eventGuid", () => {
   it("is a GUID made from the numeric id, the same every time", () => {
-    expect(eventGuid(26)).toBe("00000000-0000-4000-8000-00000000001a");
+    expect(eventGuid(26)).toBe("0000001a-0000-4000-8000-000000000000");
     expect(eventGuid(26)).toBe(eventGuid(26));
   });
 });

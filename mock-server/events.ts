@@ -3,11 +3,13 @@ import type { Entryset } from "./vehicleData";
 
 /**
  * The GUID the mock gives an event. Made from its numeric id, so it is the
- * same on every run and in every test. (The real backend reads the id from a
- * metadata individual; the mock data has none, so it makes one up.)
+ * same on every run and in every test. The id leads: the panel shows only the
+ * first 8 characters, and this way they tell mock rows apart, like the random
+ * start of a real GUID. (The real backend reads the id from a metadata
+ * individual; the mock data has none, so it makes one up.)
  */
 export function eventGuid(id: number): string {
-  return `00000000-0000-4000-8000-${id.toString(16).padStart(12, "0")}`;
+  return `${id.toString(16).padStart(8, "0")}-0000-4000-8000-000000000000`;
 }
 
 /** An event in the shape POST …/filter/execute answers with. The sample data
