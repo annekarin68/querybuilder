@@ -56,6 +56,30 @@ export const MASCOT = {
 } as const;
 
 /**
+ * Who wrote a text in the data dictionary. Each description starts with a
+ * small logo, and the label is its hover text and its text for screen readers
+ * (users found the words "Third-party:" confusing, 2026-10-13).
+ *
+ * - `ours`: the backend's own, always-correct `comment`. By default the app's
+ *   own logo (`MASCOT.neutral`), so a deployment that replaces that file gets
+ *   its logo here too.
+ * - `thirdParty`: the third party's `description`, which may contain errors.
+ *   A neutral placeholder by default: put the company's logo in
+ *   public/sources/third-party.svg (same rules as the mascot files: a
+ *   self-contained plain SVG), or point `logo` at another file in public/,
+ *   and name the company in `label`.
+ */
+export const TEXT_SOURCES = {
+  ours: { logo: "/pickle/logo.svg", label: "Our description" },
+  thirdParty: {
+    logo: "/sources/third-party.svg",
+    label: "Third-party description; may contain errors",
+  },
+} as const;
+
+export type TextSource = keyof typeof TEXT_SOURCES;
+
+/**
  * The hidden second set of faces: five clicks on the logo switch to it (and
  * five more switch back), for this page load only. Replace the files in
  * public/pickle/ to change it. Same keys and fallbacks as `MASCOT`: a face

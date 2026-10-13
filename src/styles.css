@@ -1284,6 +1284,14 @@ body {
 .qb-doc-count {
   color: var(--qb-muted);
 }
+/* Who wrote a text (docsSidebar.ts sourceLogo): a small logo in front of it,
+   on the text's first line. */
+.qb-source-logo {
+  width: 14px;
+  height: 14px;
+  margin-right: 0.35em;
+  vertical-align: -2px;
+}
 .qb-docs-hint {
   margin: 0 0 0.5rem;
   font-size: 0.8rem;

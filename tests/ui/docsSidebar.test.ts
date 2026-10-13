@@ -5,10 +5,12 @@ import {
   escapeClosesDocs,
   facetHtml,
   groupHtml,
+  sourceLogo,
   valuesHeadingId,
 } from "../../src/ui/docsSidebar";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { parseDragItem } from "../../src/query/drop";
+import { TEXT_SOURCES } from "../../src/config";
 import type { Facet } from "../../src/model";
 
 const facet: Facet = {
@@ -306,5 +308,62 @@ describe("escapeClosesDocs", () => {
     expect(escapeClosesDocs({ ...closing, floating: false })).toBe(false);
     expect(escapeClosesDocs({ ...closing, collapsed: true })).toBe(false);
     expect(escapeClosesDocs({ ...closing, focusInDocs: false })).toBe(false);
+  });
+});
+
+describe("source logos", () => {
+  const facetWithField = (over: Partial<Facet["fields"][number]>): Facet => ({
+    id: "thing",
+    name: "Thing",
+    tags: ["t"],
+    group: "",
+    comment: "",
+    description: "",
+    eventCount: 1,
+    fields: [
+      {
+        id: "size",
+        name: "size",
+        typeName: "BIGINT",
+        comment: "",
+        description: "",
+        values: [],
+        ...over,
+      },
+    ],
+  });
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  it("a logo names its source for screen readers and on hover", () => {
+    const html = sourceLogo("thirdParty");
+    expect(html).toContain(`src="${TEXT_SOURCES.thirdParty.logo}"`);
+    expect(html).toContain(`alt="${TEXT_SOURCES.thirdParty.label}"`);
+    expect(html).toContain(`title="${TEXT_SOURCES.thirdParty.label}"`);
+  });
+
+  it("an opened field's texts start with their source's logo, without the word 'Third-party:'", () => {
+    const html = facetHtml(
+      facetWithField({ comment: "Ours.", description: "Theirs." }),
+      10,
+      null,
+      "t",
+    );
+    expect(html).toContain(`${sourceLogo("ours")}Ours.`);
+    expect(html).toContain(`${sourceLogo("thirdParty")}Theirs.`);
+    expect(html).not.toContain("Third-party:");
+  });
+
+  it("a facet's own texts and its third-party group get logos too", () => {
+    const html = facetHtml(
+      { ...facetWithField({}), comment: "Ours.", description: "Theirs.", group: "grp" },
+      10,
+      null,
+      "t",
+    );
+    expect(html).toContain(`${sourceLogo("ours")}Ours.`);
+    expect(html).toContain(`${sourceLogo("thirdParty")}Theirs.`);
+    expect(html).toMatch(
+      new RegExp(`qb-doc-source[^>]*>${escapeRegExp(sourceLogo("thirdParty"))}Group:`),
+    );
   });
 });

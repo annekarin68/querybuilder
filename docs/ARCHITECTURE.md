@@ -361,8 +361,9 @@ src/
                        User, Compliance, SavedQuery / SavedQueryDraft ("Data model").
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data. Empty by
                        default: HIDDEN_ROW_BADGES, ROW_COLUMNS. Also MASCOT (the pickle files),
-                       EASTER_EGG_MASCOT (the easter-egg faces) and EASTER_EGG_TOAST (the
-                       reduced-motion toast text).
+                       EASTER_EGG_MASCOT (the easter-egg faces), EASTER_EGG_TOAST (the
+                       reduced-motion toast text) and TEXT_SOURCES (the logos in front of the
+                       dictionary's texts).
   setup-jquery.ts      Publishes window.jQuery before Fomantic's JS evaluates ("The bootstrap wrinkle").
   styles.css           Theme and layout on top of Fomantic; colours and sizes are tokens at the top
                        ("Pickle theme and mascot").
@@ -438,6 +439,7 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   savedQueries.ts      The in-memory saved-queries store and its body check ("Saved queries").
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
+public/sources/third-party.svg  The third party's logo in the dictionary (a placeholder; replace it).
 public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.svg, loading.svg, and the
                        easter-egg faces egg-logo.svg, egg-disappointed.svg, egg-loading.svg — replaceable
                        files, named in `MASCOT` and `EASTER_EGG_MASCOT`, the favicon in `index.html`
@@ -1175,8 +1177,9 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    alphabetical, a facet listed under each of its tags, untagged facets last in
    a section that cannot be dragged.
 2. **Facet cards** — name and field count in the header; opened, the tags, the
-   third-party group (if not blank), `comment`, `description` and "In N events
-   (x%)", then the fields.
+   third-party group (if not blank), `comment` and `description`, each starting
+   with a small logo saying who wrote it (`TEXT_SOURCES`, below), and "In N
+   events (x%)", then the fields.
 3. **Field rows** — name, type and a one-line blurb (`comment`, else
    `description`) in plain sight, not hidden in a hover; opened, the full
    texts and the field's known values. A field with no comment, no description
@@ -1202,6 +1205,14 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
    **Decided 2026-10-08:** a labelled list instead of chips because users
    took the chips for tags; the wording was chosen by the maintainers, and the
    heading and the hint use the same words so there is one name for the thing.
+
+**Who wrote a text.** A comment (ours, always correct) starts with our logo; a
+description and a group (the third party's, which may contain errors) start with
+the third party's logo (`sourceLogo`, `TEXT_SOURCES` in `src/config.ts`). The
+logo's label is its hover text and its `alt`, so a screen reader reads it before
+the text. **Decided 2026-10-13:** logos replaced the words "Third-party:", which
+confused users. The comment also stays italic, so the two can be told apart
+without the logo.
 
 Blank texts are `""` in the model ("Data model"), and blank parts are left
 out. The panel header has a **Hide dictionary** button, a one-line hint (`DOCS_HINT`:
@@ -1308,7 +1319,8 @@ column right away. Where the column is not cut, the two widths are equal and a
 press moves it exactly 1rem.
 
 Nothing needed to read the dictionary is behind a hover: names, types and
-blurbs are visible text, and a `title` only labels a button or repeats a number.
+blurbs are visible text, and a `title` only labels a button, repeats a number, or names a text's source
+(also in its `alt`).
 
 **Known limitation, not tested in Firefox.** The tag section's grip sits inside
 its `<summary>`. Chromium starts the drag from it; Firefox is known to treat a
@@ -1983,6 +1995,11 @@ else.
 **…hide a badge, or add a column to the Matching events rows?** Edit
 `HIDDEN_ROW_BADGES` / `ROW_COLUMNS` in `src/config.ts` — the only place
 `src/` may name the backend's data.
+
+**…show the third party's logo in the dictionary?** Replace
+`public/sources/third-party.svg` (a self-contained plain SVG, see "Pickle theme
+and mascot") and put the company's name in `TEXT_SOURCES.thirdParty.label` in
+`src/config.ts`.
 
 **…see how the app copes with a failing backend?** Start the mock with
 `MOCK_HTTP_ERRORS` (see "Mock server"), e.g.

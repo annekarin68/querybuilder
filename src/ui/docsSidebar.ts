@@ -4,7 +4,19 @@ import { escapeHtml, paint } from "./panel";
 import { compact, countLabel, displayLabel, exact, matchRatio } from "./format";
 import { filterStatus, groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
+import { TEXT_SOURCES, type TextSource } from "../config";
 import { findField, type FieldCatalog } from "../query/fieldCatalog";
+
+/**
+ * The small logo in front of a text, saying who wrote it (`TEXT_SOURCES` in
+ * src/config.ts). Its label is both the hover text and the `alt`, so a
+ * screen reader reads "Third-party description; may contain errors" before
+ * the text. Not draggable: the row's grip is what drags.
+ */
+export function sourceLogo(source: TextSource): string {
+  const { logo, label } = TEXT_SOURCES[source];
+  return `<img class="qb-source-logo" src="${escapeHtml(logo)}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="14" height="14" draggable="false" />`;
+}
 
 /** Total events across every loaded database — the denominator for a
  * facet's percentage. The backend sends no percentage: a Facet only carries
@@ -132,8 +144,8 @@ function fieldHtml(
         ${blurb ? `<span class="qb-doc-field-blurb">${escapeHtml(blurb)}</span>` : ""}
       </summary>
       <div class="qb-doc-field-body">
-        ${f.comment ? `<p class="qb-doc-comment">${escapeHtml(f.comment)}</p>` : ""}
-        ${f.description ? `<p class="qb-doc-desc" title="Third-party description; may contain errors">Third-party: ${escapeHtml(f.description)}</p>` : ""}
+        ${f.comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(f.comment)}</p>` : ""}
+        ${f.description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(f.description)}</p>` : ""}
         ${values}
       </div>
     </details>`;
@@ -162,9 +174,9 @@ export function facetHtml(
       </summary>
       <div class="qb-doc-facet-body">
         ${tags}
-        ${group ? `<p class="qb-doc-source" title="Third-party group">Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
-        ${comment ? `<p class="qb-doc-comment">${escapeHtml(comment)}</p>` : ""}
-        ${description ? `<p class="qb-doc-desc">${escapeHtml(description)}</p>` : ""}
+        ${group ? `<p class="qb-doc-source">${sourceLogo("thirdParty")}Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
+        ${comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(comment)}</p>` : ""}
+        ${description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(description)}</p>` : ""}
         <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>
         <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog, section)).join("")}</div>
       </div>
