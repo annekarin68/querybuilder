@@ -6,7 +6,7 @@ import type { DatabaseResult } from "../../src/model";
 import type { Condition, Group } from "../../src/query/types";
 import { createMockServer } from "../../mock-server/server";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
-import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
+import { unfinishedDraft, unfinishedTree } from "../savedQueryFixtures";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -165,7 +165,7 @@ describe("saved queries through the client", () => {
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedRequest.query,
+      query: unfinishedTree,
     });
     expect(await client.listSavedQueries()).toEqual([created]);
 
@@ -184,7 +184,7 @@ describe("saved queries through the client", () => {
     await client.createSavedQuery(unfinishedDraft);
     await expect(client.createSavedQuery(unfinishedDraft)).rejects.toMatchObject({
       status: 409,
-      message: 'A saved query called "Slow trips" already exists.',
+      message: expect.stringContaining('A saved query called "Slow trips" already exists.'),
     });
     await expect(client.deleteSavedQuery("nope")).rejects.toMatchObject({ status: 404 });
     await expect(client.updateSavedQuery("a/b", unfinishedDraft)).rejects.toMatchObject({

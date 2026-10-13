@@ -39,4 +39,10 @@ export interface Issue {
    * shown in red.
    */
   kind: "incomplete" | "invalid";
+  /**
+   * True for a problem a database found (src/query/issues.ts, serverIssues).
+   * Those are always highlighted, whatever their kind: unlike a row the user
+   * has not finished, nothing else on screen tells the user about them.
+   */
+  fromServer?: boolean;
 }

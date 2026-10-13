@@ -68,9 +68,11 @@ export type Scalar = string | number | boolean;
 
 /** One record: something that happened, holding values for some facets. */
 export interface EventRecord {
-  id: number;
-  /** Keyed by `Facet.id`, then by `Field.id` within that facet. */
-  values: Record<string, Record<string, Scalar>>;
+  /** The event's own id (a GUID): long, so the panel shows its start. */
+  id: string;
+  /** Keyed by `Facet.id`: one entry per occurrence of the facet in this event
+   *  (usually one), each keyed by `Field.id` within that facet. */
+  values: Record<string, Record<string, Scalar>[]>;
 }
 
 /** One problem a database found in the query. */
@@ -110,17 +112,17 @@ export interface User {
   name: string;
 }
 
-/** Whether this session has given a compliance reason. */
+/** Whether this session has a compliance log. */
 export type Compliance =
   | { status: "required" }
   | {
       status: "acknowledged";
-      reason: string;
-      /** When the reason was given (an ISO timestamp), if the backend says. */
-      givenAt: string | null;
+      /** The session's compliance log as the backend sent it, formatted as
+       *  indented JSON for display. The frontend reads no field of it. */
+      log: string;
     };
 
-/** A query the user saved (GET/POST/PUT …/saved-queries). It may be unfinished
+/** A query the user saved (GET/POST/PUT …/filter/saved). It may be unfinished
  *  or invalid: saving never checks what the query means. */
 export interface SavedQuery {
   /** Made by the server (not a backend `label`); never shown to the user. */

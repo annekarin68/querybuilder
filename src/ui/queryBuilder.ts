@@ -42,7 +42,6 @@ import { queryToText } from "../query/summary";
 import { escapeHtml, optionsHtml, paint } from "./panel";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { countLabel } from "./format";
-import { LOGIN_FIRST_NOTE } from "./dataPreview";
 import { readValueControl, renderValueControl } from "./valueControl";
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
@@ -55,23 +54,31 @@ interface BuilderCtx {
 }
 
 /**
- * Unfinished parts are quiet grey hints — the user simply isn't done yet. Only
- * an invalid query is shown in red. Both kinds still block running (validate.ts).
- * Issues come from validate.ts and from the backend (src/query/issues.ts).
+ * The issues under a row or group. The user's own unfinished parts are quiet
+ * grey hints: they simply aren't done yet. Anything the databases found is
+ * highlighted with an icon in the warning colour even when it is only
+ * "incomplete" (such as "Group contains no valid conditions."): nothing else
+ * on screen says it, and users missed it in grey (2026-10-13). Invalid is red.
+ * Every kind blocks running (validate.ts). Issues come from validate.ts and
+ * from the backend (src/query/issues.ts).
  */
-function issuesHtml(nodeId: string, issues: Issue[]): string {
+export function issuesHtml(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
-  const text = (kind: Issue["kind"]) =>
+  const text = (pick: (i: Issue) => boolean) =>
     mine
-      .filter((i) => i.kind === kind)
+      .filter(pick)
       .map((i) => escapeHtml(i.message))
       .join(" ");
-  const incomplete = text("incomplete");
-  const invalid = text("invalid");
+  const hint = text((i) => i.kind === "incomplete" && !i.fromServer);
+  const warning = text((i) => i.kind === "incomplete" && i.fromServer === true);
+  const invalid = text((i) => i.kind === "invalid");
   return (
-    (incomplete ? `<div class="qb-hint">${incomplete}</div>` : "") +
+    (hint ? `<div class="qb-hint">${hint}</div>` : "") +
+    (warning
+      ? `<div class="qb-server-warning"><i class="exclamation triangle icon" aria-hidden="true"></i>${warning}</div>`
+      : "") +
     (invalid
-      ? `<div class="qb-invalid"><i class="exclamation circle icon"></i>${invalid}</div>`
+      ? `<div class="qb-invalid"><i class="exclamation circle icon" aria-hidden="true"></i>${invalid}</div>`
       : "")
   );
 }
@@ -373,15 +380,13 @@ export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog)
   return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
 }
 
-/** The id of the logged-out note, which both buttons point at (aria-describedby). */
-const LOGIN_NOTE_ID = "qb-saved-login-note";
-
 /**
  * The query card's title row: "Query", the open saved query's name and
  * "(edited)" once the query or the database selection differs from what was
  * last saved or opened, then **Save…** and **Saved queries** (docs/ARCHITECTURE.md,
- * "Saved queries — `savedQueries.ts`"). A logged-out user also gets the note
- * "You'll be asked to log in first." under the buttons, as Run has.
+ * "Saved queries — `savedQueries.ts`"). A logged-out user who presses either
+ * button is asked to log in first, in the saved-queries dialog (`loginHtml`,
+ * savedQueries.ts).
  *
  * The two buttons only exist once startup has loaded the databases and the
  * field catalog: start() sets the query and selection when it ends, so a saved
@@ -397,23 +402,14 @@ export function queryTitleHtml(state: AppState): string {
       ? ` <span class="qb-muted">(edited)</span>`
       : "";
   const drawn = Boolean(state.catalog && state.databases);
-  // Run says the same before it sends a logged-out user to login. A redirect
-  // without a warning surprised users (maintainer's decision, 2026-10-08).
-  // Advisory only: the buttons still work, and app.ts reacts to the real 401.
-  const warnsLogin = drawn && state.auth.status === "anonymous";
-  const describedBy = warnsLogin ? ` aria-describedby="${LOGIN_NOTE_ID}"` : "";
   const buttons = drawn
-    ? `<button type="button" class="ui mini basic button" data-action="open-save-dialog" aria-haspopup="dialog"${describedBy}>Save…</button>
-         <button type="button" class="ui mini basic button" data-action="open-saved-list" aria-haspopup="dialog"${describedBy}>Saved queries</button>`
-    : "";
-  const note = warnsLogin
-    ? `<span class="qb-muted qb-login-note" id="${LOGIN_NOTE_ID}">${escapeHtml(LOGIN_FIRST_NOTE)}</span>`
+    ? `<button type="button" class="ui mini basic button" data-action="open-save-dialog" aria-haspopup="dialog">Save…</button>
+         <button type="button" class="ui mini basic button" data-action="open-saved-list" aria-haspopup="dialog">Saved queries</button>`
     : "";
   return `<div class="qb-query-head">
       <h2 class="qb-card-title">Query${name}${edited}</h2>
       <span class="qb-spacer"></span>
       ${buttons}
-      ${note}
     </div>`;
 }
 
@@ -650,6 +646,14 @@ export function wireQueryBuilder(
   });
 
   container.addEventListener("dragend", unmark);
+
+  // The hover title of a value box follows what is typed: the box is only
+  // repainted when the value is committed (on change), and until then the
+  // title would show the old value.
+  container.addEventListener("input", (e) => {
+    const box = e.target;
+    if (box instanceof HTMLInputElement && box.dataset.part === "value") box.title = box.value;
+  });
 
   container.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;

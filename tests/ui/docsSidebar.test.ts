@@ -5,10 +5,12 @@ import {
   escapeClosesDocs,
   facetHtml,
   groupHtml,
+  sourceLogo,
   valuesHeadingId,
 } from "../../src/ui/docsSidebar";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { parseDragItem } from "../../src/query/drop";
+import { TEXT_SOURCES } from "../../src/config";
 import type { Facet } from "../../src/model";
 
 const facet: Facet = {
@@ -306,5 +308,123 @@ describe("escapeClosesDocs", () => {
     expect(escapeClosesDocs({ ...closing, floating: false })).toBe(false);
     expect(escapeClosesDocs({ ...closing, collapsed: true })).toBe(false);
     expect(escapeClosesDocs({ ...closing, focusInDocs: false })).toBe(false);
+  });
+});
+
+describe("source logos", () => {
+  const facetWithField = (over: Partial<Facet["fields"][number]>): Facet => ({
+    id: "thing",
+    name: "Thing",
+    tags: ["t"],
+    group: "",
+    comment: "",
+    description: "",
+    eventCount: 1,
+    fields: [
+      {
+        id: "size",
+        name: "size",
+        typeName: "BIGINT",
+        comment: "",
+        description: "",
+        values: [],
+        ...over,
+      },
+    ],
+  });
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  it("a logo names its source for screen readers and on hover", () => {
+    const html = sourceLogo("thirdParty");
+    expect(html).toContain(`src="${TEXT_SOURCES.thirdParty.logo}"`);
+    expect(html).toContain(`alt="${TEXT_SOURCES.thirdParty.label}"`);
+    expect(html).toContain(`title="${TEXT_SOURCES.thirdParty.label}"`);
+  });
+
+  it("an opened field's texts start with their source's logo, without the word 'Third-party:'", () => {
+    const html = facetHtml(
+      facetWithField({ comment: "Ours.", description: "Theirs." }),
+      10,
+      null,
+      "t",
+    );
+    expect(html).toContain(`${sourceLogo("ours")}Ours.`);
+    expect(html).toContain(`${sourceLogo("thirdParty")}Theirs.`);
+    expect(html).not.toContain("Third-party:");
+  });
+
+  it("a facet's own texts and its third-party group get logos too", () => {
+    const html = facetHtml(
+      { ...facetWithField({}), comment: "Ours.", description: "Theirs.", group: "grp" },
+      10,
+      null,
+      "t",
+    );
+    expect(html).toContain(`${sourceLogo("ours")}Ours.`);
+    expect(html).toContain(`${sourceLogo("thirdParty")}Theirs.`);
+    expect(html).toMatch(
+      new RegExp(`qb-doc-source[^>]*>${escapeRegExp(sourceLogo("thirdParty"))}Group:`),
+    );
+  });
+});
+
+describe("field rows", () => {
+  const facetWithField = (over: Partial<Facet["fields"][number]>): Facet => ({
+    id: "thing",
+    name: "Thing",
+    tags: ["t"],
+    group: "",
+    comment: "",
+    description: "",
+    eventCount: 1,
+    fields: [
+      {
+        id: "size",
+        name: "size",
+        typeName: "BIGINT",
+        comment: "",
+        description: "",
+        values: [],
+        ...over,
+      },
+    ],
+  });
+
+  it("a field with one text and no values is a plain row showing the whole text", () => {
+    const out = facetHtml(
+      facetWithField({ description: "A long text. ".repeat(20) }),
+      10,
+      null,
+      "t",
+    );
+    expect(out).toContain('class="qb-doc-field is-leaf"');
+    expect(out).toContain(`class="qb-doc-field-text">${sourceLogo("thirdParty")}A long text.`);
+    expect(out).not.toContain('<details class="qb-doc-field"');
+    expect(out).not.toContain("qb-doc-field-more");
+  });
+
+  it("a field with only our comment is a plain row too", () => {
+    const out = facetHtml(facetWithField({ comment: "Ours." }), 10, null, "t");
+    expect(out).toContain('class="qb-doc-field is-leaf"');
+    expect(out).toContain(`class="qb-doc-field-text">${sourceLogo("ours")}Ours.`);
+  });
+
+  it("a field that opens says what opening adds", () => {
+    const out = facetHtml(
+      facetWithField({ comment: "Ours.", description: "Theirs." }),
+      10,
+      null,
+      "t",
+    );
+    expect(out).toContain('<details class="qb-doc-field"');
+    expect(out).toContain(`class="qb-doc-field-blurb">${sourceLogo("ours")}Ours.`);
+    expect(out).toContain('class="qb-doc-field-more">More: third-party description</span>');
+  });
+
+  it("known values are counted in the hint and listed when opened", () => {
+    const f = facetWithField({ comment: "Ours.", values: ["3", "7"] });
+    const out = facetHtml(f, 10, buildFieldCatalog([f]), "t");
+    expect(out).toContain('class="qb-doc-field-more">More: 2 previously seen values</span>');
+    expect(out).toContain("Previously seen values (2)");
   });
 });

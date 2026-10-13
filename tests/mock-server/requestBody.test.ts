@@ -4,9 +4,9 @@ import { queryProblem } from "../../mock-server/requestBody";
 const condition = {
   kind: "condition",
   id: "c1",
-  facetId: "thing",
-  fieldId: "size",
-  operatorId: "gt",
+  facet_id: "thing",
+  field_id: "size",
+  operator_id: "gt",
   value: 3,
 };
 const group = (...children: unknown[]) => ({ kind: "group", id: "g1", operator: "AND", children });
@@ -41,18 +41,18 @@ describe("queryProblem: is this a well-formed RequestNode?", () => {
     ["an empty group", group(), "query.children must be a non-empty list."],
     [
       "a child's problem, with its path",
-      group(condition, { ...condition, fieldId: "" }),
-      "query.children[1].fieldId must be a non-empty string or null.",
+      group(condition, { ...condition, field_id: "" }),
+      "query.children[1].field_id must be a non-empty string or null.",
     ],
     [
       "no facet",
-      group({ ...condition, facetId: null }),
-      "query.children[0].facetId must be a non-empty string.",
+      group({ ...condition, facet_id: null }),
+      "query.children[0].facet_id must be a non-empty string.",
     ],
     [
       "no operator",
-      group({ ...condition, operatorId: 5 }),
-      "query.children[0].operatorId must be a non-empty string.",
+      group({ ...condition, operator_id: 5 }),
+      "query.children[0].operator_id must be a non-empty string.",
     ],
     [
       "an object value",
@@ -70,20 +70,20 @@ describe("queryProblem: is this a well-formed RequestNode?", () => {
 });
 
 describe("queryProblem: a condition about a whole facet", () => {
-  it("accepts a null fieldId", () => {
+  it("accepts a null field_id", () => {
     const node = {
       kind: "condition",
       id: "c",
-      facetId: "f",
-      fieldId: null,
-      operatorId: "present",
+      facet_id: "f",
+      field_id: null,
+      operator_id: "present",
       value: null,
     };
     expect(queryProblem(node)).toBeNull();
   });
-  it("still rejects an empty-string or numeric fieldId", () => {
-    const base = { kind: "condition", id: "c", facetId: "f", operatorId: "present", value: null };
-    expect(queryProblem({ ...base, fieldId: "" })).toMatch(/fieldId/);
-    expect(queryProblem({ ...base, fieldId: 3 })).toMatch(/fieldId/);
+  it("still rejects an empty-string or numeric field_id", () => {
+    const base = { kind: "condition", id: "c", facet_id: "f", operator_id: "present", value: null };
+    expect(queryProblem({ ...base, field_id: "" })).toMatch(/field_id/);
+    expect(queryProblem({ ...base, field_id: 3 })).toMatch(/field_id/);
   });
 });

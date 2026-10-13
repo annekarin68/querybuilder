@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { EventRecord, Facet } from "../../src/model";
-import { eventBadges, rowCell, rowGrid } from "../../src/ui/dataPreview";
+import {
+  EVENT_SAMPLE_SIZE,
+  eventBadges,
+  fieldValues,
+  idleMessage,
+  rowCell,
+  rowGrid,
+  shortId,
+} from "../../src/ui/dataPreview";
 
 function facet(id: string, group: string, tags: string[]): Facet {
   return {
@@ -26,8 +34,8 @@ const byId = new Map(
 );
 
 const event = (...facetIds: string[]): EventRecord => ({
-  id: 1,
-  values: Object.fromEntries(facetIds.map((id) => [id, {}])),
+  id: "e-1",
+  values: Object.fromEntries(facetIds.map((id) => [id, [{}]])),
 });
 
 const none = { tags: [], groups: [] };
@@ -78,8 +86,8 @@ describe("eventBadges", () => {
 
 describe("rowCell", () => {
   const e: EventRecord = {
-    id: 7,
-    values: { thing: { kind: "alpha", count: 3, on: false, blank: "", at: "not a date" } },
+    id: "e-7",
+    values: { thing: [{ kind: "alpha", count: 3, on: false, blank: "", at: "not a date" }] },
   };
 
   it("shows the configured facet.field value as text", () => {
@@ -94,18 +102,47 @@ describe("rowCell", () => {
     expect(rowCell(e, { heading: "X", facet: "thing", field: "blank" })).toBe("—");
   });
 
+  it("joins the values of several occurrences", () => {
+    const twice = { id: "e", values: { thing: [{ kind: "a" }, { kind: "b" }] } };
+    expect(rowCell(twice, { heading: "Kind", facet: "thing", field: "kind" })).toBe("a, b");
+  });
+
   it("formats datetime columns, passing unparseable values through", () => {
     const at = { heading: "At", facet: "thing", field: "at", format: "datetime" as const };
     expect(rowCell(e, at)).toBe("not a date");
-    const iso = { ...e, values: { thing: { at: "2024-11-07T08:15:00Z" } } };
+    const iso = { ...e, values: { thing: [{ at: "2024-11-07T08:15:00Z" }] } };
     expect(rowCell(iso, at)).not.toBe("2024-11-07T08:15:00Z");
     expect(rowCell(iso, at)).toMatch(/2024/);
   });
 });
 
+describe("fieldValues", () => {
+  const event: EventRecord = {
+    id: "e",
+    values: { thing: [{ size: 5, color: "red" }, { size: 5 }, { size: 7, color: "" }] },
+  };
+  it("collects a field's values from every occurrence, without blanks or repeats", () => {
+    expect(fieldValues(event, "thing", "size")).toEqual([5, 7]);
+    expect(fieldValues(event, "thing", "color")).toEqual(["red"]);
+  });
+  it("is empty for a facet or field the event lacks", () => {
+    expect(fieldValues(event, "other", "size")).toEqual([]);
+    expect(fieldValues(event, "thing", "weight")).toEqual([]);
+  });
+});
+
+describe("shortId", () => {
+  it("cuts a GUID to its first 8 characters", () => {
+    expect(shortId("6f1c2a9e-0b7d-4c55-9a43-2f0e8d1b7c10")).toBe("6f1c2a9e…");
+  });
+  it("keeps a short id as it is", () => {
+    expect(shortId("e-12")).toBe("e-12");
+  });
+});
+
 describe("rowGrid", () => {
   it("is id, badges, count with no configured columns", () => {
-    expect(rowGrid([])).toBe("3rem minmax(0, 1fr) auto");
+    expect(rowGrid([])).toBe("6rem minmax(0, 1fr) auto");
   });
 
   it("adds one track per column: fixed for dates, capped for text", () => {
@@ -114,6 +151,15 @@ describe("rowGrid", () => {
         { heading: "At", facet: "a", field: "b", format: "datetime" },
         { heading: "Kind", facet: "a", field: "c" },
       ]),
-    ).toBe("3rem 12rem minmax(0, 10rem) minmax(0, 1fr) auto");
+    ).toBe("6rem 12rem minmax(0, 10rem) minmax(0, 1fr) auto");
+  });
+});
+
+describe("idleMessage", () => {
+  it("promises a random sample of up to the sample size", () => {
+    expect(EVENT_SAMPLE_SIZE).toBe(2000);
+    expect(idleMessage("en-US")).toBe(
+      "Fetch a random sample of up to 2,000 events this query matches.",
+    );
   });
 });

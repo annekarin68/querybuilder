@@ -29,6 +29,12 @@ const PAIRS: [string, string][] = [
   ["qb-muted", "qb-surface"],
   ["qb-muted", "qb-bg"],
   ["qb-subtle", "qb-surface"],
+  // A field row's background: its "More:" hint (muted: subtle was under 4.5:1
+  // on the row's hover tint) and its text sit on it.
+  ["qb-subtle", "qb-surface-2"],
+  ["qb-muted", "qb-surface-2"],
+  // The compliance log in the account menu.
+  ["qb-text", "qb-surface-2"],
   ["qb-text-on-fill", "qb-topbar"],
   ["qb-topbar-text", "qb-topbar"],
   ["qb-topbar-muted", "qb-topbar"],
@@ -60,5 +66,19 @@ describe("pickle palette", () => {
 describe("keyboard focus indicators", () => {
   it.each(FOCUS_INDICATORS)("%s against %s meets WCAG 1.4.11 (3:1)", (indicator, neighbour) => {
     expect(ratio(token(indicator), token(neighbour))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// Not text: the statistics bars carry meaning by colour and must stand out
+// 3:1 from the empty track and the card (WCAG 1.4.11).
+const GRAPHICS: [string, string][] = [
+  ["qb-and", "qb-track"],
+  ["qb-danger", "qb-track"],
+  ["qb-danger", "qb-surface"],
+];
+
+describe("statistics bars", () => {
+  it.each(GRAPHICS)("%s against %s meets WCAG 1.4.11 (3:1)", (mark, neighbour) => {
+    expect(ratio(token(mark), token(neighbour))).toBeGreaterThanOrEqual(3);
   });
 });

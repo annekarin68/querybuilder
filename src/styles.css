@@ -49,6 +49,7 @@
   --qb-or-tint-strong: rgba(217, 160, 10, 0.17);
 
   --qb-danger: #b03a1e;
+  --qb-danger-stripe: #e7b3a4; /* the light stripes of a failed (red) bar segment */
   --qb-warn: #7d5800;
 
   --qb-radius: 6px;
@@ -573,10 +574,26 @@ body {
   letter-spacing: 0.05em;
   color: var(--qb-muted);
 }
-.qb-account-reason {
-  margin: 0 0 0.25rem;
-  font-style: italic;
-  overflow-wrap: anywhere;
+/* The compliance log, as the backend sent it (formatted JSON). Lines are never
+   wrapped: wrapped JSON is hard to read, so a long line scrolls sideways. The
+   box scrolls both ways and is focusable (tabindex in accountMenu.ts), so the
+   keyboard can scroll it. */
+.qb-account-log {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem;
+  max-height: 16rem;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 0.75rem;
+  white-space: pre;
+  color: var(--qb-text);
+  background: var(--qb-surface-2);
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+}
+.qb-account-log:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 1px;
 }
 .qb-account-meta {
   margin: 0 0 0.6rem;
@@ -958,6 +975,15 @@ body {
   font-weight: 600;
   color: var(--qb-danger);
 }
+/* A problem a database found that is "incomplete" rather than "invalid"
+   (queryBuilder.ts issuesHtml): highlighted, not a grey hint. Mustard, not
+   yellow: yellow text on the cream cards would be unreadable (about 1.5:1). */
+.qb-server-warning {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--qb-warn);
+}
 .qb-query-foot {
   margin: 0.75rem -1rem -0.75rem;
   padding: 0.5rem 1rem;
@@ -1007,11 +1033,6 @@ body {
   font-style: italic;
   font-weight: 400;
 }
-/* The logged-out note takes its own line under the title and buttons. */
-.qb-query-head .qb-login-note {
-  flex: 1 0 100%;
-  font-size: 0.8rem; /* as Run's note (.qb-run-note) */
-}
 
 /* ---- Statistics (src/ui/statsPanel.ts + format.ts) — must fit ~15rem ---- */
 .qb-stats .qb-card-title .ui.loader {
@@ -1033,37 +1054,44 @@ body {
   font-size: 0.85rem;
   color: var(--qb-muted);
 }
-.qb-stat-failed {
-  margin-top: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--qb-danger);
-}
-.qb-stat-problems {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--qb-muted);
-}
-.qb-stat-problems .ui.button {
-  margin: 0;
-}
 .qb-bar {
-  display: block;
+  display: flex;
   height: 6px;
   overflow: hidden;
   border-radius: 3px;
   background: var(--qb-track);
 }
 .qb-bar > i {
-  display: block;
+  flex: none;
   height: 100%;
   background: var(--qb-and);
 }
+/* Data from databases that failed: red with stripes, so it is told apart from
+   the green without relying on colour (WCAG 1.4.1). It sits at the right end. */
+.qb-bar > .qb-bar-failed,
+.qb-bar.is-failed {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--qb-danger) 0 3px,
+    var(--qb-danger-stripe) 3px 5px
+  );
+}
+.qb-bar > .qb-bar-failed {
+  margin-left: auto;
+}
 .qb-stat-headline .qb-bar {
+  height: 10px; /* tall enough for the stripes to show */
   margin-top: 0.4rem;
+}
+.qb-db-failed-icon.icon {
+  margin: 0;
+  color: var(--qb-danger);
+}
+.qb-show-problem.ui.button {
+  margin: 0 0 0.6rem;
+}
+.qb-show-problem .icon {
+  color: var(--qb-warn);
 }
 .qb-stat-subtitle {
   margin: 0.25rem 0 0.35rem;
@@ -1096,8 +1124,23 @@ body {
   font-size: 0.75rem;
   color: var(--qb-muted);
 }
-.qb-db-error {
+/* Why a database failed (statsPanel.ts failureRowHtml): one line under its red
+   bar, cut off with "…"; the row's tooltip holds all of it. Dark red like the
+   bar, so it reads as part of the failure (--qb-danger passes AA on the card). */
+.qb-db-reason {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
   color: var(--qb-danger);
+}
+/* A database that did not run the query because the query has a problem
+   (notRunRowHtml): an empty bar and a mustard warning icon, not red, because
+   the database did not fail. */
+.qb-db-not-run-icon.icon {
+  margin: 0;
+  color: var(--qb-warn);
 }
 .qb-stat-pending {
   display: flex;
@@ -1154,7 +1197,7 @@ body {
 .qb-event-row summary {
   display: grid;
   /* Set inline by dataPreview.ts from the configured ROW_COLUMNS. */
-  grid-template-columns: var(--qb-er-grid, 3rem minmax(0, 1fr) auto);
+  grid-template-columns: var(--qb-er-grid, 6rem minmax(0, 1fr) auto);
   gap: 0.75rem;
   align-items: center;
   padding: 0.5rem 0.75rem;
@@ -1275,6 +1318,7 @@ body {
 .qb-doc-count {
   margin: 0.25rem 0;
   font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 .qb-doc-comment {
   font-style: italic;
@@ -1282,6 +1326,14 @@ body {
 }
 .qb-doc-count {
   color: var(--qb-muted);
+}
+/* Who wrote a text (docsSidebar.ts sourceLogo): a small logo in front of it,
+   on the text's first line. */
+.qb-source-logo {
+  width: 14px;
+  height: 14px;
+  margin-right: 0.35em;
+  vertical-align: -2px;
 }
 .qb-docs-hint {
   margin: 0 0 0.5rem;
@@ -1377,11 +1429,20 @@ body {
 }
 .qb-doc-field-blurb {
   flex: 1 0 100%;
+  /* The 100% basis must include the indent below, or the text sticks out of
+     the row by that much. RULE: an element inside a <details> body that has
+     width 100% plus padding needs `box-sizing: border-box`. Why: the
+     <details> content wrapper (::details-content) is not matched by
+     Fomantic's `* { box-sizing: inherit }` reset, so its descendants fall
+     back to content-box (observed in Chromium). */
+  box-sizing: border-box;
   /* Lines up under the field name: the row's padding (0.5rem) + this = the name's
      left edge (chevron + grip + their gaps; measured in the browser). */
   padding-left: 3rem;
   font-size: 0.8rem;
   color: var(--qb-muted);
+  /* A long word (an identifier, a URL) breaks instead of widening the row. */
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1389,6 +1450,29 @@ body {
 }
 .qb-doc-field[open] .qb-doc-field-blurb {
   display: none; /* the full text is in the body below */
+}
+/* A plain field row's only text, in full: nothing is hidden behind an arrow,
+   so nothing may be cut off either. Same indent as the blurb. */
+.qb-doc-field-text {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  padding-left: 3rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+  overflow-wrap: anywhere;
+}
+/* What opening a field adds ("More: 12 previously seen values"): says that the
+   arrow shows something new. Gone once the row is open. */
+.qb-doc-field-more {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  padding-left: 3rem;
+  font-size: 0.72rem;
+  /* Muted, not subtle: subtle is under 4.5:1 on the row's hover tint. */
+  color: var(--qb-muted);
+}
+.qb-doc-field[open] .qb-doc-field-more {
+  display: none;
 }
 .qb-doc-field-body {
   /* Starts at the field name's left edge (3.5rem from the row's edge, as above). */
@@ -1617,23 +1701,29 @@ details[open] > summary > .qb-chevron {
   width: 28px;
   height: 28px;
   cursor: pointer;
-  transform-origin: 50% 90%;
+  /* Turns around its middle: the normal logo may be round. */
+  transform-origin: 50% 50%;
 }
+/* Busy: the loading face turns, so the user sees the app is working. Done
+   here, not inside the SVG: the files are meant to be replaced, and an
+   animation inside one would be lost with it. */
 .qb-logo[data-state="loading"] {
-  animation: qb-wobble 1s ease-in-out infinite;
+  animation: qb-spin 1.2s linear infinite;
 }
-@keyframes qb-wobble {
-  0%,
-  100% {
-    transform: rotate(-8deg);
-  }
-  50% {
-    transform: rotate(8deg);
+@keyframes qb-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
+/* No turning for people who ask for less motion; a slow fade still says "busy". */
 @media (prefers-reduced-motion: reduce) {
   .qb-logo[data-state="loading"] {
-    animation: none;
+    animation: qb-pulse 1.6s ease-in-out infinite alternate;
+  }
+}
+@keyframes qb-pulse {
+  to {
+    opacity: 0.45;
   }
 }
 

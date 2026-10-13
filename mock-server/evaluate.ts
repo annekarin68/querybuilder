@@ -89,7 +89,7 @@ export function utcSpan(v: unknown): [number, number] | null {
 function dateMatches(c: RequestCondition, v: Row[string] | undefined): boolean | undefined {
   const t = typeof v === "string" ? Date.parse(v) : NaN;
   if (Number.isNaN(t)) return undefined;
-  if (c.operatorId === "between") {
+  if (c.operator_id === "between") {
     if (!Array.isArray(c.value) || c.value.length !== 2) return undefined;
     const from = utcSpan(c.value[0]);
     const to = utcSpan(c.value[1]);
@@ -98,7 +98,7 @@ function dateMatches(c: RequestCondition, v: Row[string] | undefined): boolean |
   const span = utcSpan(c.value);
   if (!span) return undefined;
   const [start, end] = span;
-  switch (c.operatorId) {
+  switch (c.operator_id) {
     case "eq":
       return t >= start && t < end;
     case "neq":
@@ -124,16 +124,16 @@ function rowHasFacet(row: Row, facetId: string): boolean {
 }
 
 function conditionMatches(c: RequestCondition, row: Row): boolean {
-  if (c.fieldId === null) {
+  if (c.field_id === null) {
     // A condition about the facet itself: only presence makes sense.
-    if (c.operatorId === "present") return rowHasFacet(row, c.facetId);
-    if (c.operatorId === "absent") return !rowHasFacet(row, c.facetId);
+    if (c.operator_id === "present") return rowHasFacet(row, c.facet_id);
+    if (c.operator_id === "absent") return !rowHasFacet(row, c.facet_id);
     return false;
   }
-  const v = row[rowKey(c.facetId, c.fieldId)];
+  const v = row[rowKey(c.facet_id, c.field_id)];
   const asDate = dateMatches(c, v);
   if (asDate !== undefined) return asDate;
-  switch (c.operatorId) {
+  switch (c.operator_id) {
     case "eq":
       return v === c.value;
     case "neq":
@@ -234,10 +234,10 @@ export function queryErrors(node: RequestNode): StatsErrorMessage[] {
     const errors = perChild.flat();
     const everyChildFailed =
       node.children.length > 0 &&
-      node.children.every((child, i) => perChild[i]!.some((e) => e.nodeId === child.id));
+      node.children.every((child, i) => perChild[i]!.some((e) => e.node_id === child.id));
     if (everyChildFailed) {
       errors.push({
-        nodeId: node.id,
+        node_id: node.id,
         kind: "incomplete",
         message: "Group contains no valid conditions.",
       });
@@ -249,13 +249,15 @@ export function queryErrors(node: RequestNode): StatsErrorMessage[] {
   if (!tooLong) return [];
   return [
     {
-      nodeId: node.id,
+      node_id: node.id,
       kind: "invalid",
       message: `Text is too long (at most ${MAX_TEXT_LENGTH} characters).`,
     },
   ];
 }
 
+/** What the mock worked out for one database; `buildStatsLine` puts it on the
+ *  wire. camelCase because it is the mock's own, not the contract's. */
 export interface DatabaseOutcome {
   label: string;
   /** Present only on success. */
@@ -264,16 +266,16 @@ export interface DatabaseOutcome {
   fail?: { errorMessages: StatsErrorMessage[]; infoMessages: string[] };
 }
 
-/** Turns one database's raw outcome into the StatsResponse line /api/stats streams for it. */
+/** Turns one database's raw outcome into the StatsResponse line /api/filter/validate streams for it. */
 export function buildStatsLine(outcome: DatabaseOutcome): StatsResponse {
   if (outcome.fail) {
     const line: StatsResponse = {
       label: outcome.label,
       success: false,
-      errorMessages: outcome.fail.errorMessages,
-      infoMessages: outcome.fail.infoMessages,
+      error_messages: outcome.fail.errorMessages,
+      info_messages: outcome.fail.infoMessages,
     };
     return line;
   }
-  return { label: outcome.label, success: true, matchCount: outcome.matchCount };
+  return { label: outcome.label, success: true, match_count: outcome.matchCount };
 }

@@ -69,7 +69,7 @@ function ready(query = runnableQuery()): Partial<AppState> {
   };
 }
 
-const events: EventRecord[] = [{ id: 1, values: {} }];
+const events: EventRecord[] = [{ id: "e-1", values: {} }];
 
 /** What the server answers for a saved draft. */
 function savedFrom(draft: SavedQueryDraft, id: string): SavedQuery {
@@ -97,8 +97,7 @@ function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
     getMe: vi.fn(async () => ({ name: "pat" })),
     getComplianceStatus: vi.fn(async () => ({
       status: "acknowledged" as const,
-      reason: "audit",
-      givenAt: "2026-09-23T10:00:00Z",
+      log: '{\n  "reason": "audit"\n}',
     })),
     getStats: vi.fn(async () => {}),
     runQuery: vi.fn(async () => events),
@@ -116,8 +115,9 @@ function setup(state: Partial<AppState> = {}, api: AppApi = fakeApi()) {
   const store = createStore({ ...initialState, ...state });
   const navigate = vi.fn();
   const announce = vi.fn();
-  const app = createApp({ store, api, navigate, announce });
-  return { store, api, navigate, announce, app };
+  const showError = vi.fn();
+  const app = createApp({ store, api, navigate, announce, showError });
+  return { store, api, navigate, announce, showError, app };
 }
 
 /** A promise the test settles by hand, to control when a response "arrives". */
@@ -208,7 +208,7 @@ describe("runPreview (the Run query button)", () => {
     expect(takePendingQuery()).not.toBeNull();
   });
 
-  it("a 403 for another reason shows its message instead of redirecting", async () => {
+  it("a 403 for another reason shows a plain message instead of redirecting", async () => {
     const api = fakeApi({
       runQuery: vi.fn(async () => Promise.reject(new ApiError(403, "Not allowed here."))),
     });
@@ -216,10 +216,13 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
-    expect(store.getState().preview).toEqual({ status: "error", error: "Not allowed here." });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "You don't have permission to do this. If you think you should, contact support.",
+    });
   });
 
-  it("a 403 whose compliance check fails shows the 403's message", async () => {
+  it("a 403 whose compliance check fails shows the 403's plain message", async () => {
     const api = fakeApi({
       runQuery: vi.fn(async () => Promise.reject(new ApiError(403, "Forbidden."))),
       getComplianceStatus: vi.fn(async () => Promise.reject(new Error("down"))),
@@ -228,7 +231,10 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
-    expect(store.getState().preview).toEqual({ status: "error", error: "Forbidden." });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "You don't have permission to do this. If you think you should, contact support.",
+    });
   });
 
   it("ignores a 403 if the query changed while compliance was being checked", async () => {
@@ -262,7 +268,10 @@ describe("runPreview (the Run query button)", () => {
     const { app, store } = setup(ready(), api);
     app.runPreview();
     await flushPromises();
-    expect(store.getState().preview).toEqual({ status: "error", error: "boom" });
+    expect(store.getState().preview).toEqual({
+      status: "error",
+      error: "Something went wrong. Try again; if it keeps happening, reload the page.",
+    });
   });
 
   // The panel repaints out of sight of a screen-reader user, and their focus
@@ -280,7 +289,9 @@ describe("runPreview (the Run query button)", () => {
     const { app, announce } = setup(ready(), api);
     app.runPreview();
     await flushPromises();
-    expect(announce).toHaveBeenLastCalledWith("Could not load events: boom");
+    expect(announce).toHaveBeenLastCalledWith(
+      "Could not load events: Something went wrong. Try again; if it keeps happening, reload the page.",
+    );
   });
 
   it("says nothing about a run the query has moved on from", async () => {
@@ -379,7 +390,7 @@ describe("statistics", () => {
     calls[0]!.onLine(failed("alpha", dbError("c1", "Too long.")));
     calls[0]!.onLine(failed("beta", dbError("c1", "Too long.")));
     expect(store.getState().serverIssues).toEqual([
-      { nodeId: "c1", message: "Too long.", kind: "invalid" },
+      { nodeId: "c1", message: "Too long.", kind: "invalid", fromServer: true },
     ]);
     // The second line reports the same problem: only `stats` is written, so
     // the query builder doesn't repaint.
@@ -417,7 +428,10 @@ describe("statistics", () => {
     app.onQueryChange(runnableQuery(5));
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     await flushPromises();
-    expect(store.getState().stats).toMatchObject({ status: "error", error: "down" });
+    expect(store.getState().stats).toMatchObject({
+      status: "error",
+      error: "Something went wrong. Try again; if it keeps happening, reload the page.",
+    });
   });
 
   it("fetches again on retryStats after a failed request", async () => {
@@ -495,7 +509,7 @@ describe("logging out and invalidating compliance", () => {
     ...ready(),
     preview: { status: "ok", events },
     auth: { status: "authenticated", user: { name: "pat" } },
-    compliance: { status: "acknowledged", reason: "audit", givenAt: null },
+    compliance: { status: "acknowledged", log: "{}" },
   };
 
   it("logout clears the preview at once, even if logging out fails", async () => {
@@ -506,6 +520,25 @@ describe("logging out and invalidating compliance", () => {
     await flushPromises();
     expect(store.getState().auth.status).toBe("authenticated");
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it("says so when logging out fails", async () => {
+    const api = fakeApi({ logout: vi.fn(async () => Promise.reject(new ApiError(500, "x"))) });
+    const { app, store, showError } = setup(signedIn, api);
+    app.onLogout();
+    await flushPromises();
+    expect(store.getState().auth.status).toBe("authenticated");
+    expect(showError).toHaveBeenCalledWith("Couldn't log out. Try again.");
+  });
+
+  it("says so when invalidating the compliance reason fails", async () => {
+    const api = fakeApi({
+      invalidateCompliance: vi.fn(async () => Promise.reject(new ApiError(500, "x"))),
+    });
+    const { app, showError } = setup(signedIn, api);
+    app.onInvalidateCompliance();
+    await flushPromises();
+    expect(showError).toHaveBeenCalledWith("Couldn't invalidate the compliance reason. Try again.");
   });
 
   it("a successful logout signs out and clears compliance", async () => {
@@ -541,7 +574,10 @@ describe("start", () => {
     expect(s.query.children).toHaveLength(1);
     expect(s.issues).toEqual([expect.objectContaining({ kind: "incomplete" })]);
     expect(s.auth).toMatchObject({ status: "authenticated", user: { name: "pat" } });
-    expect(s.compliance).toMatchObject({ status: "acknowledged", reason: "audit" });
+    expect(s.compliance).toMatchObject({
+      status: "acknowledged",
+      log: expect.stringContaining("audit"),
+    });
   });
 
   it("logs login and compliance failures and carries on", async () => {
@@ -904,6 +940,24 @@ describe("dropping docs items", () => {
     expect(store.getState().query.children[0]).toMatchObject({ facetId: "thing", fieldId: "size" });
   });
 
+  it("Add all on a tag puts one ALL group at the end of the root and says so", () => {
+    const tagged: Facet[] = [
+      { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
+      { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
+    ];
+    const { app, store, announce } = setup({
+      ...ready(),
+      facets: tagged,
+      catalog: buildFieldCatalog(tagged),
+    });
+    const before = store.getState().query.children.length;
+    app.onAddItem({ type: "tag", tag: "t" });
+    const { children } = store.getState().query;
+    expect(children).toHaveLength(before + 1);
+    expect(children.at(-1)).toMatchObject({ kind: "group", operator: "AND" });
+    expect(announce).toHaveBeenCalledWith("Added a group of 2 conditions to the query.");
+  });
+
   it("with no docs loaded yet, says so instead of ignoring the drop", () => {
     const { store, app } = setup({});
     app.onAddItem({ type: "facet", facetId: "thing" });
@@ -916,25 +970,36 @@ describe("dropping docs items", () => {
 // ---- saved queries --------------------------------------------------------
 
 describe("saved queries: opening the dialogs", () => {
-  it("sends an anonymous visitor to log in, keeping the query (even a blank one)", () => {
+  it("asks an anonymous visitor to log in first instead of leaving at once", () => {
     const { app, navigate, store } = setup({
       ...ready(emptyQuery()),
       auth: { status: "anonymous" },
     });
     app.openSaveDialog();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(store.getState().savedDialog).toBe("login-to-save");
+  });
+
+  it("does the same for the list, without asking the server", () => {
+    const { app, navigate, api, store } = setup({ ...ready(), auth: { status: "anonymous" } });
+    app.openSavedList();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(api.listSavedQueries).not.toHaveBeenCalled();
+    expect(store.getState().savedDialog).toBe("login-to-list");
+  });
+
+  it("Log in in that dialog goes to log in, keeping the query (even a blank one)", () => {
+    const { app, navigate, store } = setup({
+      ...ready(emptyQuery()),
+      auth: { status: "anonymous" },
+      savedDialog: "login-to-save",
+    });
+    app.logInToSave();
     expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
     expect(takePendingQuery()).toEqual({
       query: store.getState().query,
       selectedDatabaseIds: ["alpha", "beta"],
     });
-    expect(store.getState().savedDialog).toBeNull();
-  });
-
-  it("does the same for the list", () => {
-    const { app, navigate, api } = setup({ ...ready(), auth: { status: "anonymous" } });
-    app.openSavedList();
-    expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
-    expect(api.listSavedQueries).not.toHaveBeenCalled();
   });
 
   it("opens the save dialog for a logged-in user, with a fresh save state", () => {
@@ -976,7 +1041,11 @@ describe("saved queries: opening the dialogs", () => {
     const { app, store } = setup(ready(), fakeApi({ listSavedQueries: list }));
     app.openSavedList();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "error", error: "down" });
+    expect(store.getState().savedList).toEqual({
+      status: "error",
+      error:
+        "The server ran into a problem. Try again in a moment; if it keeps happening, contact support.",
+    });
     app.retrySavedList();
     expect(store.getState().savedList).toEqual({ status: "loading" });
     await flushPromises();
@@ -1208,7 +1277,11 @@ describe("saved queries: saving", () => {
     const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
     app.saveQuery("Weekly", "");
     await flushPromises();
-    expect(store.getState().save).toEqual({ status: "error", error: "disk full" });
+    expect(store.getState().save).toEqual({
+      status: "error",
+      error:
+        "The server ran into a problem. Try again in a moment; if it keeps happening, contact support.",
+    });
     expect(store.getState().savedDialog).toBe("save");
   });
 
@@ -1434,18 +1507,90 @@ describe("saved queries: deleting", () => {
     expect(store.getState().openSaved).toMatchObject({ id: "a" });
   });
 
-  it("shows a failed delete in the list", async () => {
+  it("a delete whose query is already gone counts as deleted", async () => {
     const api = fakeApi({
       deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(404, "gone"))),
+      listSavedQueries: vi.fn(async () => []),
     });
-    const { app, store } = setup(
+    const { app, store, showError } = setup(
       { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
       api,
     );
     app.askDeleteSaved("a");
     app.confirmSavedAction();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "error", error: "gone" });
+    expect(showError).not.toHaveBeenCalled();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [] });
+  });
+
+  // The toast is drawn under the modal dialog's backdrop and the page's live
+  // region is inert while the dialog is open, so the notice lives in the dialog.
+  it("a failed delete keeps the list and says so inside the dialog", async () => {
+    const api = fakeApi({
+      deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
+    });
+    const { app, store, showError } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [a] });
+    expect(store.getState().savedListNotice).toBe(
+      `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
+    );
+    expect(showError).not.toHaveBeenCalled();
+  });
+
+  it("the delete notice goes away when the list reloads, another question is asked or the dialog closes", async () => {
+    const failing = () =>
+      fakeApi({
+        deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
+        listSavedQueries: vi.fn(async () => [a]),
+      });
+    const failedDelete = async () => {
+      const made = setup(
+        { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+        failing(),
+      );
+      made.app.askDeleteSaved("a");
+      made.app.confirmSavedAction();
+      await flushPromises();
+      expect(made.store.getState().savedListNotice).not.toBeNull();
+      return made;
+    };
+
+    const reload = await failedDelete();
+    reload.app.retrySavedList();
+    expect(reload.store.getState().savedListNotice).toBeNull();
+
+    const asking = await failedDelete();
+    asking.app.askDeleteSaved("a");
+    expect(asking.store.getState().savedListNotice).toBeNull();
+
+    const closing = await failedDelete();
+    closing.app.closeSavedDialog();
+    expect(closing.store.getState().savedListNotice).toBeNull();
+
+    const reopening = await failedDelete();
+    reopening.app.openSavedList();
+    expect(reopening.store.getState().savedListNotice).toBeNull();
+  });
+
+  it("a delete that fails after the dialog was closed leaves no notice behind", async () => {
+    const answer = deferred<void>();
+    const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
+    const { app, store } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    app.closeSavedDialog();
+    answer.reject(new ApiError(503, "down"));
+    await flushPromises();
+    expect(store.getState().savedListNotice).toBeNull();
   });
 
   it("a 401 on delete redirects to log in", async () => {

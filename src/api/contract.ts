@@ -20,12 +20,13 @@ import type { SavedValue } from "./types";
  *   `number`, `boolean`, `list`, `optionalList`, `object`. The app cannot work without
  *   these. A missing or wrong value throws a
  *   `ContractError`. (`optionalList` allows a missing one.)
- * - **Display-only**: `text`, `strings` and the `optional…` reads. The app
- *   only shows these. A missing or wrong value becomes blank ("" or []) and is
- *   logged once as a console warning, so a small backend change can't take the
- *   whole app down. Use an `optional…` read for a key marked `?` in
- *   src/api/types.ts: the backend may leave those out, so their absence is not
- *   warned about.
+ * - **Display-only**: `text`, `strings`, `formatted` and the `optional…`
+ *   reads. The app only shows these. A missing or wrong value becomes blank
+ *   ("" or []) and is logged once as a console warning, so a small backend
+ *   change can't take the whole app down. Use an `optional…` read for a key
+ *   marked `?` in src/api/types.ts: the backend may leave those out, so their
+ *   absence is not warned about. (`formatted` checks nothing: it shows a
+ *   whole message whose fields the backend owns.)
  *
  * Keys the app doesn't read are never checked, and unknown keys are ignored.
  */
@@ -113,7 +114,7 @@ function warnOnce(message: string): void {
 export class ResponseValue {
   constructor(
     private readonly value: unknown,
-    /** The request it came from, e.g. "GET /api/v1/databases". */
+    /** The request it came from, e.g. "GET /api/v1/documentation/databases". */
     private readonly source: string,
     /** Where it sits in the body, e.g. "[3].fields". "" for the whole body. */
     private readonly path = "",
@@ -143,6 +144,12 @@ export class ResponseValue {
     return this.value.map((item, i) =>
       new ResponseValue(item, this.source, `${this.path}[${i}]`).object<T>(),
     );
+  }
+
+  /** This whole value as indented JSON, for showing a message whose fields
+   *  belong to the backend. Reads nothing and checks nothing. */
+  formatted(): string {
+    return JSON.stringify(this.value, null, 2);
   }
 
   private error(expected: string): ContractError {

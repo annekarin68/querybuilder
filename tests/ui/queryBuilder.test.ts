@@ -5,12 +5,11 @@ import {
   collapseButton,
   footerHtml,
   groupHtml,
+  issuesHtml,
   noticeHtml,
   queryTitleHtml,
   rowDropdown,
 } from "../../src/ui/queryBuilder";
-import { LOGIN_FIRST_NOTE } from "../../src/ui/dataPreview";
-import { escapeHtml } from "../../src/ui/panel";
 import { initialState, type AppState } from "../../src/state";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
 import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
@@ -382,47 +381,16 @@ describe("the query card's title", () => {
     expect(html).not.toContain("<b>x</b>");
   });
 
-  // Run warns a logged-out user ("You'll be asked to log in first."); Save…
-  // and Saved queries send them to login just the same, so they say it too.
+  // A logged-out user who presses either button is asked in the saved-queries
+  // dialog (savedQueries.ts), so the title row draws no note.
   describe("for a logged-out user", () => {
     const anonymous: AppState = { ...loaded, auth: { status: "anonymous" } };
-    const NOTE = "You'll be asked to log in first.";
 
-    it("says they will be asked to log in, and ties both buttons to that note", () => {
+    it("draws the buttons without any login note: the dialog asks instead", () => {
       const html = queryTitleHtml(anonymous);
-      // `text` drops the tags and turns the entity for the apostrophe back.
-      expect(html).toMatch(/<[^>]*id="qb-saved-login-note"[^>]*>/);
-      expect(text(html).replace("&#39;", "'")).toContain(NOTE);
-      expect(html).toMatch(
-        /<button[^>]*data-action="open-save-dialog"[^>]*aria-describedby="qb-saved-login-note"/,
-      );
-      expect(html).toMatch(
-        /<button[^>]*data-action="open-saved-list"[^>]*aria-describedby="qb-saved-login-note"/,
-      );
-    });
-
-    it("uses the sentence Run shows", () => {
-      expect(LOGIN_FIRST_NOTE).toBe(NOTE);
-      expect(queryTitleHtml(anonymous)).toContain(escapeHtml(LOGIN_FIRST_NOTE));
-    });
-
-    it.each([
-      ["loading", { status: "loading" }],
-      ["authenticated", { status: "authenticated", user: { name: "U" } }],
-    ] as const)("says nothing while auth is %s", (_name, auth) => {
-      const html = queryTitleHtml({ ...loaded, auth } as AppState);
-      expect(html).not.toContain("log in");
-      expect(html).not.toContain("qb-saved-login-note");
-      expect(html).not.toContain("aria-describedby");
       expect(html).toContain('data-action="open-save-dialog"');
-    });
-
-    it("says nothing before the buttons exist", () => {
-      for (const partial of [{ databases: null }, { catalog: null }]) {
-        const html = queryTitleHtml({ ...anonymous, ...partial });
-        expect(html).not.toContain("log in");
-        expect(html).not.toContain("qb-saved-login-note");
-      }
+      expect(html).not.toContain("log in");
+      expect(html).not.toContain("aria-describedby");
     });
   });
 
@@ -431,5 +399,36 @@ describe("the query card's title", () => {
   it("draws no buttons until the databases and the field catalog have loaded", () => {
     expect(queryTitleHtml({ ...loaded, databases: null })).not.toContain("<button");
     expect(queryTitleHtml({ ...loaded, catalog: null })).not.toContain("<button");
+  });
+});
+
+describe("issuesHtml", () => {
+  const warning = "Group contains no valid conditions.";
+
+  it("a problem the databases found is highlighted even when it is only incomplete", () => {
+    const html = issuesHtml("g1", [
+      { nodeId: "g1", message: warning, kind: "incomplete", fromServer: true },
+    ]);
+    expect(html).toBe(
+      `<div class="qb-server-warning"><i class="exclamation triangle icon" aria-hidden="true"></i>${warning}</div>`,
+    );
+  });
+
+  it("the red invalid icon is decoration, hidden from screen readers like the warning's", () => {
+    const html = issuesHtml("g1", [{ nodeId: "g1", message: "Bad date.", kind: "invalid" }]);
+    expect(html).toBe(
+      '<div class="qb-invalid"><i class="exclamation circle icon" aria-hidden="true"></i>Bad date.</div>',
+    );
+  });
+
+  it("the user's own unfinished parts stay a quiet grey hint", () => {
+    const html = issuesHtml("g1", [
+      { nodeId: "g1", message: "Add a condition to this group.", kind: "incomplete" },
+    ]);
+    expect(html).toBe('<div class="qb-hint">Add a condition to this group.</div>');
+  });
+
+  it("only shows the issues of the node it is asked about", () => {
+    expect(issuesHtml("g2", [{ nodeId: "g1", message: "x", kind: "invalid" }])).toBe("");
   });
 });

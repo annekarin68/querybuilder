@@ -136,6 +136,19 @@ describe("the saved queries list", () => {
     expect(html).toMatch(/data-action="retry-saved-list"[^>]*>Try again<\/button>/);
   });
 
+  it("shows a delete notice above the list as an alert, escaped, and keeps the list", () => {
+    const html = savedDialogHtml(listDialog({ savedListNotice: "Couldn't delete “A <b>”. Down." }));
+    expect(html).toContain(
+      '<div class="ui small negative message" role="alert">Couldn&#39;t delete “A &lt;b&gt;”. Down.</div>',
+    );
+    expect(html.indexOf('role="alert"')).toBeLessThan(html.indexOf('class="qb-saved-list"'));
+    expect(html).toMatch(/data-action="open-saved" data-id="sq-1"/);
+  });
+
+  it("shows no alert without a notice", () => {
+    expect(savedDialogHtml(listDialog())).not.toContain('role="alert"');
+  });
+
   it("lists name, note, number of databases and date, escaped", () => {
     const html = savedDialogHtml(listDialog());
     expect(html).toContain("Weekly &lt;check&gt;");
@@ -278,5 +291,41 @@ describe("escapeAction (what Escape does)", () => {
       "close-saved-dialog",
     );
     expect(escapeAction(listDialog())).toBe("close-saved-dialog");
+  });
+});
+
+describe("the login dialog", () => {
+  const at = (savedDialog: AppState["savedDialog"]) => ({ ...initialState, savedDialog });
+
+  it.each([
+    ["login-to-save", "Log in to save queries"],
+    ["login-to-list", "Log in to see saved queries"],
+  ] as const)("%s has its own title, Log in and Cancel", (kind, title) => {
+    const html = savedDialogHtml(at(kind));
+    expect(html).toContain(`>${title}</h2>`);
+    expect(html).toContain(
+      'data-action="log-in-to-save" aria-describedby="qb-login-why" data-initial-focus>Log in</button>',
+    );
+    expect(html).toContain('data-action="close-saved-dialog">Cancel</button>');
+    expect(html).toContain("the query you are building is kept");
+  });
+
+  // The dialog is labelled by its title; the paragraph says why, so a screen
+  // reader announces both when the modal opens.
+  it.each(["login-to-save", "login-to-list"] as const)(
+    "%s ties its explanation to the Log in button",
+    (kind) => {
+      const html = savedDialogHtml(at(kind));
+      expect(html).toContain('<p id="qb-login-why">');
+      expect(html).toMatch(/data-action="log-in-to-save" aria-describedby="qb-login-why"/);
+    },
+  );
+
+  it("Escape closes it", () => {
+    expect(escapeAction(at("login-to-save"))).toBe("close-saved-dialog");
+  });
+
+  it("opening it puts the focus on Log in", () => {
+    expect(focusAfterRepaint(null, at("login-to-list"))).toBe("initial");
   });
 });

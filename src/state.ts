@@ -37,8 +37,10 @@ export type PreviewState =
   | { status: "ok"; events: EventRecord[] }
   | { status: "error"; error: string };
 
-/** Which saved-queries dialog is open: "save" (name and note) or "list". */
-export type SavedDialog = null | "save" | "list";
+/** Which saved-queries dialog is open: "save" (name and note), "list", or, for
+ *  a logged-out user, the question whether to log in first ("login-to-save" /
+ *  "login-to-list" say which button asked, so the focus can go back to it). */
+export type SavedDialog = null | "save" | "list" | "login-to-save" | "login-to-list";
 
 /** Saving the query on screen, as the save dialog shows it. */
 export type SaveState =
@@ -65,11 +67,12 @@ export interface AppState {
   databases: Database[] | null;
   /** The data model backing the docs sidebar (loaded once). */
   facets: Facet[] | null;
-  /** Who's logged in, if anyone — loaded once at startup via GET /api/auth/me. */
+  /** Who's logged in, if anyone — loaded once at startup via GET /api/users/me. */
   auth: AuthState;
-  /** Compliance acknowledgment for this session — loaded once at startup via
-   *  GET /api/compliance/status. Display-only, same as `auth`: it drives the
-   *  account menu and an advisory hint, never gating logic. */
+  /** The session's compliance log — loaded once at startup via
+   *  GET /api/log/status (a 403 there means "required"). Display-only, same as
+   *  `auth`: it drives the account menu and an advisory hint, never gating
+   *  logic. */
   compliance: ComplianceState;
   /** The `Database.id`s of the databases the query runs against. Empty =
    *  nothing runs. */
@@ -108,6 +111,11 @@ export interface AppState {
   save: SaveState;
   savedList: SavedListState;
   savedConfirm: SavedConfirm;
+  /** Why the last delete in the Saved queries dialog failed, shown above the
+   *  list; null when there is nothing to say. It lives in the state, not in the
+   *  toast, because the toast is drawn under the open dialog's backdrop. Cleared
+   *  by the next action in the dialog and when it closes. */
+  savedListNotice: string | null;
 }
 
 export const initialState: AppState = {
@@ -132,6 +140,7 @@ export const initialState: AppState = {
   save: { status: "idle" },
   savedList: { status: "idle" },
   savedConfirm: null,
+  savedListNotice: null,
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */

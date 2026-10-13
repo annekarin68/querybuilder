@@ -1,7 +1,7 @@
 /**
  * Display settings meant to be edited by hand — the ONLY place the frontend
  * may name anything from the backend's data (facets, fields, tags, groups).
- * Everything else learns those names at runtime from GET /api/individuals.
+ * Everything else learns those names at runtime from GET /api/documentation/individuals.
  * Every setting about the data defaults to empty, so the app works against any
  * dataset. (The mascot and the easter-egg toast below are not backend data.)
  */
@@ -54,6 +54,31 @@ export const MASCOT = {
   disappointed: "/pickle/disappointed.svg",
   loading: "/pickle/loading.svg",
 } as const;
+
+/**
+ * Who wrote a text in the data dictionary. Each description starts with a
+ * small logo, and the label is its hover text and its text for screen readers
+ * (users found the words "Third-party:" confusing, 2026-10-13).
+ *
+ * - `ours`: the backend's own, always-correct `comment`. By default the app's
+ *   own logo (`MASCOT.neutral`), so a deployment that replaces that file gets
+ *   its logo here too.
+ * - `thirdParty`: the third party's `description` and group, which may
+ *   contain errors (one label for both: it is one source).
+ *   A neutral placeholder by default: put the company's logo in
+ *   public/sources/third-party.svg (same rules as the mascot files: a
+ *   self-contained plain SVG), or point `logo` at another file in public/,
+ *   and name the company in `label`.
+ */
+export const TEXT_SOURCES = {
+  ours: { logo: "/pickle/logo.svg", label: "Our description" },
+  thirdParty: {
+    logo: "/sources/third-party.svg",
+    label: "Third-party text; may contain errors",
+  },
+} as const;
+
+export type TextSource = keyof typeof TEXT_SOURCES;
 
 /**
  * The hidden second set of faces: five clicks on the logo switch to it (and

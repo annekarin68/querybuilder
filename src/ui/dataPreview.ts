@@ -1,8 +1,20 @@
 import { runBlocker, type AppState, type RunBlocker } from "../state";
-import type { EventRecord, Facet } from "../model";
+import type { EventRecord, Facet, Scalar } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, exact, formatWhen } from "./format";
 import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
+
+/**
+ * How many events the Run query panel promises. The backend decides the real
+ * size of the sample (up to this many, picked at random); this constant only
+ * words the panel's text, so change it when the backend's limit changes.
+ */
+export const EVENT_SAMPLE_SIZE = 2000;
+
+/** What the idle Run query panel says; `locale` is for tests ("2,000" vs "2.000"). */
+export function idleMessage(locale?: string): string {
+  return `Fetch a random sample of up to ${exact(EVENT_SAMPLE_SIZE, locale)} events this query matches.`;
+}
 
 /** How many tag / group badges to show inline before collapsing the rest into "+N". */
 const MAX_TAG_BADGES = 3;
@@ -68,11 +80,35 @@ function tagsAndGroupsHtml(event: EventRecord, byId: Map<string, Facet>): string
   );
 }
 
+/**
+ * Every value `event` holds for one field, across all occurrences of its
+ * facet (usually one), without blanks or repeats, in the order they come.
+ */
+export function fieldValues(event: EventRecord, facetId: string, fieldId: string): Scalar[] {
+  const seen = new Set<string>();
+  const out: Scalar[] = [];
+  for (const occurrence of event.values[facetId] ?? []) {
+    const v = occurrence[fieldId];
+    if (v === undefined || v === "" || seen.has(String(v))) continue;
+    seen.add(String(v));
+    out.push(v);
+  }
+  return out;
+}
+
 /** The text of one configured column for one event ("—" when absent). */
 export function rowCell(event: EventRecord, col: RowColumn): string {
-  const v = event.values[col.facet]?.[col.field];
-  if (v === undefined || v === null || v === "") return "—";
-  return col.format === "datetime" ? formatWhen(String(v)) : String(v);
+  const values = fieldValues(event, col.facet, col.field);
+  if (values.length === 0) return "—";
+  return values
+    .map((v) => (col.format === "datetime" ? formatWhen(String(v)) : String(v)))
+    .join(", ");
+}
+
+/** The start of a long event id (a GUID has 36 characters). The row's tooltip
+ *  and its JSON show the whole id. */
+export function shortId(id: string): string {
+  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
 }
 
 /** The row grid: id, one column per ROW_COLUMNS entry, badges, facet count.
@@ -81,7 +117,7 @@ export function rowCell(event: EventRecord, col: RowColumn): string {
  *  date + short time; text is capped and ellipsised, full value on hover. */
 export function rowGrid(columns: RowColumn[]): string {
   const cols = columns.map((c) => (c.format === "datetime" ? "12rem" : "minmax(0, 10rem)"));
-  return ["3rem", ...cols, "minmax(0, 1fr)", "auto"].join(" ");
+  return ["6rem", ...cols, "minmax(0, 1fr)", "auto"].join(" ");
 }
 
 function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: RowColumn[]): string {
@@ -94,7 +130,7 @@ function eventRowHtml(event: EventRecord, byId: Map<string, Facet>, columns: Row
   return `
     <details class="qb-event-row">
       <summary>
-        <span class="qb-er-id">#${escapeHtml(event.id)}</span>
+        <span class="qb-er-id" title="Event ${escapeHtml(event.id)}">#${escapeHtml(shortId(event.id))}</span>
         ${cells}
         <span class="qb-er-groups">${tagsAndGroupsHtml(event, byId)}</span>
         <span class="qb-er-count">${countLabel(Object.keys(event.values).length, "facet")}</span>
@@ -137,10 +173,10 @@ function runBlock({
   </div>`;
 }
 
-/** Said next to every button that sends a logged-out user to login: Run here,
- *  and Save… / Saved queries in queryBuilder.ts. One constant, so they cannot
- *  drift apart. */
-export const LOGIN_FIRST_NOTE = "You'll be asked to log in first.";
+/** Said next to Run query, the one button that sends a logged-out user to log
+ *  in without asking first (Save… and Saved queries ask in a dialog,
+ *  savedQueries.ts). */
+const LOGIN_FIRST_NOTE = "You'll be asked to log in first.";
 
 /** Advisory only (docs/ARCHITECTURE.md, "Auth"): Run always attempts the
  *  request; src/app.ts reacts to the real 401/403 by redirecting into
@@ -183,7 +219,7 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
       el,
       card(
         runBlock({
-          message: "Fetch a sample of the events this query matches.",
+          message: idleMessage(),
           enabled: true,
           note: runNote(state),
         }),

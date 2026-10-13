@@ -1,9 +1,16 @@
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "./api/client";
 import type * as client from "./api/client";
+import { userMessage } from "./api/errorText";
 import type { Compliance, DatabaseResult, SavedQuery, SavedQueryDraft } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
 import { serverIssues } from "./query/issues";
-import { addedMessage, dropNotice, movedMessage, nodesForItem, type DragItem } from "./query/drop";
+import {
+  addedNodesMessage,
+  dropNotice,
+  movedMessage,
+  nodesForItem,
+  type DragItem,
+} from "./query/drop";
 import {
   addChild,
   countConditions,
@@ -59,16 +66,13 @@ export interface AppDeps {
    *  region). Used when an edit changes the query without any visible focus
    *  change, such as the "+" button adding a row. */
   announce(message: string): void;
+  /** Tell the user that something they asked for failed, when no panel has a
+   *  place for it (logging out, a delete): a short toast, also spoken. */
+  showError(message: string): void;
 }
 
 /** How long the query must stay unchanged before statistics are fetched. */
 export const STATS_DEBOUNCE_MS = 400;
-
-/** The text a panel shows for a failed request. The error itself (with its
- *  stack) goes to the console, for whoever is debugging. */
-export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 /**
  * What a screen reader hears when Run query's panel changes: it repaints out of
@@ -91,7 +95,7 @@ export function previewAnnouncement(preview: PreviewState): string | null {
   }
 }
 
-export function createApp({ store, api, navigate, announce }: AppDeps) {
+export function createApp({ store, api, navigate, announce, showError }: AppDeps) {
   // One slot per request kind. Every query/scope edit cancels both
   // (docs/ARCHITECTURE.md, "Correctness invariant").
   const statsSlot = requestSlot();
@@ -103,11 +107,13 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   const saveSlot = requestSlot();
 
   /**
-   * A 403 from /api/query means "authenticated, but some requirement is unmet" —
+   * A 403 from /api/filter/execute means "authenticated, but some requirement is unmet" —
    * compliance is one such requirement, but not necessarily the only one (e.g. a
    * user not permitted to query a database). Redirecting into the compliance flow
    * on every 403 would send such a user round in circles with no error ever shown,
-   * so ask the backend whether compliance is actually what's missing first.
+   * so ask the backend whether compliance is actually what's missing first:
+   * GET /api/log/status answers 403 when the session has no compliance log
+   * (getComplianceStatus turns that into "required").
    */
   async function complianceIsRequired(): Promise<boolean> {
     try {
@@ -143,9 +149,9 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
       const spoken = previewAnnouncement(preview);
       if (spoken) announce(spoken);
     };
-    const showError = (err: unknown) => {
+    const showRunError = (err: unknown) => {
       console.error("Run query failed:", err);
-      show({ status: "error", error: errorMessage(err) });
+      show({ status: "error", error: userMessage(err) });
     };
     show({ status: "loading" });
     api
@@ -159,9 +165,9 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
         if (err instanceof ApiError && err.status === 403) {
           const required = await complianceIsRequired();
           if (req.isStale()) return; // query, scope or session changed meanwhile
-          return required ? redirectInto(COMPLIANCE_START_URL) : showError(err);
+          return required ? redirectInto(COMPLIANCE_START_URL) : showRunError(err);
         }
-        showError(err);
+        showRunError(err);
       });
   }
 
@@ -201,7 +207,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
       .catch((err) => {
         if (req.isStale()) return;
         console.error("Statistics failed:", err);
-        setStats({ status: "error", error: errorMessage(err) });
+        setStats({ status: "error", error: userMessage(err) });
       });
   }, STATS_DEBOUNCE_MS);
 
@@ -212,7 +218,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   }
 
   /**
-   * Logging out or invalidating compliance only affects Run (/api/stats is
+   * Logging out or invalidating compliance only affects Run (/api/filter/validate is
    * anonymous), so only the preview is cancelled — and it is reset in the same
    * step, because whoever aborts a request must also reset its panel: the
    * aborted request's own handlers are stale and will never touch the state.
@@ -232,8 +238,9 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
         store.setState({ auth: { status: "anonymous" }, compliance: { status: "required" } });
       })
       .catch((err) => {
-        // Best-effort: the button is still there for the user to try again.
-        console.error("Logout failed:", errorMessage(err));
+        console.error("Logout failed:", err);
+        // The menu still shows the user: say why nothing happened.
+        showError("Couldn't log out. Try again.");
       });
   }
 
@@ -245,7 +252,8 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
         store.setState({ compliance: { status: "required" } });
       })
       .catch((err) => {
-        console.error("Invalidate compliance failed:", errorMessage(err));
+        console.error("Invalidate compliance failed:", err);
+        showError("Couldn't invalidate the compliance reason. Try again.");
       });
   }
 
@@ -349,11 +357,11 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     // `placeNodes` puts the new nodes in place of a lone blank row (the starting
     // query, or a new "+ Group"), else at the target like any drop.
     onQueryChange(openGroup(placeNodes(query, targetNodeId, nodes), targetNodeId));
-    announce(addedMessage(nodes.length));
+    announce(addedNodesMessage(nodes));
   }
 
   /** The keyboard path: "Add to query" puts the item in the root group (or, if
-   *  that holds just a blank row, in its place). */
+   *  that holds just a blank row, in its place); a tag's facets arrive as one group. */
   function onAddItem(item: DragItem): void {
     onDropItem(item, store.getState().query.id);
   }
@@ -400,11 +408,11 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
       // show "Log in" / "Compliance needed", and let a Run press surface the
       // real problem.
       api.getMe().catch((err) => {
-        console.error("Could not determine login state:", errorMessage(err));
+        console.error("Could not determine login state:", err);
         return null;
       }),
       api.getComplianceStatus().catch((err): Compliance => {
-        console.error("Could not determine compliance status:", errorMessage(err));
+        console.error("Could not determine compliance status:", err);
         return { status: "required" };
       }),
     ]);
@@ -436,35 +444,44 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   }
 
   // ---- saved queries ------------------------------------------------------
-  // The dialogs only show `savedDialog`, `save`, `savedList` and `savedConfirm`;
-  // everything they do happens here.
+  // The dialogs only show `savedDialog`, `save`, `savedList`, `savedConfirm` and
+  // `savedListNotice`; everything they do happens here.
 
   /** A saved-query request failed. A 401 means there is no session: redirect
    *  like Run does (the query is saved first). Anything else is shown by `show`. */
   function savedCallFailed(err: unknown, show: (error: string) => void): void {
     if (err instanceof ApiError && err.status === 401) return redirectInto(LOGIN_URL);
     console.error("Saved queries request failed:", err);
-    show(errorMessage(err));
+    show(userMessage(err));
   }
 
-  /** Whether the dialogs may open: an anonymous visitor goes to log in instead,
-   *  with the query saved even when it is blank (they asked to save). While the
-   *  login state is still loading the visitor counts as logged in: a 401 from
-   *  the API redirects. */
-  function mayUseSavedQueries(): boolean {
+  /** Whether the dialogs may open. A logged-out visitor is asked to log in
+   *  first instead (`kind`: which button they pressed). A redirect without a
+   *  word surprised users (2026-10-08), and a note always on screen read as
+   *  if the whole builder needed a login (maintainers' decision, 2026-10-13).
+   *  While the login state is still loading the visitor counts as logged in: a
+   *  401 from the API redirects. */
+  function mayUseSavedQueries(kind: "save" | "list"): boolean {
     if (store.getState().auth.status !== "anonymous") return true;
-    redirectInto(LOGIN_URL);
+    store.setState({ savedDialog: kind === "save" ? "login-to-save" : "login-to-list" });
     return false;
   }
 
+  /** "Log in" in either login dialog (the save one and the list one; the name
+   *  is from the first): keep the query, even a blank one (they asked to save
+   *  it), and leave for the login flow. */
+  function logInToSave(): void {
+    redirectInto(LOGIN_URL);
+  }
+
   function openSaveDialog(): void {
-    if (!mayUseSavedQueries()) return;
+    if (!mayUseSavedQueries("save")) return;
     store.setState({ savedDialog: "save", save: { status: "idle" } });
   }
 
   function loadSavedList(): void {
     const req = savedListSlot.start();
-    store.setState({ savedList: { status: "loading" } });
+    store.setState({ savedList: { status: "loading" }, savedListNotice: null });
     api
       .listSavedQueries()
       .then((queries) => {
@@ -477,7 +494,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
   }
 
   function openSavedList(): void {
-    if (!mayUseSavedQueries()) return;
+    if (!mayUseSavedQueries("list")) return;
     store.setState({ savedDialog: "list", savedConfirm: null });
     loadSavedList();
   }
@@ -492,6 +509,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
       savedConfirm: null,
       save: { status: "idle" },
       savedList: { status: "idle" },
+      savedListNotice: null,
     });
   }
 
@@ -618,6 +636,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
       },
       savedDialog: null,
       savedConfirm: null,
+      savedListNotice: null,
     });
     announce(`Opened “${saved.name}”.`);
     setNotice(
@@ -636,30 +655,42 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     if (!saved) return; // the list changed under the click
     const { openSaved, query, selectedDatabaseIds } = store.getState();
     if (hasUnsavedWork(openSaved, query, selectedDatabaseIds)) {
-      store.setState({ savedConfirm: { action: "open", id } });
+      store.setState({ savedConfirm: { action: "open", id }, savedListNotice: null });
     } else {
       openSavedQuery(saved);
     }
   }
 
   function askDeleteSaved(id: string): void {
-    store.setState({ savedConfirm: { action: "delete", id } });
+    store.setState({ savedConfirm: { action: "delete", id }, savedListNotice: null });
   }
 
   function deleteSaved(id: string): void {
     const name = listedQuery(id)?.name;
-    api
-      .deleteSavedQuery(id)
-      .then(() => {
-        const { openSaved, savedDialog } = store.getState();
-        // The query on screen stays; it just no longer belongs to a saved one.
-        if (openSaved?.id === id) store.setState({ openSaved: null });
-        if (name !== undefined) announce(`Deleted “${name}”.`);
-        if (savedDialog === "list") loadSavedList();
-      })
-      .catch((err) => {
-        savedCallFailed(err, (error) => store.setState({ savedList: { status: "error", error } }));
+    const deleted = () => {
+      const { openSaved, savedDialog } = store.getState();
+      // The query on screen stays; it just no longer belongs to a saved one.
+      if (openSaved?.id === id) store.setState({ openSaved: null });
+      if (name !== undefined) announce(`Deleted “${name}”.`);
+      if (savedDialog === "list") loadSavedList();
+    };
+    // `.then(ok, failed)`, not `.then(ok).catch(failed)`: a bug inside
+    // `deleted()` must not be reported to the user as a failed delete.
+    api.deleteSavedQuery(id).then(deleted, (err) => {
+      // Already gone (deleted in another tab): that is what the user wanted.
+      if (err instanceof ApiError && err.status === 404) return deleted();
+      // Keep the list on screen: replacing it with an error would hide every
+      // other saved query because one delete failed. The notice is shown inside
+      // the dialog: a toast would be drawn under its backdrop (Delete is only
+      // reachable in the modal dialog).
+      savedCallFailed(err, (error) => {
+        // The dialog may have been closed while the request ran.
+        if (store.getState().savedDialog !== "list") return;
+        store.setState({
+          savedListNotice: `Couldn't delete “${name ?? "the saved query"}”. ${error}`,
+        });
       });
+    });
   }
 
   function confirmSavedAction(): void {
@@ -690,6 +721,7 @@ export function createApp({ store, api, navigate, announce }: AppDeps) {
     retryStats,
     openSaveDialog,
     openSavedList,
+    logInToSave,
     closeSavedDialog,
     saveQuery,
     confirmReplace,

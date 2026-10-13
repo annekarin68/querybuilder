@@ -27,17 +27,17 @@ const row = {
 const cond = (fieldId: string, operatorId: string, value: RequestValue) => ({
   kind: "condition" as const,
   id: "c",
-  facetId: "thing",
-  fieldId,
-  operatorId,
+  facet_id: "thing",
+  field_id: fieldId,
+  operator_id: operatorId,
   value,
 });
 const facetCond = (facetId: string, operatorId: string) => ({
   kind: "condition" as const,
   id: "x",
-  facetId,
-  fieldId: null,
-  operatorId,
+  facet_id: facetId,
+  field_id: null,
+  operator_id: operatorId,
   value: null,
 });
 const group = (operator: "AND" | "OR", ...children: RequestNode[]) => ({
@@ -109,7 +109,7 @@ describe("matches", () => {
   });
   it("reads the value stored under rowKey(facetId, fieldId)", () => {
     expect(rowKey("thing", "color")).toBe("thing.color");
-    expect(matches({ ...cond("color", "eq", "red"), facetId: "other" }, row)).toBe(false);
+    expect(matches({ ...cond("color", "eq", "red"), facet_id: "other" }, row)).toBe(false);
   });
 
   it("typed values match typed stored values, not their text", () => {
@@ -209,9 +209,9 @@ const countGte10: RequestNode = {
     {
       kind: "condition",
       id: "c",
-      facetId: "thing",
-      fieldId: "count",
-      operatorId: "gte",
+      facet_id: "thing",
+      field_id: "count",
+      operator_id: "gte",
       value: 10,
     },
   ],
@@ -266,40 +266,40 @@ describe("scaleCount", () => {
   });
 });
 
-// ---- /api/stats lines ---------------------------------------------------------
+// ---- /api/filter/validate lines ---------------------------------------------------------
 
 describe("buildStatsLine", () => {
-  it("builds a successful line with matchCount", () => {
+  it("builds a successful line with match_count", () => {
     expect(buildStatsLine({ label: "alpha", matchCount: 3 })).toEqual({
       label: "alpha",
       success: true,
-      matchCount: 3,
+      match_count: 3,
     });
   });
 
-  it("builds a failure line when fail is given, omitting matchCount entirely", () => {
+  it("builds a failure line when fail is given, omitting match_count entirely", () => {
     const line = buildStatsLine({
       label: "beta",
       matchCount: 999, // must be ignored/dropped
       fail: {
-        errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
+        errorMessages: [{ node_id: "c", message: "bad field", kind: "invalid" }],
         infoMessages: [],
       },
     });
     expect(line).toEqual({
       label: "beta",
       success: false,
-      errorMessages: [{ nodeId: "c", message: "bad field", kind: "invalid" }],
-      infoMessages: [],
+      error_messages: [{ node_id: "c", message: "bad field", kind: "invalid" }],
+      info_messages: [],
     });
-    expect(line).not.toHaveProperty("matchCount");
+    expect(line).not.toHaveProperty("match_count");
   });
 });
 
 describe("queryErrors", () => {
   const tooLong = "x".repeat(MAX_TEXT_LENGTH + 1);
   const problem = (nodeId: string) => ({
-    nodeId,
+    node_id: nodeId,
     kind: "invalid",
     message: "Text is too long (at most 100 characters).",
   });
@@ -322,7 +322,7 @@ describe("queryErrors", () => {
   });
 
   const noValidConditions = (groupId: string) => ({
-    nodeId: groupId,
+    node_id: groupId,
     kind: "incomplete",
     message: "Group contains no valid conditions.",
   });

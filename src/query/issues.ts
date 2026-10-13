@@ -28,7 +28,7 @@ export function serverIssues(stats: StatsState): Issue[] {
   for (const result of stats.results) {
     if (result.status !== "failed") continue;
     for (const { nodeId, message, kind } of result.errors) {
-      if (nodeId !== null) issues.push({ nodeId, message, kind });
+      if (nodeId !== null) issues.push({ nodeId, message, kind, fromServer: true });
     }
   }
   return withoutRepeats(issues);

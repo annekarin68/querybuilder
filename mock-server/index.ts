@@ -1,4 +1,5 @@
 import { loadEnv } from "vite";
+import { parseHttpErrors } from "./httpErrors";
 import { createMockServer } from "./server";
 
 // Starts the dev-only mock API (`npm run mock`, or `npm run dev` with Vite).
@@ -33,9 +34,15 @@ function envNumber(name: string, min: number, max: number): number | undefined {
 const failRate = envNumber("MOCK_FAIL_RATE", 0, 1);
 const lineDelay = envNumber("MOCK_STREAM_DELAY_MS", 0, 60_000);
 
+const httpErrors = parseHttpErrors(process.env.MOCK_HTTP_ERRORS);
+if (httpErrors.length > 0) {
+  console.log(`MOCK_HTTP_ERRORS: ${process.env.MOCK_HTTP_ERRORS}`);
+}
+
 createMockServer({
   apiBase,
-  // By default about 5% of /api/stats lines fail, so the UI's per-database
+  httpErrors,
+  // By default about 5% of /api/filter/validate lines fail, so the UI's per-database
   // failure path gets exercised without a real backend. MOCK_FAIL_RATE=0 turns
   // that off.
   failRate: failRate ?? 0.05,

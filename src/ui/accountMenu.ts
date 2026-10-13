@@ -1,12 +1,11 @@
-import type { AppState } from "../state";
+import type { AppState, ComplianceState } from "../state";
 import { COMPLIANCE_START_URL, LOGIN_URL } from "../api/client";
-import { formatWhen } from "./format";
 import { escapeHtml, paint } from "./panel";
 
 /**
  * The top-bar account menu: login state and the compliance acknowledgment in
  * one place. Display-only — Run is never
- * gated on it; src/app.ts reacts to POST /api/query's real 401/403 instead.
+ * gated on it; src/app.ts reacts to POST /api/filter/execute's real 401/403 instead.
  *
  * A native <details> dropdown rather than a Fomantic one: Fomantic's dropdown
  * treats a clicked item as a selection and rewrites the trigger's text, and
@@ -26,15 +25,19 @@ function badgeHtml(state: AppState): string {
   return "";
 }
 
-function complianceHtml(state: AppState): string {
-  const c = state.compliance;
+/**
+ * The menu's Compliance section. The log is the backend's own message, shown
+ * whole (the frontend reads no field of it). The <pre> is focusable because a
+ * region the keyboard cannot reach cannot be scrolled by it when the log is
+ * longer than its max-height.
+ */
+export function complianceHtml(c: ComplianceState): string {
   if (c.status === "loading") return `<p class="qb-account-meta">Checking…</p>`;
   if (c.status === "required") {
     return `<p class="qb-account-meta">Running a query needs a compliance reason for this session.</p>
       <a class="ui fluid small primary button" href="${escapeHtml(COMPLIANCE_START_URL)}" data-flow-link>Start compliance check</a>`;
   }
-  return `<p class="qb-account-reason">“${escapeHtml(c.reason)}”</p>
-    ${c.givenAt ? `<p class="qb-account-meta">Given ${escapeHtml(formatWhen(c.givenAt))}</p>` : ""}
+  return `<pre class="qb-account-log" tabindex="0" aria-label="Compliance log">${escapeHtml(c.log)}</pre>
     <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Invalidate</button>`;
 }
 
@@ -67,7 +70,7 @@ export function renderAccountMenu(el: HTMLElement, state: AppState): void {
        <div class="qb-account-menu">
          <div class="qb-account-section">
            <div class="qb-account-label">Compliance</div>
-           ${complianceHtml(state)}
+           ${complianceHtml(state.compliance)}
          </div>
          <div class="qb-account-section">
            <button type="button" class="ui fluid small basic button" data-action="logout">Log out</button>
