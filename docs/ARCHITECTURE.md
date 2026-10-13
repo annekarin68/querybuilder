@@ -128,9 +128,9 @@ the backend's vocabulary):
   *(edited)* once it differs from what was saved) and the **Save…** and
   **Saved queries** buttons, which open a dialog over the page ("Saved
   queries — `savedQueries.ts`"). On a narrow card the buttons wrap under the
-  title and a long name is cut with "…". A logged-out user sees the same
-  advisory note as on **Run query** under them ("You'll be asked to log in
-  first.").
+  title and a long name is cut with "…". A logged-out user who presses either
+  button is first asked to log in, in the dialog (**Run query** keeps its note
+  "You'll be asked to log in first.").
 - **Statistics column** (right, 15rem) — sticky (above 900 px; see **Narrow
   screens** below), so it never scrolls out of view while the user builds;
   refetched live (debounced) whenever the query is complete.
@@ -484,7 +484,9 @@ pure helpers in `src/query/saved.ts`):
 - `openSaved`: the saved query on screen as it was when last opened or saved,
   or `null` for one never saved. Whether the user changed it since is worked out
   by `isEdited` (folding a group is not an edit), never stored.
-- `savedDialog`: `null`, `"save"` or `"list"`: which dialog is open.
+- `savedDialog`: `null`, `"save"`, `"list"`, or `"login-to-save"` /
+  `"login-to-list"` (the login question for a logged-out user): which dialog is
+  open.
 - `save`: `idle`, `saving`, `conflict` (the name belongs to another saved query:
   ask "Replace it?") or `error`.
 - `savedList`: the user's saved queries, newest first: `idle`, `loading`, `ok`
@@ -494,9 +496,9 @@ pure helpers in `src/query/saved.ts`):
 Opening a saved query goes through `changeScope` and `validateQuery` like any
 edit, so the "Correctness invariant" holds. Database ids that no longer exist
 are dropped and said in `dropNotice`. A `401` from any saved-queries call
-redirects to log in like Run does (the query is saved first), as does opening
-either dialog while anonymous (the buttons first show the same advisory note
-as Run, `LOGIN_FIRST_NOTE`: "Centre — `queryBuilder.ts`"); another error is shown in the dialog's state.
+redirects to log in like Run does (the query is saved first), while opening
+either dialog anonymously asks first whether to log in (`mayUseSavedQueries`,
+"Saved queries — `savedQueries.ts`"); another error is shown in the dialog's state.
 
 `main.ts` has one table, `panelRenderers`: for each panel, the `AppState`
 keys it reads and how to render it. One subscriber runs a panel's render
@@ -929,12 +931,13 @@ the copy kept for it is the **pending query** (not a saved query, which is
    never sent to the backend. It is saved when Run redirects, and when the
    user clicks any link straight into a flow (the **Log in** button, **Start
    compliance check**; these carry `data-flow-link`) if the query has
-   conditions. **Save…** and **Saved queries** redirect a logged-out user to
-   log in the same way (the query is saved even when blank: they asked to save
-   it), and so does a `401` from any saved-queries request ("Saved queries").
-   Both buttons warn first with the same advisory note as Run
-   (`LOGIN_FIRST_NOTE`): a redirect without a warning surprised users
-   (maintainer's decision, 2026-10-08).
+   conditions. **Log in** in the dialog that **Save…** and **Saved queries**
+   show a logged-out user redirects the same way (the query is saved even when
+   blank: they asked to save it), and so does a `401` from any saved-queries
+   request ("Saved queries"). A redirect without a warning surprised users
+   (2026-10-08); a note always above the builder read as if building a query
+   needed a login (2026-10-13), so the question is asked when the button is
+   pressed.
 2. **The backend redirects back to `/?resume=1`.** `main.ts` removes
    `resume=1` from the URL at once (so a refresh doesn't repeat it) and calls
    `app.start(true)`.
@@ -1350,17 +1353,10 @@ every node; `main.ts` passes `app.openSaveDialog` / `app.openSavedList` as the
 selection when it ends, so a saved query opened before that would be
 overwritten.
 
-While `auth.status` is `"anonymous"` the row also draws the muted note
-`LOGIN_FIRST_NOTE` ("You'll be asked to log in first.", exported by
-`dataPreview.ts`, which shows it next to **Run query**, so the two cannot
-drift) on its own line under the title and buttons, and both buttons point at it
-with `aria-describedby` (`qb-saved-login-note`). It is advisory only, like
-Run's: the buttons still work and `app.ts` reacts to the real `401`. It is not
-drawn while `auth` is loading or authenticated, nor before the buttons exist. A
-redirect to login without a warning surprised users (maintainer's decision,
-2026-10-08). `main.ts` repaints the card when `auth` changes; the buttons keep
-the keyboard focus through that repaint (`data-action`, "Keyboard focus across
-repaints").
+A logged-out user's press on either button opens the login question in the
+saved-queries dialog ("Saved queries — `savedQueries.ts`"); the title row draws
+no note. **Decided 2026-10-13:** the note under the buttons (2026-10-08) read
+as if the whole builder needed a login.
 
 A group is a coloured bracket (green = ALL/AND, mustard = ANY/OR) with a header:
 a bordered collapse chevron (`collapseButton`: `angle down` while open, `angle
@@ -1643,8 +1639,7 @@ fix it. The panel says that the query has problems, how many, and where.
 
 Owns the app's only **Run query** button: disabled with the reason when the
 query can't run; enabled with an advisory note ("You'll be asked to log in
-first.", the exported `LOGIN_FIRST_NOTE`, which the query card's **Save…** and
-**Saved queries** show too) when ready; a loader; an error with **Try again**;
+first.", `LOGIN_FIRST_NOTE`) when ready; a loader; an error with **Try again**;
 or the result. The result is a list of compact rows, one native `<details>`
 per event: the id's first 8 characters (all of it in the tooltip and the
 JSON), one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default; a
@@ -1665,7 +1660,7 @@ view is a stand-in for a dedicated event viewer planned later.
 ### Saved queries — `savedQueries.ts`
 
 The **Save…** and **Saved queries** buttons of the query card open one of two
-dialogs. Everything they do is an action in `app.ts` ("Saved queries" under
+dialogs (or, for a logged-out user, the login question: see "Logged out"). Everything they do is an action in `app.ts` ("Saved queries" under
 "API contract", and the state in "State and the render loop"); this file only
 draws `savedDialog`, `save`, `savedList`, `savedConfirm` and `openSaved`.
 
@@ -1695,10 +1690,12 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm` and `openSaved`.
   one asks about that item instead. Loading, the empty state ("No saved
   queries yet. Build a query and press Save…") and an error with **Try again**
   show in the dialog. **Close** closes it.
-- **Logged out**: both buttons first show the same advisory note as Run
-  (`LOGIN_FIRST_NOTE`, "Centre — `queryBuilder.ts`"), then start the login
-  redirect instead of opening a dialog, the query saved first ("Saved query
-  across the login/compliance redirect").
+- **Logged out**: both buttons open a small dialog instead: "Log in to save
+  queries" / "Log in to see saved queries", "… You'll leave this page to log in
+  and come back here; the query you are building is kept.", **Log in**
+  (focused; `app.logInToSave`, the query is saved first: "Saved query across the
+  login/compliance redirect") and **Cancel**. Escape closes it; closing returns
+  the focus to the button that opened it.
 
 **Decision: a native `<dialog>` with `showModal()`, not Fomantic's modal.**
 The browser keeps the focus inside it, greys out and blocks the page, and
@@ -1727,7 +1724,7 @@ reads the boxes before it paints and passes them to `savedDialogHtml`.
 Keyboard focus:
 
 - **Opening** puts the focus on the dialog's `data-initial-focus` control:
-  the Name box, or in the list the first **Open**, the empty-state or loading
+  the Name box, **Log in** in the login question, or in the list the first **Open**, the empty-state or loading
   text (`tabindex="-1"`), or **Try again**. When the control that had the
   focus goes (the loader replaced by the list, Save turned into a loader), it
   goes there again.

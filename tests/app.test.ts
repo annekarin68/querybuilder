@@ -950,25 +950,36 @@ describe("dropping docs items", () => {
 // ---- saved queries --------------------------------------------------------
 
 describe("saved queries: opening the dialogs", () => {
-  it("sends an anonymous visitor to log in, keeping the query (even a blank one)", () => {
+  it("asks an anonymous visitor to log in first instead of leaving at once", () => {
     const { app, navigate, store } = setup({
       ...ready(emptyQuery()),
       auth: { status: "anonymous" },
     });
     app.openSaveDialog();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(store.getState().savedDialog).toBe("login-to-save");
+  });
+
+  it("does the same for the list, without asking the server", () => {
+    const { app, navigate, api, store } = setup({ ...ready(), auth: { status: "anonymous" } });
+    app.openSavedList();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(api.listSavedQueries).not.toHaveBeenCalled();
+    expect(store.getState().savedDialog).toBe("login-to-list");
+  });
+
+  it("Log in in that dialog goes to log in, keeping the query (even a blank one)", () => {
+    const { app, navigate, store } = setup({
+      ...ready(emptyQuery()),
+      auth: { status: "anonymous" },
+      savedDialog: "login-to-save",
+    });
+    app.logInToSave();
     expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
     expect(takePendingQuery()).toEqual({
       query: store.getState().query,
       selectedDatabaseIds: ["alpha", "beta"],
     });
-    expect(store.getState().savedDialog).toBeNull();
-  });
-
-  it("does the same for the list", () => {
-    const { app, navigate, api } = setup({ ...ready(), auth: { status: "anonymous" } });
-    app.openSavedList();
-    expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
-    expect(api.listSavedQueries).not.toHaveBeenCalled();
   });
 
   it("opens the save dialog for a logged-in user, with a fresh save state", () => {

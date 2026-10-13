@@ -161,10 +161,10 @@ function runBlock({
   </div>`;
 }
 
-/** Said next to every button that sends a logged-out user to login: Run here,
- *  and Save… / Saved queries in queryBuilder.ts. One constant, so they cannot
- *  drift apart. */
-export const LOGIN_FIRST_NOTE = "You'll be asked to log in first.";
+/** Said next to Run query, the one button that sends a logged-out user to log
+ *  in without asking first (Save… and Saved queries ask in a dialog,
+ *  savedQueries.ts). */
+const LOGIN_FIRST_NOTE = "You'll be asked to log in first.";
 
 /** Advisory only (docs/ARCHITECTURE.md, "Auth"): Run always attempts the
  *  request; src/app.ts reacts to the real 401/403 by redirecting into

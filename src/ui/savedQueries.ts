@@ -6,7 +6,8 @@ import { countLabel, formatDate } from "./format";
 
 /**
  * The **Save…** and **Saved queries** dialogs (docs/ARCHITECTURE.md, "Saved
- * queries — `savedQueries.ts`"). Both are drawn in ONE native `<dialog>` that
+ * queries — `savedQueries.ts`"). All of them (save, list, and the login
+ * question for a logged-out user) are drawn in ONE native `<dialog>` that
  * the shell creates once (`Shell.savedDialog`): `showModal()` keeps the focus
  * inside it, greys out the page and reports Escape (which cancels a question
  * or closes the dialog: `escapeAction`), all without a Fomantic plugin (so
@@ -20,7 +21,12 @@ export const SAVED_TITLE_ID = "qb-saved-title";
 
 /** The query card button that opens each dialog, by its `data-action`: the
  *  focus goes back to it when the dialog closes. */
-const OPENER_ACTION = { save: "open-save-dialog", list: "open-saved-list" } as const;
+const OPENER_ACTION = {
+  save: "open-save-dialog",
+  list: "open-saved-list",
+  "login-to-save": "open-save-dialog",
+  "login-to-list": "open-saved-list",
+} as const;
 
 /** What the user typed in the save form, carried over a repaint. */
 export interface TypedDraft {
@@ -187,16 +193,49 @@ function savedListHtml(state: AppState): string {
     </div>`;
 }
 
+type LoginDialog = "login-to-save" | "login-to-list";
+
+/**
+ * For a logged-out user: saved queries belong to an account, so ask before
+ * leaving for the login page (maintainers' decision, 2026-10-13). Log in keeps
+ * the query on screen for the return trip ("Saved query across the
+ * login/compliance redirect"); Cancel and Escape just close.
+ */
+function loginHtml(kind: LoginDialog): string {
+  const what =
+    kind === "login-to-save"
+      ? "Saved queries are kept in your account."
+      : "Your saved queries are kept in your account.";
+  return `<p>${what} You'll leave this page to log in and come back here; the query you are building is kept.</p>
+    <div class="qb-dialog-actions">
+      <button type="button" class="ui small primary button" data-action="log-in-to-save" data-initial-focus>Log in</button>
+      <button type="button" class="ui small basic button" data-action="close-saved-dialog">Cancel</button>
+    </div>`;
+}
+
+/** Each dialog's title. */
+const TITLES = {
+  save: "Save query",
+  list: "Saved queries",
+  "login-to-save": "Log in to save queries",
+  "login-to-list": "Log in to see saved queries",
+} as const;
+
 /**
  * The open dialog's contents, or "" while it is closed. `typed`: what the user
  * had typed in the save form before this repaint (see `renderSavedDialog`).
  * Every text from the server is escaped.
  */
 export function savedDialogHtml(state: AppState, typed: TypedDraft | null = null): string {
-  if (state.savedDialog === null) return "";
-  const title = state.savedDialog === "save" ? "Save query" : "Saved queries";
-  const body = state.savedDialog === "save" ? saveFormHtml(state, typed) : savedListHtml(state);
-  return `<h2 class="qb-dialog-title" id="${SAVED_TITLE_ID}">${title}</h2>${body}`;
+  const dialog = state.savedDialog;
+  if (dialog === null) return "";
+  const body =
+    dialog === "save"
+      ? saveFormHtml(state, typed)
+      : dialog === "list"
+        ? savedListHtml(state)
+        : loginHtml(dialog);
+  return `<h2 class="qb-dialog-title" id="${SAVED_TITLE_ID}">${TITLES[dialog]}</h2>${body}`;
 }
 
 /** The part of the state that decides where the focus goes. */
@@ -349,6 +388,7 @@ export type SavedDialogActions = Pick<
   | "askDeleteSaved"
   | "confirmSavedAction"
   | "cancelSavedAction"
+  | "logInToSave"
 >;
 
 /** Delegated listeners on the persistent `<dialog>`. Call once at startup. */
@@ -373,6 +413,8 @@ export function wireSavedDialog(dialog: HTMLDialogElement, app: SavedDialogActio
         return app.confirmSavedAction();
       case "cancel-saved-action":
         return app.cancelSavedAction();
+      case "log-in-to-save":
+        return app.logInToSave();
     }
   });
 

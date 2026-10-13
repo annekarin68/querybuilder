@@ -280,3 +280,26 @@ describe("escapeAction (what Escape does)", () => {
     expect(escapeAction(listDialog())).toBe("close-saved-dialog");
   });
 });
+
+describe("the login dialog", () => {
+  const at = (savedDialog: AppState["savedDialog"]) => ({ ...initialState, savedDialog });
+
+  it.each([
+    ["login-to-save", "Log in to save queries"],
+    ["login-to-list", "Log in to see saved queries"],
+  ] as const)("%s has its own title, Log in and Cancel", (kind, title) => {
+    const html = savedDialogHtml(at(kind));
+    expect(html).toContain(`>${title}</h2>`);
+    expect(html).toContain('data-action="log-in-to-save" data-initial-focus>Log in</button>');
+    expect(html).toContain('data-action="close-saved-dialog">Cancel</button>');
+    expect(html).toContain("the query you are building is kept");
+  });
+
+  it("Escape closes it", () => {
+    expect(escapeAction(at("login-to-save"))).toBe("close-saved-dialog");
+  });
+
+  it("opening it puts the focus on Log in", () => {
+    expect(focusAfterRepaint(null, at("login-to-list"))).toBe("initial");
+  });
+});

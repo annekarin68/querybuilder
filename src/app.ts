@@ -447,18 +447,26 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     show(userMessage(err));
   }
 
-  /** Whether the dialogs may open: an anonymous visitor goes to log in instead,
-   *  with the query saved even when it is blank (they asked to save). While the
-   *  login state is still loading the visitor counts as logged in: a 401 from
-   *  the API redirects. */
-  function mayUseSavedQueries(): boolean {
+  /** Whether the dialogs may open. A logged-out visitor is asked to log in
+   *  first instead (`kind`: which button they pressed). A redirect without a
+   *  word surprised users (2026-10-08), and a note always on screen read as
+   *  if the whole builder needed a login (maintainers' decision, 2026-10-13).
+   *  While the login state is still loading the visitor counts as logged in: a
+   *  401 from the API redirects. */
+  function mayUseSavedQueries(kind: "save" | "list"): boolean {
     if (store.getState().auth.status !== "anonymous") return true;
-    redirectInto(LOGIN_URL);
+    store.setState({ savedDialog: kind === "save" ? "login-to-save" : "login-to-list" });
     return false;
   }
 
+  /** "Log in" in that dialog: keep the query, even a blank one (they asked to
+   *  save it), and leave for the login flow. */
+  function logInToSave(): void {
+    redirectInto(LOGIN_URL);
+  }
+
   function openSaveDialog(): void {
-    if (!mayUseSavedQueries()) return;
+    if (!mayUseSavedQueries("save")) return;
     store.setState({ savedDialog: "save", save: { status: "idle" } });
   }
 
@@ -477,7 +485,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   function openSavedList(): void {
-    if (!mayUseSavedQueries()) return;
+    if (!mayUseSavedQueries("list")) return;
     store.setState({ savedDialog: "list", savedConfirm: null });
     loadSavedList();
   }
@@ -697,6 +705,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     retryStats,
     openSaveDialog,
     openSavedList,
+    logInToSave,
     closeSavedDialog,
     saveQuery,
     confirmReplace,

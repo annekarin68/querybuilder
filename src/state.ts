@@ -37,8 +37,10 @@ export type PreviewState =
   | { status: "ok"; events: EventRecord[] }
   | { status: "error"; error: string };
 
-/** Which saved-queries dialog is open: "save" (name and note) or "list". */
-export type SavedDialog = null | "save" | "list";
+/** Which saved-queries dialog is open: "save" (name and note), "list", or, for
+ *  a logged-out user, the question whether to log in first ("login-to-save" /
+ *  "login-to-list" say which button asked, so the focus can go back to it). */
+export type SavedDialog = null | "save" | "list" | "login-to-save" | "login-to-list";
 
 /** Saving the query on screen, as the save dialog shows it. */
 export type SaveState =
