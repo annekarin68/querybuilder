@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { EventRecord, Facet } from "../../src/model";
-import { eventBadges, fieldValues, rowCell, rowGrid, shortId } from "../../src/ui/dataPreview";
+import {
+  EVENT_SAMPLE_SIZE,
+  eventBadges,
+  fieldValues,
+  idleMessage,
+  rowCell,
+  rowGrid,
+  shortId,
+} from "../../src/ui/dataPreview";
 
 function facet(id: string, group: string, tags: string[]): Facet {
   return {
@@ -144,5 +152,14 @@ describe("rowGrid", () => {
         { heading: "Kind", facet: "a", field: "c" },
       ]),
     ).toBe("6rem 12rem minmax(0, 10rem) minmax(0, 1fr) auto");
+  });
+});
+
+describe("idleMessage", () => {
+  it("promises a random sample of up to the sample size", () => {
+    expect(EVENT_SAMPLE_SIZE).toBe(2000);
+    expect(idleMessage("en-US")).toBe(
+      "Fetch a random sample of up to 2,000 events this query matches.",
+    );
   });
 });

@@ -180,20 +180,32 @@ describe("POST /api/filter/execute", () => {
     expect(res.status).toBe(403);
   });
 
-  it("returns the matching events, capped, and writes an audit entry", async () => {
+  it("returns up to 2,000 matching events, each at most once, and writes an audit entry", async () => {
     const before = auditLogSnapshot().length;
     const all = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"];
     const res = await post(`${API}/filter/execute`, body(all), compliant());
     expect(res.status).toBe(200);
     const json = (await res.json()) as { events: { id: string; items: unknown[] }[] };
     expect(json.events.length).toBeGreaterThan(0);
+    expect(QUERY_RESULT_CAP).toBe(2000);
     expect(json.events.length).toBeLessThanOrEqual(QUERY_RESULT_CAP);
+    expect(new Set(json.events.map((e) => e.id)).size).toBe(json.events.length);
     for (const event of json.events) {
       expect(event.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);
       expect(Array.isArray(event.items)).toBe(true);
     }
     expect(auditLogSnapshot()).toHaveLength(before + 1);
     expect(auditLogSnapshot().at(-1)).toMatchObject({ name: "demo.user", reason: "testing" });
+  });
+
+  it("returns only events that match the query", async () => {
+    const nobody = {
+      ...everyEvent,
+      children: [{ ...everyEvent.children[0], operator_id: "absent" }],
+    };
+    const all = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"];
+    const res = await post(`${API}/filter/execute`, body(all, nobody), compliant());
+    expect(((await res.json()) as { events: unknown[] }).events).toEqual([]);
   });
 
   it("checks the body after the session", async () => {

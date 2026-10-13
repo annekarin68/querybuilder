@@ -98,7 +98,8 @@ export function toEvent(e: ResponseObject<EventResponse>): EventRecord {
   for (const item of e.list<EventItemResponse>("items")) {
     const facetId = item.id("facet_label");
     // Each occurrence is keyed by the backend's own field ids, so its keys are
-    // read as they come rather than by name; a null value is left out.
+    // read as they come rather than by name; the backend leaves an empty field out, and a null
+    // value (tolerated, never expected) is dropped too.
     const occurrences = item
       .list<Record<string, Scalar | null>>("values")
       .map((occurrence) => occurrence.scalars());

@@ -172,13 +172,14 @@ export interface EventItemResponse {
   /** `IndividualResponse.label`. */
   facet_label: string;
   /** One object per occurrence of the individual in this event (usually
-   *  one), each keyed by `IndividualFieldResponse.label`. A field without a
-   *  value is left out or `null`. */
+   *  one), each keyed by `IndividualFieldResponse.label`. The backend leaves a
+   *  field without a value out of the object. The frontend also tolerates
+   *  `null` there (it drops it), but the backend does not send it. */
   values: Record<string, string | number | boolean | null>[];
 }
 
-/** The events matching the current query in the selected databases, capped
- *  by the backend. No pagination. */
+/** Up to 2,000 randomly sampled events matching the current query in the
+ *  selected databases; the backend decides the number. No pagination. */
 export interface EventsResponse {
   events: EventResponse[];
 }

@@ -138,8 +138,9 @@ export async function getStats(
   });
 }
 
-/** POST …/filter/execute: the events matching `query` in `databaseIds` (capped by the
- *  backend). Like getStats, an unfinished query rejects without sending. */
+/** POST …/filter/execute: the events matching `query` in `databaseIds` (a random
+ *  sample of up to 2,000; the backend decides the size). Like getStats, an
+ *  unfinished query rejects without sending. */
 export async function runQuery(
   query: Group,
   databaseIds: string[],

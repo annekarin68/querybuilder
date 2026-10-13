@@ -23,3 +23,21 @@ export function toEventResponse(e: Entryset): EventResponse {
     })),
   };
 }
+
+/**
+ * Up to `cap` items of `items`, picked at random without repeats, in random
+ * order: what the backend does for POST …/filter/execute (a random sample, not
+ * the first N). A partial Fisher–Yates shuffle: each step swaps a random
+ * not-yet-picked item into the next place. `random` is a parameter (like
+ * `Math.random`: a number from 0 up to, not including, 1) so a test can pin
+ * the outcome. The list passed in is not changed.
+ */
+export function sampleOf<T>(items: readonly T[], cap: number, random: () => number): T[] {
+  const pool = [...items];
+  const size = Math.min(cap, pool.length);
+  for (let i = 0; i < size; i++) {
+    const j = i + Math.floor(random() * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+  }
+  return pool.slice(0, size);
+}

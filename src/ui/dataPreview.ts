@@ -4,6 +4,18 @@ import { escapeHtml, paint } from "./panel";
 import { countLabel, displayLabel, exact, formatWhen } from "./format";
 import { HIDDEN_ROW_BADGES, ROW_COLUMNS, type RowColumn } from "../config";
 
+/**
+ * How many events the Run query panel promises. The backend decides the real
+ * size of the sample (up to this many, picked at random); this constant only
+ * words the panel's text, so change it when the backend's limit changes.
+ */
+export const EVENT_SAMPLE_SIZE = 2000;
+
+/** What the idle Run query panel says; `locale` is for tests ("2,000" vs "2.000"). */
+export function idleMessage(locale?: string): string {
+  return `Fetch a random sample of up to ${exact(EVENT_SAMPLE_SIZE, locale)} events this query matches.`;
+}
+
 /** How many tag / group badges to show inline before collapsing the rest into "+N". */
 const MAX_TAG_BADGES = 3;
 const MAX_GROUP_BADGES = 2;
@@ -207,7 +219,7 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
       el,
       card(
         runBlock({
-          message: "Fetch a sample of the events this query matches.",
+          message: idleMessage(),
           enabled: true,
           note: runNote(state),
         }),

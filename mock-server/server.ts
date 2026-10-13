@@ -10,7 +10,7 @@ import {
   type DatabaseOutcome,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
-import { toEventResponse } from "./events";
+import { sampleOf, toEventResponse } from "./events";
 import { ROWS } from "./rows";
 import { queryProblem } from "./requestBody";
 import { httpErrorFor, type HttpErrorRule } from "./httpErrors";
@@ -65,8 +65,8 @@ export interface MockConfig {
   httpErrors?: HttpErrorRule[];
 }
 
-/** POST /api/filter/execute returns at most this many events. There is no pagination. */
-export const QUERY_RESULT_CAP = 25;
+/** POST /api/filter/execute returns a random sample of at most this many events. There is no pagination. */
+export const QUERY_RESULT_CAP = 2000;
 
 // ---- responses ------------------------------------------------------------
 
@@ -264,7 +264,7 @@ async function streamStats(req: IncomingMessage, res: ServerResponse, config: Mo
   res.end();
 }
 
-/** POST /api/filter/execute: the matching events. Needs a session and a compliance reason. */
+/** POST /api/filter/execute: a random sample of the matching events. Needs a session and a compliance reason. */
 async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   const session = sessionFor(req.headers.cookie);
   if (!session) return sendJson(res, 401, { error: "Log in to preview data." });
@@ -273,12 +273,11 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   }
   const body = await readQueryBody(req, res);
   if (!body) return;
-  const events = filterByDatabases(ROWS, body.databases)
+  const matching = filterByDatabases(ROWS, body.databases)
     .filter((row) => matches(body.query, row))
     .map((row) => ENTRYSETS[String(row.id)])
-    .filter((e): e is Entryset => e !== undefined)
-    .slice(0, QUERY_RESULT_CAP)
-    .map(toEventResponse);
+    .filter((e): e is Entryset => e !== undefined);
+  const events = sampleOf(matching, QUERY_RESULT_CAP, Math.random).map(toEventResponse);
   logQueryAudit(session.user.display_name, session.compliance.reason);
   sendJson(res, 200, { events });
 }

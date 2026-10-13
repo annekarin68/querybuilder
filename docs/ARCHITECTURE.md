@@ -690,7 +690,7 @@ comments, `/api/filter/validate` and the like are short for `{prefix}/filter/val
 | `GET {prefix}/documentation/databases` | The databases to scope to — a bare array. |
 | `GET {prefix}/documentation/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
 | `POST {prefix}/filter/validate` | The statistics (the backend's name for this endpoint). Body: a `QueryRequest` ("Wire format of the query"). Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
-| `POST {prefix}/filter/execute` | Body: a `QueryRequest` ("Wire format of the query"). The matching events (`EventsResponse`: `{ events: [{ id, items: [{ facet_label, values: [ … ] }] }] }`), capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance log (`403`). |
+| `POST {prefix}/filter/execute` | Body: a `QueryRequest` ("Wire format of the query"). Up to 2,000 randomly sampled matching events (`EventsResponse`: `{ events: [{ id, items: [{ facet_label, values: [ … ] }] }] }`; the backend decides the number, `EVENT_SAMPLE_SIZE` only words the panel), no pagination. An event that holds the same facet several times has one item whose `values` is a list of objects, one per occurrence; the backend leaves a field without a value out of its object. Needs a session (`401`) and a compliance log (`403`). |
 | `GET {prefix}/users/me` | Who's logged in (`UserResponse`; the app shows `display_name`). `401` when anonymous. |
 | `GET {prefix}/auth/login`, `/callback`, `POST /logout` | Login (below). |
 | `GET {prefix}/log/build` | Starts the compliance flow: a browser navigation, not a fetch (Compliance, below). The callback the compliance service returns to is the backend's own business. |
@@ -703,33 +703,28 @@ comments, `/api/filter/validate` and the like are short for `{prefix}/filter/val
 
 A body that isn't a well-formed `QueryRequest` is answered with `400`.
 
-**Not yet confirmed by the backend (2026-10-13).** The frontend implements the
-shapes below as proposed, and asks the backend team to confirm or correct them:
+**The contract is ours (2026-10-13).** The backend team builds its response
+models to serve the frontend and implements `src/api/types.ts`; they send no
+example responses, so that file (with its doc comments) is the whole
+specification. Every key is snake_case ("Naming"). What the backend team still
+has to do:
 
-- `GET /users/me`: the spelling of the keys (`sub` or `user_id`,
-  `preferred_username` or `username`), and whether login, callback and logout
-  stay under `/auth`.
-- `POST /filter/execute`: snake_case or camelCase for the whole API; what the
-  `values` list means (one object per occurrence of the facet in the event?) and
-  whether a facet can appear twice in `items`; null versus missing values; a
-  `truncated` flag (or a total) for the capped result; an optional database on
-  each event; the same `QueryRequest` body and the same `401` / `403` as before.
-- `POST /filter/validate` (the statistics): that its answer is still the
-  newline-delimited stream of `StatsResponse` lines, one per selected database.
-- After login and after the compliance check, the backend must send the browser
-  back to `/?resume=1`. Today it returns to the URL that started the flow, which
-  loses the query kept across the redirect ("Saved query across the
-  login/compliance redirect").
-- The paths of the saved-queries endpoints. Until they are confirmed the
-  frontend keeps the paths in the table above. (The data dictionary and
-  compliance paths were confirmed on 2026-10-13 and are adopted.)
-- Whether some `403` reasons must be shown to users. Today the GUI never shows
-  the server's text (a `403` shows the plain `userMessage` text; the server's
-  words go to the console).
+- After login and after the compliance check, send the browser back to
+  `/?resume=1`. Today it returns to the URL that started the flow, which loses
+  the query kept across the redirect ("Saved query across the login/compliance
+  redirect").
+- Implement the saved-queries endpoints at the paths in the table above
+  ("Saved queries"). The buttons stay meanwhile; until the endpoints exist they
+  show the plain error message.
+- Leave a field without a value out of an event's object. (The frontend still
+  tolerates a `null` there and drops it, but the backend should not send one.)
+- Decide whether some `403` reasons must be shown to users. This one is open:
+  today the GUI never shows the server's text (a `403` shows the plain
+  `userMessage` text; the server's words go to the console).
 
-Until the answers come, the proposed shapes stay. If an answer differs, only
-`src/api/` (`types.ts`, `response.ts`) and the mock server change; the rest of
-the app uses the model ("Data model").
+If the backend needs a shape to differ, only `src/api/` (`types.ts`,
+`response.ts`, `request.ts`) and the mock server change; the rest of the app
+uses the model ("Data model").
 
 ### Data model
 
@@ -764,10 +759,13 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **A field's type** comes from `type`, or from `format` when `type` is empty,
   into `Field.typeName` (see "The field catalog").
 - **A statistics line** becomes a `DatabaseResult` that is either `"ok"`
-  (with a `matchCount`) or `"failed"` (with `errors`, each a `DatabaseError`:
-  `message`, `kind`, and the `nodeId` it points at or `null`): see below.
-- **An event's id** is a GUID (text); its values are kept per occurrence,
-  because the backend may list a facet more than once in one event.
+  (with a `matchCount`, from `match_count`) or `"failed"` (with `errors`, each a `DatabaseError`:
+  `message`, `kind`, and the `nodeId` (from `node_id`) it points at or `null`): see below.
+- **An event's id** is a GUID (text); its values are kept per occurrence.
+  The backend merges a facet that occurs several times in one event into one
+  item whose `values` is a list of objects, one per occurrence (and the reader
+  also accepts the same facet in two items). Each object leaves out the fields
+  without a value; a `null` is tolerated and dropped.
 - **A missing name.** A database or facet with a blank `name` shows its id.
 - **The user's name** is the backend's `display_name` (it already falls back from
   the username to the email to the id); a blank one shows `sub` / `user_id`.
@@ -948,10 +946,10 @@ compliance reason is needed. The list never shows the query itself (queries can
 be sensitive): a name and an optional note help recall it. (Not to be confused
 with "Saved query across the login/compliance redirect": that one is the
 *pending query*, a `sessionStorage` copy of the query on screen, never sent to
+the backend.)
+
 The endpoints are `GET` and `POST {prefix}/filter/saved`, and `PUT` and
 `DELETE {prefix}/filter/saved/{id}` ("API contract").
-
-the backend.)
 
 `SavedQueryRequest` is `{ name, note, databases, query }`.
 
@@ -1757,14 +1755,21 @@ broken.
 ### Under the query — `dataPreview.ts` (Matching events)
 
 Owns the app's only **Run query** button: disabled with the reason when the
-query can't run; enabled with an advisory note ("You'll be asked to log in
-first.", `LOGIN_FIRST_NOTE`) when ready; a loader; an error with **Try again**;
+query can't run; enabled, with the text "Fetch a random sample of up to
+2,000 events this query matches." (`idleMessage`) and an advisory note ("You'll
+be asked to log in first.", `LOGIN_FIRST_NOTE`) when ready; a loader; an error with **Try again**;
 or the result. The result is a list of compact rows, one native `<details>`
 per event: the id's first 8 characters (all of it in the tooltip and the
 JSON), one cell per `ROW_COLUMNS` entry (`src/config.ts`; none by default; a
 cell joins the values of every occurrence of its facet), up to 3 tag and 2
 group badges ranked by how many of the event's facets carry them (values in `HIDDEN_ROW_BADGES` left out), and the facet
 count; expanding a row shows the event's JSON.
+
+The backend returns a **random sample of up to 2,000** of the matching events,
+not the first ones, and there is no pagination. `EVENT_SAMPLE_SIZE` (2000) in
+`dataPreview.ts` only words the idle text: the backend decides the real size,
+so change the constant when the backend's limit changes. The statistics, not
+this list, say how many events match in total.
 
 Pressing **Run query** from the keyboard leaves the focus on this card (the
 button is replaced by the loader, then by the result; see "Keyboard focus
@@ -1911,7 +1916,11 @@ to a named handler function — add a route there, and a test in
   none: the frontend's own validation reports it.
 - **`/api/filter/execute`** returns the matching events themselves, as
   `EventResponse`s (`events.ts`: a GUID made from the stored numeric id, one
-  occurrence per individual), at most `QUERY_RESULT_CAP` (25).
+  occurrence per individual): a random sample of at most `QUERY_RESULT_CAP`
+  (2,000) of the matches (`sampleOf` in `events.ts`: a shuffle, then the first
+  N, with the random source passed in so a test can pin it). The 21-event
+  sample data never reaches the cap, so there the order is the only thing that
+  varies.
 - **`present` / `absent`** work at both levels (`conditionMatches` in
   `evaluate.ts`). On a field, `present` matches a non-blank value (not `null`,
   missing or `""`) and `absent` a blank one. With `field_id: null`, `present`
