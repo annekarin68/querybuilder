@@ -11,7 +11,7 @@ import { findField, type FieldCatalog } from "../query/fieldCatalog";
 /**
  * The small logo in front of a text, saying who wrote it (`TEXT_SOURCES` in
  * src/config.ts). Its label is both the hover text and the `alt`, so a
- * screen reader reads "Third-party description; may contain errors" before
+ * screen reader reads "Third-party text; may contain errors" before
  * the text. Not draggable: the row's grip is what drags.
  */
 export function sourceLogo(source: TextSource): string {

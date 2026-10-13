@@ -414,6 +414,13 @@ describe("issuesHtml", () => {
     );
   });
 
+  it("the red invalid icon is decoration, hidden from screen readers like the warning's", () => {
+    const html = issuesHtml("g1", [{ nodeId: "g1", message: "Bad date.", kind: "invalid" }]);
+    expect(html).toBe(
+      '<div class="qb-invalid"><i class="exclamation circle icon" aria-hidden="true"></i>Bad date.</div>',
+    );
+  });
+
   it("the user's own unfinished parts stay a quiet grey hint", () => {
     const html = issuesHtml("g1", [
       { nodeId: "g1", message: "Add a condition to this group.", kind: "incomplete" },

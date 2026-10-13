@@ -303,10 +303,23 @@ describe("the login dialog", () => {
   ] as const)("%s has its own title, Log in and Cancel", (kind, title) => {
     const html = savedDialogHtml(at(kind));
     expect(html).toContain(`>${title}</h2>`);
-    expect(html).toContain('data-action="log-in-to-save" data-initial-focus>Log in</button>');
+    expect(html).toContain(
+      'data-action="log-in-to-save" aria-describedby="qb-login-why" data-initial-focus>Log in</button>',
+    );
     expect(html).toContain('data-action="close-saved-dialog">Cancel</button>');
     expect(html).toContain("the query you are building is kept");
   });
+
+  // The dialog is labelled by its title; the paragraph says why, so a screen
+  // reader announces both when the modal opens.
+  it.each(["login-to-save", "login-to-list"] as const)(
+    "%s ties its explanation to the Log in button",
+    (kind) => {
+      const html = savedDialogHtml(at(kind));
+      expect(html).toContain('<p id="qb-login-why">');
+      expect(html).toMatch(/data-action="log-in-to-save" aria-describedby="qb-login-why"/);
+    },
+  );
 
   it("Escape closes it", () => {
     expect(escapeAction(at("login-to-save"))).toBe("close-saved-dialog");

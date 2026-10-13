@@ -465,8 +465,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     return false;
   }
 
-  /** "Log in" in that dialog: keep the query, even a blank one (they asked to
-   *  save it), and leave for the login flow. */
+  /** "Log in" in either login dialog (the save one and the list one; the name
+   *  is from the first): keep the query, even a blank one (they asked to save
+   *  it), and leave for the login flow. */
   function logInToSave(): void {
     redirectInto(LOGIN_URL);
   }

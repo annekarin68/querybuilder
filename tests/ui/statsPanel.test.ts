@@ -157,7 +157,8 @@ describe("statsPanelHtml", () => {
     it("counts the problems in the button's label", () => {
       const other = { ...issue, nodeId: "other" };
       const html = statsPanelHtml(withNodeError({ serverIssues: [issue, other] }));
-      expect(html).toContain('aria-label="Show the first of 2 problems in the query"');
+      // The accessible name starts with the visible text (WCAG 2.5.3, label in name).
+      expect(html).toContain('aria-label="Show problem (the first of 2 in the query)"');
     });
 
     it("explains a database's own failure in its row's label and tooltip, not in text", () => {
@@ -234,8 +235,17 @@ describe("showProblemButton", () => {
     });
     expect(html).toContain(`data-action="show-issue" data-target-id="${root.id}"`);
     expect(html).toContain(">Show problem</button>");
-    expect(html).toContain('aria-label="Show the first of 2 problems in the query"');
+    expect(html).toContain('aria-label="Show problem (the first of 2 in the query)"');
     expect(html).not.toContain("Not counted");
+  });
+
+  it("with one problem, the name still starts with the visible text", () => {
+    const html = showProblemButton({
+      ...initialState,
+      query: root,
+      serverIssues: [problem("Too long.")],
+    });
+    expect(html).toContain('aria-label="Show problem in the query"');
   });
 });
 

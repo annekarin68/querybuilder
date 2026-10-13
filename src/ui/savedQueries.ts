@@ -198,6 +198,9 @@ function savedListHtml(state: AppState): string {
     </div>`;
 }
 
+/** The login dialog's explanation: the Log in button is described by it. */
+const LOGIN_WHY_ID = "qb-login-why";
+
 type LoginDialog = "login-to-save" | "login-to-list";
 
 /**
@@ -211,9 +214,14 @@ function loginHtml(kind: LoginDialog): string {
     kind === "login-to-save"
       ? "Saved queries are kept in your account."
       : "Your saved queries are kept in your account.";
-  return `<p>${what} You'll leave this page to log in and come back here; the query you are building is kept.</p>
+  // The explanation is tied to the focused Log in button, not to the
+  // `<dialog>`: the dialog element is created once (layout.ts) and serves
+  // every dialog, so a description there would have to be added and removed on
+  // each repaint. The button is repainted with its own text, and a screen
+  // reader reads its description right after the dialog's title.
+  return `<p id="${LOGIN_WHY_ID}">${what} You'll leave this page to log in and come back here; the query you are building is kept.</p>
     <div class="qb-dialog-actions">
-      <button type="button" class="ui small primary button" data-action="log-in-to-save" data-initial-focus>Log in</button>
+      <button type="button" class="ui small primary button" data-action="log-in-to-save" aria-describedby="${LOGIN_WHY_ID}" data-initial-focus>Log in</button>
       <button type="button" class="ui small basic button" data-action="close-saved-dialog">Cancel</button>
     </div>`;
 }

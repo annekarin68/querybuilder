@@ -1163,7 +1163,7 @@ body {
 .qb-event-row summary {
   display: grid;
   /* Set inline by dataPreview.ts from the configured ROW_COLUMNS. */
-  grid-template-columns: var(--qb-er-grid, 3rem minmax(0, 1fr) auto);
+  grid-template-columns: var(--qb-er-grid, 6rem minmax(0, 1fr) auto);
   gap: 0.75rem;
   align-items: center;
   padding: 0.5rem 0.75rem;
@@ -1396,10 +1396,11 @@ body {
 .qb-doc-field-blurb {
   flex: 1 0 100%;
   /* The 100% basis must include the indent below, or the text sticks out of
-     the row by that much. Everything inside a <details> inherits content-box:
-     the browser's own box around a <details>' content is not matched by
-     Fomantic's `* { box-sizing: inherit }` reset, so it falls back to
-     content-box and passes that on to its children. */
+     the row by that much. RULE: an element inside a <details> body that has
+     width 100% plus padding needs `box-sizing: border-box`. Why: the
+     <details> content wrapper (::details-content) is not matched by
+     Fomantic's `* { box-sizing: inherit }` reset, so its descendants fall
+     back to content-box (observed in Chromium). */
   box-sizing: border-box;
   /* Lines up under the field name: the row's padding (0.5rem) + this = the name's
      left edge (chevron + grip + their gaps; measured in the browser). */
@@ -1433,7 +1434,8 @@ body {
   box-sizing: border-box;
   padding-left: 3rem;
   font-size: 0.72rem;
-  color: var(--qb-subtle);
+  /* Muted, not subtle: subtle is under 4.5:1 on the row's hover tint. */
+  color: var(--qb-muted);
 }
 .qb-doc-field[open] .qb-doc-field-more {
   display: none;

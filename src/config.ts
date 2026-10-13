@@ -63,7 +63,8 @@ export const MASCOT = {
  * - `ours`: the backend's own, always-correct `comment`. By default the app's
  *   own logo (`MASCOT.neutral`), so a deployment that replaces that file gets
  *   its logo here too.
- * - `thirdParty`: the third party's `description`, which may contain errors.
+ * - `thirdParty`: the third party's `description` and group, which may
+ *   contain errors (one label for both: it is one source).
  *   A neutral placeholder by default: put the company's logo in
  *   public/sources/third-party.svg (same rules as the mascot files: a
  *   self-contained plain SVG), or point `logo` at another file in public/,
@@ -73,7 +74,7 @@ export const TEXT_SOURCES = {
   ours: { logo: "/pickle/logo.svg", label: "Our description" },
   thirdParty: {
     logo: "/sources/third-party.svg",
-    label: "Third-party description; may contain errors",
+    label: "Third-party text; may contain errors",
   },
 } as const;
 

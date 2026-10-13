@@ -66,10 +66,10 @@ export function showProblemButton(state: AppState): string {
   const count = state.serverIssues.length;
   if (count === 0) return "";
   const first = placeIssues(state.query, state.serverIssues)[0]!;
+  // The accessible name starts with the visible text, so a voice-control user
+  // who says "Show problem" reaches it (WCAG 2.5.3, label in name).
   const label =
-    count === 1
-      ? "Show the problem in the query"
-      : `Show the first of ${count} problems in the query`;
+    count === 1 ? "Show problem in the query" : `Show problem (the first of ${count} in the query)`;
   return `<button type="button" class="ui mini basic button qb-show-problem" data-action="show-issue" data-target-id="${escapeHtml(first.nodeId)}" aria-label="${label}" title="${label}"><i class="exclamation triangle icon" aria-hidden="true"></i>Show problem</button>`;
 }
 

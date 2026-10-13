@@ -1233,7 +1233,8 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
 
 **Who wrote a text.** A comment (ours, always correct) starts with our logo; a
 description and a group (the third party's, which may contain errors) start with
-the third party's logo (`sourceLogo`, `TEXT_SOURCES` in `src/config.ts`). The
+the third party's logo (`sourceLogo`, `TEXT_SOURCES` in `src/config.ts`; one
+label for both, "Third-party text; may contain errors"). The
 logo's label is its hover text and its `alt`, so a screen reader reads it before
 the text. **Decided 2026-10-13:** logos replaced the words "Third-party:", which
 confused users. The comment also stays italic, so the two can be told apart
@@ -1641,7 +1642,9 @@ Each kind of error is shown once, where the person who can fix it looks:
 | The statistics request itself failed (`ApiError`, `NetworkError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with `userMessage(err)` and **Try again** |
 
 N (in the button's label) is `AppState.serverIssues.length`, already
-de-duplicated across databases. **Show problem** carries the id `placeIssues` drew the first problem on, so a problem
+de-duplicated across databases. **Show problem**'s accessible name starts with its visible text ("Show
+problem in the query", or "Show problem (the first of N in the query)": WCAG
+2.5.3, label in name). It carries the id `placeIssues` drew the first problem on, so a problem
 inside a collapsed group points at that group. It is in `data-target-id`, not
 `data-node-id`: that one marks query nodes, and "Keyboard focus across
 repaints" would take the button for one; `main.ts` wires it to
@@ -1725,7 +1728,8 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
 - **Logged out**: both buttons open a small dialog instead: "Log in to save
   queries" / "Log in to see saved queries", "… You'll leave this page to log in
   and come back here; the query you are building is kept.", **Log in**
-  (focused; `app.logInToSave`, the query is saved first: "Saved query across the
+  (focused and described by the explanation, `aria-describedby`;
+  `app.logInToSave`, which serves both login dialogs, the query is saved first: "Saved query across the
   login/compliance redirect") and **Cancel**. Escape closes it; closing returns
   the focus to the button that opened it.
 

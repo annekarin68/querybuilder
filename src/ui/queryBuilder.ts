@@ -78,7 +78,7 @@ export function issuesHtml(nodeId: string, issues: Issue[]): string {
       ? `<div class="qb-server-warning"><i class="exclamation triangle icon" aria-hidden="true"></i>${warning}</div>`
       : "") +
     (invalid
-      ? `<div class="qb-invalid"><i class="exclamation circle icon"></i>${invalid}</div>`
+      ? `<div class="qb-invalid"><i class="exclamation circle icon" aria-hidden="true"></i>${invalid}</div>`
       : "")
   );
 }
