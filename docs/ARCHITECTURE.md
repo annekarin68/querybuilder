@@ -812,7 +812,7 @@ whether Run is allowed, so a plain-text item is a contract error; a blank
 `nodeId` is shown **once, in the query builder, next to what is wrong**; the
 statistics panel only offers **Show problem**, which jumps to it ("Right —
 `statsPanel.ts`"). An error without a `nodeId` makes that database's row a red
-bar whose tooltip and `aria-label` give the reason. `app.ts` keeps the
+bar with the reason on one line under it. `app.ts` keeps the
 errors with a `nodeId` in
 `AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`), once however
 many databases report them, and they block Run (`runBlocker` → `"rejected"`).
@@ -820,6 +820,8 @@ A line that says `success` but has no `matchCount`
 counts as failed rather than as a made-up 0. Both carry `notes` (from
 `infoMessages`). The headline sums the successful databases only; the databases
 that failed are the striped red end of its bar ("Right — `statsPanel.ts`").
+When the query itself is at fault (`queryIsAtFault`), no database failed:
+nothing is red, and the rows say the query was not run.
 
 ### The field catalog (there is no schema endpoint)
 
@@ -1195,7 +1197,8 @@ this query. The picker therefore re-renders on `stats`.
 selected database that has answered so far failed, and only with errors that
 point at query nodes (a text value that is too long fails everywhere). Those
 errors are the query's, shown in the builder where they can be fixed, and the
-statistics column offers **Show problem** once ("Right — `statsPanel.ts`").
+statistics column offers **Show problem** once and draws those databases' rows
+as "not run", not red ("Right — `statsPanel.ts`"): the two always agree.
 Red pills with the same message on every database would repeat them and
 suggest deselecting databases, which would not help. While answers stream in,
 the rule is checked again on each one: a database that then answers fine
@@ -1653,8 +1656,11 @@ headline (sum of successful databases, ratio, and a bar of every answered
 database's events: green for the matches, a striped red end for the events of
 databases that failed, `splitBar`; its words are its `aria-label` and tooltip),
 **⚠ Show problem** when the query has a problem (below), then **By database**
-(one row per streamed result: a ratio bar, or for a failed database a striped
-red bar and an icon whose tooltip and label say why, `failureReasons`), then
+(one row per streamed result: a ratio bar; for a database that failed, a
+striped red bar, a red icon and why it failed on one line under it, cut off
+with "…" if long, all of it in the row's tooltip, `failureReasons`; or, when
+the query itself is at fault, `queryIsAtFault`, a "not run" row: an empty grey
+bar and a mustard ⚠ pointing at **Show problem**, `notRunRowHtml`), then
 "Waiting on N more databases…" while loading. The
 backend can only return counts, so there are no per-field statistics.
 
@@ -1662,8 +1668,8 @@ Each kind of error is shown once, where the person who can fix it looks:
 
 | Problem | Who fixes it | Where it is shown |
 |---|---|---|
-| Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder (when only some databases report it, those databases' pills are also marked, with the message in the tooltip: "Above the builder — `databasePicker.ts`"); here the failed databases' rows are red and **⚠ Show problem** jumps to the first one |
-| Database error without a `nodeId` | the user (deselect the database) or the service | that database's row is a red bar; the reason is its tooltip and its label for screen readers (a failed row with no reason says "Failed.") |
+| Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder; here **⚠ Show problem** jumps to the first one. When every database that answered refused the query only for such errors (`queryIsAtFault`), their rows are "not run" (grey, mustard ⚠), not red. When only some databases report it, it is about those databases: their rows are red with the message as the reason, and their pills are marked ("Above the builder — `databasePicker.ts`") |
+| Database error without a `nodeId` | the user (deselect the database) or the service | that database's row is a red bar with the reason on one line under it (a failed row with no reason says "Failed.") |
 | The statistics request itself failed (`ApiError`, `NetworkError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with `userMessage(err)` and **Try again** |
 
 N (in the button's label) is `AppState.serverIssues.length`, already
@@ -1679,9 +1685,11 @@ script can focus it without making it a Tab stop). **Try again** calls
 `app.retryStats`, which fetches the statistics again for the current query and
 scope. `wireStatsPanel` owns both buttons with one delegated listener.
 
-A failed database's row does not show its `notes` as text any more (they are
-part of `failureReasons`, so they are in the tooltip and the label); a
-successful database's row still prints its notes under the bar.
+A failed database's row shows one line: its `failureReasons` (errors without a
+node, else its notes, else its node errors, else "Failed."); a successful
+database's row still prints its notes under the bar. The red bar's own
+`aria-label` is only "Failed and not counted.": the name and the reason are
+the row's text, so a screen reader hears each once.
 
 **Decision: no duplication.** The maintainers asked whether the node errors
 should also be listed in the statistics. They are not: the same message in the
@@ -1695,6 +1703,12 @@ and carry their words for screen readers and on hover. **Show problem** stayed,
 because it is the only way to jump to the problem. The headline's green is the
 matched share of all answered events, failed databases included, while the
 text ratio ("x% of N") stays over the databases that succeeded.
+**Decided later the same day, after the first version:** the reason a database
+failed is back as one visible line (keyboard and touch users could not read a
+tooltip), and red means only a database that really failed to run the query.
+Some databases do break, which is one reason the data is split across them, so
+a query the databases refused for its own problem must not make them look
+broken.
 
 ### Under the query — `dataPreview.ts` (Matching events)
 
@@ -1921,7 +1935,7 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   Deleting a saved query that is already gone (`404`) counts as deleted.
 - A database that finds a problem in the query reports it in its stats
   line, not as an HTTP error: the statistics panel shows it as that
-  database's red bar (reason in its tooltip and label) if it points at no query
+  database's red bar (reason on one line under it) if it points at no query
   node; an error that points at a query node is shown once, in the builder
   (the panel offers **Show problem**), and blocks Run ("Statistics
   lines", "Right — `statsPanel.ts`").

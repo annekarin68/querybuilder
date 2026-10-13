@@ -1108,6 +1108,24 @@ body {
   font-size: 0.75rem;
   color: var(--qb-muted);
 }
+/* Why a database failed (statsPanel.ts failureRowHtml): one line under its red
+   bar, cut off with "…"; the row's tooltip holds all of it. Dark red like the
+   bar, so it reads as part of the failure (--qb-danger passes AA on the card). */
+.qb-db-reason {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--qb-danger);
+}
+/* A database that did not run the query because the query has a problem
+   (notRunRowHtml): an empty bar and a mustard warning icon, not red, because
+   the database did not fail. */
+.qb-db-not-run-icon.icon {
+  margin: 0;
+  color: var(--qb-warn);
+}
 .qb-stat-pending {
   display: flex;
   align-items: center;

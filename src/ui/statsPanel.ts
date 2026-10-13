@@ -2,7 +2,7 @@ import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../
 import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { placeIssues } from "../query/issues";
-import { failureReasons } from "./databasePicker";
+import { failureReasons, queryIsAtFault } from "./databasePicker";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
 /** The databases are loaded once into AppState.databases; a result only
@@ -36,19 +36,39 @@ function successRowHtml(result: Ok, db: Database | undefined): string {
 }
 
 /**
- * A failed database's row: a red, striped bar where the ratio bar would be,
- * and an icon. Why it failed (`failureReasons`) is its tooltip and its text
- * for screen readers, not text on the row (users asked for a picture,
- * 2026-10-13). A problem in the query itself is also drawn in the builder,
- * where it can be fixed.
+ * A database that failed to run the query: a red, striped bar where the ratio
+ * bar would be, an icon, and why it failed (`failureReasons`) on one line
+ * under it, cut off with "…" if long; the row's tooltip holds all of it. The
+ * users asked for a picture instead of the old "Not counted" sentences, and
+ * then for the reason back, in one line (2026-10-13). The bar's own label says
+ * only what happened: the name and the reason are read from the row's text,
+ * so a screen reader does not hear them twice.
  */
 export function failureRowHtml(result: Failed, db: Database | undefined): string {
   const name = db?.name ?? result.databaseId;
-  const label = `${name} failed and is not counted: ${failureReasons(result).join(" ")}`;
-  return `<div class="qb-db-row is-failed" title="${escapeHtml(label)}">
+  const reason = failureReasons(result).join(" · ");
+  return `<div class="qb-db-row is-failed" title="${escapeHtml(`${name} failed and is not counted: ${reason}`)}">
     <span class="qb-db-name">${escapeHtml(name)}</span>
-    <span class="qb-bar is-failed" role="img" aria-label="${escapeHtml(label)}"></span>
+    <span class="qb-bar is-failed" role="img" aria-label="Failed and not counted."></span>
     <i class="exclamation circle icon qb-db-failed-icon" aria-hidden="true"></i>
+    <span class="qb-db-reason">${escapeHtml(reason)}</span>
+  </div>`;
+}
+
+/**
+ * A database that did not run the query because the query itself has a
+ * problem (`queryIsAtFault`: every database that answered refused it only
+ * for problems in the query). The database did not fail, so its row is not
+ * red: an empty bar and a warning icon that point at **Show problem**, where
+ * the problem can be fixed. Red means a database that really failed; some of
+ * them do break, and users must be able to tell the two apart (2026-10-13).
+ */
+export function notRunRowHtml(db: Database | undefined, databaseId: string): string {
+  const name = db?.name ?? databaseId;
+  return `<div class="qb-db-row is-not-run" title="${escapeHtml(name)} did not run the query: it has a problem (see Show problem).">
+    <span class="qb-db-name">${escapeHtml(name)}</span>
+    <span class="qb-bar is-not-run" role="img" aria-label="Not run: the query has a problem (see Show problem)."></span>
+    <i class="exclamation triangle icon qb-db-not-run-icon" aria-hidden="true"></i>
   </div>`;
 }
 
@@ -77,15 +97,20 @@ export function showProblemButton(state: AppState): string {
 type StatsWithResults = Exclude<StatsState, { status: "error" }>;
 
 /** One row per database that has reported so far — success (ratio + bar),
- * failure (a red bar and an icon) — as each streamed result arrives. */
+ * failure (a red bar, an icon and the reason), or, when the query itself is
+ * at fault, not run (a neutral bar) — as each streamed result arrives. The
+ * rule is the database picker's (`queryIsAtFault`), checked again on every
+ * answer, so the pills and the rows always agree. */
 function perDatabaseHtml(results: DatabaseResult[], databases: Database[] | null): string {
   if (!results.length) return "";
+  const atFault = queryIsAtFault(results);
   return `<h3 class="qb-stat-subtitle">By database</h3>
     <div class="qb-stat-perdb">
       ${results
         .map((result) => {
           const db = databaseFor(databases, result.databaseId);
-          return result.status === "ok" ? successRowHtml(result, db) : failureRowHtml(result, db);
+          if (result.status === "ok") return successRowHtml(result, db);
+          return atFault ? notRunRowHtml(db, result.databaseId) : failureRowHtml(result, db);
         })
         .join("")}
     </div>`;
@@ -146,7 +171,9 @@ function splitBar(s: Split): string {
  * The combined headline sums only the databases that succeeded: a failed
  * database has no count at all, so it is never shown as "0 matched". The bar
  * shows the failed share in red (`splitBar`); with no success yet there is no
- * number, and the bar is all red if every answer so far failed.
+ * number, and the bar is all red if every answer so far failed. When the query
+ * itself is at fault (`queryIsAtFault`), no database failed, so there is no
+ * bar at all: **Show problem** below says what to do.
  */
 export function headlineHtml(
   { status, results }: StatsWithResults,
@@ -156,7 +183,7 @@ export function headlineHtml(
   if (s.failedDatabases === results.length) {
     const text =
       status === "loading" ? "No results yet." : "No database returned a result for this query.";
-    const bar = s.failedDatabases > 0 ? splitBar(s) : "";
+    const bar = s.failedDatabases > 0 && !queryIsAtFault(results) ? splitBar(s) : "";
     return `<div class="qb-stat-headline"><p class="qb-stat-sub">${text}</p>${bar}</div>`;
   }
   const title = `${exact(s.matched)} of ${exact(s.counted)}${s.failedDatabases ? ` · not counted: ${exact(s.notCounted)} in ${countLabel(s.failedDatabases, "database")} that failed` : ""}`;

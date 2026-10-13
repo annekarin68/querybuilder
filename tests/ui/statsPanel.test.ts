@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Database, DatabaseResult } from "../../src/model";
 import {
   failureRowHtml,
+  notRunRowHtml,
   headlineHtml,
   showProblemButton,
   splitLabel,
@@ -89,6 +90,14 @@ describe("headlineHtml", () => {
     expect(html).toContain('class="qb-bar-failed" style="width:max(100%, 2px)"');
   });
 
+  // Every database refused the query because of a problem in it: the databases
+  // did not fail, so nothing is red (users, 2026-10-13).
+  it("draws no red when the query itself is at fault", () => {
+    const html = headline("ok", [failed("a", dbError("c1")), failed("b", dbError("c1"))]);
+    expect(html).toContain("No database returned a result");
+    expect(html).not.toContain("qb-bar");
+  });
+
   it("labels the headline number", () => {
     const html = headline("ok", [ok("a", 10)]);
     expect(html).toContain("matching events");
@@ -151,7 +160,10 @@ describe("statsPanelHtml", () => {
       // the button for one (closest("[data-node-id]")).
       expect(html).not.toContain("data-node-id");
       expect(html).not.toContain("Not counted");
-      expect(html.match(/class="qb-bar is-failed"/g)).toHaveLength(2);
+      // The databases did not fail, the query did: no red rows, as the
+      // database picker marks no pill (queryIsAtFault).
+      expect(html).not.toContain("is-failed");
+      expect(html.match(/class="qb-bar is-not-run"/g)).toHaveLength(2);
     });
 
     it("counts the problems in the button's label", () => {
@@ -161,11 +173,12 @@ describe("statsPanelHtml", () => {
       expect(html).toContain('aria-label="Show problem (the first of 2 in the query)"');
     });
 
-    it("explains a database's own failure in its row's label and tooltip, not in text", () => {
+    it("explains a database's own failure in one line under its red bar", () => {
       const html = statsPanelHtml({
         ...ready,
         stats: { status: "ok", results: [ok("a", 5), failed("b", dbError(null, "Timed out."))] },
       });
+      expect(html).toContain('<span class="qb-db-reason">Timed out.</span>');
       expect(html).toContain('title="B failed and is not counted: Timed out."');
       expect(html).not.toContain("qb-db-error");
       expect(html).not.toContain("Show problem");
@@ -250,13 +263,36 @@ describe("showProblemButton", () => {
 });
 
 describe("failureRowHtml", () => {
-  it("is a red bar whose label and tooltip say why, with no text on the row", () => {
+  it("is a red bar with the reason on one line under it, and all of it on hover", () => {
     const result = failed("b", dbError(null, "Unreachable.")) as Failed;
     const html = failureRowHtml(result, databases[1]);
+    // The bar says what happened; the visible line says why, so a screen
+    // reader does not hear the name or the reason twice.
     expect(html).toContain(
-      '<span class="qb-bar is-failed" role="img" aria-label="B failed and is not counted: Unreachable."',
+      '<span class="qb-bar is-failed" role="img" aria-label="Failed and not counted."',
     );
+    expect(html).toContain('<span class="qb-db-reason">Unreachable.</span>');
     expect(html).toContain('title="B failed and is not counted: Unreachable."');
     expect(html).not.toContain("Not counted");
+  });
+
+  it("escapes the reason", () => {
+    const html = failureRowHtml(failed("b", dbError(null, "<down>")) as Failed, databases[1]);
+    expect(html).toContain('<span class="qb-db-reason">&lt;down&gt;</span>');
+  });
+});
+
+describe("notRunRowHtml", () => {
+  it("is a neutral row pointing at Show problem: no red, no reason text", () => {
+    const html = notRunRowHtml(databases[1]!, "b");
+    expect(html).not.toContain("is-failed");
+    expect(html).not.toContain("qb-db-reason");
+    expect(html).toContain(
+      '<span class="qb-bar is-not-run" role="img" aria-label="Not run: the query has a problem (see Show problem)."',
+    );
+    expect(html).toContain('title="B did not run the query: it has a problem (see Show problem)."');
+    expect(html).toContain(
+      '<i class="exclamation triangle icon qb-db-not-run-icon" aria-hidden="true">',
+    );
   });
 });
