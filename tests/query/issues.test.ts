@@ -95,6 +95,13 @@ describe("placeIssues", () => {
     ]);
   });
 
+  // The server's flag changes how it is drawn (a warning, not a hint), so a
+  // local twin that comes first must not hide it.
+  it("keeps one of a local and a server issue with the same text, as the server's", () => {
+    expect(placeIssues(query, [issue("c1"), serverIssue("c1")])).toEqual([serverIssue("c1")]);
+    expect(placeIssues(query, [serverIssue("c1"), issue("c1")])).toEqual([serverIssue("c1")]);
+  });
+
   it("moves an issue with an unknown id to the root group", () => {
     expect(placeIssues(query, [issue("gone")])).toEqual([issue("root")]);
   });

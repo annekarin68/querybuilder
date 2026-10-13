@@ -60,5 +60,8 @@ function statusMessage(status: number): string {
   if (status >= 500) {
     return "The server ran into a problem. Try again in a moment; if it keeps happening, contact support.";
   }
+  // Also every 409: the contract has one, a save under a name already taken,
+  // and app.ts turns it into "Replace it?" before it gets here. Any other is
+  // outside the contract, which this text fits.
   return "The server didn't accept this request. Reload the page and try again; if it keeps happening, contact support.";
 }

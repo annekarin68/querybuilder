@@ -343,6 +343,24 @@ describe("source logos", () => {
     expect(html).toContain(`title="${TEXT_SOURCES.thirdParty.label}"`);
   });
 
+  // The row's grip is what drags: a draggable image would start a drag of
+  // its own, carrying no item.
+  it("a logo is not draggable", () => {
+    expect(sourceLogo("ours")).toContain('draggable="false"');
+  });
+
+  // A deployment writes its own labels and paths in src/config.ts.
+  it("escapes a configured logo path and label", () => {
+    const sources = {
+      ...TEXT_SOURCES,
+      ours: { logo: '/a"b.svg', label: 'R&D "notes"' },
+    };
+    const html = sourceLogo("ours", sources);
+    expect(html).toContain('src="/a&quot;b.svg"');
+    expect(html).toContain('alt="R&amp;D &quot;notes&quot;"');
+    expect(html).toContain('title="R&amp;D &quot;notes&quot;"');
+  });
+
   it("an opened field's texts start with their source's logo, without the word 'Third-party:'", () => {
     const html = facetHtml(
       facetWithField({ comment: "Ours.", description: "Theirs." }),

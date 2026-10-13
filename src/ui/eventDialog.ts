@@ -63,6 +63,9 @@ export function renderEventDialog(dialog: HTMLDialogElement, state: AppState): v
     }
     return;
   }
+  // Already showing this event: a repaint would only send the JSON back to its
+  // top. (The dialog repaints whenever one of its renderer's keys changes.)
+  if (before === event.id && dialog.open) return;
   shownId.set(dialog, event.id);
   paint(dialogBody(dialog), eventDialogHtml(event));
   if (!dialog.open) dialog.showModal();

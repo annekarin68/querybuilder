@@ -12,10 +12,14 @@ import { findField, type FieldCatalog } from "../query/fieldCatalog";
  * The small logo in front of a text, saying who wrote it (`TEXT_SOURCES` in
  * src/config.ts). Its label is both the hover text and the `alt`, so a
  * screen reader reads "Third-party text; may contain errors" before
- * the text. Not draggable: the row's grip is what drags.
+ * the text. Not draggable: the row's grip is what drags. `sources` is only
+ * for tests: a deployment's own labels are escaped too.
  */
-export function sourceLogo(source: TextSource): string {
-  const { logo, label } = TEXT_SOURCES[source];
+export function sourceLogo(
+  source: TextSource,
+  sources: Record<TextSource, { logo: string; label: string }> = TEXT_SOURCES,
+): string {
+  const { logo, label } = sources[source];
   return `<img class="qb-source-logo" src="${escapeHtml(logo)}" alt="${escapeHtml(label)}" title="${escapeHtml(label)}" width="14" height="14" draggable="false" />`;
 }
 
