@@ -264,7 +264,7 @@ export interface DatabaseOutcome {
   fail?: { errorMessages: StatsErrorMessage[]; infoMessages: string[] };
 }
 
-/** Turns one database's raw outcome into the StatsResponse line /api/stats streams for it. */
+/** Turns one database's raw outcome into the StatsResponse line /api/filter/validate streams for it. */
 export function buildStatsLine(outcome: DatabaseOutcome): StatsResponse {
   if (outcome.fail) {
     const line: StatsResponse = {

@@ -26,31 +26,37 @@ const db = (id: string, eventCount: number): Database => ({
 
 const databases = [db("a", 1000), db("b", 1000)];
 
+const selectedIds = ["a", "b"];
+
 const headline = (status: "loading" | "ok", results: DatabaseResult[]) =>
-  headlineHtml({ status, results }, databases);
+  headlineHtml({ status, results }, databases, selectedIds);
 
 describe("splitResults", () => {
-  it("counts matches over the databases that answered, and sets failed ones apart", () => {
-    expect(splitResults([ok("a", 10), failed("b", dbError(null, "down"))], databases)).toEqual({
-      matched: 10,
-      counted: 1000,
-      notCounted: 1000,
-      failedDatabases: 1,
-    });
+  it("counts matches, sets failed databases apart, and sizes the whole selection", () => {
+    expect(
+      splitResults([ok("a", 10), failed("b", dbError(null, "down"))], databases, selectedIds),
+    ).toEqual({ matched: 10, counted: 1000, notCounted: 1000, selected: 2000, failedDatabases: 1 });
+  });
+
+  it("counts a selected database that has not answered yet in the selection", () => {
+    expect(splitResults([ok("a", 10)], databases, selectedIds).selected).toBe(2000);
   });
 });
 
 describe("splitLabel", () => {
-  it("says the ratio, and how many databases are not counted", () => {
-    expect(splitLabel({ matched: 10, counted: 1000, notCounted: 0, failedDatabases: 0 })).toBe(
-      "1.0% of the counted events match.",
+  const split = { matched: 10, counted: 1000, notCounted: 0, selected: 2000, failedDatabases: 0 };
+
+  it("gives the share of ALL selected events that match (users, 2026-10-13)", () => {
+    expect(splitLabel(split)).toBe("0.5% of the selected events match.");
+  });
+
+  it("says how many databases failed and are not counted", () => {
+    expect(splitLabel({ ...split, notCounted: 1000, failedDatabases: 1 })).toBe(
+      "0.5% of the selected events match. 1 database failed and is not counted.",
     );
-    expect(splitLabel({ matched: 10, counted: 1000, notCounted: 1000, failedDatabases: 1 })).toBe(
-      "1.0% of the counted events match. 1 database failed and is not counted.",
-    );
-    expect(splitLabel({ matched: 0, counted: 0, notCounted: 2000, failedDatabases: 2 })).toBe(
-      "2 databases failed and are not counted.",
-    );
+    expect(
+      splitLabel({ ...split, matched: 0, counted: 0, notCounted: 2000, failedDatabases: 2 }),
+    ).toBe("2 databases failed and are not counted.");
   });
 });
 
@@ -76,12 +82,24 @@ describe("headlineHtml", () => {
   it("shows failed databases as a red end of the bar instead of words", () => {
     const html = headline("ok", [ok("a", 5), failed("b", dbError(null, "timeout"))]);
     expect(html).toContain('<span class="qb-stat-big">5</span>');
-    expect(html).toContain("of 1,000");
-    expect(html).toContain('class="qb-bar-failed" style="width:max(50%, 2px)"');
+    expect(html).toContain('style="width:max(50%, 2px)"');
     expect(html).toContain(
-      'aria-label="0.5% of the counted events match. 1 database failed and is not counted."',
+      'aria-label="0.25% of the selected events match. 1 database failed and is not counted."',
     );
     expect(html).not.toContain("Excludes");
+  });
+
+  // The share is of every selected database, failed ones included, so the
+  // number and the green part of the bar always agree (users, 2026-10-13).
+  it("gives the percentage of all selected events, and the green part matches it", () => {
+    const html = headline("ok", [ok("a", 5), failed("b", dbError(null, "timeout"))]);
+    expect(html).toContain('<div class="qb-stat-sub">0.25% of 2,000</div>');
+    expect(html).toContain('<i style="width:max(0.25%, 2px)"></i>');
+  });
+
+  it("counts databases still loading in the selection too", () => {
+    const html = headline("loading", [ok("a", 10)]);
+    expect(html).toContain('<div class="qb-stat-sub">0.5% of 2,000</div>');
   });
 
   it("a bar that is all red when every database failed", () => {

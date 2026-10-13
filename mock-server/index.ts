@@ -42,7 +42,7 @@ if (httpErrors.length > 0) {
 createMockServer({
   apiBase,
   httpErrors,
-  // By default about 5% of /api/stats lines fail, so the UI's per-database
+  // By default about 5% of /api/filter/validate lines fail, so the UI's per-database
   // failure path gets exercised without a real backend. MOCK_FAIL_RATE=0 turns
   // that off.
   failRate: failRate ?? 0.05,

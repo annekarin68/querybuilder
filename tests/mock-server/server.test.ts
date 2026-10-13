@@ -95,9 +95,9 @@ describe("GET /api/databases and /api/individuals", () => {
   );
 });
 
-describe("POST /api/stats", () => {
+describe("POST /api/filter/validate", () => {
   it("streams one successful line per selected database, in order", async () => {
-    const res = await post(`${API}/stats`, body(["beta", "alpha"]));
+    const res = await post(`${API}/filter/validate`, body(["beta", "alpha"]));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("application/x-ndjson");
     const lines = (await res.text())
@@ -118,7 +118,7 @@ describe("POST /api/stats", () => {
         { ...everyEvent.children[0], operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
       ],
     };
-    const res = await post(`${API}/stats`, body(["alpha", "beta"], tooLong));
+    const res = await post(`${API}/filter/validate`, body(["alpha", "beta"], tooLong));
     expect(res.status).toBe(200);
     const lines = (await res.text())
       .trim()
@@ -163,7 +163,7 @@ describe("POST /api/stats", () => {
     ],
     ["no databases", body([]), "Select at least one database."],
   ])("answers 400 for a %s", async (_label, payload, error) => {
-    const res = await post(`${API}/stats`, payload);
+    const res = await post(`${API}/filter/validate`, payload);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error });
   });

@@ -52,7 +52,7 @@ export const COMPLIANCE_START_URL = `${BASE}/compliance/start`;
 /**
  * How long a request may go without the server sending anything before it is
  * abandoned. For plain JSON requests that's the whole request; for the streamed
- * /stats body the clock restarts on every chunk, so a slow-but-progressing
+ * /filter/validate body the clock restarts on every chunk, so a slow-but-progressing
  * stream is never cut off — only a silent one.
  */
 export const REQUEST_TIMEOUT_MS = 60_000;
@@ -112,7 +112,7 @@ export async function getFacets(): Promise<Facet[]> {
 }
 
 /**
- * POST …/stats streams newline-delimited JSON: one line per database in
+ * POST …/filter/validate streams newline-delimited JSON: one line per database in
  * `databaseIds`, as soon as that database's result is ready. `onResult` is
  * called once per line, in arrival order; the returned promise resolves when
  * the stream ends, or rejects (before any line is read) on a non-2xx response.
@@ -129,7 +129,7 @@ export async function getStats(
   signal?: AbortSignal,
 ): Promise<void> {
   const body = toQueryRequest(query, databaseIds);
-  await send("POST", "/stats", { body, signal }, async (res, source, touch) => {
+  await send("POST", "/filter/validate", { body, signal }, async (res, source, touch) => {
     let lineNumber = 0;
     await readLines(res, source, touch, (line) => {
       lineNumber += 1;

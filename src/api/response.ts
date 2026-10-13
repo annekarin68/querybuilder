@@ -118,7 +118,7 @@ function toDatabaseError(e: ResponseObject<StatsErrorMessage>): DatabaseError {
 }
 
 /**
- * One line of the /stats stream. A line that claims success but carries no
+ * One line of the /filter/validate stream. A line that claims success but carries no
  * count is treated as a failure: showing it as "0 matched" would be a guess.
  */
 export function toDatabaseResult(line: ResponseObject<StatsResponse>): DatabaseResult {

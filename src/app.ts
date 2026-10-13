@@ -216,7 +216,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   /**
-   * Logging out or invalidating compliance only affects Run (/api/stats is
+   * Logging out or invalidating compliance only affects Run (/api/filter/validate is
    * anonymous), so only the preview is cancelled — and it is reset in the same
    * step, because whoever aborts a request must also reset its panel: the
    * aborted request's own handlers are stale and will never touch the state.

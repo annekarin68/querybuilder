@@ -58,7 +58,7 @@ Three conventions that the code relies on everywhere:
 3. **The backend's types keep the backend's names.** In `src/api/types.ts`, a
    `…Response` type is one record from a response, not the whole body:
    `GET /api/databases` returns a `DatabasesResponse[]`, and each line of the
-   `/api/stats` stream is one `StatsResponse`. (`EventsResponse` is the
+   `/api/filter/validate` stream is one `StatsResponse`. (`EventsResponse` is the
    exception: it is the whole `/api/filter/execute` body.)
 
 The same things have different names in the UI and `src/`, on the wire (named
@@ -377,7 +377,7 @@ src/
     contract.ts        Checks each response value against the contract as it is read: ResponseValue,
                        ResponseObject, ContractError ("Reading responses").
     response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, …).
-    request.ts         toQueryRequest(query, databaseIds) — the body sent to /stats and /filter/execute;
+    request.ts         toQueryRequest(query, databaseIds) — the body sent to /filter/validate and /filter/execute;
                        toSavedQueryRequest(draft) — the body of a saved query.
   query/
     types.ts           Condition, Group, QueryNode, Issue.
@@ -634,10 +634,10 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
   was open, and reloads the list if the list is still open).
 - **Superseded requests are aborted, not just ignored** (the slot's
   `AbortController` goes through `client.ts`), so edits don't leave
-  `/api/stats` streams running on the backend.
+  `/api/filter/validate` streams running on the backend.
 - **Whoever aborts a request resets its panel.** An aborted request's own
   handlers are stale and never touch state. `changeScope` resets both panels;
-  logout and compliance invalidation reset only the preview (`/api/stats` is
+  logout and compliance invalidation reset only the preview (`/api/filter/validate` is
   anonymous).
 - **Streaming is not staleness.** While `stats.status` is `"loading"`,
   `stats.results` holds fewer results than there are selected databases;
@@ -662,7 +662,7 @@ failed: 500 Internal Server Error: …`). A request that gets no answer at all
 request. A 2xx answer that doesn't match the contract is thrown as a
 `ContractError` ("Reading responses"). Every request has a 60 s timeout
 (`REQUEST_TIMEOUT_MS`, rejecting with a `TimeoutError`); for the streamed
-`/stats` body the clock restarts on every chunk, so a slow stream that is
+`/filter/validate` body the clock restarts on every chunk, so a slow stream that is
 still making progress is never cut off.
 
 **The API prefix** is set in one place, the committed `.env`
@@ -673,13 +673,13 @@ fallback, and `vite.config.ts` stops dev and build when the prefix is missing
 or ends in `/`. The whole API moves with it, the login and compliance flows
 included, so the backend registers its callback URLs under the deployed
 prefix. The mock server reads the same `.env`. In this document and in code
-comments, `/api/stats` and the like are short for `{prefix}/stats`.
+comments, `/api/filter/validate` and the like are short for `{prefix}/filter/validate`.
 
 | Endpoint | What |
 |---|---|
 | `GET {prefix}/databases` | The databases to scope to — a bare array. |
 | `GET {prefix}/individuals` | The facets and their fields — a bare array. Drives the data dictionary and, via `buildFieldCatalog`, the query builder. |
-| `POST {prefix}/stats` | Body: a `QueryRequest` ("Wire format of the query"). Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
+| `POST {prefix}/filter/validate` | The statistics (the backend's name for this endpoint). Body: a `QueryRequest` ("Wire format of the query"). Newline-delimited JSON: one `StatsResponse` line per selected database, each written as soon as that database is done. Anonymous. |
 | `POST {prefix}/filter/execute` | Body: a `QueryRequest` ("Wire format of the query"). The matching events (`EventsResponse`: `{ events: [{ id, items: [{ facet_label, values: [ … ] }] }] }`), capped by the backend (25 in the mock), no pagination. Needs a session (`401`) and a compliance reason (`403`). |
 | `GET {prefix}/users/me` | Who's logged in (`UserResponse`; the app shows `display_name`). `401` when anonymous. |
 | `GET {prefix}/auth/login`, `/callback`, `POST /logout` | Login (below). |
@@ -702,6 +702,13 @@ shapes below as proposed, and asks the backend team to confirm or correct them:
   whether a facet can appear twice in `items`; null versus missing values; a
   `truncated` flag (or a total) for the capped result; an optional database on
   each event; the same `QueryRequest` body and the same `401` / `403` as before.
+- `POST /filter/validate` (the statistics): that its answer is still the
+  newline-delimited stream of `StatsResponse` lines, one per selected database.
+- Compliance: the backend has `/log/build/` (keep the compliance log) and
+  `/log/validate` (check its state) instead of the `/compliance/…` flow this
+  app still calls; and the paths of the databases, facets and saved-queries
+  endpoints. Until these are confirmed the frontend keeps the paths in the
+  table above.
 - Whether some `403` reasons must be shown to users. Today the GUI never shows
   the server's text (a `403` shows the plain `userMessage` text; the server's
   words go to the console).
@@ -781,7 +788,7 @@ written as it would be in JavaScript:
 
 ```
 Unexpected response from GET /api/v1/individuals: "[3].fields" should be a list, but it is missing.
-Unexpected response from POST /api/v1/stats, line 2: "label" should be non-blank text, but it is missing.
+Unexpected response from POST /api/v1/filter/validate, line 2: "label" should be non-blank text, but it is missing.
 Unexpected response from GET /api/v1/databases: the body should be JSON, but it starts with "<!doctype html>…". That looks like a web page, not the API: check VITE_API_BASE in .env, and that the backend (or `npm run mock`) is running.
 ```
 
@@ -935,7 +942,7 @@ query of this user has that id (another user's counts as unknown); a `400` is
 a malformed body, which is a bug on our side, never a user mistake.
 
 **Decided 2026-10-08: the backend checks the shape only, never the meaning, so
-a half-built query can be saved.** The `/stats` format cannot hold unfinished
+a half-built query can be saved.** The `/filter/validate` format cannot hold unfinished
 conditions, and a validation bug on our side must never stop a user saving
 their work. The frontend still never rewrites a condition ("Wire format of the
 query"): it converts the tree in `src/api/` only, both ways
@@ -1010,7 +1017,7 @@ This is the mock's reading; the real backend owns the rule.
 
 ### Wire format of the query
 
-`/stats` and `/filter/execute` take a `QueryRequest` (`src/api/types.ts`):
+`/filter/validate` and `/filter/execute` take a `QueryRequest` (`src/api/types.ts`):
 `{ databases, query }`. `databases` holds the databases' `label`s (the model's
 `Database.id`s), and
 `query` is a tree of `RequestGroup`s (`AND`/`OR` over `children`, never empty)
@@ -1652,9 +1659,11 @@ Every number goes through `format.ts` so it fits the 15rem column when the
 backend returns billions: `compact` (`1.2B`, exact value on hover),
 `matchRatio` (`62%`, `0.34%`, and `1 in 289.3M` rather than a misleading
 `0%`), `barWidth` (any nonzero match shows at least 2 px). Top to bottom: the
-headline (sum of successful databases, ratio, and a bar of every answered
-database's events: green for the matches, a striped red end for the events of
-databases that failed, `splitBar`; its words are its `aria-label` and tooltip),
+headline (sum of successful databases; its share of **all selected
+databases**, failed and still-loading ones included, "x% of N"; and a bar of the
+same N events: green for the matches, so it is the same share as the text, a
+striped red end for the events of databases that failed, grey for the rest,
+`splitBar`; its words are its `aria-label` and tooltip),
 **⚠ Show problem** when the query has a problem (below), then **By database**
 (one row per streamed result: a ratio bar; for a database that failed, a
 striped red bar, a red icon and why it failed on one line under it, cut off
@@ -1700,9 +1709,11 @@ fix it. The panel only offers a button that jumps to the first problem.
 are marked in the query" and "Excludes N databases that failed" confusing and
 asked for a picture. The red parts are striped (not colour alone, WCAG 1.4.1)
 and carry their words for screen readers and on hover. **Show problem** stayed,
-because it is the only way to jump to the problem. The headline's green is the
-matched share of all answered events, failed databases included, while the
-text ratio ("x% of N") stays over the databases that succeeded.
+because it is the only way to jump to the problem. The headline's percentage
+and its green part are both the share of **all selected databases' events**,
+failed ones included: that is the share of the data the query actually
+returned (maintainers' decision, 2026-10-13, replacing a first version where the
+text counted only the databases that succeeded and so disagreed with the bar).
 **Decided later the same day, after the first version:** the reason a database
 failed is back as one visible line (keyboard and touch users could not read a
 tooltip), and red means only a database that really failed to run the query.
@@ -1852,7 +1863,7 @@ to a named handler function — add a route there, and a test in
   (`dbIndexForEntrysetId`), never by its content. `rows.ts` flattens every
   event into a `Row` keyed by `rowKey(facetLabel, fieldLabel)` plus a `__db`
   key; `evaluate.ts` matches the query against rows.
-- **`/api/stats`** projects the 21-event sample's match rate onto each
+- **`/api/filter/validate`** projects the 21-event sample's match rate onto each
   database's real size (`scaleCount`) and streams one line per database with a
   pause between lines; now and then it simulates a database that can't be
   reached. A text value (or a text item in a list) longer than 100
@@ -1900,8 +1911,8 @@ Besides `.env`, three environment variables, read by `index.ts`:
 
 | Variable | Default | What |
 |---|---|---|
-| `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/stats` lines that simulate an unreachable database. `0` turns it off. |
-| `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/stats` line. `0` = no pause. |
+| `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/filter/validate` lines that simulate an unreachable database. `0` turns it off. |
+| `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/filter/validate` line. `0` = no pause. |
 | `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /saved-queries=500, GET /databases=502:html"`. |
 
 The sample data is **fictional** vehicle telemetry, and the real backend's
@@ -2090,7 +2101,7 @@ and mascot") and put the company's name in `TEXT_SOURCES.thirdParty.label` in
 
 **…see how the app copes with a failing backend?** Start the mock with
 `MOCK_HTTP_ERRORS` (see "Mock server"), e.g.
-`MOCK_HTTP_ERRORS="POST /stats=503" npm run dev`. A dead network (no answer
+`MOCK_HTTP_ERRORS="POST /filter/validate=503" npm run dev`. A dead network (no answer
 at all) cannot be simulated by the mock: in a Playwright check use
 `page.route(url, (route) => route.abort("connectionrefused"))`.
 

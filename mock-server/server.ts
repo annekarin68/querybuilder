@@ -57,9 +57,9 @@ import { logQueryAudit } from "./audit";
 export interface MockConfig {
   /** The API prefix every route and redirect goes under, e.g. "/api/v1" (VITE_API_BASE in .env). */
   apiBase: string;
-  /** Share (0–1) of /api/stats lines that simulate an unreachable database. */
+  /** Share (0–1) of /api/filter/validate lines that simulate an unreachable database. */
   failRate: number;
-  /** Pause before each streamed /api/stats line, in ms. */
+  /** Pause before each streamed /api/filter/validate line, in ms. */
   lineDelayMs(): number;
   /** Routes that answer with an HTTP error instead (MOCK_HTTP_ERRORS, httpErrors.ts). */
   httpErrors?: HttpErrorRule[];
@@ -162,7 +162,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 }
 
 /**
- * Reads and checks a …/stats or …/filter/execute body: `query` must be a well-formed
+ * Reads and checks a …/filter/validate or …/filter/execute body: `query` must be a well-formed
  * query tree whose root is a group (requestBody.ts), and `databases` a
  * non-empty string[]. For a bad body this sends the 400 itself and returns
  * null.
@@ -214,7 +214,7 @@ function delay(ms: number): Promise<void> {
 // ---- data and queries -----------------------------------------------------
 
 /**
- * One database's outcome for /api/stats. A query with problems (queryErrors)
+ * One database's outcome for /api/filter/validate. A query with problems (queryErrors)
  * fails in every database, with the problems. Otherwise, dev-only: now and
  * then (failRate) simulate a database that can't answer, so the UI's
  * per-database failure path gets exercised.
@@ -243,7 +243,7 @@ function statsOutcome(
 }
 
 /**
- * POST /api/stats: newline-delimited JSON, one StatsResponse line per selected
+ * POST /api/filter/validate: newline-delimited JSON, one StatsResponse line per selected
  * database, written one at a time with a short pause so the streaming is
  * visible in dev.
  */
@@ -464,7 +464,7 @@ function routes(config: MockConfig, savedQueries: SavedQueryStore): Record<strin
   return {
     [`GET ${api}/databases`]: (_req, res) => sendJson(res, 200, DATABASES),
     [`GET ${api}/individuals`]: (_req, res) => sendJson(res, 200, INDIVIDUALS),
-    [`POST ${api}/stats`]: (req, res) => streamStats(req, res, config),
+    [`POST ${api}/filter/validate`]: (req, res) => streamStats(req, res, config),
     [`POST ${api}/filter/execute`]: queryEvents,
 
     [`GET ${api}/saved-queries`]: forSessionUser((userId) => savedQueries.list(userId)),
@@ -521,7 +521,7 @@ export function createMockServer(config: MockConfig) {
       if (handler) await handler(req, res, url);
       else sendJson(res, 404, { error: `No route for ${req.method} ${url.pathname}` });
     } catch (err) {
-      // A throw after /api/stats has already written its 200 NDJSON header
+      // A throw after /api/filter/validate has already written its 200 NDJSON header
       // (e.g. mid-stream) can't be turned into a JSON error response —
       // sendJson's own res.writeHead would throw ERR_HTTP_HEADERS_SENT. Just end
       // the response instead of trying (and failing) to report the error.

@@ -157,7 +157,7 @@ describe("api client", () => {
     vi.stubGlobal("fetch", f);
     await getStats(query, databaseIds, () => {});
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/v1/stats");
+    expect(url).toBe("/api/v1/filter/validate");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual(body);
   });
@@ -437,7 +437,7 @@ describe("api client", () => {
       vi.fn(async () => new Response(null, { status: 204 })),
     );
     await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
-      "Unexpected response from POST /api/v1/stats: the body is empty.",
+      "Unexpected response from POST /api/v1/filter/validate: the body is empty.",
     );
   });
 });
@@ -471,7 +471,7 @@ describe("a response that breaks the API contract", () => {
     vi.stubGlobal("fetch", mockStreamFetch(200, [`${ok}\nnot json\n${ok}\n`]));
     const onResult = vi.fn();
     await expect(getStats(query, databaseIds, onResult)).rejects.toThrow(
-      'Unexpected response from POST /api/v1/stats, line 2: the body should be JSON, but it starts with "not json".',
+      'Unexpected response from POST /api/v1/filter/validate, line 2: the body should be JSON, but it starts with "not json".',
     );
     expect(onResult).toHaveBeenCalledOnce();
   });
@@ -479,7 +479,7 @@ describe("a response that breaks the API contract", () => {
   it("a statistics line without a database names its line and field", async () => {
     vi.stubGlobal("fetch", mockStreamFetch(200, [JSON.stringify({ success: true }) + "\n"]));
     await expect(getStats(query, databaseIds, () => {})).rejects.toThrow(
-      'POST /api/v1/stats, line 1: "label" should be non-blank text, but it is missing.',
+      'POST /api/v1/filter/validate, line 1: "label" should be non-blank text, but it is missing.',
     );
   });
 });

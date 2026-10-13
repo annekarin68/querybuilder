@@ -15,7 +15,7 @@
 export interface HttpErrorRule {
   /** "GET", "POST", … or "*". */
   method: string;
-  /** Below the API prefix, e.g. "/stats"; or "*"; or ending in "/*". */
+  /** Below the API prefix, e.g. "/filter/validate"; or "*"; or ending in "/*". */
   path: string;
   /** 400–599. */
   status: number;

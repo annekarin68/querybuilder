@@ -266,7 +266,7 @@ describe("scaleCount", () => {
   });
 });
 
-// ---- /api/stats lines ---------------------------------------------------------
+// ---- /api/filter/validate lines ---------------------------------------------------------
 
 describe("buildStatsLine", () => {
   it("builds a successful line with matchCount", () => {

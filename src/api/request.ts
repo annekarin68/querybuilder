@@ -15,7 +15,7 @@ import type { SavedQueryDraft } from "../model";
 import type { Condition, Group, QueryNode } from "../query/types";
 
 /**
- * The body of POST …/stats and POST …/filter/execute, built from the query on screen
+ * The body of POST …/filter/validate and POST …/filter/execute, built from the query on screen
  * (docs/ARCHITECTURE.md, "Wire format of the query"). A projection, never a
  * rewrite: every operator and value goes out exactly as the user built it, and
  * the backend interprets them. Only display state (`collapsed`) is left out.

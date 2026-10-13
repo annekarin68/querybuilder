@@ -116,26 +116,39 @@ function perDatabaseHtml(results: DatabaseResult[], databases: Database[] | null
     </div>`;
 }
 
-/** How the events of the databases that have answered split up. */
+/** How the events of the selected databases split up. */
 export interface Split {
   /** Events that match, in the databases that answered. */
   matched: number;
-  /** Events in the databases that answered: what `matched` is a share of. */
+  /** Events in the databases that answered. */
   counted: number;
   /** Events in the databases that failed: nobody counted them. */
   notCounted: number;
+  /** Events in every selected database, answered, failed or still loading:
+   *  what `matched` is a share of (users, 2026-10-13). */
+  selected: number;
   failedDatabases: number;
 }
 
-export function splitResults(results: DatabaseResult[], databases: Database[] | null): Split {
-  const split: Split = { matched: 0, counted: 0, notCounted: 0, failedDatabases: 0 };
+export function splitResults(
+  results: DatabaseResult[],
+  databases: Database[] | null,
+  selectedIds: string[],
+): Split {
+  const size = (id: string) => databaseFor(databases, id)?.eventCount ?? 0;
+  const split: Split = {
+    matched: 0,
+    counted: 0,
+    notCounted: 0,
+    selected: selectedIds.reduce((sum, id) => sum + size(id), 0),
+    failedDatabases: 0,
+  };
   for (const r of results) {
-    const size = databaseFor(databases, r.databaseId)?.eventCount ?? 0;
     if (r.status === "ok") {
       split.matched += r.matchCount;
-      split.counted += size;
+      split.counted += size(r.databaseId);
     } else {
-      split.notCounted += size;
+      split.notCounted += size(r.databaseId);
       split.failedDatabases += 1;
     }
   }
@@ -145,52 +158,58 @@ export function splitResults(results: DatabaseResult[], databases: Database[] | 
 /** The bar's words, for screen readers and the tooltip. */
 export function splitLabel(s: Split): string {
   const ratio =
-    s.counted > 0 ? `${matchRatio(s.matched, s.counted)} of the counted events match.` : "";
+    s.counted > 0 ? `${matchRatio(s.matched, s.selected)} of the selected events match.` : "";
   if (s.failedDatabases === 0) return ratio;
   const failed = `${countLabel(s.failedDatabases, "database")} failed and ${s.failedDatabases === 1 ? "is" : "are"} not counted.`;
   return ratio ? `${ratio} ${failed}` : failed;
 }
 
 /**
- * The headline's bar: every event of the databases that have answered. Green
- * (left) is what matches; the striped red end is the events of databases that
- * failed, which nobody counted. Users found the words "Excludes N databases"
- * and "Not counted" confusing and asked for a picture (2026-10-13); the words
- * are still there for screen readers (`splitLabel`). A failed database whose
- * size is unknown still shows a sliver.
+ * The headline's bar: every event of the selected databases. Green (left) is
+ * what matches, so it is the same share as the percentage above it; the
+ * striped red end is the events of databases that failed, which nobody
+ * counted; grey is the rest (no match, or not answered yet). Users found the
+ * words "Excludes N databases" and "Not counted" confusing and asked for a
+ * picture (2026-10-13); the words are still there for screen readers
+ * (`splitLabel`). A failed database whose size is unknown still shows a sliver.
  */
 function splitBar(s: Split): string {
-  const all = s.counted + s.notCounted;
   const failedWidth =
-    s.failedDatabases === 0 ? null : s.notCounted > 0 ? barWidth(s.notCounted, all) : "2px";
+    s.failedDatabases === 0 ? null : s.notCounted > 0 ? barWidth(s.notCounted, s.selected) : "2px";
   const failed = failedWidth ? `<i class="qb-bar-failed" style="width:${failedWidth}"></i>` : "";
-  return `<span class="qb-bar" role="img" aria-label="${escapeHtml(splitLabel(s))}"><i style="width:${barWidth(s.matched, all)}"></i>${failed}</span>`;
+  return `<span class="qb-bar" role="img" aria-label="${escapeHtml(splitLabel(s))}"><i style="width:${barWidth(s.matched, s.selected)}"></i>${failed}</span>`;
 }
 
 /**
- * The combined headline sums only the databases that succeeded: a failed
- * database has no count at all, so it is never shown as "0 matched". The bar
- * shows the failed share in red (`splitBar`); with no success yet there is no
- * number, and the bar is all red if every answer so far failed. When the query
- * itself is at fault (`queryIsAtFault`), no database failed, so there is no
- * bar at all: **Show problem** below says what to do.
+ * The headline: how many events match, as a share of ALL selected databases,
+ * failed and still-loading ones included, because that is the share of the
+ * data the query actually returned (users, 2026-10-13). A failed database has
+ * no count at all, so it is never shown as "0 matched": the bar shows its
+ * share in red (`splitBar`); with no success yet there is no number, and the
+ * bar is red for every answer so far that failed. When the query itself is at
+ * fault (`queryIsAtFault`), no database failed, so there is no bar at all:
+ * **Show problem** below says what to do.
  */
 export function headlineHtml(
   { status, results }: StatsWithResults,
   databases: Database[] | null,
+  selectedIds: string[],
 ): string {
-  const s = splitResults(results, databases);
+  const s = splitResults(results, databases, selectedIds);
   if (s.failedDatabases === results.length) {
     const text =
       status === "loading" ? "No results yet." : "No database returned a result for this query.";
     const bar = s.failedDatabases > 0 && !queryIsAtFault(results) ? splitBar(s) : "";
     return `<div class="qb-stat-headline"><p class="qb-stat-sub">${text}</p>${bar}</div>`;
   }
-  const title = `${exact(s.matched)} of ${exact(s.counted)}${s.failedDatabases ? ` · not counted: ${exact(s.notCounted)} in ${countLabel(s.failedDatabases, "database")} that failed` : ""}`;
+  const notCounted = s.failedDatabases
+    ? ` · not counted: ${exact(s.notCounted)} in ${countLabel(s.failedDatabases, "database")} that failed`
+    : "";
+  const title = `${exact(s.matched)} of ${exact(s.selected)} selected events${notCounted}`;
   return `<div class="qb-stat-headline" title="${escapeHtml(title)}">
     <span class="qb-stat-big">${escapeHtml(compact(s.matched))}</span>
     <div class="qb-stat-label">matching events</div>
-    <div class="qb-stat-sub">${escapeHtml(matchRatio(s.matched, s.counted))} of ${escapeHtml(compact(s.counted))}</div>
+    <div class="qb-stat-sub">${escapeHtml(matchRatio(s.matched, s.selected))} of ${escapeHtml(compact(s.selected))}</div>
     ${splitBar(s)}
   </div>`;
 }
@@ -249,7 +268,7 @@ export function statsPanelHtml(state: AppState): string {
   // 900px block).
   return card(
     state,
-    headlineHtml(stats, state.databases) +
+    headlineHtml(stats, state.databases, state.selectedDatabaseIds) +
       showProblemButton(state) +
       perDatabaseHtml(stats.results, state.databases) +
       pendingHtml(stats, state.selectedDatabaseIds.length),

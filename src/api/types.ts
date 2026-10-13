@@ -40,7 +40,7 @@ export interface ComplianceStatus {
 }
 
 /**
- * One database's result from the POST /api/stats stream. The endpoint's
+ * One database's result from the POST /api/filter/validate stream. The endpoint's
  * response body is newline-delimited JSON today (the backend may change the
  * streaming format later): one of these per selected database, written as
  * soon as that database's result is ready — some databases are slower than
@@ -179,10 +179,10 @@ export interface EventsResponse {
   events: EventResponse[];
 }
 
-// ---- the body of POST …/stats and POST …/filter/execute ---------------------
+// ---- the body of POST …/filter/validate and POST …/filter/execute ---------------------
 
 /**
- * The query and where to run it — the body of POST {prefix}/stats and POST
+ * The query and where to run it — the body of POST {prefix}/filter/validate and POST
  * {prefix}/filter/execute (docs/ARCHITECTURE.md, "Wire format of the query"). Built by
  * `toQueryRequest` (src/api/request.ts) from the query on screen.
  */

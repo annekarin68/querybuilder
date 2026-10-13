@@ -30,7 +30,7 @@ describe("parseHttpErrors", () => {
 
 describe("httpErrorFor", () => {
   const rules = parseHttpErrors(
-    "POST /saved-queries=500, DELETE /saved-queries/*=404, * /stats=503",
+    "POST /saved-queries=500, DELETE /saved-queries/*=404, * /filter/validate=503",
   );
 
   it("matches the method and the path exactly", () => {
@@ -44,7 +44,7 @@ describe("httpErrorFor", () => {
   });
 
   it("* matches any method", () => {
-    expect(httpErrorFor(rules, "POST", "/stats")?.status).toBe(503);
+    expect(httpErrorFor(rules, "POST", "/filter/validate")?.status).toBe(503);
   });
 
   it("the first matching rule wins", () => {
