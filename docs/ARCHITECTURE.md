@@ -383,7 +383,8 @@ src/
   api/                 The only place that knows the backend's names ("Data model").
     client.ts          The ONLY file that calls fetch(). One function per endpoint; timeouts; ApiError, NetworkError.
                        Takes and returns the model, never the backend's types.
-    errorText.ts       userMessage(err) — the plain words a panel shows for a failed request.
+    errorText.ts       userMessage(err) — the plain words a panel shows for a failed request; startupFailure(err) —
+                       the fatal startup page's text and button (Log in or Reload).
     types.ts           The backend's request/response types. This IS the API contract.
     contract.ts        Checks each response value against the contract as it is read: ResponseValue,
                        ResponseObject, ContractError ("Reading responses").
@@ -415,7 +416,7 @@ src/
     paging.ts          PAGE_SIZE (100), pageOf(total, page) — the clamped page of the Matching events table (pure).
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
-    panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), escapeHtml(), optionsHtml().
+    panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), dialogBody(), escapeHtml(), optionsHtml().
     focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries and event <dialog>s
@@ -450,10 +451,12 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   server.ts            createMockServer(config): one route table ("METHOD /path" -> handler).
   auth.ts, audit.ts    Fake login / compliance sessions and the audit log (in memory).
   httpErrors.ts        MOCK_HTTP_ERRORS rules: parseHttpErrors, httpErrorFor.
+  paths.ts             pathBelow: the part of a path below the API prefix (stops at a "/").
   databases.ts, rows.ts, evaluate.ts, requestBody.ts, vehicleData.ts
                        The 7 mock databases, the flattened rows, the query evaluator, the request-body check, the data loader.
   events.ts            eventGuid, toEventResponse: a stored event as POST /filter/execute answers it.
-  savedQueries.ts      The in-memory saved-queries store and its body check ("Saved queries").
+  savedQueries.ts      The in-memory saved-queries store, its body check ("Saved queries") and savedQueryOwner
+                       (a user without an id is refused, never given a shared list).
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
 public/sources/third-party.svg  The third party's logo in the dictionary (a placeholder; replace it).
@@ -513,12 +516,14 @@ pure helpers in `src/query/saved.ts`):
 - `savedList`: the user's saved queries, newest first: `idle`, `loading`, `ok`
   or `error`. It reloads every time the list opens and after a delete.
 - `savedConfirm`: an open or delete in the list waiting for the user's yes.
-- `savedListNotice`: why the last **Delete** failed (`Couldn't delete “…”.` and
-  the plain `userMessage`), shown inside the list dialog as a
-  `role="alert"` message above the list; null otherwise. A toast would be drawn
-  under the modal dialog's backdrop, and the page's live region is inert while
-  the dialog is open. The next action in the dialog (a reload, a question) and
-  closing it clear it.
+- `savedListNotice`: how the last **Delete** went, shown above the list
+  inside the dialog (`{ tone, text }`; null otherwise). `"error"`:
+  `Couldn't delete “…”.` and the plain `userMessage`, a `role="alert"`
+  message. `"done"`: `Deleted “…”.`, a plain green message (no role: the
+  same words are spoken through `announce`), kept through the reload that
+  follows the delete. A toast would be drawn under the modal dialog's
+  backdrop, where nobody sees it. The next action in the dialog (a reload,
+  a question) and closing it clear it.
 
 Opening a saved query goes through `changeScope` and `validateQuery` like any
 edit, so the "Correctness invariant" holds. Database ids that no longer exist
@@ -546,7 +551,7 @@ binding its Fomantic dropdowns must always happen together.
 
 | Trigger | Effect |
 |---|---|
-| App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
+| App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
@@ -1229,8 +1234,9 @@ scrollable region the keyboard cannot focus cannot be scrolled by it. The menu
 reads no field of the log. Outside clicks and Escape close it. Display-only (see "Auth"). In a narrow
 window the chip shrinks (name with an ellipsis, badge as an icon): see "Screen
 layout".
-**Invalidate** and **Log out** change what the menu shows, and its repaint
-rebuilds it closed, so the keyboard focus goes to the chip, or to **Log in**
+**Invalidate** and **Log out** close the menu at once and put the focus on
+the chip (a failure's toast would otherwise cover the open menu); when they
+succeed, the repaint moves the focus to the chip, or to **Log in**
 ("Keyboard focus across repaints").
 
 ### Above the builder — `databasePicker.ts`
@@ -1636,9 +1642,13 @@ the issue's message tells the user to do exactly that.
   "Added a group to the query." (`ADDED_GROUP_MESSAGE`); the focus stays on the
   button, so pressing it again adds another. `announce` is a
   dependency of `createApp`, like `navigate`; `main.ts` passes `Shell.announce`,
-  which writes to one visually hidden `role="status"` region in the page frame.
+  which writes to a visually hidden `role="status"` region in the page frame.
   That region is never repainted, which is what makes a screen reader speak a
-  change. When several messages arrive within its 50 ms pause (a drop that adds
+  change. A modal `<dialog>` makes the rest of the page inert, so each shell
+  dialog holds its own region next to the body its panel paints
+  (`DIALOG_INSIDE`, `dialogBody`), and `announce` writes to the open dialog's
+  region instead (picked when the text goes in). That is how "Deleted “X”." is
+  heard in the Saved queries dialog. When several messages arrive within its 50 ms pause (a drop that adds
   some things and refuses others) they are read together, in order. A drop that
   did nothing announces no "Added" or "Moved"; its `dropNotice` is the message,
   and `setNotice` also sends it through `announce`: the warning box is painted
@@ -1826,7 +1836,9 @@ or the result. The result is a **table**, one row per event, in pages of 100
   headers, the id cell is the row's `<th scope="row">`).
 - **Event JSON dialog** (`eventDialog.ts`): an id opens that result's JSON in
   a native `<dialog>` (title "Event" plus the short id, the whole id, then the
-  JSON in a focusable, scrolling `<pre role="region">`, which makes its label heard). It is built like the saved-queries
+  JSON in a focusable, scrolling `<pre role="region">`, which makes its label heard). On a short window
+  the JSON shrinks to what is left of the dialog's height (a flex column), so
+  only the JSON scrolls, never the dialog as well. It is built like the saved-queries
   dialog: created once by the shell (`Shell.eventDialog`), painted from the
   state (`openEventId`, `openEventOf`) and opened or closed to match it. The
   focus starts on **Close**; **Close**, Escape and any other close tell the
@@ -1891,9 +1903,10 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
   saved." (`hasUnsavedWork`). The other items keep their buttons, and pressing
   one asks about that item instead. Loading, the empty state ("No saved
   queries yet. Build a query and press Save…") and an error with **Try again**
-  show in the dialog. **Close** closes it. A **Delete** that fails shows
-  `savedListNotice` above the list (`ui small negative message`, `role="alert"`:
-  spoken inside the modal, unlike the page's live region) and keeps the list.
+  show in the dialog. **Close** closes it. After a **Delete**,
+  `savedListNotice` shows above the list: "Deleted “…”." (`ui small positive
+  message`, spoken by the dialog's own live region), or, when it failed, why
+  (`ui small negative message`, `role="alert"`), and the list stays.
 - **Logged out**: both buttons open a small dialog instead: "Log in to save
   queries" / "Log in to see saved queries", "… You'll leave this page to log in
   and come back here; the query you are building is kept.", **Log in**
@@ -1908,7 +1921,7 @@ closes it on Escape, with no plugin, so no new jQuery ("The Fomantic
 discipline"). Fomantic's CSS classes (`ui form`, `ui button`, `ui message`)
 still style its contents. The `<dialog>` is created once by `renderShell`
 (`Shell.savedDialog`, labelled by the heading inside it) and never replaced:
-`renderSavedDialog` paints its contents and calls `showModal()` or `close()`
+`renderSavedDialog` paints its body (`dialogBody`) and calls `showModal()` or `close()`
 so that it is open exactly when `savedDialog` is not null. The Cancel / Close
 buttons call `app.closeSavedDialog()`. Escape (the `cancel` event, whose
 default is prevented) does what `escapeAction` (pure) says: **while a question
@@ -2037,7 +2050,7 @@ Besides `.env`, three environment variables, read by `index.ts`:
 |---|---|---|
 | `MOCK_FAIL_RATE` | `0.05` | Share (0–1) of `/api/filter/validate` lines that simulate an unreachable database. `0` turns it off. |
 | `MOCK_STREAM_DELAY_MS` | random 150–400 | Pause before each streamed `/api/filter/validate` line. `0` = no pause. |
-| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /filter/saved=500, GET /documentation/databases=502:html"`. |
+| `MOCK_HTTP_ERRORS` | unset | Routes that answer with an HTTP error instead, to see how the app copes: `METHOD PATH=STATUS` rules separated by commas, PATH below the prefix, `*` for any method or path, `/*` at the end of a path for everything below it, `:html` for an HTML page instead of JSON (`mock-server/httpErrors.ts`). Example: `MOCK_HTTP_ERRORS="POST /filter/saved=500, GET /documentation/databases=502:html"`. The stand-in login and compliance pages are routes under the prefix too, so `* *=503` (or `GET *`) also locks you out of logging in: name the routes you mean. |
 
 The sample data is **fictional** vehicle telemetry, and the real backend's
 data differs — which is why `src/` must never name it (`src/config.ts` holds
@@ -2063,10 +2076,12 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   the server's text and the stack, is logged to the console. Errors of
   requests aborted because they were superseded never reach a panel.
 - An action with no panel of its own (**Log out**, **Invalidate**) reports a
-  failure with a red toast, also spoken (`AppDeps.showError`). A failed
-  **Delete** in the saved-queries list is not a toast: that action is only
-  reachable inside the modal dialog, which hides the toast and silences the
-  page's live region, so it is `AppState.savedListNotice`, shown in the dialog.
+  failure with a red toast, also spoken (`AppDeps.showError`). The account
+  menu closes when either is pressed, and toasts start below the top bar
+  (`styles.css`), so the toast covers neither the menu nor the chip that then
+  has the focus. A failed **Delete** in the saved-queries list is not a
+  toast: that action is only reachable inside the modal dialog, which hides
+  the toast, so it is `AppState.savedListNotice`, shown in the dialog.
   Deleting a saved query that is already gone (`404`) counts as deleted.
 - A database that finds a problem in the query reports it in its stats
   line, not as an HTTP error: the statistics panel shows it as that
@@ -2077,10 +2092,12 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
 - A failed statistics request shows "Couldn't get statistics" with **Try
   again** (`app.retryStats`).
 - Failing to load databases or facets at startup is fatal: `#app` is replaced
-  by an error (`role="alert"`) and a **Reload** button that takes the focus
-  (it shows `userMessage` and "Technical details are in the browser
-  console."; the text is escaped like every panel's, and there is no inline
-  `onclick`, so a strict Content-Security-Policy allows it). Login and
+  by an error (`role="alert"`) and one button that takes the focus
+  (`startupFailure`, pure): **Log in** (a link to the login flow) after a
+  `401`, where Reload would only fail again, and **Reload** otherwise, with
+  `userMessage`. Below it: "Technical details are in the browser console.".
+  The text is escaped like every panel's, and there is no inline `onclick`,
+  so a strict Content-Security-Policy allows it. Login and
   compliance status failures are not fatal.
 - Drops never fail silently: whatever a drop or "Add to query" can't do is
   explained in `AppState.dropNotice`, a dismissible warning above the query

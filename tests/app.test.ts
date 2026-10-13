@@ -998,6 +998,27 @@ describe("dropping docs items", () => {
       expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
     });
 
+    it("is replaced by Add all on a tag: one group of the tag's facets, each present", () => {
+      const tagged: Facet[] = [
+        { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
+        { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
+      ];
+      const { store, app } = setup({
+        ...ready(startingQuery()),
+        facets: tagged,
+        catalog: buildFieldCatalog(tagged),
+      });
+      app.onAddItem({ type: "tag", tag: "t" });
+      const q = store.getState().query;
+      expect(q.children).toHaveLength(1);
+      const group = q.children[0];
+      expect(group).toMatchObject({ kind: "group", operator: "AND" });
+      expect(group?.kind === "group" && group.children).toEqual([
+        expect.objectContaining({ facetId: "one", fieldId: null, operatorId: "present" }),
+        expect.objectContaining({ facetId: "two", fieldId: null, operatorId: "present" }),
+      ]);
+    });
+
     it("stays when the drop fails", () => {
       const { store, app } = setup({ ...ready(startingQuery()) });
       app.onAddItem({ type: "facet", facetId: "ghost" });
@@ -1559,6 +1580,41 @@ describe("saved queries: deleting", () => {
     expect(announce).toHaveBeenCalledWith("Deleted “Weekly”.");
   });
 
+  // Sighted users otherwise only see the item vanish. The reload after the
+  // delete must not clear it.
+  it("shows the delete inside the dialog too, after the list reloads", async () => {
+    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue([b]);
+    const { app, store } = setup(
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a, b] },
+      },
+      fakeApi({ listSavedQueries: list }),
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b] });
+    expect(store.getState().savedListNotice).toEqual({ tone: "done", text: "Deleted “Weekly”." });
+  });
+
+  it("a delete that finishes after the dialog was closed leaves no notice behind", async () => {
+    const answer = deferred<void>();
+    const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
+    const { app, store } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    app.closeSavedDialog();
+    answer.resolve();
+    await flushPromises();
+    expect(store.getState().savedListNotice).toBeNull();
+  });
+
   it("forgets the open query when it is the one deleted", async () => {
     const { app, store } = setup({
       ...loggedIn,
@@ -1617,9 +1673,10 @@ describe("saved queries: deleting", () => {
     app.confirmSavedAction();
     await flushPromises();
     expect(store.getState().savedList).toEqual({ status: "ok", queries: [a] });
-    expect(store.getState().savedListNotice).toBe(
-      `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
-    );
+    expect(store.getState().savedListNotice).toEqual({
+      tone: "error",
+      text: `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
+    });
     expect(showError).not.toHaveBeenCalled();
   });
 

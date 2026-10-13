@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { userMessage } from "../../src/api/errorText";
+import { startupFailure, userMessage } from "../../src/api/errorText";
 import { ApiError, NetworkError, TimeoutError } from "../../src/api/client";
 import { ContractError } from "../../src/api/contract";
 
@@ -57,5 +57,21 @@ describe("userMessage", () => {
       "Something went wrong. Try again; if it keeps happening, reload the page.",
     );
     expect(userMessage("not even an error")).toContain("Something went wrong");
+  });
+});
+
+describe("startupFailure", () => {
+  it("offers Log in, not Reload, when the startup requests need a login", () => {
+    // Reload would only fail the same way again.
+    expect(startupFailure(api(401))).toEqual({
+      message: "You aren't logged in, or your login has expired. Log in to continue.",
+      action: "log-in",
+    });
+  });
+
+  it("offers Reload with the usual words for any other failure", () => {
+    for (const err of [api(500), api(403), new TimeoutError(), new Error("boom")]) {
+      expect(startupFailure(err)).toEqual({ message: userMessage(err), action: "reload" });
+    }
   });
 });

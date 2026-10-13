@@ -28,9 +28,12 @@ const RULE = /^(\*|[A-Z]+)\s+(\*|\/\S*)\s*=\s*(\d{3})(:html)?$/;
 /** The rules in `text` (the variable's value). Throws on a rule it can't read,
  *  so a typo stops the mock at startup instead of silently doing nothing. */
 export function parseHttpErrors(text: string | undefined): HttpErrorRule[] {
-  if (!text || !text.trim()) return [];
-  return text.split(",").map((part) => {
-    const rule = part.trim();
+  // Empty parts (unset, blank, a trailing comma) are skipped: a harmless slip.
+  const rules = (text ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter((rule) => rule !== "");
+  return rules.map((rule) => {
     const m = RULE.exec(rule);
     const status = m ? Number(m[3]) : 0;
     if (!m || status < 400 || status > 599) {

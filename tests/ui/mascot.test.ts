@@ -68,4 +68,26 @@ describe("mascotFor", () => {
       }),
     ).toBe("loading");
   });
+
+  it("Matching events loading wins over a failed statistics request", () => {
+    expect(
+      mascotFor({
+        ...base,
+        stats: { status: "error", error: "x" },
+        preview: { status: "loading" },
+      }),
+    ).toBe("loading");
+  });
+
+  // Statistics can say "found some" while the query has a red message: the
+  // red message still wins.
+  it("is disappointed for an invalid query even when statistics found matches", () => {
+    expect(
+      mascotFor({
+        ...base,
+        issues: [{ nodeId: "c", message: "x", kind: "invalid" }],
+        stats: { status: "ok", results: [ok("a", 3)] },
+      }),
+    ).toBe("disappointed");
+  });
 });

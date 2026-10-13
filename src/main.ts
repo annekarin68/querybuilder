@@ -14,7 +14,7 @@ import "./styles.css";
 import * as api from "./api/client";
 import { EASTER_EGG_MASCOT, EASTER_EGG_TOAST, MASCOT } from "./config";
 import { createApp } from "./app";
-import { userMessage } from "./api/errorText";
+import { startupFailure } from "./api/errorText";
 import { store, type AppState } from "./state";
 import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
@@ -264,25 +264,33 @@ function consumeResumeParam(): boolean {
 
 /**
  * Databases or facets could not be loaded: nothing can work, so replace the
- * page with the error and a Reload button. The text is plain words for the
- * kind of failure (`userMessage`), the details are in the console; it is still
- * escaped, like every panel's text. No inline onclick either: a strict
- * Content-Security-Policy would block it.
+ * page with the error and one button: Log in when the backend wants a login,
+ * Reload otherwise (`startupFailure`). The text is plain words for the kind
+ * of failure, the details are in the console; it is still escaped, like every
+ * panel's text. No inline onclick either: a strict Content-Security-Policy
+ * would block it.
  */
 function showFatalError(err: unknown): void {
   console.error("Could not load the app:", err);
+  const { message, action } = startupFailure(err);
+  // Log in is a plain link, without data-flow-link: there is no query on
+  // screen to keep for the return trip.
+  const button =
+    action === "log-in"
+      ? `<a class="ui primary button" href="${escapeHtml(api.LOGIN_URL)}" data-fatal-action>Log in</a>`
+      : `<button type="button" class="ui button" data-fatal-action>Reload</button>`;
   // role="alert" makes a screen reader read the message at once, and the focus
-  // goes to Reload: the page the user was on has just vanished, so without
+  // goes to the button: the page the user was on has just vanished, so without
   // this their focus is on nothing and the only action is out of reach.
   root.innerHTML = `<div class="ui negative message" style="margin:2rem" role="alert">
       <div class="header">Could not load the app</div>
-      <p>${escapeHtml(userMessage(err))}</p>
+      <p>${escapeHtml(message)}</p>
       <p class="qb-muted">Technical details are in the browser console.</p>
-      <button class="ui button" data-action="reload">Reload</button>
+      ${button}
     </div>`;
-  const reload = root.querySelector<HTMLButtonElement>('[data-action="reload"]');
-  reload?.addEventListener("click", () => window.location.reload());
-  reload?.focus();
+  const actionButton = root.querySelector<HTMLElement>("[data-fatal-action]");
+  if (action === "reload") actionButton?.addEventListener("click", () => window.location.reload());
+  actionButton?.focus();
 }
 
 const resumed = consumeResumeParam();

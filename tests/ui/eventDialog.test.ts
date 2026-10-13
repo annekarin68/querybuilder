@@ -54,6 +54,15 @@ describe("eventDialogHtml", () => {
     expect(html).not.toContain("<b>");
   });
 
+  // The id comes from the backend: it must not be able to add markup.
+  it("escapes an id that needs it, in the title and in the line under it", () => {
+    const html = eventDialogHtml({ id: '<i>"&id</i>-of-a-result', values: {} });
+    const title = /<h2[^>]*>(.*?)<\/h2>/.exec(html)![1]!;
+    const hint = /<p class="qb-dialog-hint">(.*?)<\/p>/.exec(html)![1]!;
+    expect(title).toBe("Event &lt;i&gt;&quot;&amp;id&lt;…");
+    expect(hint).toBe("&lt;i&gt;&quot;&amp;id&lt;/i&gt;-of-a-result");
+  });
+
   it("has a Close button that takes the focus first", () => {
     expect(eventDialogHtml(event)).toContain(
       '<button type="button" class="ui small basic button" data-action="close-event" data-initial-focus>Close</button>',

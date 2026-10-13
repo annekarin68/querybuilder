@@ -1,7 +1,7 @@
-import type { AppState, SavedConfirm } from "../state";
+import type { AppState, SavedConfirm, SavedListNotice } from "../state";
 import type { SavedQuery } from "../model";
 import type { createApp } from "../app";
-import { escapeHtml, paint } from "./panel";
+import { dialogBody, escapeHtml, paint } from "./panel";
 import { countLabel, formatDate } from "./format";
 
 /**
@@ -187,15 +187,22 @@ function savedListBodyHtml(state: AppState): string {
 
 /** The list dialog's body and its Close button. */
 function savedListHtml(state: AppState): string {
-  // role="alert" is announced inside a modal dialog, where the page's own live
-  // region is inert and a toast would be hidden behind the backdrop.
-  const notice = state.savedListNotice
-    ? `<div class="ui small negative message" role="alert">${escapeHtml(state.savedListNotice)}</div>`
-    : "";
-  return `${notice}${savedListBodyHtml(state)}
+  return `${savedListNoticeHtml(state.savedListNotice)}${savedListBodyHtml(state)}
     <div class="qb-dialog-actions">
       <button type="button" class="ui small basic button" data-action="close-saved-dialog">Close</button>
     </div>`;
+}
+
+/** The line above the list after a delete. A failure is an alert, read at
+ *  once (a toast would be hidden behind the dialog's backdrop). A success has
+ *  no role: app.ts already says it through `announce`, and a role would read
+ *  it twice. */
+function savedListNoticeHtml(notice: SavedListNotice): string {
+  if (!notice) return "";
+  const text = escapeHtml(notice.text);
+  return notice.tone === "error"
+    ? `<div class="ui small negative message" role="alert">${text}</div>`
+    : `<div class="ui small positive message">${text}</div>`;
 }
 
 /** The login dialog's explanation: the Log in button is described by it. */
@@ -345,7 +352,7 @@ function focusFirstControl(dialog: HTMLDialogElement): void {
 /**
  * Paint the dialog from the state and open or close it to match
  * `state.savedDialog`. The `<dialog>` itself is never replaced, only its
- * contents (paint()).
+ * body (paint(), dialogBody()).
  */
 export function renderSavedDialog(dialog: HTMLDialogElement, state: AppState): void {
   const before = shown.get(dialog) ?? null;
@@ -360,7 +367,7 @@ export function renderSavedDialog(dialog: HTMLDialogElement, state: AppState): v
     // Closed by the state: the close listener sees `shown` say null and does
     // nothing more.
     if (dialog.open) dialog.close();
-    paint(dialog, "");
+    paint(dialogBody(dialog), "");
     // The opener may have been repainted since (the query card repaints on
     // every edit, and opening a saved query is one), so it is looked up again.
     if (before?.savedDialog) {
@@ -373,7 +380,7 @@ export function renderSavedDialog(dialog: HTMLDialogElement, state: AppState): v
   // opened has no form yet, so it starts from the open saved query.
   const typed = before?.savedDialog === "save" ? readTyped(dialog) : null;
   const itemButton = focusedItemButton(dialog);
-  paint(dialog, savedDialogHtml(state, typed));
+  paint(dialogBody(dialog), savedDialogHtml(state, typed));
   if (!dialog.open) dialog.showModal();
 
   const target = focusAfterRepaint(before, view) ?? itemButton;

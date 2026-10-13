@@ -13,7 +13,7 @@ import type {
   StatsResponse,
   UserResponse,
 } from "./types";
-import type { ResponseObject, ResponseValue } from "./contract";
+import { setOwnKey, type ResponseObject, type ResponseValue } from "./contract";
 import type {
   Compliance,
   Database,
@@ -106,9 +106,10 @@ export function toEvent(e: ResponseObject<EventResponse>): EventRecord {
       .map((occurrence) => occurrence.scalars());
     // The same facet listed twice: keep every occurrence rather than drop one.
     // Checked with hasOwn: a facet named like a built-in ("constructor") would
-    // otherwise pick up Object.prototype's value here.
+    // otherwise pick up Object.prototype's value here. Set with setOwnKey, so
+    // that a facet named "__proto__" is kept too.
     const earlier = Object.hasOwn(values, facetId) ? values[facetId]! : [];
-    values[facetId] = [...earlier, ...occurrences];
+    setOwnKey(values, facetId, [...earlier, ...occurrences]);
   }
   return { id: e.id("id"), values };
 }

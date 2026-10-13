@@ -3,6 +3,7 @@ import {
   createSavedQueryStore,
   readSavedQueryBody,
   savedQueryIdFrom,
+  savedQueryOwner,
 } from "../../mock-server/savedQueries";
 import type { SavedQueryRequest, SavedQueryResponse } from "../../src/api/types";
 import { unfinishedRequest } from "../savedQueryFixtures";
@@ -300,5 +301,18 @@ describe("savedQueryIdFrom: the {id} of a saved-query path", () => {
     ["broken percent-encoding", `${api}/filter/saved/%E0%A4%A`],
   ])("returns null for %s", (_label, pathname) => {
     expect(savedQueryIdFrom(pathname, api)).toBeNull();
+  });
+});
+
+describe("savedQueryOwner: whose list a session's user gets", () => {
+  it("is the user's id (`sub`), or `user_id`, its other spelling", () => {
+    expect(savedQueryOwner({ sub: "u-1", user_id: "u-2" })).toBe("u-1");
+    expect(savedQueryOwner({ user_id: "u-2" })).toBe("u-2");
+  });
+
+  // Every user without an id would otherwise share one list under "".
+  it("is null for a user with no id", () => {
+    expect(savedQueryOwner({})).toBeNull();
+    expect(savedQueryOwner({ sub: "" })).toBeNull();
   });
 });

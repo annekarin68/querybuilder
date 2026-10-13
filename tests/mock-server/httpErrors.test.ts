@@ -20,7 +20,19 @@ describe("parseHttpErrors", () => {
     ]);
   });
 
-  it.each(["POST /x", "POST /x=200", "post /x=500", "POST x=500", "POST /x=600"])(
+  it("accepts the bounds 400 and 599", () => {
+    expect(parseHttpErrors("GET /a=400, GET /b=599").map((r) => r.status)).toEqual([400, 599]);
+  });
+
+  // A stray comma is a harmless slip, not a rule that could silently do nothing.
+  it("ignores a trailing comma and empty parts", () => {
+    expect(parseHttpErrors("GET /a=500,")).toEqual([
+      { method: "GET", path: "/a", status: 500, html: false },
+    ]);
+    expect(parseHttpErrors("GET /a=500, ,GET /b=502")).toHaveLength(2);
+  });
+
+  it.each(["POST /x", "POST /x=200", "POST /x=399", "post /x=500", "POST x=500", "POST /x=600"])(
     "refuses %s, naming the variable",
     (rule) => {
       expect(() => parseHttpErrors(rule)).toThrow("MOCK_HTTP_ERRORS");

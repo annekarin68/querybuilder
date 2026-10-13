@@ -26,6 +26,23 @@ export function userMessage(err: unknown): string {
   return "Something went wrong. Try again; if it keeps happening, reload the page.";
 }
 
+/**
+ * What the full-page error shows when the app could not load (main.ts,
+ * `showFatalError`): its text and its one button. A 401 means the backend
+ * wants a login before it hands out databases or facets, so the page offers
+ * Log in: Reload would only fail the same way again, and `userMessage`'s
+ * "then try again" would point at a button the page doesn't have.
+ */
+export function startupFailure(err: unknown): { message: string; action: "log-in" | "reload" } {
+  if (err instanceof ApiError && err.status === 401) {
+    return {
+      message: "You aren't logged in, or your login has expired. Log in to continue.",
+      action: "log-in",
+    };
+  }
+  return { message: userMessage(err), action: "reload" };
+}
+
 /** Busy or unreachable for a moment: trying again later can work. */
 const TRY_LATER = new Set([408, 429, 502, 503, 504]);
 

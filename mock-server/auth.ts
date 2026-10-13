@@ -85,7 +85,8 @@ export function exchangeCodeForSession(code: string, state: string): ExchangeOut
   if (!PENDING_STATES.take(state)) return { ok: false, error: "Invalid or expired login attempt." };
   if (!FAKE_CODES.take(code)) return { ok: false, error: "Invalid or expired authorization code." };
   const sessionId = randomToken(32);
-  SESSIONS.set(sessionId, { user: MOCK_USER });
+  // A copy per session: a change to one session's user must not reach the others.
+  SESSIONS.set(sessionId, { user: structuredClone(MOCK_USER) });
   return { ok: true, sessionId };
 }
 

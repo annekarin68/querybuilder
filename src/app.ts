@@ -25,7 +25,14 @@ import {
 import { hasUnsavedWork, sameName, saveTarget } from "./query/saved";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
-import { runBlocker, type AppState, type PreviewState, type StatsState, type Store } from "./state";
+import {
+  runBlocker,
+  type AppState,
+  type PreviewState,
+  type SavedListNotice,
+  type StatsState,
+  type Store,
+} from "./state";
 import { debounce } from "./util/debounce";
 import { pageOf } from "./util/paging";
 import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
@@ -484,9 +491,12 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     store.setState({ savedDialog: "save", save: { status: "idle" } });
   }
 
-  function loadSavedList(): void {
+  /** (Re)load the list. `notice` is what to show above it meanwhile: a reload
+   *  is an action in the dialog, which clears the last one, unless it is the
+   *  reload after a delete, which keeps "Deleted “X”." on screen. */
+  function loadSavedList(notice: SavedListNotice = null): void {
     const req = savedListSlot.start();
-    store.setState({ savedList: { status: "loading" }, savedListNotice: null });
+    store.setState({ savedList: { status: "loading" }, savedListNotice: notice });
     api
       .listSavedQueries()
       .then((queries) => {
@@ -676,8 +686,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       const { openSaved, savedDialog } = store.getState();
       // The query on screen stays; it just no longer belongs to a saved one.
       if (openSaved?.id === id) store.setState({ openSaved: null });
-      if (name !== undefined) announce(`Deleted “${name}”.`);
-      if (savedDialog === "list") loadSavedList();
+      const done = name === undefined ? null : `Deleted “${name}”.`;
+      if (done) announce(done);
+      if (savedDialog === "list") loadSavedList(done ? { tone: "done", text: done } : null);
     };
     // `.then(ok, failed)`, not `.then(ok).catch(failed)`: a bug inside
     // `deleted()` must not be reported to the user as a failed delete.
@@ -692,7 +703,10 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
         // The dialog may have been closed while the request ran.
         if (store.getState().savedDialog !== "list") return;
         store.setState({
-          savedListNotice: `Couldn't delete “${name ?? "the saved query"}”. ${error}`,
+          savedListNotice: {
+            tone: "error",
+            text: `Couldn't delete “${name ?? "the saved query"}”. ${error}`,
+          },
         });
       });
     });
@@ -762,7 +776,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     saveQuery,
     confirmReplace,
     cancelReplace,
-    retrySavedList: loadSavedList,
+    retrySavedList: () => loadSavedList(),
     askOpenSaved,
     askDeleteSaved,
     confirmSavedAction,

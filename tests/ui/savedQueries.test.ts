@@ -136,13 +136,25 @@ describe("the saved queries list", () => {
     expect(html).toMatch(/data-action="retry-saved-list"[^>]*>Try again<\/button>/);
   });
 
-  it("shows a delete notice above the list as an alert, escaped, and keeps the list", () => {
-    const html = savedDialogHtml(listDialog({ savedListNotice: "Couldn't delete “A <b>”. Down." }));
+  it("shows a failed delete above the list as an alert, escaped, and keeps the list", () => {
+    const html = savedDialogHtml(
+      listDialog({ savedListNotice: { tone: "error", text: "Couldn't delete “A <b>”. Down." } }),
+    );
     expect(html).toContain(
       '<div class="ui small negative message" role="alert">Couldn&#39;t delete “A &lt;b&gt;”. Down.</div>',
     );
     expect(html.indexOf('role="alert"')).toBeLessThan(html.indexOf('class="qb-saved-list"'));
     expect(html).toMatch(/data-action="open-saved" data-id="sq-1"/);
+  });
+
+  // No role: announce() already speaks it through the dialog's own live
+  // region, and a role would read it a second time.
+  it("shows a done delete above the list as a positive message without a role, escaped", () => {
+    const html = savedDialogHtml(
+      listDialog({ savedListNotice: { tone: "done", text: "Deleted “A <b>”." } }),
+    );
+    expect(html).toContain('<div class="ui small positive message">Deleted “A &lt;b&gt;”.</div>');
+    expect(html.indexOf("positive message")).toBeLessThan(html.indexOf('class="qb-saved-list"'));
   });
 
   it("shows no alert without a notice", () => {
@@ -321,8 +333,8 @@ describe("the login dialog", () => {
     },
   );
 
-  it("Escape closes it", () => {
-    expect(escapeAction(at("login-to-save"))).toBe("close-saved-dialog");
+  it.each(["login-to-save", "login-to-list"] as const)("Escape closes %s", (kind) => {
+    expect(escapeAction(at(kind))).toBe("close-saved-dialog");
   });
 
   it("opening it puts the focus on Log in", () => {

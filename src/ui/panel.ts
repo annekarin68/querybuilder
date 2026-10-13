@@ -16,6 +16,12 @@ export function paint(container: HTMLElement, html: string): void {
   restoreFocus(container, focus);
 }
 
+/** The part of a shell `<dialog>` (layout.ts) that its panel paints. The
+ *  dialog's own live region sits beside it, so a repaint never wipes it. */
+export function dialogBody(dialog: HTMLDialogElement): HTMLElement {
+  return dialog.querySelector<HTMLElement>("[data-dialog-body]")!;
+}
+
 const ENTITIES: Record<string, string> = {
   "&": "&amp;",
   "<": "&lt;",

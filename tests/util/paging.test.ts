@@ -22,10 +22,19 @@ describe("pageOf", () => {
     expect(pageOf(100, 0).pageCount).toBe(1);
   });
 
-  it("clamps a page out of range or not a number (a stale click)", () => {
-    expect(pageOf(150, 5).page).toBe(1);
-    expect(pageOf(150, -1).page).toBe(0);
-    expect(pageOf(150, Number.NaN).page).toBe(0);
+  it("clamps a page out of range or not a number (a stale click), rows included", () => {
+    const last = { page: 1, pageCount: 2, from: 101, to: 150, total: 150 };
+    const first = { page: 0, pageCount: 2, from: 1, to: 100, total: 150 };
+    expect(pageOf(150, 5)).toEqual(last);
+    expect(pageOf(150, -1)).toEqual(first);
+    expect(pageOf(150, Number.NaN)).toEqual(first);
+  });
+
+  // Past the end like any other page that is too high: the nearest page is
+  // the last one. Only NaN has no nearest page, so it gives the first.
+  it("clamps Infinity to the last page and -Infinity to the first", () => {
+    expect(pageOf(150, Infinity).page).toBe(1);
+    expect(pageOf(150, -Infinity).page).toBe(0);
   });
 
   it("has no rows for no results", () => {

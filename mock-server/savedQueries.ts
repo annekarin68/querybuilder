@@ -3,8 +3,10 @@ import type {
   SavedQueryRequest,
   SavedQueryResponse,
   SavedValue,
+  UserResponse,
 } from "../src/api/types";
 import { isObject, isScalar } from "./requestBody";
+import { pathBelow } from "./paths";
 
 // The mock's saved queries (docs/ARCHITECTURE.md, "Saved queries"): in memory,
 // one list per user, lost when the mock restarts. A pure store plus the body
@@ -200,6 +202,14 @@ function savedTreeProblem(
   return null;
 }
 
+// ---- whose list ------------------------------------------------------------------
+
+/** Whose saved queries a session's user gets: their id (`sub`, also spelled
+ *  `user_id`), or null when they have none. */
+export function savedQueryOwner(user: Pick<UserResponse, "sub" | "user_id">): string | null {
+  return user.sub || user.user_id || null;
+}
+
 // ---- the path ---------------------------------------------------------------------
 
 /**
@@ -208,9 +218,10 @@ function savedTreeProblem(
  * this for the PUT and DELETE routes that carry an id).
  */
 export function savedQueryIdFrom(pathname: string, apiBase: string): string | null {
-  const prefix = `${apiBase}/filter/saved/`;
-  if (!pathname.startsWith(prefix)) return null;
-  const rest = pathname.slice(prefix.length);
+  const below = pathBelow(pathname, apiBase);
+  const prefix = "/filter/saved/";
+  if (below === null || !below.startsWith(prefix)) return null;
+  const rest = below.slice(prefix.length);
   if (rest === "" || rest.includes("/")) return null;
   try {
     return decodeURIComponent(rest);
