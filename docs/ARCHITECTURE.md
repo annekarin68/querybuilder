@@ -424,9 +424,10 @@ src/
     dataPreview.ts     Matching events and the Run button (render + wiring).
     accountMenu.ts     The top-bar account menu (render + wiring).
 mock-server/           Dev-only stand-in backend — see "Mock server".
-  index.ts             Reads VITE_API_BASE and DEV_BACKEND_URL (.env), MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS, starts the server.
+  index.ts             Reads VITE_API_BASE and DEV_BACKEND_URL (.env), MOCK_FAIL_RATE / MOCK_STREAM_DELAY_MS / MOCK_HTTP_ERRORS, starts the server.
   server.ts            createMockServer(config): one route table ("METHOD /path" -> handler).
   auth.ts, audit.ts    Fake login / compliance sessions and the audit log (in memory).
+  httpErrors.ts        MOCK_HTTP_ERRORS rules: parseHttpErrors, httpErrorFor.
   databases.ts, rows.ts, evaluate.ts, requestBody.ts, vehicleData.ts
                        The 7 mock databases, the flattened rows, the query evaluator, the request-body check, the data loader.
   savedQueries.ts      The in-memory saved-queries store and its body check ("Saved queries").
