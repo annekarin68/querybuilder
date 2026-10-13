@@ -84,6 +84,7 @@ export function toFacet(i: ResponseObject<IndividualResponse>): Facet {
   return {
     id,
     name: i.text("name") || id,
+    number: i.number("id_number"),
     tags: [...new Set(tags)],
     group: i.text("group"),
     comment: i.text("comment"),

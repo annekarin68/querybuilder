@@ -772,13 +772,15 @@ The mapping is also where the backend's quirks are dealt with, once:
   item whose `values` is a list of objects, one per occurrence (and the reader
   also accepts the same facet in two items). Each object leaves out the fields
   without a value; a `null` is tolerated and dropped.
+- **A facet's number** (`id_number`) becomes `Facet.number`; the Matching
+  events table orders its columns by it.
 - **A missing name.** A database or facet with a blank `name` shows its id.
 - **The user's name** is the backend's `display_name` (it already falls back from
   the username to the email to the id); a blank one shows `sub` / `user_id`.
 
-Only what the app uses is mapped (and checked). `DatabasesResponse.percentage_of_total`,
-`IndividualResponse.id_number` and `IndividualFieldResponse.cardinality` are
-left out; add them to the model when a panel needs them.
+Only what the app uses is mapped (and checked).
+`DatabasesResponse.percentage_of_total` and `IndividualFieldResponse.cardinality`
+are left out; add them to the model when a panel needs them.
 
 ### Reading responses
 

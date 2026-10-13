@@ -16,6 +16,7 @@ import type { Facet } from "../../src/model";
 const facet: Facet = {
   id: "a&b",
   name: "Alpha <b>",
+  number: 1,
   tags: ["t"],
   group: "",
   comment: "backend note",
@@ -315,6 +316,7 @@ describe("source logos", () => {
   const facetWithField = (over: Partial<Facet["fields"][number]>): Facet => ({
     id: "thing",
     name: "Thing",
+    number: 1,
     tags: ["t"],
     group: "",
     comment: "",
@@ -372,6 +374,7 @@ describe("field rows", () => {
   const facetWithField = (over: Partial<Facet["fields"][number]>): Facet => ({
     id: "thing",
     name: "Thing",
+    number: 1,
     tags: ["t"],
     group: "",
     comment: "",

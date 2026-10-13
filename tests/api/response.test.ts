@@ -141,6 +141,15 @@ describe("toFacet", () => {
     expect(facet.fields.map((f) => f.id)).toEqual(["size"]);
   });
 
+  it("keeps the backend's facet number, which orders the events table's columns", () => {
+    expect(toFacet(read(wireFacet({ id_number: 7 }))).number).toBe(7);
+  });
+
+  it("throws a ContractError when the facet number is missing", () => {
+    const broken = { ...wireFacet(), id_number: undefined };
+    expect(() => toFacet(readBroken<IndividualResponse>(broken))).toThrow('"id_number"');
+  });
+
   it("trims tags and drops blank and repeated ones", () => {
     expect(toFacet(read(wireFacet({ tags: [" red ", "", "red", "  ", "blue"] }))).tags).toEqual([
       "red",

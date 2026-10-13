@@ -24,6 +24,7 @@ const facets: Facet[] = [
   {
     id: "thing",
     name: "Thing",
+    number: 1,
     tags: [],
     group: "",
     comment: "",

@@ -2,10 +2,18 @@ import { describe, it, expect } from "vitest";
 import type { Facet } from "../../src/model";
 import { filterStatus, groupByTag, matchDocs, tagsOf, UNTAGGED } from "../../src/ui/docsFilter";
 
-function facet(id: string, tags: string[], name: string, fields: string[], group = ""): Facet {
+function facet(
+  id: string,
+  tags: string[],
+  name: string,
+  fields: string[],
+  group = "",
+  number = 1,
+): Facet {
   return {
     id,
     name,
+    number,
     tags,
     group,
     comment: "",
@@ -143,6 +151,7 @@ describe("filterStatus", () => {
   const facetNamed = (id: string, name: string): Facet => ({
     id,
     name,
+    number: 1,
     tags: [],
     group: "",
     comment: "",

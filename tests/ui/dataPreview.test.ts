@@ -10,10 +10,11 @@ import {
   shortId,
 } from "../../src/ui/dataPreview";
 
-function facet(id: string, group: string, tags: string[]): Facet {
+function facet(id: string, group: string, tags: string[], number = 1): Facet {
   return {
     id,
     name: id,
+    number,
     tags,
     group,
     comment: "",

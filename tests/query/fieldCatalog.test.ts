@@ -32,6 +32,7 @@ const facets: Facet[] = [
   {
     id: "engine_rpm",
     name: "Engine RPM",
+    number: 1,
     tags: [],
     group: "engine",
     comment: "",
@@ -46,6 +47,7 @@ const facets: Facet[] = [
   {
     id: "vehicle_identity",
     name: "Vehicle identity",
+    number: 2,
     tags: [],
     group: "metadata",
     comment: "",
@@ -92,6 +94,7 @@ describe("buildFieldCatalog", () => {
       {
         id: "a",
         name: "Alpha",
+        number: 1,
         tags: [],
         group: "",
         comment: "",
