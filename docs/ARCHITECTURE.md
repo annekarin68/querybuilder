@@ -69,7 +69,8 @@ Four conventions that the code relies on everywhere:
    reads the snake_case keys and builds the camelCase model, `request.ts` does
    the reverse. The point is that either side's code tells you at a glance
    which side of the line it is on, and that the frontend's model does not
-   depend on the backend's. Apart from the mock server, no file outside `src/api/` spells a wire key.
+   depend on the backend's. No `src/` file outside `src/api/` spells a wire key (the mock
+   server and the tests do, because they stand in for or check the backend).
 
 The same things have different names in the UI and `src/`, on the wire (named
 by the backend's vocabulary, in snake_case) and inside the mock server (which speaks
@@ -709,6 +710,11 @@ example responses, so that file (with its doc comments) is the whole
 specification. Every key is snake_case ("Naming"). What the backend team still
 has to do:
 
+- Answer `POST /filter/validate` as a stream: newline-delimited JSON, one
+  `StatsResponse` line per selected database, each written as soon as that
+  database is done (the statistics fill in database by database). A single
+  JSON array at the end would work but would show nothing until the slowest
+  database answers.
 - After login and after the compliance check, send the browser back to
   `/?resume=1`. Today it returns to the URL that started the flow, which loses
   the query kept across the redirect ("Saved query across the login/compliance
