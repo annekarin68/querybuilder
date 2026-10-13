@@ -14,7 +14,7 @@ import {
 } from "./query/drop";
 import {
   addChild,
-  countConditions,
+  emptyQuery,
   findNode,
   moveNode,
   moveSibling,
@@ -39,7 +39,7 @@ import {
 } from "./state";
 import { debounce } from "./util/debounce";
 import { pageOf } from "./util/paging";
-import { savePendingQuery, takePendingQuery } from "./util/pendingQuery";
+import { isWorthRestoring, keepQuery, readKeptQuery } from "./util/keptQuery";
 import { requestSlot } from "./util/requestSlot";
 
 /**
@@ -85,6 +85,10 @@ export interface AppDeps {
 
 /** How long the query must stay unchanged before statistics are fetched. */
 export const STATS_DEBOUNCE_MS = 400;
+
+/** The Restored notice above the query, and what a screen reader hears when
+ *  a page load brings the query back (see `start`). */
+export const RESTORED_MESSAGE = "Restored the query you were building.";
 
 /**
  * What a screen reader hears when Run query's panel changes: it repaints out of
@@ -135,10 +139,21 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     }
   }
 
-  /** Save the query (it survives the page load) and leave for `url`. */
+  // The kept query (src/util/keptQuery.ts): every change to the query or the
+  // database selection is copied at once, so the next page load in this tab
+  // finds what was on screen.
+  store.subscribe((state, changed) => {
+    if (changed.has("query") || changed.has("selectedDatabaseIds")) {
+      keepQuery(state.query, state.selectedDatabaseIds);
+    }
+  });
+
+  /** Leave for `url`; the next page load restores the kept query. The copy
+   *  is already current (see the `store.subscribe` above); it is written once
+   *  more here so that leaving never depends on that. */
   function redirectInto(url: string): void {
     const s = store.getState();
-    savePendingQuery(s.query, s.selectedDatabaseIds);
+    keepQuery(s.query, s.selectedDatabaseIds);
     navigate(url);
   }
 
@@ -281,6 +296,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     statsSlot.cancel();
     previewSlot.cancel();
     store.setState({
+      // An edit means the user carries on with the restored query (or a fresh
+      // one): the Restored notice has nothing left to offer.
+      restoredNotice: false,
       ...patch,
       stats: { status: "idle", results: [] },
       serverIssues: [],
@@ -407,29 +425,41 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     changeScope({ selectedDatabaseIds: nextIds });
   }
 
-  /**
-   * Any link that navigates straight into the login or compliance flow (the
-   * account menu, the Matching events card's notes) must save the in-progress
-   * query first, not just Run's own redirect — otherwise a user who follows
-   * the on-screen guidance loses their query.
-   */
-  function saveQueryBeforeRedirect(): void {
-    const s = store.getState();
-    if (countConditions(s.query) > 0) savePendingQuery(s.query, s.selectedDatabaseIds);
+  /** The Restored notice's **Start fresh**: the empty starting query (one
+   *  blank row) with every database, as on a first visit. It goes through
+   *  `changeScope` like any edit, which also hides the notice. */
+  function startFresh(): void {
+    const { databases, catalog } = store.getState();
+    const root = emptyQuery();
+    const query = addChild(root, root.id, newCondition());
+    changeScope({
+      query,
+      selectedDatabaseIds: (databases ?? []).map((d) => d.id),
+      issues: catalog ? validateQuery(query, catalog) : [],
+      dropNotice: null,
+    });
+  }
+
+  /** The Restored notice's ✕: hide it and keep the restored query. */
+  function dismissRestoredNotice(): void {
+    store.setState({ restoredNotice: false });
   }
 
   /**
-   * Load everything the app needs and set the first real state. `resumed` is
-   * true on the return hop from the login or compliance flow: only then is the
-   * pending query (src/util/pendingQuery.ts) restored. Rejects if databases or
-   * facets can't be loaded — without them there is nothing to show.
+   * Load everything the app needs and set the first real state, restoring the
+   * kept query (src/util/keptQuery.ts) if there is one worth restoring.
+   * `resumed` is true on the return hop from the login or compliance flow.
+   * Rejects if databases or facets can't be loaded — without them there is
+   * nothing to show (and the kept query stays for the next try).
    */
   async function start(resumed: boolean): Promise<void> {
-    // Always take (and so clear) a pending entry, even on a normal load: a stale
-    // one from an abandoned attempt must not resurface on some later, unrelated
-    // return hop. Only a return hop actually uses it.
-    const taken = takePendingQuery();
-    const pending = resumed ? taken : null;
+    const kept = readKeptQuery();
+    // After logging in the user expects their query back, so it is restored
+    // whatever it holds, without a word. On any other load (a reload, a Back
+    // from the login page, a reopened tab) it is restored only if something
+    // was chosen in it, and the Restored notice offers Start fresh.
+    const pending = kept && (resumed || isWorthRestoring(kept.query)) ? kept : null;
+    const showRestored = pending !== null && !resumed;
 
     const [databases, facets, user, compliance] = await Promise.all([
       api.getDatabases(),
@@ -468,9 +498,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       issues: validateQuery(query, catalog),
       auth: user ? { status: "authenticated", user } : { status: "anonymous" },
       compliance,
+      restoredNotice: showRestored,
     });
-    // A restored query is already complete, so fetch its statistics now, as
-    // any in-app edit would. The empty seed has nothing runnable yet.
+    if (showRestored) announce(RESTORED_MESSAGE);
+    // Fetch a restored query's statistics now, as any in-app edit would (an
+    // unfinished one fetches nothing). The empty seed has nothing runnable yet.
     if (pending) refreshStats();
   }
 
@@ -787,7 +819,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onDatabasesChange,
     onLogout,
     onInvalidateCompliance,
-    saveQueryBeforeRedirect,
+    startFresh,
+    dismissRestoredNotice,
     retryStats,
     openSaveDialog,
     openSavedList,

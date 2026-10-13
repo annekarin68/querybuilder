@@ -8,10 +8,12 @@ import {
   moveButtons,
   issuesHtml,
   noticeHtml,
+  restoredNoticeHtml,
   queryTitleHtml,
   rowDropdown,
 } from "../../src/ui/queryBuilder";
 import { initialState, type AppState } from "../../src/state";
+import { RESTORED_MESSAGE } from "../../src/app";
 import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
 import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
 import { UNGROUP_BLOCKED_MESSAGE } from "../../src/query/tree";
@@ -149,6 +151,33 @@ describe("drop warning", () => {
     expect(html).toContain("Couldn&#39;t add &lt;x&gt;");
     expect(html).toContain('data-action="dismiss-notice"');
     expect(html).not.toContain('role="status"');
+  });
+});
+
+describe("Restored notice", () => {
+  it("renders nothing when the query was not restored", () => {
+    expect(restoredNoticeHtml(false)).toBe("");
+  });
+
+  it("says the query was restored and offers Start fresh and a ✕, both real buttons", () => {
+    const html = restoredNoticeHtml(true);
+    expect(html).toContain(RESTORED_MESSAGE);
+    expect(html).toMatch(
+      /<button type="button"[^>]*data-action="start-fresh"[^>]*>Start fresh<\/button>/,
+    );
+    expect(html).toMatch(
+      /<button type="button"[^>]*data-action="dismiss-restored"[^>]*aria-label="Dismiss"/,
+    );
+  });
+
+  // Information, not a problem: it must not look like the drop warning. And no
+  // live-region role: the app already says the words through `announce`, and
+  // a role would read them twice.
+  it("is an information message without a live-region role", () => {
+    const html = restoredNoticeHtml(true);
+    expect(html).toContain("ui info message");
+    expect(html).not.toContain("warning");
+    expect(html).not.toMatch(/role="(status|alert)"/);
   });
 });
 

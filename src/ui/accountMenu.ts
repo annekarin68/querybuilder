@@ -35,7 +35,7 @@ export function complianceHtml(c: ComplianceState): string {
   if (c.status === "loading") return `<p class="qb-account-meta">Checking…</p>`;
   if (c.status === "required") {
     return `<p class="qb-account-meta">Running a query needs a compliance reason for this session.</p>
-      <a class="ui fluid small primary button" href="${escapeHtml(COMPLIANCE_START_URL)}" data-flow-link>Start compliance check</a>`;
+      <a class="ui fluid small primary button" href="${escapeHtml(COMPLIANCE_START_URL)}">Start compliance check</a>`;
   }
   return `<pre class="qb-account-log" tabindex="0" aria-label="Compliance log">${escapeHtml(c.log)}</pre>
     <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Invalidate</button>`;
@@ -54,7 +54,7 @@ export function renderAccountMenu(el: HTMLElement, state: AppState): void {
   if (auth.status === "anonymous") {
     paint(
       el,
-      `<a href="${escapeHtml(LOGIN_URL)}" data-flow-link data-focus-landing class="ui small primary button qb-login-btn">Log in</a>`,
+      `<a href="${escapeHtml(LOGIN_URL)}" data-focus-landing class="ui small primary button qb-login-btn">Log in</a>`,
     );
     return;
   }

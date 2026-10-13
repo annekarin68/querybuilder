@@ -1,20 +1,26 @@
 import type { Group, QueryNode } from "../query/types";
 
-const KEY = "qb:pending-query";
+/**
+ * The **kept query** (docs/ARCHITECTURE.md, "Saved query across the
+ * login/compliance redirect"): a copy of the query on screen and its database
+ * selection, written on every change, so that the next page load in this tab
+ * can put it back. That covers a reload, the trip to the login or compliance
+ * page and back, a Back from those pages, and a reopened tab. Not to be
+ * confused with a *saved* query, which the user names and the server stores.
+ *
+ * sessionStorage only: this tab's own, gone when the tab is closed for good,
+ * so a query is never left behind on a shared machine; and never sent to the
+ * backend or put in a redirect URL.
+ */
+const KEY = "qb:kept-query";
 
-interface PendingQuery {
+export interface KeptQuery {
   query: Group;
   selectedDatabaseIds: string[];
 }
 
-/**
- * Preserves the in-progress query across the full-page redirect into the
- * login or compliance flow — a lost query tree would otherwise force the
- * user to rebuild it from scratch after logging in or writing a compliance
- * reason. sessionStorage only: never sent through the backend or any
- * redirect URL.
- */
-export function savePendingQuery(query: Group, selectedDatabaseIds: string[]): void {
+/** Write the copy, replacing the one before. */
+export function keepQuery(query: Group, selectedDatabaseIds: string[]): void {
   try {
     sessionStorage.setItem(KEY, JSON.stringify({ query, selectedDatabaseIds }));
   } catch {
@@ -29,8 +35,8 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 /**
  * Structural check on a tree read back from storage. The entry may have been
- * written by an older build of the app (a deploy can land between the redirect
- * out and the return hop), so it is untrusted input — a malformed tree must be
+ * written by an older build of the app (a deploy can land between two page
+ * loads), so it is untrusted input — a malformed tree must be
  * dropped here rather than crash rendering or validation later.
  */
 function isQueryNode(v: unknown): v is QueryNode {
@@ -50,16 +56,15 @@ function isQueryNode(v: unknown): v is QueryNode {
 }
 
 /**
- * Reads and clears the pending query, if any. A missing key, a storage error,
- * corrupted JSON, and a structurally invalid entry are all treated the same:
- * nothing to restore. The root must be a group — the query builder's root is
- * always one.
+ * Read the copy, if any, and leave it in place (the app writes a new one as
+ * soon as its first state is set). A missing key, a storage error, corrupted
+ * JSON, and a structurally invalid entry are all treated the same: nothing to
+ * restore. The root must be a group — the query builder's root is always one.
  */
-export function takePendingQuery(): PendingQuery | null {
+export function readKeptQuery(): KeptQuery | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
-    sessionStorage.removeItem(KEY);
     const parsed: unknown = JSON.parse(raw);
     if (
       !isObject(parsed) ||
@@ -74,4 +79,15 @@ export function takePendingQuery(): PendingQuery | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether `query` holds anything the user chose: at least one row with a
+ * facet, at any depth. The starting query (one blank row), blank rows and an
+ * ALL/ANY switch alone are not worth bringing back with a "Restored" notice.
+ */
+export function isWorthRestoring(query: Group): boolean {
+  return query.children.some((node) =>
+    node.kind === "group" ? isWorthRestoring(node) : node.facetId !== null,
+  );
 }

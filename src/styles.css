@@ -1757,6 +1757,21 @@ details[open] > summary > .qb-chevron {
 .qb-notice {
   position: relative;
 }
+/* The Restored notice (restoredNoticeHtml): its sentence, Start fresh and the
+   ✕ on one line, wrapping in a narrow window. */
+.qb-restored.ui.message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.qb-restored p {
+  flex: 1 1 12rem;
+  margin: 0;
+}
+.qb-restored .ui.button {
+  margin: 0;
+}
 /* Read by screen readers, invisible to everyone else (the live region in
    src/ui/layout.ts). `display: none` would stop it being read. */
 .qb-sr-only {

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createApp, previewAnnouncement, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
+import {
+  createApp,
+  previewAnnouncement,
+  RESTORED_MESSAGE,
+  STATS_DEBOUNCE_MS,
+  type AppApi,
+} from "../src/app";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
 import type {
   Database,
@@ -15,7 +21,7 @@ import type { Group } from "../src/query/types";
 import type { OpenSaved } from "../src/query/saved";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
-import { savePendingQuery, takePendingQuery } from "../src/util/pendingQuery";
+import { keepQuery, readKeptQuery } from "../src/util/keptQuery";
 import { dbError, failed, ok } from "./statsFixtures";
 
 // ---- fixtures -------------------------------------------------------------
@@ -191,7 +197,7 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
-    expect(takePendingQuery()).toEqual({
+    expect(readKeptQuery()).toEqual({
       query: store.getState().query,
       selectedDatabaseIds: ["alpha", "beta"],
     });
@@ -206,7 +212,7 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(navigate).toHaveBeenCalledWith(COMPLIANCE_START_URL);
-    expect(takePendingQuery()).not.toBeNull();
+    expect(readKeptQuery()).not.toBeNull();
   });
 
   it("a 403 for another reason shows a plain message instead of redirecting", async () => {
@@ -678,40 +684,105 @@ describe("start", () => {
     await expect(app.start(false)).rejects.toThrow("down");
   });
 
-  it("after a login/compliance redirect, restores the pending query and fetches its statistics", async () => {
+  it("after a login/compliance redirect, restores the kept query, without a notice", async () => {
     vi.useFakeTimers();
-    const saved = runnableQuery(9);
-    savePendingQuery(saved, ["beta", "no-longer-exists"]);
-    const { app, api, store } = setup();
+    const kept = runnableQuery(9);
+    keepQuery(kept, ["beta", "no-longer-exists"]);
+    const { app, api, store, announce } = setup();
     await app.start(true);
-    expect(store.getState().query).toEqual(saved);
+    expect(store.getState().query).toEqual(kept);
     expect(store.getState().selectedDatabaseIds).toEqual(["beta"]);
     expect(store.getState().issues).toEqual([]);
+    // The user expects their query back after logging in: nothing to say.
+    expect(store.getState().restoredNotice).toBe(false);
+    expect(announce).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).toHaveBeenCalledTimes(1);
   });
 
-  it("a normal load ignores a leftover pending query, and clears it", async () => {
-    savePendingQuery(runnableQuery(9), ["beta"]);
-    const { app, store } = setup();
+  it("a normal load (a reload, a Back) restores the kept query and says so", async () => {
+    vi.useFakeTimers();
+    const kept = runnableQuery(9);
+    keepQuery(kept, ["beta", "no-longer-exists"]);
+    const { app, api, store, announce } = setup();
+    await app.start(false);
+    expect(store.getState().query).toEqual(kept);
+    expect(store.getState().selectedDatabaseIds).toEqual(["beta"]);
+    expect(store.getState().restoredNotice).toBe(true);
+    expect(announce).toHaveBeenCalledWith(RESTORED_MESSAGE);
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    expect(api.getStats).toHaveBeenCalledTimes(1);
+  });
+
+  it("a normal load does not bring back a query in which nothing was chosen", async () => {
+    const blank = addChild(emptyQuery(), emptyQuery().id, newCondition());
+    keepQuery(blank, ["beta"]);
+    const { app, store, announce } = setup();
     await app.start(false);
     expect(store.getState().selectedDatabaseIds).toEqual(["alpha", "beta"]);
-    expect(store.getState().issues).toHaveLength(1); // the seeded empty condition
-    expect(takePendingQuery()).toBeNull();
+    expect(store.getState().query).not.toEqual(blank); // a fresh seed
+    expect(store.getState().restoredNotice).toBe(false);
+    expect(announce).not.toHaveBeenCalled();
+  });
+
+  it("keeps the first state at once, so a reload straight away finds it", async () => {
+    const { app, store } = setup();
+    await app.start(false);
+    expect(readKeptQuery()).toEqual({
+      query: store.getState().query,
+      selectedDatabaseIds: ["alpha", "beta"],
+    });
   });
 });
 
-describe("saveQueryBeforeRedirect (login / compliance links)", () => {
-  it("saves a query that has conditions", () => {
+describe("the kept query", () => {
+  it("is rewritten on every change to the query or the databases", () => {
     const { app, store } = setup(ready());
-    app.saveQueryBeforeRedirect();
-    expect(takePendingQuery()?.query).toEqual(store.getState().query);
+    const next = runnableQuery(3);
+    app.onQueryChange(next);
+    expect(readKeptQuery()?.query).toEqual(next);
+    app.onDatabasesChange(["alpha"]);
+    expect(readKeptQuery()).toEqual({
+      query: store.getState().query,
+      selectedDatabaseIds: ["alpha"],
+    });
+  });
+});
+
+describe("the Restored notice", () => {
+  const restored = () => setup({ ...ready(), restoredNotice: true });
+
+  it("Start fresh puts back the empty starting query with every database", () => {
+    const { app, store } = restored();
+    app.onDatabasesChange(["alpha"]); // something to undo besides the query
+    store.setState({ restoredNotice: true });
+    app.startFresh();
+    const s = store.getState();
+    expect(s.restoredNotice).toBe(false);
+    expect(s.selectedDatabaseIds).toEqual(["alpha", "beta"]);
+    expect(s.query.children).toHaveLength(1);
+    expect(s.query.children[0]).toMatchObject({ kind: "condition", facetId: null });
+    expect(s.stats).toEqual({ status: "idle", results: [] });
+    // What is kept now is the blank start, which a reload won't bring back.
+    expect(readKeptQuery()?.query).toEqual(s.query);
   });
 
-  it("saves nothing for an empty query", () => {
-    const { app } = setup({ ...ready(), query: emptyQuery() });
-    app.saveQueryBeforeRedirect();
-    expect(takePendingQuery()).toBeNull();
+  it("the ✕ only hides it; the query stays", () => {
+    const { app, store } = restored();
+    const before = store.getState().query;
+    app.dismissRestoredNotice();
+    expect(store.getState().restoredNotice).toBe(false);
+    expect(store.getState().query).toBe(before);
+  });
+
+  // Editing means carrying on with the restored query: the offer is settled.
+  it("goes away with the first change to the query or the databases", () => {
+    const edited = restored();
+    edited.app.onQueryChange(runnableQuery(4));
+    expect(edited.store.getState().restoredNotice).toBe(false);
+    const scoped = restored();
+    scoped.app.onDatabasesChange(["alpha"]);
+    expect(scoped.store.getState().restoredNotice).toBe(false);
   });
 });
 
@@ -1097,7 +1168,7 @@ describe("saved queries: opening the dialogs", () => {
     });
     app.logInToSave();
     expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
-    expect(takePendingQuery()).toEqual({
+    expect(readKeptQuery()).toEqual({
       query: store.getState().query,
       selectedDatabaseIds: ["alpha", "beta"],
     });
@@ -1161,7 +1232,7 @@ describe("saved queries: opening the dialogs", () => {
     app.openSavedList();
     await flushPromises();
     expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
-    expect(takePendingQuery()).not.toBeNull();
+    expect(readKeptQuery()).not.toBeNull();
   });
 
   it("ignores a slow list answer once a newer load started", async () => {
@@ -1368,7 +1439,7 @@ describe("saved queries: saving", () => {
     app.saveQuery("Weekly", "");
     await flushPromises();
     expect(navigate).toHaveBeenCalledWith(LOGIN_URL);
-    expect(takePendingQuery()).not.toBeNull();
+    expect(readKeptQuery()).not.toBeNull();
   });
 
   it("shows any other error in the dialog", async () => {

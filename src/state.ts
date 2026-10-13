@@ -106,6 +106,10 @@ export interface AppState {
    *  Ungroup and "N saved databases no longer exist…" after opening a saved
    *  query. */
   dropNotice: string | null;
+  /** The query on screen was brought back by this page load (a reload, a Back
+   *  from the login page): the notice above it says so and offers Start fresh.
+   *  Hidden by its ✕, by Start fresh and by the first edit (`changeScope`). */
+  restoredNotice: boolean;
   /** Whether the hidden easter-egg mascot set is showing. Display only: five
    *  clicks on the logo toggle it. It is not stored, so a reload brings back
    *  the normal pickle (decided by the maintainers, 2026-10-08). */
@@ -143,6 +147,7 @@ export const initialState: AppState = {
   // The docs are the main way to build a query, so they start open.
   sidebarCollapsed: false,
   dropNotice: null,
+  restoredNotice: false,
   easterEgg: false,
   openSaved: null,
   savedDialog: null,

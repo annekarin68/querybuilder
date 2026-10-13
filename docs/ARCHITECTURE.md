@@ -394,7 +394,7 @@ src/
                        panel once to `app`, the panelRenderers table, reads `?resume=1`, fatal-error page,
                        the five-click pickle rain.
   app.ts               createApp({ store, api, navigate, announce }) — everything the app DOES, with no DOM: startup
-                       (+ restoring the pending query), live stats, Run query and its 401/403 redirects, logout,
+                       (+ restoring the kept query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
                        `dismissDropNotice`), Move up / Move down (`onMoveNode`), the saved-queries
                        actions (`openSaveDialog`, `saveQuery`,
@@ -446,7 +446,8 @@ src/
     debounce.ts        debounce(fn, ms) (the live-stats trigger).
     afterPointer.ts    When a typed value may be committed: not while the mouse button is down (see "Centre — `queryBuilder.ts`", Wiring).
     requestSlot.ts     At most one request per kind in flight; the whole stale-response guard.
-    pendingQuery.ts    Save / restore the query across the login or compliance redirect (sessionStorage).
+    keptQuery.ts       The kept query: the query on screen copied for the next page load in this tab
+                       (sessionStorage); isWorthRestoring.
     paging.ts          PAGE_SIZE (100), pageOf(total, page) — the clamped page of the Matching events table (pure).
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
@@ -535,6 +536,9 @@ preview has `events` and `page`, the 0-based page of them on screen).
 screen) or `null`; it is reset together with `preview` (a query or database
 change, or a new run), and `openEventOf` is also null while `runBlocker` blocks
 Run, so the dialog never shows a result that is gone or hidden.
+`restoredNotice` is true while the Restored notice is up: this page load
+brought the kept query back ("Saved query across the login/compliance
+redirect"). Its ✕, **Start fresh** and the first edit (`changeScope`) clear it.
 
 The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
 pure helpers in `src/query/saved.ts`):
@@ -586,7 +590,7 @@ binding its Fomantic dropdowns must always happen together.
 
 | Trigger | Effect |
 |---|---|
-| App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or a restored query). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
+| App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or the kept query, restored: "Saved query across the login/compliance redirect"). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
@@ -595,6 +599,7 @@ binding its Fomantic dropdowns must always happen together.
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User presses **Deselect failing (N)** in the database picker | `onDatabasesChange` with the selection minus the marked databases: a database change like any other. The button and the markers go with the old results; the focus lands on **All**. |
 | User presses **Group contents** or **Ungroup** | `groupContents` / `ungroup` (`tree.ts`) → `app.onQueryChange` like any edit: the tree changes shape, so `changeScope` resets and refetches although the meaning is the same. Success clears an older `dropNotice`. A refused Ungroup changes no query: `app.showNotice` puts the reason in `dropNotice` (and announces it). |
+| User presses **Start fresh** in the Restored notice | `app.startFresh` → `changeScope` with the starting query (one blank row), every database and fresh `issues`: like any edit, so `restoredNotice` goes and the kept query is now the blank start, which the next load won't bring back. |
 | User presses **Try again** in the statistics column | `app.retryStats` → the debounced stats fetch for the same query and scope; it replaces the failed request in the stats slot. Nothing else is reset. |
 | User opens a saved query (**Open**, after "Replace the current query?" if asked) | `openSavedQuery` → `changeScope` with the saved `query`, the databases that still exist, fresh `issues` and `openSaved`, and the dialog closed, in one `setState`: like any edit, so the old statistics and preview go and new ones are fetched. Databases left out are said in `dropNotice`. |
 | User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `savedListNotice`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
@@ -644,20 +649,14 @@ control had focus before it repaints and focuses the same control afterwards.
 - **A mouse click** focuses the button too, but the repainted one shows no
   focus ring: the browser's `:focus-visible` follows the last input device.
 - **A value box commits on `change`, which fires as the box loses the focus,
-  before the focus reaches the next control** (Tab, or a click on "To"). A
-  repaint at that moment would remove that control, so the builder commits the
-  value one tick later (`setTimeout`), once the focus has landed, and `paint()`
-  keeps it there. A click that arrives before that tick (press and release both
-  inside it, as a fast click or a script does) would run its handler on the OLD
-  query, so `wireQueryBuilder` also commits the waiting value from a
-  capture-phase `click` listener on `document`, before any other handler sees
-  the click: **Run query** then runs, and the login / compliance links
-  (`saveQueryBeforeRedirect`) save, the query with the value in it.
-  **Known gap:** a button press held longer than that tick (a normal mouse
-  click) on a control that the commit repaints still loses the click: the
-  button is replaced between press and release. Typing a value and then
-  clicking **Run query** or **+ Condition** commits the value but needs a
-  second click. It was lost before as well.
+  before the user's next action has finished** (Tab, or a mouse press on a
+  button). A repaint at that moment would remove the control the focus is
+  moving to, or the button under the pointer, so the commit waits: for the
+  next tick, and while the mouse button is down, until it is released
+  (`afterPointer`; see "Centre — `queryBuilder.ts`"). `paint()` then keeps
+  the focus where it landed. A click on a button or link commits the waiting
+  value first, so **Run query** runs, and the login and compliance links
+  leave, with the value in the query.
 
 The pure part (`controlOf`, `sameControl`) has Node tests; the rest needs a
 DOM and is checked in a browser.
@@ -1005,7 +1004,7 @@ backend, per user, needing a session** (`401` without); it reads no data, so no
 compliance reason is needed. The list never shows the query itself (queries can
 be sensitive): a name and an optional note help recall it. (Not to be confused
 with "Saved query across the login/compliance redirect": that one is the
-*pending query*, a `sessionStorage` copy of the query on screen, never sent to
+*kept query*, a `sessionStorage` copy of the query on screen, never sent to
 the backend.)
 
 The endpoints are `GET` and `POST {prefix}/filter/saved`, and `PUT` and
@@ -1045,36 +1044,56 @@ are `listSavedQueries`, `createSavedQuery`, `updateSavedQuery(id, draft)` and
 
 ### Saved query across the login/compliance redirect
 
-A user who presses Run while logged out, or without a compliance reason,
-leaves the app for a full-page redirect. Their query must survive the trip;
-the copy kept for it is the **pending query** (not a saved query, which is
-"Saved queries"):
+The query on screen survives a page load in the same tab: a reload, the trip
+to the login or compliance page and back, a Back from those pages, a reopened
+tab. The copy that makes this work is the **kept query**
+(`src/util/keptQuery.ts`; not a saved query, which the user names and the
+server stores: "Saved queries"). Before 2026-10-13 it was kept only for the
+login/compliance trip and thrown away on any other load; users lost their
+query on a reload (#69).
 
-1. **Saved** (`savePendingQuery`, `src/util/pendingQuery.ts`) to
-   `sessionStorage` as `{ query, selectedDatabaseIds }` — never in a URL,
-   never sent to the backend. It is saved when Run redirects, and when the
-   user clicks any link straight into a flow (the **Log in** button, **Start
-   compliance check**; these carry `data-flow-link`) if the query has
-   conditions. **Log in** in the dialog that **Save…** and **Saved queries**
-   show a logged-out user redirects the same way (the query is saved even when
-   blank: they asked to save it), and so does a `401` from any saved-queries
-   request ("Saved queries"). A redirect without a warning surprised users
-   (2026-10-08); a note always above the builder read as if building a query
-   needed a login (2026-10-13), so the question is asked when the button is
-   pressed.
+1. **Kept** (`keepQuery`) in `sessionStorage` as
+   `{ query, selectedDatabaseIds }`, on every change to either: `app.ts`
+   subscribes to the store, and `redirectInto` writes it once more before it
+   leaves, so leaving never depends on the subscription. Never in a URL, never
+   sent to the backend. `sessionStorage` belongs to the tab: it survives a
+   reload and "reopen closed tab", and is gone once the tab is closed for good,
+   so no query is left behind on a shared machine (queries can be sensitive),
+   and no age limit is needed. Leaving for the login flow from the **Save…** /
+   **Saved queries** dialog of a logged-out user, or after a `401` from any
+   saved-queries request, works the same ("Saved queries"). A redirect without
+   a warning surprised users (2026-10-08); a note always above the builder read
+   as if building a query needed a login (2026-10-13), so the question is
+   asked when the button is pressed.
 2. **The backend redirects back to `/?resume=1`.** `main.ts` removes
-   `resume=1` from the URL at once (so a refresh doesn't repeat it) and calls
-   `app.start(true)`.
-3. **Restored** (`takePendingQuery`) only on such a return hop. The entry is
-   *always* taken and cleared at startup, even on a normal load, so a leftover
-   from an abandoned attempt can't appear on some later, unrelated return. The
-   entry is untrusted (a deploy may land in between), so it is structurally
-   checked, and database ids that no longer exist are dropped. The restored
-   query is validated and its statistics fetched.
+   `resume=1` from the URL at once (so a refresh counts as an ordinary reload)
+   and calls `app.start(true)`.
+3. **Restored** (`readKeptQuery`, which leaves the copy in place) by
+   `app.start`:
+   - **On the return hop** (`resume=1`) whatever it holds, without a word: the
+     user expects their query back after logging in.
+   - **On any other load** only if something was chosen in it
+     (`isWorthRestoring`: a row with a facet, at any depth; the starting blank
+     row is not worth a notice). Then the **Restored notice** above the query
+     card says "Restored the query you were building." (`RESTORED_MESSAGE`,
+     also spoken through `announce`) and offers **Start fresh** (the empty
+     starting query with every database, `app.startFresh`) and a ✕
+     (`dismissRestoredNotice`). It is `AppState.restoredNotice`, an
+     information message (`restoredNoticeHtml`), not a warning, and it goes
+     away with the first edit (`changeScope`): editing means carrying on.
+     Restoring without asking was chosen over asking first (maintainers,
+     2026-10-13): a question before every reload would be a chore, and the
+     query on screen shows better than any summary what came back.
+
+   Either way the entry is untrusted (a deploy may land in between), so it is
+   structurally checked, database ids that no longer exist are dropped, and the
+   restored query is validated and its statistics fetched. A load that fails
+   (databases or facets can't be loaded) sets no state, so the copy is still
+   there for the next try.
 4. **No automatic retry.** The user presses Run (or **Save…**) again. This
    keeps the flow loop-free (see the decision above). Which saved query was
-   open is not carried over: after the trip the title says plain "Query", and
-   saving under the same name asks "Replace it?".
+   open is not carried over: after a reload or the trip the title says plain
+   "Query", and saving under the same name asks "Replace it?".
 
 ### Dates
 
@@ -2222,7 +2241,7 @@ file it tests, in the same place under `tests/`. The ones to know about:
 
 - `tests/app.test.ts` — `createApp` with a fake API: Run and its 401/403
   redirects, stale responses, streamed statistics, logout, startup and
-  restoring the pending query after a redirect, saved queries. The most
+  restoring the kept query, saved queries. The most
   important behaviour lives here.
 - `tests/query/` — tree (including `insertNodes` / `moveNode`), validation,
   summary, field catalog, the row cascade, dates, and `drop.test.ts` (drag
