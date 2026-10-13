@@ -167,7 +167,8 @@ you add a token that carries text. A colour that carries text must be an opaque
 `#rrggbb` token, because the test cannot read a see-through `rgba()` (this is
 why the badge backgrounds are opaque). The test also checks that the green used
 to mark keyboard focus on the dictionary's resize handle stands out 3:1 from the
-page and the card (WCAG 1.4.11).
+page and the card (WCAG 1.4.11), and that the statistics bars (green, red)
+stand out 3:1 from the track and the card.
 
 The pickle is four small SVG files in `public/pickle/` (plus the three easter-egg
 faces below), served as-is. Three of them are named by `MASCOT` in
@@ -417,7 +418,7 @@ src/
                        displayLabel, databaseTitle, countLabel, formatWhen, formatDate.
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
-                       (failedDatabases, queryIsAtFault) and Deselect failing (deselectFailingIds).
+                       (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
     queryBuilder.ts    The query builder (wiring, drop targets, node grips, the title row with Save… and
                        Saved queries; returns its render function).
     savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint and
@@ -791,8 +792,8 @@ errors with a `nodeId` in
 many databases report them, and they block Run (`runBlocker` → `"rejected"`).
 A line that says `success` but has no `matchCount`
 counts as failed rather than as a made-up 0. Both carry `notes` (from
-`infoMessages`). The headline sums the successful databases only and says how
-many it excludes.
+`infoMessages`). The headline sums the successful databases only; the databases
+that failed are the striped red end of its bar ("Right — `statsPanel.ts`").
 
 ### The field catalog (there is no schema endpoint)
 
@@ -1147,7 +1148,7 @@ empty.
 is marked on its pill: a danger-coloured outline, a "!" icon and the hidden
 text " failed for this query" (`qb-sr-only`; the leading space keeps a screen
 reader from running it into the name), so the colour is not the only signal.
-Its reasons (`failedDatabases`) are appended to the pill's tooltip on a new
+Its reasons (`failureReasons`, also used by its statistics row) are appended to the pill's tooltip on a new
 line, after the database description: its errors that point at no node, else
 its notes, else its node errors' messages, else "Failed.". Only the current
 results count and only selected databases are marked: `changeScope` empties
@@ -1158,7 +1159,7 @@ this query. The picker therefore re-renders on `stats`.
 selected database that has answered so far failed, and only with errors that
 point at query nodes (a text value that is too long fails everywhere). Those
 errors are the query's, shown in the builder where they can be fixed, and the
-statistics column says "Not counted: …" once ("Right — `statsPanel.ts`").
+statistics column offers **Show problem** once ("Right — `statsPanel.ts`").
 Red pills with the same message on every database would repeat them and
 suggest deselecting databases, which would not help. While answers stream in,
 the rule is checked again on each one: a database that then answers fine
@@ -1606,21 +1607,25 @@ Every number goes through `format.ts` so it fits the 15rem column when the
 backend returns billions: `compact` (`1.2B`, exact value on hover),
 `matchRatio` (`62%`, `0.34%`, and `1 in 289.3M` rather than a misleading
 `0%`), `barWidth` (any nonzero match shows at least 2 px). Top to bottom: the
-headline (sum of successful databases, ratio, bar, "Excludes N databases that
-failed"), the query-problems line (below), then **By database** (one row per
-streamed result), then "Waiting on N more databases…" while loading. The
+headline (sum of successful databases, ratio, and a bar of every answered
+database's events: green for the matches, a striped red end for the events of
+databases that failed, `splitBar`; its words are its `aria-label` and tooltip),
+**⚠ Show problem** when the query has a problem (below), then **By database**
+(one row per streamed result: a ratio bar, or for a failed database a striped
+red bar and an icon whose tooltip and label say why, `failureReasons`), then
+"Waiting on N more databases…" while loading. The
 backend can only return counts, so there are no per-field statistics.
 
 Each kind of error is shown once, where the person who can fix it looks:
 
 | Problem | Who fixes it | Where it is shown |
 |---|---|---|
-| Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder (when only some databases report it, those databases' pills are also marked, with the message in the tooltip: "Above the builder — `databasePicker.ts`"); here one line, "Not counted: N problem(s) are marked in the query." (`queryProblemsLine`), with a **Show** button; each such database's row says "Not counted" in muted text |
-| Database error without a `nodeId` | the user (deselect the database) or the service | in that database's row, in red; a failed row with no error at all says "Failed." |
+| Error with a `nodeId` (a condition or group of the query) | the user, in the query | in the builder (when only some databases report it, those databases' pills are also marked, with the message in the tooltip: "Above the builder — `databasePicker.ts`"); here the failed databases' rows are red and **⚠ Show problem** jumps to the first one |
+| Database error without a `nodeId` | the user (deselect the database) or the service | that database's row is a red bar; the reason is its tooltip and its label for screen readers (a failed row with no reason says "Failed.") |
 | The statistics request itself failed (`ApiError`, `NetworkError`, `TimeoutError`, `ContractError`) | retry, or the service | a "Couldn't get statistics" `ui negative message` with `userMessage(err)` and **Try again** |
 
-N is `AppState.serverIssues.length`, already de-duplicated across databases.
-**Show** carries the id `placeIssues` drew the first problem on, so a problem
+N (in the button's label) is `AppState.serverIssues.length`, already
+de-duplicated across databases. **Show problem** carries the id `placeIssues` drew the first problem on, so a problem
 inside a collapsed group points at that group. It is in `data-target-id`, not
 `data-node-id`: that one marks query nodes, and "Keyboard focus across
 repaints" would take the button for one; `main.ts` wires it to
@@ -1633,7 +1638,15 @@ scope. `wireStatsPanel` owns both buttons with one delegated listener.
 **Decision: no duplication.** The maintainers asked whether the node errors
 should also be listed in the statistics. They are not: the same message in the
 builder and in every database row is noise, and only the builder lets the user
-fix it. The panel says that the query has problems, how many, and where.
+fix it. The panel only offers a button that jumps to the first problem.
+
+**Decided 2026-10-13: bars, not words.** Users found "Not counted: N problems
+are marked in the query" and "Excludes N databases that failed" confusing and
+asked for a picture. The red parts are striped (not colour alone, WCAG 1.4.1)
+and carry their words for screen readers and on hover. **Show problem** stayed,
+because it is the only way to jump to the problem. The headline's green is the
+matched share of all answered events, failed databases included, while the
+text ratio ("x% of N") stays over the databases that succeeded.
 
 ### Under the query — `dataPreview.ts` (Matching events)
 
@@ -1888,7 +1901,7 @@ file it tests, in the same place under `tests/`. The ones to know about:
   payloads, what a drop creates, the warnings).
 - `tests/themeContrast.test.ts` — reads the `:root` colour tokens from
   `src/styles.css` and fails if a text/background pair falls below WCAG AA
-  (4.5:1), or a keyboard-focus colour below 3:1 ("Pickle theme and mascot").
+  (4.5:1), or a keyboard-focus colour or a statistics bar below 3:1 ("Pickle theme and mascot").
 - `tests/api/` — the client over a stubbed `fetch`, the contract checks
   (`contract.test.ts`), and the translation both ways: `response.test.ts`
   (backend → model) and `request.test.ts` (query → request body).

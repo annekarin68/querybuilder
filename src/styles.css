@@ -49,6 +49,7 @@
   --qb-or-tint-strong: rgba(217, 160, 10, 0.17);
 
   --qb-danger: #b03a1e;
+  --qb-danger-stripe: #e7b3a4; /* the light stripes of a failed (red) bar segment */
   --qb-warn: #7d5800;
 
   --qb-radius: 6px;
@@ -1028,37 +1029,44 @@ body {
   font-size: 0.85rem;
   color: var(--qb-muted);
 }
-.qb-stat-failed {
-  margin-top: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--qb-danger);
-}
-.qb-stat-problems {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--qb-muted);
-}
-.qb-stat-problems .ui.button {
-  margin: 0;
-}
 .qb-bar {
-  display: block;
+  display: flex;
   height: 6px;
   overflow: hidden;
   border-radius: 3px;
   background: var(--qb-track);
 }
 .qb-bar > i {
-  display: block;
+  flex: none;
   height: 100%;
   background: var(--qb-and);
 }
+/* Data from databases that failed: red with stripes, so it is told apart from
+   the green without relying on colour (WCAG 1.4.1). It sits at the right end. */
+.qb-bar > .qb-bar-failed,
+.qb-bar.is-failed {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--qb-danger) 0 3px,
+    var(--qb-danger-stripe) 3px 5px
+  );
+}
+.qb-bar > .qb-bar-failed {
+  margin-left: auto;
+}
 .qb-stat-headline .qb-bar {
+  height: 10px; /* tall enough for the stripes to show */
   margin-top: 0.4rem;
+}
+.qb-db-failed-icon.icon {
+  margin: 0;
+  color: var(--qb-danger);
+}
+.qb-show-problem.ui.button {
+  margin: 0 0 0.6rem;
+}
+.qb-show-problem .icon {
+  color: var(--qb-warn);
 }
 .qb-stat-subtitle {
   margin: 0.25rem 0 0.35rem;
@@ -1090,9 +1098,6 @@ body {
   grid-column: 1 / -1;
   font-size: 0.75rem;
   color: var(--qb-muted);
-}
-.qb-db-error {
-  color: var(--qb-danger);
 }
 .qb-stat-pending {
   display: flex;

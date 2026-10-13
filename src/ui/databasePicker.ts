@@ -22,22 +22,30 @@ export function queryIsAtFault(results: DatabaseResult[]): boolean {
   );
 }
 
+type FailedResult = Extract<DatabaseResult, { status: "failed" }>;
+
 /**
- * Each failed database's id → why it failed, in the user's words, for its
- * pill's tooltip: its errors without a node, else its notes (a timeout, an
- * unreachable server), else its node errors' messages (a node error that only
- * some databases report is about that database), else "Failed.". Empty when
- * the query is at fault (`queryIsAtFault`): then no database is marked.
+ * Why a database failed, in the user's words: its errors without a node, else
+ * its notes (a timeout, an unreachable server), else its node errors'
+ * messages (a node error that only some databases report is about that
+ * database), else "Failed.". Its pill's tooltip and its statistics row say this.
+ */
+export function failureReasons(r: FailedResult): string[] {
+  const nodeless = r.errors.filter((e) => e.nodeId === null).map((e) => e.message);
+  const nodeErrors = r.errors.filter((e) => e.nodeId !== null).map((e) => e.message);
+  return [nodeless, r.notes, nodeErrors].find((list) => list.length > 0) ?? ["Failed."];
+}
+
+/**
+ * Each failed database's id → why it failed (`failureReasons`), for its pill's
+ * tooltip. Empty when the query is at fault (`queryIsAtFault`): then no
+ * database is marked.
  */
 export function failedDatabases(results: DatabaseResult[]): Map<string, string[]> {
   const failed = new Map<string, string[]>();
   if (queryIsAtFault(results)) return failed;
   for (const r of results) {
-    if (r.status !== "failed") continue;
-    const nodeless = r.errors.filter((e) => e.nodeId === null).map((e) => e.message);
-    const nodeErrors = r.errors.filter((e) => e.nodeId !== null).map((e) => e.message);
-    const reasons = [nodeless, r.notes, nodeErrors].find((list) => list.length > 0);
-    failed.set(r.databaseId, reasons ?? ["Failed."]);
+    if (r.status === "failed") failed.set(r.databaseId, failureReasons(r));
   }
   return failed;
 }

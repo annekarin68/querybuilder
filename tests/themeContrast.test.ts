@@ -65,3 +65,17 @@ describe("keyboard focus indicators", () => {
     expect(ratio(token(indicator), token(neighbour))).toBeGreaterThanOrEqual(3);
   });
 });
+
+// Not text: the statistics bars carry meaning by colour and must stand out
+// 3:1 from the empty track and the card (WCAG 1.4.11).
+const GRAPHICS: [string, string][] = [
+  ["qb-and", "qb-track"],
+  ["qb-danger", "qb-track"],
+  ["qb-danger", "qb-surface"],
+];
+
+describe("statistics bars", () => {
+  it.each(GRAPHICS)("%s against %s meets WCAG 1.4.11 (3:1)", (mark, neighbour) => {
+    expect(ratio(token(mark), token(neighbour))).toBeGreaterThanOrEqual(3);
+  });
+});

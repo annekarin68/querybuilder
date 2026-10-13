@@ -2,6 +2,7 @@ import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../
 import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { placeIssues } from "../query/issues";
+import { failureReasons } from "./databasePicker";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
 /** The databases are loaded once into AppState.databases; a result only
@@ -20,7 +21,7 @@ function messagesHtml(list: string[], cls: string): string {
 }
 
 type Ok = Extract<DatabaseResult, { status: "ok" }>;
-type Failed = Extract<DatabaseResult, { status: "failed" }>;
+export type Failed = Extract<DatabaseResult, { status: "failed" }>;
 
 function successRowHtml(result: Ok, db: Database | undefined): string {
   const name = db?.name ?? result.databaseId;
@@ -35,56 +36,48 @@ function successRowHtml(result: Ok, db: Database | undefined): string {
 }
 
 /**
- * A failed database's row. Errors that point at a query node are shown once,
- * in the query builder (and counted by `queryProblemsLine`), so the row only
- * says "Not counted" for them; errors without a node can only be fixed by
- * deselecting the database or by the service, so they stay here, in red.
+ * A failed database's row: a red, striped bar where the ratio bar would be,
+ * and an icon. Why it failed (`failureReasons`) is its tooltip and its text
+ * for screen readers, not text on the row (users asked for a picture,
+ * 2026-10-13). A problem in the query itself is also drawn in the builder,
+ * where it can be fixed.
  */
-function failureRowHtml(result: Failed, db: Database | undefined): string {
+export function failureRowHtml(result: Failed, db: Database | undefined): string {
   const name = db?.name ?? result.databaseId;
-  const databaseErrors = result.errors.filter((e) => e.nodeId === null);
-  let errors: string;
-  if (databaseErrors.length) {
-    errors = messagesHtml(
-      databaseErrors.map((e) => e.message),
-      "qb-db-msg qb-db-error",
-    );
-  } else if (result.errors.length) {
-    errors = `<span class="qb-db-msg">Not counted</span>`;
-  } else {
-    errors = `<span class="qb-db-msg qb-db-error">Failed.</span>`;
-  }
-  return `<div class="qb-db-row is-failed">
+  const label = `${name} failed and is not counted: ${failureReasons(result).join(" ")}`;
+  return `<div class="qb-db-row is-failed" title="${escapeHtml(label)}">
     <span class="qb-db-name">${escapeHtml(name)}</span>
-    ${errors}
-    ${messagesHtml(result.notes, "qb-db-msg")}
+    <span class="qb-bar is-failed" role="img" aria-label="${escapeHtml(label)}"></span>
+    <i class="exclamation circle icon qb-db-failed-icon" aria-hidden="true"></i>
   </div>`;
 }
 
 /**
- * "Not counted: N problems are marked in the query." with a Show button, or
- * "" when the databases found no problem in the query. The messages
- * themselves are drawn in the builder, next to what is wrong, so they are not
- * repeated here. N counts each problem once (`AppState.serverIssues`). Show
- * names the node that is drawn for the first problem (`placeIssues`), so a
- * problem inside a collapsed group points at that group. The node's id goes in
- * `data-target-id`, not `data-node-id`: that attribute means "this element is
- * a query node", and keyboard focus memory (focusMemory.ts) would take the
- * button for one.
+ * "⚠ Show problem", when the databases found a problem in the query: the one
+ * way to jump to it from here (kept by the maintainers, 2026-10-13, when the
+ * "Not counted: N problems are marked in the query" line went). The messages
+ * are drawn in the builder, next to what is wrong. It points at the node drawn
+ * for the first problem (`placeIssues`), so a problem inside a collapsed group
+ * points at that group. The id goes in `data-target-id`, not `data-node-id`:
+ * that attribute means "this element is a query node", and keyboard focus
+ * memory (focusMemory.ts) would take the button for one.
  */
-export function queryProblemsLine(state: AppState): string {
+export function showProblemButton(state: AppState): string {
   const count = state.serverIssues.length;
   if (count === 0) return "";
   const first = placeIssues(state.query, state.serverIssues)[0]!;
-  const problems = count === 1 ? "1 problem is" : `${count} problems are`;
-  return `<div class="qb-stat-problems" role="note"><span>Not counted: ${problems} marked in the query.</span> <button type="button" class="ui mini basic button" data-action="show-issue" data-target-id="${escapeHtml(first.nodeId)}">Show</button></div>`;
+  const label =
+    count === 1
+      ? "Show the problem in the query"
+      : `Show the first of ${count} problems in the query`;
+  return `<button type="button" class="ui mini basic button qb-show-problem" data-action="show-issue" data-target-id="${escapeHtml(first.nodeId)}" aria-label="${label}" title="${label}"><i class="exclamation triangle icon" aria-hidden="true"></i>Show problem</button>`;
 }
 
 /** Statistics that have (some) results: everything but the error state. */
 type StatsWithResults = Exclude<StatsState, { status: "error" }>;
 
 /** One row per database that has reported so far — success (ratio + bar),
- * failure (errors in red, notes beneath) — as each streamed result arrives. */
+ * failure (a red bar and an icon) — as each streamed result arrives. */
 function perDatabaseHtml(results: DatabaseResult[], databases: Database[] | null): string {
   if (!results.length) return "";
   return `<h3 class="qb-stat-subtitle">By database</h3>
@@ -98,39 +91,80 @@ function perDatabaseHtml(results: DatabaseResult[], databases: Database[] | null
     </div>`;
 }
 
+/** How the events of the databases that have answered split up. */
+export interface Split {
+  /** Events that match, in the databases that answered. */
+  matched: number;
+  /** Events in the databases that answered: what `matched` is a share of. */
+  counted: number;
+  /** Events in the databases that failed: nobody counted them. */
+  notCounted: number;
+  failedDatabases: number;
+}
+
+export function splitResults(results: DatabaseResult[], databases: Database[] | null): Split {
+  const split: Split = { matched: 0, counted: 0, notCounted: 0, failedDatabases: 0 };
+  for (const r of results) {
+    const size = databaseFor(databases, r.databaseId)?.eventCount ?? 0;
+    if (r.status === "ok") {
+      split.matched += r.matchCount;
+      split.counted += size;
+    } else {
+      split.notCounted += size;
+      split.failedDatabases += 1;
+    }
+  }
+  return split;
+}
+
+/** The bar's words, for screen readers and the tooltip. */
+export function splitLabel(s: Split): string {
+  const ratio =
+    s.counted > 0 ? `${matchRatio(s.matched, s.counted)} of the counted events match.` : "";
+  if (s.failedDatabases === 0) return ratio;
+  const failed = `${countLabel(s.failedDatabases, "database")} failed and ${s.failedDatabases === 1 ? "is" : "are"} not counted.`;
+  return ratio ? `${ratio} ${failed}` : failed;
+}
+
 /**
- * The combined headline sums only the databases that succeeded. A failed
- * database has no count at all (only an "ok" DatabaseResult has a
- * `matchCount`), so the headline must never present failures as "0 matched":
- * with no successes yet it shows no number, and when some failed it says the
- * total excludes them.
+ * The headline's bar: every event of the databases that have answered. Green
+ * (left) is what matches; the striped red end is the events of databases that
+ * failed, which nobody counted. Users found the words "Excludes N databases"
+ * and "Not counted" confusing and asked for a picture (2026-10-13); the words
+ * are still there for screen readers (`splitLabel`). A failed database whose
+ * size is unknown still shows a sliver.
+ */
+function splitBar(s: Split): string {
+  const all = s.counted + s.notCounted;
+  const failedWidth =
+    s.failedDatabases === 0 ? null : s.notCounted > 0 ? barWidth(s.notCounted, all) : "2px";
+  const failed = failedWidth ? `<i class="qb-bar-failed" style="width:${failedWidth}"></i>` : "";
+  return `<span class="qb-bar" role="img" aria-label="${escapeHtml(splitLabel(s))}"><i style="width:${barWidth(s.matched, all)}"></i>${failed}</span>`;
+}
+
+/**
+ * The combined headline sums only the databases that succeeded: a failed
+ * database has no count at all, so it is never shown as "0 matched". The bar
+ * shows the failed share in red (`splitBar`); with no success yet there is no
+ * number, and the bar is all red if every answer so far failed.
  */
 export function headlineHtml(
   { status, results }: StatsWithResults,
   databases: Database[] | null,
 ): string {
-  const succeeded = results.filter((r): r is Ok => r.status === "ok");
-  const failed = results.length - succeeded.length;
-  const failedNote =
-    failed > 0
-      ? `<div class="qb-stat-failed">Excludes ${failed} database${failed === 1 ? "" : "s"} that failed (see below).</div>`
-      : "";
-  if (succeeded.length === 0) {
+  const s = splitResults(results, databases);
+  if (s.failedDatabases === results.length) {
     const text =
       status === "loading" ? "No results yet." : "No database returned a result for this query.";
-    return `<div class="qb-stat-headline"><p class="qb-stat-sub">${text}</p></div>`;
+    const bar = s.failedDatabases > 0 ? splitBar(s) : "";
+    return `<div class="qb-stat-headline"><p class="qb-stat-sub">${text}</p>${bar}</div>`;
   }
-  const matchCount = succeeded.reduce((s, r) => s + r.matchCount, 0);
-  const total = succeeded.reduce(
-    (s, r) => s + (databaseFor(databases, r.databaseId)?.eventCount ?? 0),
-    0,
-  );
-  return `<div class="qb-stat-headline" title="${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
-    <span class="qb-stat-big">${escapeHtml(compact(matchCount))}</span>
+  const title = `${exact(s.matched)} of ${exact(s.counted)}${s.failedDatabases ? ` · not counted: ${exact(s.notCounted)} in ${countLabel(s.failedDatabases, "database")} that failed` : ""}`;
+  return `<div class="qb-stat-headline" title="${escapeHtml(title)}">
+    <span class="qb-stat-big">${escapeHtml(compact(s.matched))}</span>
     <div class="qb-stat-label">matching events</div>
-    <div class="qb-stat-sub">${escapeHtml(matchRatio(matchCount, total))} of ${escapeHtml(compact(total))}</div>
-    ${bar(matchCount, total)}
-    ${failedNote}
+    <div class="qb-stat-sub">${escapeHtml(matchRatio(s.matched, s.counted))} of ${escapeHtml(compact(s.counted))}</div>
+    ${splitBar(s)}
   </div>`;
 }
 
@@ -189,7 +223,7 @@ export function statsPanelHtml(state: AppState): string {
   return card(
     state,
     headlineHtml(stats, state.databases) +
-      queryProblemsLine(state) +
+      showProblemButton(state) +
       perDatabaseHtml(stats.results, state.databases) +
       pendingHtml(stats, state.selectedDatabaseIds.length),
   );
@@ -200,7 +234,7 @@ export function renderStatsPanel(el: HTMLElement, state: AppState): void {
 }
 
 /**
- * One delegated listener for the Try again and Show buttons. Call once at
+ * One delegated listener for the Try again and Show problem buttons. Call once at
  * startup; the buttons are redrawn with every repaint, the container is not.
  */
 export function wireStatsPanel(

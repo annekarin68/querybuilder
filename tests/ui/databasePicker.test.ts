@@ -5,6 +5,7 @@ import {
   databasePickerHtml,
   deselectFailingIds,
   failedDatabases,
+  failureReasons,
 } from "../../src/ui/databasePicker";
 import { dbError, failed, ok } from "../statsFixtures";
 
@@ -14,6 +15,24 @@ const db = (id: string, description = ""): Database => ({
   description,
   owner: "",
   eventCount: 100,
+});
+
+describe("failureReasons", () => {
+  it("prefers errors without a node, then notes, then node errors, then 'Failed.'", () => {
+    const withNotes = (r: DatabaseResult, notes: string[]) =>
+      ({ ...r, notes }) as Extract<DatabaseResult, { status: "failed" }>;
+    const asFailed = (r: DatabaseResult) => r as Extract<DatabaseResult, { status: "failed" }>;
+    expect(
+      failureReasons(
+        withNotes(failed("a", dbError(null, "Down."), dbError("c1", "Bad.")), ["Slow."]),
+      ),
+    ).toEqual(["Down."]);
+    expect(failureReasons(withNotes(failed("a", dbError("c1", "Bad.")), ["Slow."]))).toEqual([
+      "Slow.",
+    ]);
+    expect(failureReasons(asFailed(failed("a", dbError("c1", "Bad."))))).toEqual(["Bad."]);
+    expect(failureReasons(asFailed(failed("a")))).toEqual(["Failed."]);
+  });
 });
 
 describe("failedDatabases", () => {
