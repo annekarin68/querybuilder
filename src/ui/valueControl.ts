@@ -56,7 +56,11 @@ const DATE_ATTRS = `placeholder="${UTC_TIMESTAMP_HINT}" spellcheck="false" autoc
 function scalarInput(field: CatalogField, current: unknown, attrs: string): string {
   const type = field.valueType === "number" ? "number" : "text";
   const extra = field.valueType === "date" ? ` ${DATE_ATTRS}` : "";
-  return `<div class="ui input"><input type="${type}" data-part="value" ${attrs}${extra} value="${escapeHtml(current ?? "")}" /></div>`;
+  const text = current === null || current === undefined ? "" : String(current);
+  // A long value is cut off by the box: hovering shows all of it. The builder
+  // keeps the title in step while the user types (wireQueryBuilder).
+  const title = text ? ` title="${escapeHtml(text)}"` : "";
+  return `<div class="ui input"><input type="${type}" data-part="value" ${attrs}${extra}${title} value="${escapeHtml(text)}" /></div>`;
 }
 
 export function renderValueControl(

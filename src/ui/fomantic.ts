@@ -39,7 +39,7 @@ const FREE_ENTRY_DROPDOWN = { ...DROPDOWN, allowAdditions: true, delimiter: "\u0
  *   no accessible name, so a screen reader says only "edit text". Give it the
  *   <select>'s aria-label.
  * - The shown choice is cut off with "…" when it is longer than the dropdown.
- *   Put its full text in a `title` so hovering reads it.
+ *   Put its full text in a `title` on what the pointer is over (see showFullChoice).
  */
 function describeDropdown(node: HTMLElement): void {
   // `node` was the <select> carrying the `ui dropdown` classes; Fomantic wraps
@@ -50,11 +50,29 @@ function describeDropdown(node: HTMLElement): void {
   showFullChoice(dropdown);
 }
 
-/** (Re)write the title of the dropdown's shown text. Called on activation and
- *  after every change, so the title follows the selected choice. */
+/**
+ * (Re)write the hover title that shows a dropdown's full choice: the shown text
+ * is cut off with "…" when it is longer than the box. Called on activation and
+ * after every change.
+ *
+ * In a search dropdown the typing box (`input.search`) lies on top of the
+ * shown text, so the pointer is always over the box: the title must be there
+ * too (a title on the text alone never showed). A placeholder ("Choose…") gets
+ * no title: it is not a choice. In a multi-select each chosen value is a
+ * label, cut off the same way, so each label gets its own.
+ */
 function showFullChoice(node: HTMLElement): void {
   const shown = node.querySelector<HTMLElement>(":scope > .text");
-  if (shown) shown.title = shown.textContent ?? "";
+  const placeholder = !shown || shown.classList.contains("default");
+  const title = placeholder ? "" : (shown.textContent ?? "").trim();
+  for (const el of [shown, node.querySelector<HTMLElement>(":scope > input.search")]) {
+    if (!el) continue;
+    if (title) el.title = title;
+    else el.removeAttribute("title");
+  }
+  node.querySelectorAll<HTMLElement>(":scope > a.ui.label").forEach((label) => {
+    label.title = (label.dataset.value ?? label.textContent ?? "").trim();
+  });
 }
 
 export function activate(container: HTMLElement): void {

@@ -308,8 +308,10 @@ state. The hazard is contained in one file and one helper:
   `activate` also finishes what Fomantic leaves out: it copies the `<select>`'s
   `aria-label` onto the dropdown's typing box (`input.search`), which is what
   has the keyboard focus and otherwise has no accessible name, and it puts the
-  shown choice's full text in a `title`, so a name cut off with "…" can be read
-  on hover (kept in step on every change).
+  shown choice's full text in a `title` on the typing box and the shown text
+  (the typing box lies on top of the text, so the pointer is always over it),
+  never on a placeholder, and one on each chosen label of a multi-select, so a
+  name cut off with "…" can be read on hover (kept in step on every change).
 - **`src/ui/panel.ts`** — `paint(container, html)`: `destroy`, swap
   `innerHTML`, `activate`. The only way a panel updates its DOM.
 
@@ -1366,7 +1368,11 @@ typed entry in the `<option>` it creates for it (`a"b` → `a&quot;b`);
 an entity itself, such as `&lt;`, reads back as `<`: Fomantic stores both
 alike.) A picked or typed entry becomes the field's type
 (`parseEntry`: `"3"` → `3` on a number field; anything else stays as typed,
-for validation to report). Every control has an accessible name. Issues — the
+for validation to report). Every control has an accessible name. Every box
+shows its full content on hover (users asked, 2026-10-13): the dropdowns
+through `fomantic.ts`, the value boxes through a `title` that follows the
+typing. A tooltip is mouse-only; keyboard and screen-reader users get the same
+text from the control itself. Issues — the
 local ones and the backend's — show under their row or group (`placeIssues`):
 an issue inside a collapsed group shows on that group, and one whose node is
 unknown on the root group, so none is lost. The footer shows the whole query

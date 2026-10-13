@@ -31,6 +31,21 @@ describe("renderValueControl", () => {
     expect(renderValueControl(field(), op("none"), null)).toBe("");
   });
 
+  it("a value box carries its value as a hover title, so a cut-off value can be read", () => {
+    const html = renderValueControl(field(), op("one", "contains"), "a long value");
+    expect(html).toContain('title="a long value"');
+  });
+
+  it("an empty value box has no title", () => {
+    expect(renderValueControl(field(), op("one", "contains"), null)).not.toContain("title=");
+  });
+
+  it("each box of a range has its own title", () => {
+    const html = renderValueControl(field({ valueType: "number" }), op("two", "between"), [1, 9]);
+    expect(html).toContain('title="1"');
+    expect(html).toContain('title="9"');
+  });
+
   it('arity "one" + boolean renders a toggle checkbox', () => {
     const html = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), true);
     expect(html).toContain("ui toggle checkbox");

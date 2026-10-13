@@ -651,6 +651,14 @@ export function wireQueryBuilder(
 
   container.addEventListener("dragend", unmark);
 
+  // The hover title of a value box follows what is typed: the box is only
+  // repainted when the value is committed (on change), and until then the
+  // title would show the old value.
+  container.addEventListener("input", (e) => {
+    const box = e.target;
+    if (box instanceof HTMLInputElement && box.dataset.part === "value") box.title = box.value;
+  });
+
   container.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
     // Fomantic dispatches a native bubbling "change" on the <select> behind each
