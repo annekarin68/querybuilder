@@ -1665,23 +1665,29 @@ details[open] > summary > .qb-chevron {
   width: 28px;
   height: 28px;
   cursor: pointer;
-  transform-origin: 50% 90%;
+  /* Turns around its middle: the normal logo may be round. */
+  transform-origin: 50% 50%;
 }
+/* Busy: the loading face turns, so the user sees the app is working. Done
+   here, not inside the SVG: the files are meant to be replaced, and an
+   animation inside one would be lost with it. */
 .qb-logo[data-state="loading"] {
-  animation: qb-wobble 1s ease-in-out infinite;
+  animation: qb-spin 1.2s linear infinite;
 }
-@keyframes qb-wobble {
-  0%,
-  100% {
-    transform: rotate(-8deg);
-  }
-  50% {
-    transform: rotate(8deg);
+@keyframes qb-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
+/* No turning for people who ask for less motion; a slow fade still says "busy". */
 @media (prefers-reduced-motion: reduce) {
   .qb-logo[data-state="loading"] {
-    animation: none;
+    animation: qb-pulse 1.6s ease-in-out infinite alternate;
+  }
+}
+@keyframes qb-pulse {
+  to {
+    opacity: 0.45;
   }
 }
 

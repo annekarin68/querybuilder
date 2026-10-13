@@ -180,7 +180,7 @@ be replaced: overwrite a file with the same name and nothing else changes. Repla
 | `favicon.svg` | The browser tab (`<link rel="icon">` in `index.html`). |
 | `logo.svg` | The top bar, normal face. Also the face everything falls back to. |
 | `disappointed.svg` | The top bar while the query has an `invalid` issue (a red message), unless statistics or Matching events are loading: loading wins when both apply. A merely unfinished query is not a mistake and keeps the normal face. |
-| `loading.svg` | The top bar while statistics or Matching events are loading. It wobbles (not under reduced motion). |
+| `loading.svg` | The top bar while statistics or Matching events are loading. It turns around its middle (CSS, `qb-spin`, so a replaced file turns too); under reduced motion it slowly fades in and out instead. |
 
 `mascotFor(state)` (`src/ui/mascot.ts`) picks the face from `issues`, `stats`
 and `preview`; `main.ts` repaints it when those change (or when `easterEgg`
