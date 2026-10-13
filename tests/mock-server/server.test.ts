@@ -11,6 +11,7 @@ import {
   startLogin,
 } from "../../mock-server/auth";
 import { auditLogSnapshot } from "../../mock-server/audit";
+import { parseHttpErrors } from "../../mock-server/httpErrors";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
 import { unfinishedRequest } from "../savedQueryFixtures";
 
@@ -355,5 +356,43 @@ describe("the API prefix (MockConfig.apiBase)", () => {
     expect(idp).toContain(`href="${API}/mock-idp/authorize/confirm?state=s"`);
     const form = await (await get(`${API}/mock-compliance/submit?state=s`)).text();
     expect(form).toContain(`action="${API}/mock-compliance/submit"`);
+  });
+});
+
+describe("MOCK_HTTP_ERRORS", () => {
+  let failing: Server;
+  let failingBase: string;
+
+  beforeAll(async () => {
+    failing = createMockServer({
+      apiBase: API,
+      failRate: 0,
+      lineDelayMs: () => 0,
+      httpErrors: parseHttpErrors("GET /databases=503, GET /individuals=502:html"),
+    });
+    await new Promise<void>((resolve) => failing.listen(0, resolve));
+    failingBase = `http://localhost:${(failing.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise((resolve) => failing.close(resolve));
+  });
+
+  it("answers a matching route with the simulated status and a JSON error", async () => {
+    const res = await fetch(`${failingBase}${API}/databases`);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({
+      error: `Simulated HTTP 503 for GET ${API}/databases (MOCK_HTTP_ERRORS).`,
+    });
+  });
+
+  it("answers with an HTML page for a :html rule", async () => {
+    const res = await fetch(`${failingBase}${API}/individuals`);
+    expect(res.status).toBe(502);
+    expect(res.headers.get("content-type")).toContain("text/html");
+  });
+
+  it("leaves every other route alone", async () => {
+    expect((await fetch(`${failingBase}${API}/compliance/status`)).status).toBe(200);
   });
 });

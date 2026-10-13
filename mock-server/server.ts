@@ -12,6 +12,7 @@ import {
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { ROWS } from "./rows";
 import { queryProblem } from "./requestBody";
+import { httpErrorFor, type HttpErrorRule } from "./httpErrors";
 import {
   createSavedQueryStore,
   readSavedQueryBody,
@@ -59,6 +60,8 @@ export interface MockConfig {
   failRate: number;
   /** Pause before each streamed /api/stats line, in ms. */
   lineDelayMs(): number;
+  /** Routes that answer with an HTTP error instead (MOCK_HTTP_ERRORS, httpErrors.ts). */
+  httpErrors?: HttpErrorRule[];
 }
 
 /** POST /api/query returns at most this many events. There is no pagination. */
@@ -121,6 +124,18 @@ function sendFlowError(res: ServerResponse, message: string, clearCookie: string
     <p>${escapeHtml(message)}</p>
     <p><a href="/">Back to the Query Builder</a> and try again.</p>`;
   sendHtml(res, 400, page("Something went wrong", body), clearCookie);
+}
+
+/** A failure MOCK_HTTP_ERRORS asked for: JSON like every API error, or an
+ *  HTML page like a proxy in front of the backend would send. */
+function sendSimulatedError(res: ServerResponse, rule: HttpErrorRule, request: string): void {
+  if (rule.html) {
+    sendHtml(res, rule.status, page(`${rule.status}`, `<h1>${rule.status}</h1><p>Simulated.</p>`));
+    return;
+  }
+  sendJson(res, rule.status, {
+    error: `Simulated HTTP ${rule.status} for ${request} (MOCK_HTTP_ERRORS).`,
+  });
 }
 
 // ---- requests -------------------------------------------------------------
@@ -482,6 +497,16 @@ export function createMockServer(config: MockConfig) {
   const table = routes(config, savedQueries);
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
+    // A simulated failure wins over the real route (MOCK_HTTP_ERRORS).
+    const below = url.pathname.startsWith(config.apiBase)
+      ? url.pathname.slice(config.apiBase.length)
+      : null;
+    const simulated =
+      below === null ? undefined : httpErrorFor(config.httpErrors ?? [], req.method ?? "", below);
+    if (simulated) {
+      sendSimulatedError(res, simulated, `${req.method} ${url.pathname}`);
+      return;
+    }
     // The table matches exact paths; a saved query's id is part of its path,
     // so those routes get a second look before the 404.
     const savedQueryId = savedQueryIdFrom(url.pathname, config.apiBase);
