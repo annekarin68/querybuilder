@@ -514,11 +514,14 @@ pure helpers in `src/query/saved.ts`):
 - `savedList`: the user's saved queries, newest first: `idle`, `loading`, `ok`
   or `error`. It reloads every time the list opens and after a delete.
 - `savedConfirm`: an open or delete in the list waiting for the user's yes.
-- `savedListNotice`: why the last **Delete** failed (`Couldn't delete “…”.` and
-  the plain `userMessage`), shown inside the list dialog as a
-  `role="alert"` message above the list; null otherwise. A toast would be drawn
-  under the modal dialog's backdrop, where nobody sees it. The next action in the dialog (a reload, a question) and
-  closing it clear it.
+- `savedListNotice`: how the last **Delete** went, shown above the list
+  inside the dialog (`{ tone, text }`; null otherwise). `"error"`:
+  `Couldn't delete “…”.` and the plain `userMessage`, a `role="alert"`
+  message. `"done"`: `Deleted “…”.`, a plain green message (no role: the
+  same words are spoken through `announce`), kept through the reload that
+  follows the delete. A toast would be drawn under the modal dialog's
+  backdrop, where nobody sees it. The next action in the dialog (a reload,
+  a question) and closing it clear it.
 
 Opening a saved query goes through `changeScope` and `validateQuery` like any
 edit, so the "Correctness invariant" holds. Database ids that no longer exist
@@ -1898,9 +1901,10 @@ draws `savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
   saved." (`hasUnsavedWork`). The other items keep their buttons, and pressing
   one asks about that item instead. Loading, the empty state ("No saved
   queries yet. Build a query and press Save…") and an error with **Try again**
-  show in the dialog. **Close** closes it. A **Delete** that fails shows
-  `savedListNotice` above the list (`ui small negative message`, `role="alert"`:
-  spoken inside the modal, unlike the page's live region) and keeps the list.
+  show in the dialog. **Close** closes it. After a **Delete**,
+  `savedListNotice` shows above the list: "Deleted “…”." (`ui small positive
+  message`, spoken by the dialog's own live region), or, when it failed, why
+  (`ui small negative message`, `role="alert"`), and the list stays.
 - **Logged out**: both buttons open a small dialog instead: "Log in to save
   queries" / "Log in to see saved queries", "… You'll leave this page to log in
   and come back here; the query you are building is kept.", **Log in**

@@ -57,6 +57,10 @@ export type SavedListState =
   | { status: "ok"; queries: SavedQuery[] }
   | { status: "error"; error: string };
 
+/** A line above the saved-queries list: a delete that failed ("error",
+ *  spoken as an alert) or succeeded ("done", spoken through `announce`). */
+export type SavedListNotice = { tone: "error" | "done"; text: string } | null;
+
 /** An action in the list waiting for the user's yes. */
 export type SavedConfirm = null | { action: "open" | "delete"; id: string };
 
@@ -115,11 +119,11 @@ export interface AppState {
   save: SaveState;
   savedList: SavedListState;
   savedConfirm: SavedConfirm;
-  /** Why the last delete in the Saved queries dialog failed, shown above the
+  /** How the last delete in the Saved queries dialog went, shown above the
    *  list; null when there is nothing to say. It lives in the state, not in the
    *  toast, because the toast is drawn under the open dialog's backdrop. Cleared
    *  by the next action in the dialog and when it closes. */
-  savedListNotice: string | null;
+  savedListNotice: SavedListNotice;
 }
 
 export const initialState: AppState = {

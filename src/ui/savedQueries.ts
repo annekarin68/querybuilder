@@ -1,4 +1,4 @@
-import type { AppState, SavedConfirm } from "../state";
+import type { AppState, SavedConfirm, SavedListNotice } from "../state";
 import type { SavedQuery } from "../model";
 import type { createApp } from "../app";
 import { dialogBody, escapeHtml, paint } from "./panel";
@@ -187,15 +187,22 @@ function savedListBodyHtml(state: AppState): string {
 
 /** The list dialog's body and its Close button. */
 function savedListHtml(state: AppState): string {
-  // role="alert" is announced inside a modal dialog, where the page's own live
-  // region is inert and a toast would be hidden behind the backdrop.
-  const notice = state.savedListNotice
-    ? `<div class="ui small negative message" role="alert">${escapeHtml(state.savedListNotice)}</div>`
-    : "";
-  return `${notice}${savedListBodyHtml(state)}
+  return `${savedListNoticeHtml(state.savedListNotice)}${savedListBodyHtml(state)}
     <div class="qb-dialog-actions">
       <button type="button" class="ui small basic button" data-action="close-saved-dialog">Close</button>
     </div>`;
+}
+
+/** The line above the list after a delete. A failure is an alert, read at
+ *  once (a toast would be hidden behind the dialog's backdrop). A success has
+ *  no role: app.ts already says it through `announce`, and a role would read
+ *  it twice. */
+function savedListNoticeHtml(notice: SavedListNotice): string {
+  if (!notice) return "";
+  const text = escapeHtml(notice.text);
+  return notice.tone === "error"
+    ? `<div class="ui small negative message" role="alert">${text}</div>`
+    : `<div class="ui small positive message">${text}</div>`;
 }
 
 /** The login dialog's explanation: the Log in button is described by it. */

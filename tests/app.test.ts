@@ -1559,6 +1559,41 @@ describe("saved queries: deleting", () => {
     expect(announce).toHaveBeenCalledWith("Deleted “Weekly”.");
   });
 
+  // Sighted users otherwise only see the item vanish. The reload after the
+  // delete must not clear it.
+  it("shows the delete inside the dialog too, after the list reloads", async () => {
+    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue([b]);
+    const { app, store } = setup(
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a, b] },
+      },
+      fakeApi({ listSavedQueries: list }),
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b] });
+    expect(store.getState().savedListNotice).toEqual({ tone: "done", text: "Deleted “Weekly”." });
+  });
+
+  it("a delete that finishes after the dialog was closed leaves no notice behind", async () => {
+    const answer = deferred<void>();
+    const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
+    const { app, store } = setup(
+      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    app.closeSavedDialog();
+    answer.resolve();
+    await flushPromises();
+    expect(store.getState().savedListNotice).toBeNull();
+  });
+
   it("forgets the open query when it is the one deleted", async () => {
     const { app, store } = setup({
       ...loggedIn,
@@ -1617,9 +1652,10 @@ describe("saved queries: deleting", () => {
     app.confirmSavedAction();
     await flushPromises();
     expect(store.getState().savedList).toEqual({ status: "ok", queries: [a] });
-    expect(store.getState().savedListNotice).toBe(
-      `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
-    );
+    expect(store.getState().savedListNotice).toEqual({
+      tone: "error",
+      text: `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
+    });
     expect(showError).not.toHaveBeenCalled();
   });
 
