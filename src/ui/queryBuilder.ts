@@ -54,21 +54,29 @@ interface BuilderCtx {
 }
 
 /**
- * Unfinished parts are quiet grey hints — the user simply isn't done yet. Only
- * an invalid query is shown in red. Both kinds still block running (validate.ts).
- * Issues come from validate.ts and from the backend (src/query/issues.ts).
+ * The issues under a row or group. The user's own unfinished parts are quiet
+ * grey hints: they simply aren't done yet. Anything the databases found is
+ * highlighted with an icon in the warning colour even when it is only
+ * "incomplete" (such as "Group contains no valid conditions."): nothing else
+ * on screen says it, and users missed it in grey (2026-10-13). Invalid is red.
+ * Every kind blocks running (validate.ts). Issues come from validate.ts and
+ * from the backend (src/query/issues.ts).
  */
-function issuesHtml(nodeId: string, issues: Issue[]): string {
+export function issuesHtml(nodeId: string, issues: Issue[]): string {
   const mine = issues.filter((i) => i.nodeId === nodeId);
-  const text = (kind: Issue["kind"]) =>
+  const text = (pick: (i: Issue) => boolean) =>
     mine
-      .filter((i) => i.kind === kind)
+      .filter(pick)
       .map((i) => escapeHtml(i.message))
       .join(" ");
-  const incomplete = text("incomplete");
-  const invalid = text("invalid");
+  const hint = text((i) => i.kind === "incomplete" && !i.fromServer);
+  const warning = text((i) => i.kind === "incomplete" && i.fromServer === true);
+  const invalid = text((i) => i.kind === "invalid");
   return (
-    (incomplete ? `<div class="qb-hint">${incomplete}</div>` : "") +
+    (hint ? `<div class="qb-hint">${hint}</div>` : "") +
+    (warning
+      ? `<div class="qb-server-warning"><i class="exclamation triangle icon" aria-hidden="true"></i>${warning}</div>`
+      : "") +
     (invalid
       ? `<div class="qb-invalid"><i class="exclamation circle icon"></i>${invalid}</div>`
       : "")

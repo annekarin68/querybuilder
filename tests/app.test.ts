@@ -391,7 +391,7 @@ describe("statistics", () => {
     calls[0]!.onLine(failed("alpha", dbError("c1", "Too long.")));
     calls[0]!.onLine(failed("beta", dbError("c1", "Too long.")));
     expect(store.getState().serverIssues).toEqual([
-      { nodeId: "c1", message: "Too long.", kind: "invalid" },
+      { nodeId: "c1", message: "Too long.", kind: "invalid", fromServer: true },
     ]);
     // The second line reports the same problem: only `stats` is written, so
     // the query builder doesn't repaint.

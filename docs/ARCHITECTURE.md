@@ -1057,7 +1057,8 @@ Dropping a facet or a tag on the builder creates such conditions.
 - **`src/api/request.ts`** — `toQueryRequest`, the one place the tree becomes
   the request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
-  `incomplete` (not filled in yet, shown as a quiet grey hint) or `invalid`
+  `incomplete` (not filled in yet, shown as a quiet grey hint; a database's "incomplete" problem is
+  highlighted instead, below) or `invalid`
   (can't work, shown in red). Besides a field, an operator and a value of the
   right shape, it checks every value against the field's type (a number,
   `true`/`false`, text, a partial UTC timestamp) and that a number range
@@ -1070,7 +1071,10 @@ Dropping a facet or a tag on the builder creates such conditions.
   redirect. **Any issue blocks running.**
 - **`issues.ts`** — the backend's issues and where issues are shown.
   `serverIssues` turns each stats error that points at a node into an
-  `Issue`, once; `app.ts` stores the result in `AppState.serverIssues`.
+  `Issue` marked `fromServer`, once; the builder always highlights those
+  (mustard with a warning icon for "incomplete", red for "invalid"), because
+  nothing else on screen tells the user about them (users missed them in grey,
+  2026-10-13). `app.ts` stores the result in `AppState.serverIssues`.
   `placeIssues` moves an issue to a node that is drawn: the outermost
   collapsed group around a hidden node, or the root group for an id the query
   doesn't have. Issues that end up the same on one node are kept once.
@@ -1394,8 +1398,9 @@ shows its full content on hover (users asked, 2026-10-13): the dropdowns
 through `fomantic.ts`, the value boxes through a `title` that follows the
 typing. A tooltip is mouse-only; keyboard and screen-reader users get the same
 text from the control itself. Issues — the
-local ones and the backend's — show under their row or group (`placeIssues`):
-an issue inside a collapsed group shows on that group, and one whose node is
+local ones and the backend's — show under their row or group (`placeIssues`): the user's own unfinished
+parts as a grey hint, the backend's "incomplete" ones in mustard with a
+warning icon, anything invalid in red. An issue inside a collapsed group shows on that group, and one whose node is
 unknown on the root group, so none is lost. The footer shows the whole query
 in plain English (wrapped, never cut off with "…") once nothing needs attention,
 otherwise how many parts do.
@@ -1795,8 +1800,9 @@ to a named handler function — add a route there, and a test in
   tried in dev. A group with at least one child, **all** of whose children
   have an error of their own, also gets
   `{ nodeId: <group id>, kind: "incomplete", message: "Group contains no valid conditions." }`,
-  as the real backend does. It is `incomplete` so that it shows as a grey
-  hint while the condition errors that cause it stay red. An empty group gets
+  as the real backend does. It is `incomplete`, like the real backend's; the
+  builder still highlights it (mustard, warning icon), and the condition
+  errors that cause it stay red. An empty group gets
   none: the frontend's own validation reports it.
 - **`/api/filter/execute`** returns the matching events themselves, as
   `EventResponse`s (`events.ts`: a GUID made from the stored numeric id, one

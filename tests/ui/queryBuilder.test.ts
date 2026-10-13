@@ -5,6 +5,7 @@ import {
   collapseButton,
   footerHtml,
   groupHtml,
+  issuesHtml,
   noticeHtml,
   queryTitleHtml,
   rowDropdown,
@@ -398,5 +399,29 @@ describe("the query card's title", () => {
   it("draws no buttons until the databases and the field catalog have loaded", () => {
     expect(queryTitleHtml({ ...loaded, databases: null })).not.toContain("<button");
     expect(queryTitleHtml({ ...loaded, catalog: null })).not.toContain("<button");
+  });
+});
+
+describe("issuesHtml", () => {
+  const warning = "Group contains no valid conditions.";
+
+  it("a problem the databases found is highlighted even when it is only incomplete", () => {
+    const html = issuesHtml("g1", [
+      { nodeId: "g1", message: warning, kind: "incomplete", fromServer: true },
+    ]);
+    expect(html).toBe(
+      `<div class="qb-server-warning"><i class="exclamation triangle icon" aria-hidden="true"></i>${warning}</div>`,
+    );
+  });
+
+  it("the user's own unfinished parts stay a quiet grey hint", () => {
+    const html = issuesHtml("g1", [
+      { nodeId: "g1", message: "Add a condition to this group.", kind: "incomplete" },
+    ]);
+    expect(html).toBe('<div class="qb-hint">Add a condition to this group.</div>');
+  });
+
+  it("only shows the issues of the node it is asked about", () => {
+    expect(issuesHtml("g2", [{ nodeId: "g1", message: "x", kind: "invalid" }])).toBe("");
   });
 });

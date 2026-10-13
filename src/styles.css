@@ -959,6 +959,15 @@ body {
   font-weight: 600;
   color: var(--qb-danger);
 }
+/* A problem a database found that is "incomplete" rather than "invalid"
+   (queryBuilder.ts issuesHtml): highlighted, not a grey hint. Mustard, not
+   yellow: yellow text on the cream cards would be unreadable (about 1.5:1). */
+.qb-server-warning {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--qb-warn);
+}
 .qb-query-foot {
   margin: 0.75rem -1rem -0.75rem;
   padding: 0.5rem 1rem;
