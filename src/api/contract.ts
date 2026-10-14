@@ -10,7 +10,7 @@ import type { SavedValue } from "./types";
  * checks the value it reads. So a response that breaks the contract fails where
  * it is read, with a message that names the request and the field:
  *
- *     Unexpected response from GET /api/v1/individuals: "[3].fields" should be
+ *     Unexpected response from GET /api/v1/documentation/individuals: "[3].fields" should be
  *     a list, but it is missing.
  *
  * and not three files later as "Cannot read properties of undefined".

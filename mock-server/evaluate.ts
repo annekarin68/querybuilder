@@ -222,7 +222,7 @@ export const MAX_TEXT_LENGTH = 100;
  * - a group whose every child has an error of its own (a condition's, or a
  *   child group's own "no valid conditions"): "Group contains no valid
  *   conditions." This mirrors the real backend. It is `incomplete`, not
- *   `invalid`: the frontend shows it as a grey hint, while the condition
+ *   `invalid`: the frontend shows it as a warning, while the condition
  *   errors that cause it stay red. An empty group gets none; the frontend's
  *   own validation reports that.
  *

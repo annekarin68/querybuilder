@@ -23,12 +23,46 @@ const MOCK_SERVER_AIRLOCK = {
     'src/ must not import mock-server directly — go through src/api/client.ts. See docs/ARCHITECTURE.md, "Mock server".',
 };
 
-// The wire-types airlock (docs/ARCHITECTURE.md, "Data model").
+// The wire-types airlock (docs/ARCHITECTURE.md, "Data model"). The `.*`
+// entries catch the same file written with an extension ("../api/types.js").
 const WIRE_TYPES_AIRLOCK = {
-  group: ["./api/types", "../api/types", "../../api/types", "**/api/types"],
+  group: [
+    "./api/types",
+    "../api/types",
+    "../../api/types",
+    "**/api/types",
+    "./api/types.*",
+    "../api/types.*",
+    "../../api/types.*",
+    "**/api/types.*",
+  ],
   message:
     "Only src/api/ may import the backend's types (src/api/types.ts) — use the frontend's own model in src/model.ts. See docs/ARCHITECTURE.md, \"Data model\".",
 };
+
+// `no-restricted-imports` only sees `import … from "…"` lines. jQuery's types
+// also declare `$` and `jQuery` as globals, setup-jquery.ts puts them on
+// `window`, and an `import("…")` expression or an `import("…").Type` type is
+// not an import line. These rules close those other routes into the airlocks,
+// so "never write $(...) outside fomantic.ts" really is enforced.
+const JQUERY_MESSAGE =
+  'jQuery may only be used in src/ui/fomantic.ts (the airlock). See docs/ARCHITECTURE.md, "The Fomantic discipline".';
+const JQUERY_GLOBALS = ["$", "jQuery"].map((name) => ({ name, message: JQUERY_MESSAGE }));
+const JQUERY_ON_WINDOW = ["window", "globalThis"].flatMap((object) =>
+  ["$", "jQuery"].map((property) => ({ object, property, message: JQUERY_MESSAGE })),
+);
+
+/** `no-restricted-syntax` entries that forbid `import("…")` and
+ *  `import("…").Type` when the path matches `pathRegex`. */
+function dynamicImportsOf(pathRegex, message) {
+  return [
+    { selector: `ImportExpression[source.value=${pathRegex}]`, message },
+    { selector: `TSImportType[argument.literal.value=${pathRegex}]`, message },
+  ];
+}
+const NO_DYNAMIC_JQUERY = dynamicImportsOf("/^jquery$/", JQUERY_MESSAGE);
+const NO_DYNAMIC_MOCK_SERVER = dynamicImportsOf("/mock-server/", MOCK_SERVER_AIRLOCK.message);
+const NO_DYNAMIC_WIRE_TYPES = dynamicImportsOf("/api.types/", WIRE_TYPES_AIRLOCK.message);
 
 export default tseslint.config(
   { ignores: ["dist/", "coverage/", ".claude/"] },
@@ -63,6 +97,8 @@ export default tseslint.config(
   // the later block's options REPLACE the earlier ones (they are not merged),
   // so without it any file in src/ could import jquery and lint would pass.
   // tests/lintRules.test.ts fails if the entry goes missing.
+  // The same replace-not-merge rule holds for `no-restricted-syntax`: the
+  // blocks below that set it again repeat the entries they still need.
   {
     files: ["src/**/*.{ts,cts,mts}"],
     rules: {
@@ -72,6 +108,14 @@ export default tseslint.config(
           paths: [JQUERY_ONLY_IN_AIRLOCK],
           patterns: [MOCK_SERVER_AIRLOCK, WIRE_TYPES_AIRLOCK],
         },
+      ],
+      "no-restricted-globals": ["error", ...JQUERY_GLOBALS],
+      "no-restricted-properties": ["error", ...JQUERY_ON_WINDOW],
+      "no-restricted-syntax": [
+        "error",
+        ...NO_DYNAMIC_JQUERY,
+        ...NO_DYNAMIC_MOCK_SERVER,
+        ...NO_DYNAMIC_WIRE_TYPES,
       ],
     },
   },
@@ -85,19 +129,22 @@ export default tseslint.config(
         "error",
         { paths: [JQUERY_ONLY_IN_AIRLOCK], patterns: [MOCK_SERVER_AIRLOCK] },
       ],
+      "no-restricted-syntax": ["error", ...NO_DYNAMIC_JQUERY, ...NO_DYNAMIC_MOCK_SERVER],
     },
   },
 
-  // The two files that legitimately import jQuery.
+  // The two files that legitimately import jQuery. (fomantic.ts's `$` is its
+  // own import, not the global, so no-restricted-globals doesn't fire there.)
   {
     files: ["src/ui/fomantic.ts", "src/setup-jquery.ts"],
     rules: { "no-restricted-imports": "off" },
   },
 
-  // The bootstrap publishes window.jQuery but must never CALL $().
+  // The bootstrap publishes window.jQuery and window.$ but must never CALL $().
   {
     files: ["src/setup-jquery.ts"],
     rules: {
+      "no-restricted-properties": "off",
       "no-restricted-syntax": [
         "error",
         {
@@ -105,6 +152,8 @@ export default tseslint.config(
           message:
             "This file may only bootstrap window.jQuery — put jQuery work in src/ui/fomantic.ts.",
         },
+        ...NO_DYNAMIC_MOCK_SERVER,
+        ...NO_DYNAMIC_WIRE_TYPES,
       ],
     },
   },

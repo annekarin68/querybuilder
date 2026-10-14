@@ -3,21 +3,26 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 
 /**
  * Offline-first (docs/ARCHITECTURE.md, "Offline-first"): nothing may load from the internet, so
- * this plugin strips every off-origin `@import` / `url()` from bundled CSS. In
- * fomantic-ui-css@2.9.x the only off-origin references are the emoji icon URLs
- * pointing at `cdn.jsdelivr.net` (jdecked/twemoji), and they sit in commented-out
- * rules — nothing the browser would fetch, but `check:offline` greps the text, so
- * they are neutralised here. Note 2.9.x does NOT `@import` Google Fonts: it ships
- * Lato self-hosted as `themes/default/assets/fonts/Lato*.woff2` with local
- * `@font-face` rules. The `@import` branch below is kept only as a guard in case a
- * future/other CSS dependency reintroduces one.
+ * this plugin strips every off-origin `@import` / `url()` from Fomantic's CSS. In
+ * fomantic-ui-css@2.9.x those are the emoji rules (`em[data-emoji=…]::before`,
+ * about 4,000 of them), whose `background-image` points at `cdn.jsdelivr.net`
+ * (jdecked/twemoji). The app never renders an emoji element, but the rules are
+ * live CSS, and `check:offline` greps the built text, so they are neutralised
+ * here. Note 2.9.x does NOT `@import` Google Fonts: it ships Lato self-hosted as
+ * `themes/default/assets/fonts/Lato*.woff2` with local `@font-face` rules. The
+ * `@import` branch below is kept only as a guard in case a future Fomantic
+ * version reintroduces one.
+ *
+ * Only Fomantic's files are rewritten. A remote URL in our own CSS
+ * (src/styles.css) is a mistake that `check:offline` must report, not one to
+ * hide by silently deleting it. Exported for tests/offlineCheck.test.ts.
  */
-function stripRemoteCss(): Plugin {
+export function stripRemoteCss(): Plugin {
   return {
     name: "strip-remote-css",
     enforce: "pre",
     transform(code, id) {
-      if (!id.endsWith(".css")) return null;
+      if (!id.endsWith(".css") || !id.includes("/node_modules/fomantic-ui-css/")) return null;
       const cleaned = code
         .replace(/@import\s+url\(\s*['"]?https?:\/\/[^)]+\)\s*;?/gi, "")
         .replace(/url\(\s*['"]?https?:\/\/[^)'"]+['"]?\s*\)/gi, "local(x)");

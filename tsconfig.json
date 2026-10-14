@@ -7,6 +7,13 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
+    // Cheap checks that catch a forgotten `return`, a `case` that falls
+    // through, and leftovers after a refactor. Prefix a parameter with `_` when
+    // a callback must accept it but doesn't use it.
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     // Lets tests import scripts/check-offline.mjs with the types from its JSDoc.
