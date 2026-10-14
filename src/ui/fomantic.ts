@@ -109,9 +109,11 @@ export function openDropdown(el: HTMLElement): void {
 }
 
 /**
- * Bind Fomantic dropdowns' onChange within `container`. Fomantic dropdowns do not
- * emit a native "change" event, so panels cannot rely on delegated listeners for them.
- * Call this AFTER activate(). `el` is the .ui.dropdown element that changed.
+ * Bind Fomantic dropdowns' onChange within `container`. Fomantic also dispatches a
+ * native "change" on the <select>, but just BEFORE onChange, and a panel must
+ * handle each dropdown in one place only (queryBuilder.ts's change listener
+ * explains why): that place is here. Call this AFTER activate(). `el` is the
+ * .ui.dropdown element that changed.
  */
 export function onDropdownChange(container: HTMLElement, handler: (el: HTMLElement) => void): void {
   $(container)

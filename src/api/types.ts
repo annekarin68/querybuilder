@@ -4,9 +4,7 @@
  * snake_case, in requests and responses alike; the frontend's own model
  * (src/model.ts) is camelCase, and src/api/response.ts and request.ts translate.
  * The backend team builds its response models from this file. Only
- * src/api/ may import this file (ESLint enforces it). The rest of the app uses
- * its own model (src/model.ts); src/api/response.ts and src/api/request.ts
- * translate between the two.
+ * src/api/ may import this file (ESLint enforces it).
  *
  * TypeScript can't check what the server really sends, so response.ts reads
  * every response through src/api/contract.ts, which checks each value against

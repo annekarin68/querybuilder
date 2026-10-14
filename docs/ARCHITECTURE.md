@@ -321,9 +321,12 @@ nothing else* — no internet. So:
    `http://www.w3.org/2000/svg` inside Fomantic's inline SVGs, and the file
    `dist/THIRD-PARTY-NOTICES.txt` (licence text, never loaded by the app).
    Some bundled code contains URLs that are never fetched — jQuery's licence
-   banner, Fomantic's error messages, commented-out emoji rules in its CSS —
-   so the `stripRemoteJs` / `stripRemoteCss` plugins in `vite.config.ts`
-   neutralise those, so that the guard only reports real problems.
+   banner, Fomantic's error messages, and the emoji rules in Fomantic's CSS
+   (live rules, but the app never renders an emoji element) — so the
+   `stripRemoteJs` / `stripRemoteCss` plugins in `vite.config.ts` neutralise
+   those, so that the guard only reports real problems. `stripRemoteCss` only
+   touches Fomantic's own CSS: a remote URL in `src/styles.css` fails the
+   build.
 5. **Reproducible installs.** `package-lock.json` is committed; use `npm ci`.
    The machine that builds `dist/` needs internet once; the one that serves it
    never does.
@@ -345,8 +348,10 @@ state. The hazard is contained in one file and one helper:
 - **`src/ui/fomantic.ts`** — the only file that uses jQuery.
   `activate(container)` turns markup into Fomantic components,
   `destroy(container)` tears them down, `onDropdownChange` binds a
-  dropdown's `onChange` (Fomantic dropdowns don't emit a usable native
-  `change`), and `openDropdown` focuses a dropdown and opens its menu.
+  dropdown's `onChange` (Fomantic also dispatches a native `change` on the
+  `<select>`, just before `onChange`; each dropdown is handled in one of the
+  two places only, and that place is `onChange`), and `openDropdown` focuses
+  a dropdown and opens its menu.
   `activate` also finishes what Fomantic leaves out: it copies the `<select>`'s
   `aria-label` onto the dropdown's typing box (`input.search`), which is what
   has the keyboard focus and otherwise has no accessible name, and it puts the
@@ -362,12 +367,15 @@ state. The hazard is contained in one file and one helper:
 ### The rules a maintainer learns on day one
 
 1. **Never write `$(...)` outside `src/ui/fomantic.ts`.** ESLint enforces it:
-   importing `jquery` anywhere else is an error (checked by
-   `tests/lintRules.test.ts`).
+   importing `jquery` anywhere else is an error, and so is reaching jQuery
+   without an import: the `$` and `jQuery` globals, `window.$`, or
+   `import("jquery")` (checked by `tests/lintRules.test.ts`).
 2. **To make new markup interactive**, add its selector to `activate()` and
    the matching teardown to `destroy()`.
 3. **To update a panel**, build an HTML string from state and call `paint()`.
-   Two deliberate exceptions change the painted DOM directly, because a
+   Small touches that the next repaint resets anyway (drag highlights, a value
+   box's hover title while typing, focusing a node) are fine. Beyond those,
+   two deliberate exceptions change the painted DOM directly, because a
    repaint would lose or cost something: the data dictionary's search filter
    (a repaint per keystroke would rebuild the whole dictionary and lose which
    cards are open and the scroll position) and `layout.ts` (the frame is
@@ -393,7 +401,7 @@ src/
   main.ts              Page setup only: imports setup-jquery + Fomantic, renders the frame, wires every
                        panel once to `app`, the panelRenderers table, reads `?resume=1`, fatal-error page,
                        the five-click pickle rain.
-  app.ts               createApp({ store, api, navigate, announce }) — everything the app DOES, with no DOM: startup
+  app.ts               createApp({ store, api, navigate, announce, showError }) — everything the app DOES, with no DOM: startup
                        (+ restoring the kept query), live stats, Run query and its 401/403 redirects, logout,
                        query/scope changes, drops and "Add to query" (`onDropItem`, `onAddItem`,
                        `dismissDropNotice`), Move up / Move down (`onMoveNode`), the saved-queries
@@ -500,18 +508,20 @@ public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.sv
                        files, named in `MASCOT` and `EASTER_EGG_MASCOT`, the favicon in `index.html`
                        ("Pickle theme and mascot"). Served as-is, scanned by `check:offline`.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
-                       src/query/tree.ts), plus app.test, lintRules, docReferences, offlineCheck,
-                       dateCases, themeContrast and noBackendDataInSrc.
+                       src/query/tree.ts), plus app.test, appScripts, env, lintRules, docReferences,
+                       offlineCheck, thirdPartyNotices, themeContrast, noBackendDataInSrc and
+                       api/mockContract; shared fixtures in dateCases, savedQueryFixtures and statsFixtures.
 scripts/check-offline.mjs  The offline guard ("Offline-first"); findOffOrigin(text) is pure and tested.
 vite.config.ts         Dev proxy of the API prefix to DEV_BACKEND_URL, the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE or DEV_BACKEND_URL is missing.
 .env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract");
                        DEV_BACKEND_URL — the backend the dev server proxies to ("Mock server").
 eslint.config.js       ESLint + the import airlocks (jQuery; src/ never imports mock-server/; only src/api/
-                       imports src/api/types.ts).
+                       imports src/api/types.ts), including jQuery's globals and `import("…")`.
 .github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main (read-only token).
 package.json           Scripts and dependencies; package-lock.json pins them (`npm ci`).
-tsconfig.json          Strict TypeScript for everything `npm run typecheck` checks (src, mock-server, tests, configs).
-tsconfig.app.json      The subset that ends up in dist/ (src and vite.config.ts), used by `build:app`.
+tsconfig.json          Strict TypeScript for everything `npm run typecheck` checks (src, mock-server, tests,
+                       vite.config.ts, vitest.config.ts), with Node's types.
+tsconfig.app.json      Just src/, with Vite's browser types and not Node's, used by `build:app`.
 vitest.config.ts       Vitest: tests/**/*.test.ts, Node environment (no DOM).
 .prettierrc.json       Prettier options (100 columns, double quotes, trailing commas).
 .prettierignore        What Prettier skips (docs/, README.md, build output, lock file).
@@ -763,9 +773,8 @@ has to do:
 
 - Answer `POST /filter/validate` as a stream: newline-delimited JSON, one
   `StatsResponse` line per selected database, each written as soon as that
-  database is done (the statistics fill in database by database). A single
-  JSON array at the end would work but would show nothing until the slowest
-  database answers.
+  database is done (the statistics fill in database by database). The client
+  reads only this format: a JSON array is rejected.
 - After login and after the compliance check, send the browser back to
   `/?resume=1`. Today it returns to the URL that started the flow, which loses
   the query kept across the redirect ("Saved query across the login/compliance
@@ -814,7 +823,7 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **A field's name** is the backend's `name`, or its `label` while the backend
   doesn't fill `name` in yet: `Field.name` is always set.
 - **A field's type** comes from `type`, or from `format` when `type` is empty,
-  into `Field.typeName` (see "The field catalog").
+  into `Field.typeName` (see "The field catalog (there is no schema endpoint)").
 - **A statistics line** becomes a `DatabaseResult` that is either `"ok"` (with a
   `matchCount`, from `match_count`) or `"failed"` (with `errors`, each a
   `DatabaseError`: `message`, `kind`, and the `nodeId` (from `node_id`) it
@@ -951,7 +960,8 @@ OAuth2 authorization code login against an internal, LAN-reachable identity
 provider. The IdP redirects back to the **backend** (`/api/auth/callback`),
 never to the SPA, so the frontend never handles the code, the CSRF `state` or
 tokens. The backend sets an `HttpOnly`, `SameSite=Lax` (and, in production,
-`Secure`) session cookie and redirects to `/?resume=1`. `GET /api/users/me`
+`Secure`) session cookie and is to redirect to `/?resume=1` (it doesn't yet:
+see the to-do list in "API contract"). `GET /api/users/me`
 answers `200 UserResponse` or `401`.
 
 Everything except `POST /api/filter/execute` is anonymous. The UI's login state is
@@ -1205,8 +1215,10 @@ Dropping a facet on the builder creates such a condition; dropping a tag creates
 one ALL group of them, one per facet carrying the tag (a single facet: just the
 condition).
 
-- **`tree.ts`** — pure and immutable: every edit is "read `state.query`, call
-  one `tree.ts` function, write the new tree back". `sameSemantics` tells a
+- **`tree.ts`** — immutable: every edit is "read `state.query`, call
+  one `tree.ts` function, write the new tree back". The functions are pure
+  except that new nodes get fresh ids (`newCondition`, `groupOf`,
+  `groupContents`). `sameSemantics` tells a
   real edit from a collapse toggle; `sameTree` (collapse included) tells a move
   that changed something from one that put a node back where it was.
 - **`src/api/request.ts`** — `toQueryRequest`, the one place the tree becomes
@@ -1221,7 +1233,8 @@ condition).
   a known facet, use `present` or `absent` and hold no value; the two messages
   for a facet-level operator or value that isn't allowed end with "Pick Is
   present or Is absent." because the row has no Operator or Value slot to fix,
-  only the Field dropdown ("The Field dropdown's two kinds of choice"). These
+  only the Field dropdown (**The Field dropdown's two kinds of choice** in
+  "Centre — `queryBuilder.ts`"). These
   checks also cover a query restored after a redirect. **Any issue blocks
   running.**
 - **`issues.ts`** — the backend's issues and where issues are shown.
@@ -1445,7 +1458,7 @@ inside them moves it to the rail (`setSidebarCollapsed`), and folding or
 unfolding a group in the builder keeps it on that group's (repainted) collapse
 button, like every control a repaint replaces (see "Keyboard focus across
 repaints"); after a mouse click the new button gets no focus ring. Green buttons
-(`.ui.primary.button`, e.g. **Hide docs**, **Log in**) show a ring on
+(`.ui.primary.button`, e.g. **Hide dictionary**, **Log in**) show a ring on
 `:focus-visible` (a light ring on the dark top bar itself, a green one inside
 the light account-menu panel), and keep the resting green on plain `:focus`, so
 a mouse click leaves no stuck colour and Fomantic's blue never shows.
@@ -1662,7 +1675,7 @@ to the Operator as before. The Operator and Value slots vanish without a sound
 for a screen-reader user, so the same pick is announced
 (`announcementAfterChange`: "Thing is present. Condition complete.", built with
 `queryToText`) through the page's one live region, which `main.ts` hands to
-`wireQueryBuilder` as `announce` (see "Announcements" below).
+`wireQueryBuilder` as `announce` (see **Announcements** below).
 
 A whole-facet row the UI cannot produce but a hand-edited or restored query can
 (a foreign operator such as "Equals", or a value next to "Is present") is drawn
@@ -1800,17 +1813,19 @@ movement in `queryBuilder.ts`):
   Without this the repaint would lose the cursor. **One exception:** a
   whole-facet test ("Is present" / "Is absent") finishes the row — no Operator
   or Value follows — so the cursor stays on the closed Field dropdown
-  (`focusFieldDropdown`); see "The Field dropdown's two kinds of choice".
+  (`focusFieldDropdown`); see **The Field dropdown's two kinds of choice** above.
   `cursorAfterChange` judges by the condition that was just committed, not by
   the row's dropdowns: after a new Facet the Field dropdown still shows the old
   facet's choice until the repaint, and that stale choice must not count.
   Operator is a search dropdown partly for this: a click on a search dropdown
   whose menu is already open keeps it open, where a plain one would close it.
 
-Wiring: two delegated listeners (`click` for `data-action` buttons, `change`
-for plain `<input>`s) read the current tree through `getState()` when an event
-fires. Every `<select>` is a Fomantic dropdown, handled only through its
-`onChange` (handling the native `change` too would run the row update twice).
+Wiring: listeners on the builder's container read the current tree through
+`getState()` when an event fires: `click` for `data-action` buttons, `keydown`
+(Enter or Space on the warning's ✕), the drag events, `input` (keeps a value
+box's hover title current) and `change` for plain `<input>`s. The page-wide
+listeners for typed values are described below. Every `<select>` is a
+Fomantic dropdown, handled only through its `onChange` (handling the native `change` too would run the row update twice).
 The `change` listener skips everything inside a `.ui.dropdown`: a search
 dropdown's typing box fires `change` when it loses focus on the mousedown
 before a menu click, and repainting then would remove the item under the
@@ -2018,7 +2033,7 @@ stand-in for that viewer.
 ### Saved queries — `savedQueries.ts`
 
 The **Save…** and **Saved queries** buttons of the query card open one of two
-dialogs (or, for a logged-out user, the login question: see "Logged out").
+dialogs (or, for a logged-out user, the login question: see **Logged out** below).
 Everything they do is an action in `app.ts` ("Saved queries" under "API
 contract", and the state in "State and the render loop"); this file only draws
 `savedDialog`, `save`, `savedList`, `savedConfirm`, `savedListNotice` and
@@ -2241,9 +2256,10 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
   (`startupFailure`, pure): **Log in** (a link to the login flow) after a
   `401`, where Reload would only fail again, and **Reload** otherwise, with
   `userMessage`. Below it: "Technical details are in the browser console.".
-  The text is escaped like every panel's, and there is no inline `onclick`,
-  so a strict Content-Security-Policy allows it. Login and
-  compliance status failures are not fatal.
+  The text is escaped like every panel's, and there is no inline `onclick`.
+  (It has an inline `style`, as Fomantic's markup does, so a
+  Content-Security-Policy needs `style-src 'unsafe-inline'`; see the README.)
+  Login and compliance status failures are not fatal.
 - Drops never fail silently: whatever a drop or "Add to query" can't do is
   explained in `AppState.dropNotice`, a dismissible warning above the query
   ("Centre — `queryBuilder.ts`" has the list, which also holds the refused
@@ -2298,18 +2314,22 @@ typecheck, test, lint and build on every pull request and push to `main`.
 The mock server is a dev stand-in, so it can never stop the app from running or
 building. `dev:app` is Vite alone, which doesn't type-check and loads no
 `mock-server/` code. `build:app` type-checks only what ends up in `dist/`
-(`tsconfig.app.json`: `src/` and `vite.config.ts`), so it still works when the
-mock or the tests have drifted from `src/api/types.ts`. `build` is the full
+(`tsconfig.app.json`: `src/`, as browser code without Node's types), so it
+still works when the mock or the tests have drifted from `src/api/types.ts`. `build` is the full
 `typecheck` followed by `build:app`, so it still checks everything.
 `tests/appScripts.test.ts` keeps both that way.
 
-`tsconfig.json` is `strict` with `noUncheckedIndexedAccess`; `allowJs` lets
-`tests/offlineCheck.test.ts` import `scripts/check-offline.mjs` with its JSDoc
-types. ESLint skips `dist/`, `coverage/` and `.claude/` (other worktrees live
+`tsconfig.json` is `strict` with `noUncheckedIndexedAccess`,
+`noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUnusedLocals` and
+`noUnusedParameters` (prefix a parameter that must exist but isn't used with
+`_`); `allowJs` lets `tests/offlineCheck.test.ts` import
+`scripts/check-offline.mjs` with its JSDoc types. ESLint skips `dist/`, `coverage/` and `.claude/` (other worktrees live
 there). ESLint is
 `eslint:recommended` + `typescript-eslint` recommended, plus the import
 airlocks (jQuery only in its two files; `src/` never imports `mock-server/`;
-only `src/api/` imports `src/api/types.ts`).
+only `src/api/` imports `src/api/types.ts`). Each airlock covers import lines
+and `import("…")`; the jQuery one also forbids the `$` / `jQuery` globals and
+`window.$` outside its two files.
 
 ---
 

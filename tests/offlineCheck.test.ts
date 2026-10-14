@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOffOrigin, findOffOriginInDir } from "../scripts/check-offline.mjs";
+import { stripRemoteCss } from "../vite.config";
 
 /**
  * The offline guard is what the "no internet" promise rests on
@@ -136,5 +137,22 @@ describe("running check-offline.mjs as a script", () => {
     });
     expect(run.status).toBe(1);
     expect(run.stderr).toContain("https://cdn.example/a.js");
+  });
+});
+
+describe("stripRemoteCss", () => {
+  // The plugin's transform hook, called the way Vite calls it: the CSS text and
+  // the file's id. It returns null when it leaves the file alone.
+  const transform = (code: string, id: string) =>
+    (stripRemoteCss().transform as (code: string, id: string) => { code: string } | null)(code, id);
+  const remoteCss = '.x { background: url("https://cdn.example/a.svg"); }';
+
+  it("neutralises remote URLs in Fomantic's CSS", () => {
+    const out = transform(remoteCss, "/repo/node_modules/fomantic-ui-css/semantic.min.css");
+    expect(out?.code).toBe(".x { background: local(x); }");
+  });
+
+  it("leaves our own CSS alone, so check:offline reports a remote URL there", () => {
+    expect(transform(remoteCss, "/repo/src/styles.css")).toBeNull();
   });
 });

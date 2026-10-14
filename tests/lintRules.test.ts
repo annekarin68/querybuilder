@@ -7,12 +7,28 @@ import { ESLint } from "eslint";
  * types. They are easy to switch off by
  * accident (see the comment on the src/** block there), so lint a few
  * snippets as if they lived at `filePath` and check the rule still fires.
+ * Besides import lines, the airlocks also cover jQuery's globals and
+ * `import("…")`, which an import rule alone doesn't see.
  */
 const eslint = new ESLint();
 
 async function restrictedImportErrors(code: string, filePath: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath });
   return result!.messages.filter((m) => m.ruleId === "no-restricted-imports").map((m) => m.message);
+}
+
+/** Messages from every rule that guards an airlock, not only the import rule. */
+const AIRLOCK_RULES = [
+  "no-restricted-imports",
+  "no-restricted-globals",
+  "no-restricted-properties",
+  "no-restricted-syntax",
+];
+async function airlockErrors(code: string, filePath: string): Promise<string[]> {
+  const [result] = await eslint.lintText(code, { filePath });
+  return result!.messages
+    .filter((m) => AIRLOCK_RULES.includes(m.ruleId ?? ""))
+    .map((m) => m.message);
 }
 
 const importJquery = 'import $ from "jquery";\nexport const x = $;\n';
@@ -68,5 +84,47 @@ describe("lint airlocks", { timeout: 30_000 }, () => {
   it("src/query/ may still import its own ./types", async () => {
     const code = 'import type { Group } from "./types";\nexport type X = Group;\n';
     expect(await restrictedImportErrors(code, "src/query/tree.ts")).toEqual([]);
+  });
+
+  // jQuery's types declare `$` and `jQuery` as globals, and setup-jquery.ts puts
+  // them on `window`, so code can reach jQuery without importing it.
+  it.each([
+    '$("#x").hide();\nexport {};\n',
+    'jQuery.ajax("/x");\nexport {};\n',
+    'window.$("#x");\nexport {};\n',
+    'globalThis.jQuery("#x");\nexport {};\n',
+    'export const m = import("jquery");\n',
+  ])("src/ may not reach jQuery without importing it: %j", async (code) => {
+    const errors = await airlockErrors(code, "src/ui/queryBuilder.ts");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("jQuery may only be used in src/ui/fomantic.ts");
+  });
+
+  it("fomantic.ts may use its own $, and setup-jquery.ts may publish it", async () => {
+    const fomantic = 'import $ from "jquery";\nexport const f = () => $("#x");\n';
+    expect(await airlockErrors(fomantic, "src/ui/fomantic.ts")).toEqual([]);
+    const bootstrap = 'import $ from "jquery";\nwindow.jQuery = $;\nwindow.$ = $;\n';
+    expect(await airlockErrors(bootstrap, "src/setup-jquery.ts")).toEqual([]);
+  });
+
+  it("src/ may not reach mock-server/ with import()", async () => {
+    const code = 'export const m = import("../../mock-server/databases");\n';
+    const errors = await airlockErrors(code, "src/ui/queryBuilder.ts");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("src/ must not import mock-server");
+  });
+
+  it.each([
+    'import type { StatsResponse } from "../api/types.js";\nexport type X = StatsResponse;\n',
+    'export type X = import("../api/types").StatsResponse;\n',
+  ])("src/ outside src/api/ may not reach the backend's types: %j", async (code) => {
+    const errors = await airlockErrors(code, "src/ui/statsPanel.ts");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("Only src/api/ may import the backend's types");
+  });
+
+  it("src/api/ may use import() types for the backend's types", async () => {
+    const code = 'export type X = import("./types").StatsResponse;\n';
+    expect(await airlockErrors(code, "src/api/response.ts")).toEqual([]);
   });
 });

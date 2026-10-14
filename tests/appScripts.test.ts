@@ -27,3 +27,17 @@ describe("dev:app and build:app don't depend on the mock server", () => {
     expect(appConfig.include).not.toContain("tests");
   });
 });
+
+describe("src/ is checked as browser code", () => {
+  // tsconfig.json gives everything Node's types (the mock server, the tests and
+  // vite.config.ts need them). src/ runs in the browser, where `process`,
+  // `Buffer` and `node:fs` don't exist, so build:app checks it without them.
+  it("tsconfig.app.json covers only src/, with Vite's browser types", () => {
+    const appConfig = JSON.parse(read("tsconfig.app.json")) as {
+      include: string[];
+      compilerOptions?: { types?: string[] };
+    };
+    expect(appConfig.include).toEqual(["src"]);
+    expect(appConfig.compilerOptions?.types).toEqual(["vite/client"]);
+  });
+});

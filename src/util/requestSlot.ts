@@ -8,8 +8,9 @@ export interface SlotRequest {
 }
 
 /**
- * At most one in-flight request of a kind (stats, preview). `start()` aborts the
- * previous one; `cancel()` aborts without starting another.
+ * At most one in-flight request of a kind (statistics, Run query, the saved-query
+ * list, a save). `start()` aborts the previous one, if it was given the slot's
+ * `signal`; `cancel()` aborts without starting another.
  *
  * This is the whole stale-response guard (docs/ARCHITECTURE.md, "Correctness
  * invariant"): every

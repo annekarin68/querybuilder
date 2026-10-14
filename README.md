@@ -1,7 +1,7 @@
 # Query Builder (frontend)
 
 A single-page query-builder UI. Build a filter with nested AND/OR groups; see live
-match statistics; browse a summary list of matching events. Running a query
+match statistics; browse the matching events in a paged table. Running a query
 requires login (OAuth2, via the backend) and a compliance reason for the session.
 
 All data comes from our API, under the API prefix `VITE_API_BASE`, set in
@@ -30,7 +30,9 @@ npm run dev        # mock API on :3001, app on http://localhost:5173
 
 In the mock, **Log in** signs you in as `demo.user`, and any non-blank reason
 passes the compliance check. To run a second copy side by side (another
-checkout), pick other ports: `DEV_BACKEND_URL=http://localhost:3011 npx concurrently -k "npm:mock" "vite --port 5181"`.
+checkout), give it its own ports, in two terminals:
+`DEV_BACKEND_URL=http://localhost:3091 npx tsx mock-server/index.ts` and
+`DEV_BACKEND_URL=http://localhost:3091 npx vite --port 5191 --strictPort`.
 
 The dev server forwards the API prefix to `DEV_BACKEND_URL` (`.env`), which
 is where the mock listens. To develop against a real backend instead, set it
@@ -97,8 +99,8 @@ Other scripts:
    architectural change.
 
 The pickle mascot (favicon, top-bar logo and its two other faces) is four SVG
-files in `public/pickle/`; replace a file, keeping its name, to change the
-artwork (`docs/ARCHITECTURE.md`, "Pickle theme and mascot"). Replacement SVGs must be self-contained plain SVG: export them as plain or optimised SVG with no namespaces other than `http://www.w3.org/2000/svg` (typical Inkscape or Illustrator exports add `xmlns:xlink`, `xmlns:inkscape`, `sodipodi` and `rdf` URLs, which make `npm run build`'s `check:offline` fail; nothing checks a file swapped in on an already-deployed build).
+files in `public/pickle/`, plus three for the hidden easter-egg set; replace a
+file, keeping its name, to change the artwork (`docs/ARCHITECTURE.md`, "Pickle theme and mascot"). Replacement SVGs must be self-contained plain SVG: export them as plain or optimised SVG with no namespaces other than `http://www.w3.org/2000/svg` (typical Inkscape or Illustrator exports add `xmlns:xlink`, `xmlns:inkscape`, `sodipodi` and `rdf` URLs, which make `npm run build`'s `check:offline` fail; nothing checks a file swapped in on an already-deployed build).
 
 ## Layout of the code
 
@@ -138,7 +140,9 @@ pull request and push to `main`.
 ## Licenses
 
 Third-party license texts for every bundled dependency are in
-`THIRD-PARTY-NOTICES.txt` at the repo root. The JS minifier does not preserve
-vendor licence banners in the bundle, so the build copies that file into
-`dist/` automatically (see `emitLicenseNotices` in `vite.config.ts`). It is the
+`THIRD-PARTY-NOTICES.txt` at the repo root, including the full SIL Open Font
+License that the bundled Lato and icon fonts require to travel with them
+(`tests/thirdPartyNotices.test.ts` checks the copies against Fomantic's). The
+JS minifier does not preserve vendor licence banners in the bundle, so the
+build copies that file into `dist/` automatically (see `emitLicenseNotices` in `vite.config.ts`). It is the
 licence notice for the bundled jQuery / Fomantic-UI / Lato code.

@@ -43,7 +43,6 @@ const BINARY_RE = /\.(woff2?|ttf|eot|otf|png|jpe?g|gif|webp|avif|ico|mp4|webm)$/
  * @returns {string[]}
  */
 export function findOffOrigin(text) {
-  // (Spread into arrays first: iterator `.map` needs Node 22, we support 20.19.)
   const found = [
     ...[...text.matchAll(ABSOLUTE_URL_RE)].map((m) => ({ at: m.index, url: m[0] })),
     ...[...text.matchAll(PROTOCOL_RELATIVE_URL_RE)].map((m) => ({ at: m.index, url: m[1] })),
