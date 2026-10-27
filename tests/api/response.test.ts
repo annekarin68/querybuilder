@@ -11,10 +11,13 @@ import {
   toUser,
 } from "../../src/api/response";
 import { toSavedQueryRequest } from "../../src/api/request";
-import { unfinishedDraft, unfinishedResponse, unfinishedTree } from "../savedQueryFixtures";
-import type { Group } from "../../src/query/types";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
-import { isEdited, type OpenSaved } from "../../src/query/saved";
+import {
+  unfinishedDraft,
+  unfinishedResponse,
+  unfinishedTree,
+  withoutNodeIds,
+} from "../savedQueryFixtures";
+import type { Group, QueryNode } from "../../src/query/types";
 import type {
   DatabasesResponse,
   EventResponse,
@@ -404,14 +407,15 @@ describe("toSavedQuery", () => {
   });
 
   it("gives back the tree as the user left it, with database ids and no display state", () => {
-    expect(toSavedQuery(read(unfinishedResponse))).toEqual({
+    const saved = toSavedQuery(read(unfinishedResponse));
+    expect(saved).toMatchObject({
       id: "sq-1",
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedTree,
       updatedAt: "2026-10-08T09:30:00.000Z",
     });
+    expect(withoutNodeIds(saved.query)).toEqual(withoutNodeIds(unfinishedTree));
   });
 
   it("round-trips a draft: what is sent is what comes back", () => {
@@ -424,40 +428,37 @@ describe("toSavedQuery", () => {
     });
     // toEqual, not toMatchObject: a key added on the way (or one left in, like
     // the draft's `collapsed`) must fail the test.
-    expect(back.query).toEqual(unfinishedTree);
+    expect(withoutNodeIds(back.query)).toEqual(withoutNodeIds(unfinishedTree));
   });
 
-  it("opening what was just saved is not an edit (the real conversions, both ways)", () => {
-    // Built with the builder's own helpers, in the order the builder writes
-    // keys: isEdited compares trees with sameSemantics, which compares JSON
-    // text, so a conversion that wrote the keys in another order would make
-    // every opened query look edited.
-    const root = emptyQuery();
-    const facetLevel = { ...newCondition(), facetId: "thing", operatorId: "present" };
-    const between = { ...newCondition(), facetId: "thing", fieldId: "size", operatorId: "between" };
-    const folded = { ...newGroup(), operator: "OR" as const };
-    let query = addChild(root, root.id, facetLevel);
-    query = addChild(query, root.id, folded);
-    query = addChild(query, folded.id, between);
-    query = updateNode(query, between.id, { value: [3, 7] });
-    query = updateNode(query, folded.id, { collapsed: true });
-    const draft = { name: "Trips", note: "", databaseIds: ["alpha", "beta"], query };
+  /** Every node id in `node`, depth first. */
+  const nodeIds = (node: QueryNode): string[] =>
+    node.kind === "group" ? [node.id, ...node.children.flatMap(nodeIds)] : [node.id];
 
-    const answer = {
-      ...toSavedQueryRequest(draft),
-      id: "sq-1",
-      updated_at: "2026-10-08T10:00:00Z",
+  it("gives every node a fresh id of its own, each time it is read", () => {
+    const first = nodeIds(toSavedQuery(read(unfinishedResponse)).query);
+    const second = nodeIds(toSavedQuery(read(unfinishedResponse)).query);
+    expect(first).toHaveLength(5);
+    expect(new Set([...first, ...second]).size).toBe(10);
+  });
+
+  it.each([
+    ["text ids (saved by an older build)", "g1", "c1"],
+    ["number ids", 1, 2],
+    ["the same id twice", "x", "x"],
+  ])("opens a query whose stored nodes carry %s, and ignores them", (_label, groupId, condId) => {
+    const stored = {
+      ...unfinishedResponse,
+      query: {
+        ...unfinishedResponse.query,
+        id: groupId,
+        children: [{ ...unfinishedResponse.query.children[2], id: condId }],
+      },
     };
-    // Through JSON text, as it travels.
-    const saved = toSavedQuery(read<SavedQueryResponse>(JSON.parse(JSON.stringify(answer))));
-    const open: OpenSaved = {
-      id: saved.id,
-      name: saved.name,
-      note: saved.note,
-      query: saved.query,
-      databaseIds: saved.databaseIds,
-    };
-    expect(isEdited(open, query, ["beta", "alpha"])).toBe(false);
+    const query = toSavedQuery(readBroken<SavedQueryResponse>(stored)).query;
+    expect(nodeIds(query)).not.toContain(groupId);
+    expect(nodeIds(query)).not.toContain(condId);
+    expect(query.children[0]).toMatchObject({ facetId: "thing", value: [3, null] });
   });
 
   it("ignores keys it does not know, on the saved query and on its nodes", () => {
@@ -475,10 +476,12 @@ describe("toSavedQuery", () => {
         })),
       },
     };
-    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras))).toEqual(
-      toSavedQuery(read(unfinishedResponse)),
-    );
-    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras)).query).toEqual(unfinishedTree);
+    const saved = toSavedQuery(readBroken<SavedQueryResponse>(withExtras));
+    expect({ ...saved, query: null }).toEqual({
+      ...toSavedQuery(read(unfinishedResponse)),
+      query: null,
+    });
+    expect(withoutNodeIds(saved.query)).toEqual(withoutNodeIds(unfinishedTree));
   });
 
   it("trims a padded name", () => {
@@ -528,11 +531,6 @@ describe("toSavedQuery", () => {
       "a facet_id that is a number",
       { facet_id: 3 },
       '"query.children[0].facet_id" should be non-blank text, but',
-    ],
-    [
-      "a missing node id",
-      { id: undefined },
-      '"query.children[0].id" should be non-blank text, but it is missing.',
     ],
     [
       "an operator_id that is a list",
@@ -590,19 +588,18 @@ describe("toSavedQuery", () => {
       ...unfinishedResponse,
       query: {
         kind: "group",
-        id: "g1",
         operator: "AND",
         children: [
           {
             kind: "group",
-            id: "g2",
             operator: "OR",
-            children: [{ ...unfinishedResponse.query.children[2], id: "c9" }],
+            children: [unfinishedResponse.query.children[2]],
           },
         ],
       },
     };
     const inner = toSavedQuery(readBroken<SavedQueryResponse>(deep)).query.children[0] as Group;
-    expect(inner.children[0]).toMatchObject({ id: "c9", value: [3, null] });
+    expect(inner).toMatchObject({ kind: "group", operator: "OR" });
+    expect(inner.children[0]).toMatchObject({ fieldId: "size", value: [3, null] });
   });
 });

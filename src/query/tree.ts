@@ -32,7 +32,8 @@ export function newGroup(): Group {
 }
 
 /** A new, open group holding `children`: how a tag's facets arrive ("Add
- *  all"), so a misplaced or unwanted "Add all" is moved or removed in one go. */
+ *  all"), so a misplaced or unwanted "Add all" is moved or removed in one go,
+ *  and how a saved group is read back (src/api/response.ts, with a fresh id). */
 export function groupOf(children: QueryNode[], operator: LogicalOperator = "AND"): Group {
   return { kind: "group", id: id("g"), operator, children };
 }

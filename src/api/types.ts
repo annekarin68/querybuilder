@@ -256,18 +256,20 @@ export interface SavedQueryResponse extends SavedQueryRequest {
 
 export type SavedNode = SavedGroup | SavedCondition;
 
-/** Like `RequestGroup`, but `children` may be empty. */
+/**
+ * Like `RequestGroup`, but `children` may be empty, and with no `id`: node ids
+ * only live for one page load, so the frontend makes fresh ones when it reads
+ * a saved query. An `id` saved by an older build is ignored.
+ */
 export interface SavedGroup {
   kind: "group";
-  id: string;
   operator: "AND" | "OR";
   children: SavedNode[];
 }
 
-/** Like `RequestCondition`, but unfinished: each of the four may be `null`. */
+/** Like `RequestCondition`, but unfinished (each of the four may be `null`) and with no `id`. */
 export interface SavedCondition {
   kind: "condition";
-  id: string;
   facet_id: string | null;
   field_id: string | null;
   operator_id: string | null;

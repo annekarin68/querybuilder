@@ -26,7 +26,7 @@ import {
   updateNode,
   type Direction,
 } from "./query/tree";
-import { hasUnsavedWork, sameName, saveTarget } from "./query/saved";
+import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/saved";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
 import {
@@ -609,23 +609,31 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     });
   }
 
-  /** Send one save and show how it went. A save that succeeds is remembered
+  /** Send `draft` and show how it went. A save that succeeds is remembered
    *  even if the dialog was closed meanwhile: it did happen on the server. */
-  function sendSave(name: string, note: string, send: () => Promise<SavedQuery>): void {
+  function sendSave(draft: SavedQueryDraft, send: () => Promise<SavedQuery>): void {
+    const { name, note } = draft;
     const openWhenStarted = store.getState().openSaved;
     const req = saveSlot.start();
     store.setState({ save: { status: "saving" } });
     send()
       .then((saved) => {
-        const { id, query, databaseIds } = saved;
+        // The open query remembers the tree that was sent, which is the tree
+        // on screen: the answer's tree has fresh node ids ("Saved queries"),
+        // so comparing with it would show the query as edited at once.
+        const openNow: OpenSaved = {
+          id: saved.id,
+          name: saved.name,
+          note: saved.note,
+          query: draft.query,
+          databaseIds: draft.databaseIds,
+        };
         // The saved query becomes the open one only if nothing else was opened
         // since the save started (a slow answer after the user opened another
         // query would otherwise make the next Save overwrite this one with
         // that other query).
         const patch: Partial<AppState> =
-          store.getState().openSaved === openWhenStarted
-            ? { openSaved: { id, name: saved.name, note: saved.note, query, databaseIds } }
-            : {};
+          store.getState().openSaved === openWhenStarted ? { openSaved: openNow } : {};
         // Leave the dialog alone when it was closed, or closed and reopened.
         store.setState(
           req.isStale() ? patch : { ...patch, savedDialog: null, save: { status: "idle" } },
@@ -675,7 +683,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       return;
     }
     const target = saveTarget(draft.name, store.getState().openSaved);
-    sendSave(draft.name, draft.note, () =>
+    sendSave(draft, () =>
       target.kind === "update" ? updateOrCreate(target.id, draft) : api.createSavedQuery(draft),
     );
   }
@@ -687,7 +695,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     const { save } = store.getState();
     if (save.status !== "conflict") return;
     const draft = draftOf(save.name, save.note);
-    sendSave(draft.name, draft.note, async () => {
+    sendSave(draft, async () => {
       const clash = (await api.listSavedQueries()).find((q) => sameName(q.name, draft.name));
       // Deleted in the meantime (another tab): there is nothing left to replace.
       return clash ? updateOrCreate(clash.id, draft) : api.createSavedQuery(draft);

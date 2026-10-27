@@ -1031,6 +1031,18 @@ The endpoints are `GET` and `POST {prefix}/filter/saved`, and `PUT` and
   `field_id`, `operator_id` and `value` may each be `null` (and a `value` list may
   hold nulls: a from–to pair with one end empty), and a group's `children` may
   be empty. There is no `collapsed`: display state is not saved.
+  **Nodes have no `id`** (decided 2026-10-27). A node id only lives for one
+  page load: the frontend needs one on every node while the query is on screen
+  (to edit, drag and point at problems), but the shape of the groups and
+  conditions is all a saved query means. So `toSavedQueryRequest` sends none,
+  and `toSavedQuery` gives every node a fresh id (`groupOf`, `newCondition`)
+  each time it reads one. Queries saved by an older build still carry ids; they
+  are ignored, so a stored id that is missing, a number or used twice can't
+  stop the list from loading or clash with the query on screen. This is also
+  why `openSaved.query` (what *(edited)* compares with) is always the very tree
+  on screen: after an Open, the tree that was opened; after a Save, the tree
+  that was sent (`sendSave` in `app.ts`), never the server's answer, whose ids
+  are new.
 
 `SavedQueryResponse` is the same plus `id` (made by the server) and `updated_at`
 (ISO 8601 UTC). `GET` answers newest `updated_at` first. A `404` means no saved
@@ -1044,13 +1056,18 @@ saving their work. The frontend still never rewrites a condition ("Wire format
 of the query"): it converts the tree in `src/api/` only, both ways
 (`toSavedQueryRequest` in `request.ts`, `toSavedQuery` in `response.ts`), so the
 rest of the app sees `Group` / `QueryNode` and the model's `SavedQuery`.
-`toSavedQueryRequest` trims name and note, drops `collapsed`, and throws only on
-a value that is not JSON scalars and nulls (a bug). `toSavedQuery` reads the
-tree strictly (a node of unknown `kind`, a missing `children` or a number as
-`facet_id`, or a missing or non-text database id, is a `ContractError` naming
-the path) and a missing note as `""` with a warning. The `client.ts` functions
+`toSavedQueryRequest` trims name and note, drops `collapsed` and the node ids,
+and throws only on a value that is not JSON scalars and nulls (a bug).
+`toSavedQuery` reads the tree strictly (a node of unknown `kind`, a missing
+`children` or a number as `facet_id`, or a missing or non-text database id, is a
+`ContractError` naming the path), ignores any node `id`, and reads a missing
+note as `""` with a warning. The `client.ts` functions
 are `listSavedQueries`, `createSavedQuery`, `updateSavedQuery(id, draft)` and
 `deleteSavedQuery(id)`; the id goes into the path with `encodeURIComponent`.
+
+**Backend hand-off:** saved trees no longer carry node ids. The backend must
+not require them, check them or make them unique, and may keep or drop the
+ids in queries saved before. The saved query's own `id` is unchanged.
 
 ### Saved query across the login/compliance redirect
 
@@ -2187,10 +2204,10 @@ to a named handler function — add a route there, and a test in
   user's `sub`; every mock login is the same fictional user, so they all share
   one list. The body is checked for shape only (`readSavedQueryBody`),
   in the style of `requestBody.ts` and naming the first problem. Shape includes
-  what the client relies on: node ids and database ids are non-blank
-  (`toSavedQuery` reads them strictly, so one bad stored entry would make the
-  whole list unreadable), and no two nodes of one tree share an id (the builder
-  finds nodes by id). The route
+  what the client relies on: database ids are non-blank (`toSavedQuery` reads
+  them strictly, so one bad stored entry would make the whole list
+  unreadable). Nodes carry no ids, and an `id` sent by an older build is not
+  checked ("Saved queries"). The route
   table matches exact paths, so `server.ts` gives `…/filter/saved/{id}` a
   second look (`savedQueryIdFrom`) before the 404.
 - **Login and compliance** are simulated in-process (`auth.ts`): stand-in IdP

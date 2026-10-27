@@ -1,6 +1,6 @@
 import type { SavedQueryResponse, SavedQueryRequest } from "../src/api/types";
 import type { SavedQueryDraft } from "../src/model";
-import type { Group } from "../src/query/types";
+import type { Group, QueryNode } from "../src/query/types";
 
 // One saved query shared by the conversion, client and mock tests. The `unfinishedRequest` and `unfinishedResponse` use the wire's snake_case keys; the draft and tree use the frontend's own.
 
@@ -39,19 +39,17 @@ export const unfinishedDraft: SavedQueryDraft = {
   query: { ...unfinishedTree, collapsed: true },
 };
 
-/** What `unfinishedDraft` looks like on the wire. */
+/** What `unfinishedDraft` looks like on the wire: no node ids, which only live for one page load. */
 export const unfinishedRequest: SavedQueryRequest = {
   name: "Slow trips",
   note: "the ones to check",
   databases: ["alpha"],
   query: {
     kind: "group",
-    id: "g1",
     operator: "OR",
     children: [
       {
         kind: "condition",
-        id: "c1",
         facet_id: null,
         field_id: null,
         operator_id: null,
@@ -59,7 +57,6 @@ export const unfinishedRequest: SavedQueryRequest = {
       },
       {
         kind: "condition",
-        id: "c2",
         facet_id: "thing",
         field_id: null,
         operator_id: "present",
@@ -67,13 +64,12 @@ export const unfinishedRequest: SavedQueryRequest = {
       },
       {
         kind: "condition",
-        id: "c3",
         facet_id: "thing",
         field_id: "size",
         operator_id: "between",
         value: [3, null],
       },
-      { kind: "group", id: "g2", operator: "AND", children: [] },
+      { kind: "group", operator: "AND", children: [] },
     ],
   },
 };
@@ -84,3 +80,13 @@ export const unfinishedResponse: SavedQueryResponse = {
   id: "sq-1",
   updated_at: "2026-10-08T09:30:00.000Z",
 };
+
+/**
+ * `tree` without its node ids. A saved tree comes back with fresh ids
+ * (docs/ARCHITECTURE.md, "Saved queries"), so tests compare everything else.
+ */
+export function withoutNodeIds(tree: QueryNode): unknown {
+  return JSON.parse(
+    JSON.stringify(tree, (key, value: unknown) => (key === "id" ? undefined : value)),
+  );
+}

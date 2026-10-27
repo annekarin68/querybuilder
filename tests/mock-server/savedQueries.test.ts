@@ -136,15 +136,9 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
     return r.ok ? null : r.error;
   };
   const withQuery = (query: unknown) => ({ ...unfinishedRequest, query });
-  const group = (...children: unknown[]) => ({
-    kind: "group",
-    id: "g1",
-    operator: "AND",
-    children,
-  });
+  const group = (...children: unknown[]) => ({ kind: "group", operator: "AND", children });
   const condition = {
     kind: "condition",
-    id: "c1",
     facet_id: "thing",
     field_id: "size",
     operator_id: "gt",
@@ -153,6 +147,11 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
 
   it("accepts a half-built draft: nulls, a null inside a pair, an empty group", () => {
     expect(ok(unfinishedRequest)).toEqual({ ok: true, body: unfinishedRequest });
+  });
+
+  it("accepts nodes that still carry an id (sent by an older build), and does not check it", () => {
+    const withIds = { ...group({ ...condition, id: 1 }, { ...condition, id: 1 }), id: " " };
+    expect(ok(withQuery(withIds)).ok).toBe(true);
   });
 
   it("accepts a draft with no databases and a root without children", () => {
@@ -218,33 +217,6 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
       'query.children[0].kind must be "group" or "condition".',
     ],
     [
-      "a node id that is a number",
-      withQuery(group({ ...condition, id: 1 })),
-      "query.children[0].id must be a non-blank string.",
-    ],
-    [
-      "a blank node id",
-      withQuery(group({ ...condition, id: " " })),
-      "query.children[0].id must be a non-blank string.",
-    ],
-    [
-      "a blank group id at the root",
-      withQuery({ ...group(), id: "" }),
-      "query.id must be a non-blank string.",
-    ],
-    [
-      "two nodes with the same id",
-      withQuery(
-        group(condition, { ...group({ ...condition, id: "c2" }, { ...condition }), id: "g2" }),
-      ),
-      'query.children[1].children[1].id "c1" is already used by another node.',
-    ],
-    [
-      "a child with its group's id",
-      withQuery(group({ ...condition, id: "g1" })),
-      'query.children[0].id "g1" is already used by another node.',
-    ],
-    [
       "a group operator that is neither",
       withQuery({ ...group(), operator: "XOR" }),
       'query.operator must be "AND" or "OR".',
@@ -256,7 +228,7 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
     ],
     [
       "a facet_id that is a number",
-      withQuery(group(condition, { ...condition, id: "c2", facet_id: 3 })),
+      withQuery(group(condition, { ...condition, facet_id: 3 })),
       "query.children[1].facet_id must be a non-blank string or null.",
     ],
     [
@@ -271,7 +243,7 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
     ],
     [
       "a value that is an object",
-      withQuery(group({ ...group({ ...condition, value: { from: 1 } }), id: "g2" })),
+      withQuery(group(group({ ...condition, value: { from: 1 } }))),
       "query.children[0].children[0].value must be null, a string, number or boolean, or a list of them (a list may hold nulls).",
     ],
     [
