@@ -118,9 +118,12 @@ export function forgetWarnings(): void {
   warned.clear();
 }
 
-/** Log a display-only problem, once per page load (see `warned`). */
-export function warnOnce(message: string): void {
-  const key = message.replace(/\d+/g, "#");
+/**
+ * Log a display-only problem, once per page load (see `warned`). By default
+ * messages that differ only in digits count as one problem; pass `key` when
+ * they must not (one warning per facet, whose ids may differ in digits only).
+ */
+export function warnOnce(message: string, key = message.replace(/\d+/g, "#")): void {
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(message);

@@ -674,6 +674,22 @@ describe("toFacet: co-occurrence", () => {
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
 
+  it("leaves out a negative value even when it is too small to tell from zero", () => {
+    const facet = withCo({ b: "-1e-400", c: "-0", d: "-0.0e5" });
+    expect([...facet.coOccurrence.keys()]).toEqual(["c", "d"]);
+    expect(facet.coOccurrence.get("c")).toEqual({ text: "-0", percent: 0, tooRare: false });
+  });
+
+  it("warns for each facet, even when their ids differ only in digits", () => {
+    const bad = (label: string) =>
+      toFacet(
+        readBroken<IndividualResponse>({ ...wireFacet({ label }), co_occurrence: { b: "x" } }),
+      );
+    bad("f1");
+    bad("f2");
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
   it("trims padded text but keeps the trimmed text for display", () => {
     expect(withCo({ b: " 7 " }).coOccurrence.get("b")).toEqual({
       text: "7",
@@ -711,6 +727,18 @@ describe("pruneUnknownCoOccurrence", () => {
     expect([...facets[1]!.coOccurrence.keys()]).toEqual(["a"]);
     expect(console.warn).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledWith(expect.stringMatching(/"a".*"x", "y"|"x", "y".*"a"/));
+  });
+
+  it("warns for each facet, even when their ids differ only in digits", () => {
+    const f = (id: string) =>
+      toFacet(
+        readBroken<IndividualResponse>({
+          ...wireFacet({ label: id }),
+          co_occurrence: { ghost: "1" },
+        }),
+      );
+    pruneUnknownCoOccurrence([f("f1"), f("f2")]);
+    expect(console.warn).toHaveBeenCalledTimes(2);
   });
 
   it("does not warn when every id exists", () => {

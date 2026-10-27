@@ -116,6 +116,8 @@ export function toCoValue(raw: unknown): CoValue | null {
   const text = raw.trim();
   if (!DECIMAL_TEXT.test(text)) return null;
   const percent = Number(text);
+  // "-1e-400" parses to -0, which passes `>= 0`: a negative is never a percentage.
+  if (text.startsWith("-") && !/^-[0.]*([eE]|$)/.test(text)) return null;
   if (!(percent >= 0 && percent <= 100)) return null;
   const mantissa = text.split(/e/i)[0]!;
   const tooRare = percent === 0 && /[1-9]/.test(mantissa);
@@ -158,11 +160,13 @@ export function readCoOccurrence(
   if (notPercentages.length > 0) {
     warnOnce(
       `${where}: co_occurrence for ${namesForWarning(notPercentages)} should be a percentage from 0 to 100 as text. Leaving it out.`,
+      `notPercentage ${facetId}`,
     );
   }
   if (tooRare.length > 0) {
     warnOnce(
       `${where}: co_occurrence for ${namesForWarning(tooRare)} is too small for a JavaScript number. Showing it as seen together, too rare to colour.`,
+      `tooRare ${facetId}`,
     );
   }
   return map;
@@ -194,6 +198,7 @@ export function pruneUnknownCoOccurrence(facets: Facet[]): Facet[] {
     if (unknown.length === 0) return facet;
     warnOnce(
       `Unexpected facet list: co_occurrence of facet ${JSON.stringify(facet.id)} names facets that do not exist: ${namesForWarning(unknown)}. Leaving them out.`,
+      `unknownId ${facet.id}`,
     );
     return {
       ...facet,

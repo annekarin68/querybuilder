@@ -33,6 +33,14 @@ describe("coOccurrenceOf", () => {
     expect(map["d"]).toEqual({ a: "0", b: "0", c: "0", d: "100" });
   });
 
+  it("counts events, not occurrences", () => {
+    const twice: Entryset = { id: 9, items: { a: [{ x: 1 }, { x: 2 }], b: { x: 1 } } };
+    const plain = event(10, "a");
+    const counted = coOccurrenceOf([twice, plain], ["a", "b"]);
+    expect(counted["a"]!["b"]).toBe("50");
+    expect(counted["b"]!["a"]).toBe("100");
+  });
+
   it("is on every individual the mock answers", () => {
     for (const individual of INDIVIDUALS) {
       expect(Object.keys(individual.co_occurrence ?? {})).toHaveLength(INDIVIDUALS.length);
