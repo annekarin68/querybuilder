@@ -466,6 +466,8 @@ src/
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE,
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator.
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
+    coOccurrence.ts    "Seen together" maths (pure): connectedFacets, coOccurrenceRange, scalePosition (log),
+                       coOccurrenceColour, legendTicks, stepFactorText, squarify, labelFits, formatPercent.
     validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue. An unknown field or a
                        field set twice is an issue on that condition (it gets its own removable row).
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
@@ -493,6 +495,7 @@ src/
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
     panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), dialogBody(), escapeHtml(), optionsHtml().
+    colour.ts          Colour maths (pure): mixOklab (blends that do not go muddy), contrastRatio, betterOn.
     focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries and event <dialog>s
