@@ -6,7 +6,7 @@ import type { DatabaseResult } from "../../src/model";
 import type { Condition, Group } from "../../src/query/types";
 import { createMockServer } from "../../mock-server/server";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
-import { unfinishedDraft, unfinishedTree } from "../savedQueryFixtures";
+import { unfinishedDraft, unfinishedTree, withoutNodeIds } from "../savedQueryFixtures";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -165,9 +165,15 @@ describe("saved queries through the client", () => {
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedTree,
     });
-    expect(await client.listSavedQueries()).toEqual([created]);
+    expect(withoutNodeIds(created.query)).toEqual(withoutNodeIds(unfinishedTree));
+    const [listed, ...others] = await client.listSavedQueries();
+    expect(others).toEqual([]);
+    // Each read gives the nodes fresh ids, so compare everything else.
+    expect({ ...listed, query: withoutNodeIds(listed!.query) }).toEqual({
+      ...created,
+      query: withoutNodeIds(created.query),
+    });
 
     const renamed = await client.updateSavedQuery(created.id, {
       ...unfinishedDraft,

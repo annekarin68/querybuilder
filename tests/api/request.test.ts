@@ -151,6 +151,10 @@ describe("toSavedQueryRequest", () => {
     expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft))).not.toContain("collapsed");
   });
 
+  it("sends no node ids: they only live for one page load", () => {
+    expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft).query)).not.toContain('"id"');
+  });
+
   it("does not change the draft it is given", () => {
     const before = JSON.stringify(unfinishedDraft);
     toSavedQueryRequest(unfinishedDraft);

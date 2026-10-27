@@ -26,6 +26,7 @@ import type {
   Scalar,
   User,
 } from "../model";
+import { groupOf, newCondition } from "../query/tree";
 import type { Condition, Group, QueryNode } from "../query/types";
 
 /**
@@ -166,8 +167,9 @@ export function toCompliance(body: ResponseValue): Compliance {
  * A saved query. The tree is required data (a malformed one throws a
  * ContractError naming the node, e.g. "query.children[0].kind"): loading half
  * of a user's query would be worse than saying it cannot be read. The note is
- * only shown, so a missing one becomes ""; the database ids are required like every id. The tree comes back exactly as it
- * was saved, unfinished parts included; the backend never rewrites it.
+ * only shown, so a missing one becomes ""; the database ids are required like
+ * every id. The tree comes back exactly as it was saved, unfinished parts
+ * included (the backend never rewrites it), with fresh node ids.
  */
 export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery {
   const root = q.object<SavedGroup>("query");
@@ -188,19 +190,18 @@ function toSavedNode(n: ResponseObject<SavedNode>): QueryNode {
     : toSavedCondition(n);
 }
 
+// A saved tree has no node ids. Each node gets a fresh one, as any new node
+// does, which lives until the page is left. An `id` saved by an older build is
+// ignored, so it can neither clash with the query on screen nor break the read.
+
 function toSavedGroup(g: ResponseObject<SavedGroup>): Group {
-  return {
-    kind: "group",
-    id: g.id("id"),
-    operator: g.oneOf("operator", ["AND", "OR"]),
-    children: g.list<SavedNode>("children").map(toSavedNode),
-  };
+  const operator = g.oneOf("operator", ["AND", "OR"]);
+  return groupOf(g.list<SavedNode>("children").map(toSavedNode), operator);
 }
 
 function toSavedCondition(c: ResponseObject<SavedCondition>): Condition {
   return {
-    kind: "condition",
-    id: c.id("id"),
+    ...newCondition(),
     facetId: c.nullableId("facet_id"),
     fieldId: c.nullableId("field_id"),
     operatorId: c.nullableId("operator_id"),

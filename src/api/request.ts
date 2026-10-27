@@ -88,13 +88,12 @@ function savedNodeOf(node: QueryNode): SavedNode {
 }
 
 function savedGroupOf(g: Group): SavedGroup {
-  return { kind: "group", id: g.id, operator: g.operator, children: g.children.map(savedNodeOf) };
+  return { kind: "group", operator: g.operator, children: g.children.map(savedNodeOf) };
 }
 
 function savedConditionOf(c: Condition): SavedCondition {
   return {
     kind: "condition",
-    id: c.id,
     facet_id: c.facetId,
     field_id: c.fieldId,
     operator_id: c.operatorId,

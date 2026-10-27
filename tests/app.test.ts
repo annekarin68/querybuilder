@@ -12,7 +12,7 @@ import type {
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../src/query/tree";
 import type { Group } from "../src/query/types";
-import type { OpenSaved } from "../src/query/saved";
+import { isEdited, type OpenSaved } from "../src/query/saved";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
 import {
@@ -1365,6 +1365,23 @@ describe("saved queries: saving", () => {
     expect(announce).toHaveBeenCalledWith("Saved “Weekly”.");
   });
 
+  it("shows the query just saved as not edited, though the answer's nodes have other ids", async () => {
+    // A saved query is read back with fresh node ids ("Saved queries"), so the
+    // open query must remember the tree that was sent, not the one answered.
+    const api = fakeApi({
+      createSavedQuery: vi.fn(async (draft: SavedQueryDraft) => ({
+        ...savedFrom(draft, "new"),
+        query: { ...draft.query, id: "g-read-back" },
+      })),
+    });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    const { openSaved, query, selectedDatabaseIds } = store.getState();
+    expect(openSaved).toMatchObject({ id: "new", name: "Weekly" });
+    expect(isEdited(openSaved!, query, selectedDatabaseIds)).toBe(false);
+  });
+
   it("updates the open query when the name is its own", async () => {
     const open = savedQuery("s1", "Weekly", { databaseIds: ["alpha", "beta"] });
     const { app, api, store } = setup({
@@ -1612,6 +1629,15 @@ describe("saved queries: opening one from the list", () => {
       expect.any(Function),
       expect.any(AbortSignal),
     );
+  });
+
+  it("shows the opened query as not edited: the tree on screen is the one it remembers", () => {
+    // Node ids are made fresh on every read of a saved query, so the
+    // comparison must be with this very tree, never with another read of it.
+    const { app, store } = setup({ ...loggedIn, ...inList, ...ready(emptyQuery()) });
+    app.askOpenSaved("t");
+    const { openSaved, query, selectedDatabaseIds } = store.getState();
+    expect(isEdited(openSaved!, query, selectedDatabaseIds)).toBe(false);
   });
 
   it("resets the statistics and preview of the query it replaces", () => {
