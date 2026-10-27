@@ -368,9 +368,23 @@ export function wireDocsSidebar(
     rememberDrag(grabbed.item);
     e.dataTransfer.effectAllowed = "copy";
     e.dataTransfer.setDragImage(grabbed.node, 12, 12);
+    // Slide the floating dictionary away after the browser has taken its drag
+    // image: changing layout inside `dragstart` can cancel the drag in some
+    // browsers. A transform keeps the dragged element in the DOM, so `dragend`
+    // still fires; `display: none` would not.
+    setTimeout(() => stepAside(true), 0);
   });
 
-  container.addEventListener("dragend", forgetDrag);
+  // The class is on the page frame (it moves the whole docs column). The
+  // dictionary is repainted by the app, so `dragend` is also listened for on
+  // the document: it reaches there even if the grip was replaced mid-drag.
+  const stepAside = (on: boolean) =>
+    container.closest(".qb-body")?.classList.toggle("is-dragging-from-docs", on);
+  container.addEventListener("dragend", () => {
+    forgetDrag();
+    stepAside(false);
+  });
+  document.addEventListener("dragend", () => stepAside(false));
 
   container.addEventListener("click", (e) => {
     if (!(e.target instanceof Element)) return;

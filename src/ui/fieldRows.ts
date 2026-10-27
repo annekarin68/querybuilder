@@ -104,7 +104,7 @@ function unsetRowHtml(field: CatalogField): string {
   const name = escapeHtml(field.fieldName);
   return `<div class="qb-field-row is-unset" data-field-id="${escapeHtml(field.fieldId)}">
       <span class="qb-field-label">${name}<span class="qb-sr-only"> (not filtered)</span></span>
-      <button type="button" class="qb-unset-slot" data-action="edit-field" data-field-id="${escapeHtml(field.fieldId)}" aria-label="Filter on ${name}"></button>
+      <button type="button" class="qb-unset-slot" data-action="edit-field" data-field-id="${escapeHtml(field.fieldId)}" aria-label="Filter on ${name}" title="Filter on ${name}"></button>
       <span class="qb-unset-slot" aria-hidden="true"></span>
     </div>`;
 }

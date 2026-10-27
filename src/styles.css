@@ -1167,17 +1167,6 @@ span.qb-unset-slot {
   margin: 0;
   color: var(--qb-warn);
 }
-.qb-stat-pending {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--qb-muted);
-}
-.qb-stat-pending .ui.loader {
-  margin: 0;
-}
 
 /* ---- Matching events (src/ui/dataPreview.ts) ---- */
 .qb-run {
@@ -1722,6 +1711,28 @@ details[open] > summary > .qb-chevron {
     margin-top: 0;
     box-shadow: var(--qb-shadow);
     background: var(--qb-bg);
+  }
+}
+
+/* While a drag that started in the floating dictionary is under way, the
+   dictionary slides left, out of the way of the page it covers (the drop
+   targets), and back on dragend (docsSidebar.ts). A transform, not
+   display: none: the dragged element must stay in the DOM or dragend may never
+   fire. Not pointer-events alone: the drag already started, so it only makes
+   sure the column does not take the drop. Above 1100px the docs are in the
+   grid and this rule does not apply. */
+@media (max-width: 1100px) {
+  .qb-body:not(.qb-docs-collapsed) .qb-col-docs {
+    transition: transform 0.2s ease;
+  }
+  .qb-body.is-dragging-from-docs:not(.qb-docs-collapsed) .qb-col-docs {
+    transform: translateX(calc(-100% - var(--qb-rail-w)));
+    pointer-events: none;
+  }
+}
+@media (max-width: 1100px) and (prefers-reduced-motion: reduce) {
+  .qb-body:not(.qb-docs-collapsed) .qb-col-docs {
+    transition: none;
   }
 }
 

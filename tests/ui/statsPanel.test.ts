@@ -3,6 +3,7 @@ import type { Database, DatabaseResult } from "../../src/model";
 import {
   failureRowHtml,
   notRunRowHtml,
+  pendingRowHtml,
   headlineHtml,
   showProblemButton,
   splitLabel,
@@ -38,6 +39,16 @@ const selectedIds = ["a", "b"];
 
 const headline = (status: "loading" | "ok", results: DatabaseResult[]) =>
   headlineHtml({ status, results }, databases, selectedIds);
+
+describe("pendingRowHtml", () => {
+  it("shows the database's name and a quiet ellipsis, escaped", () => {
+    const html = pendingRowHtml(db("a", 1), "a");
+    expect(html).toContain('class="qb-db-row is-pending"');
+    expect(html).toContain("…");
+    expect(pendingRowHtml({ ...db("a", 1), name: "<b>" }, "a")).not.toContain("<b>");
+    expect(pendingRowHtml(undefined, "zz")).toContain("zz");
+  });
+});
 
 describe("splitResults", () => {
   it("counts matches, sets failed databases apart, and sizes the whole selection", () => {
@@ -202,6 +213,19 @@ describe("statsPanelHtml", () => {
       const html = statsPanelHtml(withNodeError({ serverIssues: [issue, other] }));
       // The accessible name starts with the visible text (WCAG 2.5.3, label in name).
       expect(html).toContain('aria-label="Show problem (the first of 2 in the query)"');
+    });
+
+    it("draws one row per selected database while loading, answered or not", () => {
+      const loading = (results: DatabaseResult[]) =>
+        statsPanelHtml({ ...ready, stats: { status: "loading", results } });
+      const rowCount = (html: string) => html.match(/class="qb-db-row/g)?.length ?? 0;
+      expect(rowCount(loading([]))).toBe(2);
+      const half = loading([ok("a", 5)]);
+      expect(rowCount(half)).toBe(2);
+      expect(half.match(/is-pending/g)).toHaveLength(1);
+      // Done: the placeholders are gone.
+      const done = statsPanelHtml({ ...ready, stats: { status: "ok", results: [ok("a", 5)] } });
+      expect(done).not.toContain("is-pending");
     });
 
     it("explains a database's own failure in one line under its red bar", () => {

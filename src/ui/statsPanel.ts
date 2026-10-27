@@ -36,6 +36,23 @@ function successRowHtml(result: Ok, db: Database | undefined): string {
 }
 
 /**
+ * A selected database that has not answered yet: its name, an empty bar and a
+ * quiet "…" where the ratio will be. Drawn for every such database while the
+ * statistics load, so the panel has its final height from the first line.
+ * At 900 px and below the statistics sit above **Run query**, and a row that
+ * appeared with each answer pushed the button down while the user aimed at it
+ * (maintainers, 2026-10-27).
+ */
+export function pendingRowHtml(db: Database | undefined, databaseId: string): string {
+  const name = db?.name ?? databaseId;
+  return `<div class="qb-db-row is-pending" title="${escapeHtml(name)}: still counting">
+    <span class="qb-db-name">${escapeHtml(name)}</span>
+    <span class="qb-bar" aria-hidden="true"></span>
+    <span class="qb-db-ratio" aria-label="still counting">…</span>
+  </div>`;
+}
+
+/**
  * A database that failed to run the query: a red, striped bar where the ratio
  * bar would be, an icon, and why it failed (`failureReasons`) on one line
  * under it, cut off with "…" if long; the row's tooltip holds all of it. The
@@ -96,13 +113,18 @@ export function showProblemButton(state: AppState): string {
 /** Statistics that have (some) results: everything but the error state. */
 type StatsWithResults = Exclude<StatsState, { status: "error" }>;
 
-/** One row per database that has reported so far — success (ratio + bar),
+/** One row per selected database: those that have reported so far — success (ratio + bar),
  * failure (a red bar, an icon and the reason), or, when the query itself is
- * at fault, not run (a neutral bar) — as each streamed result arrives. The
+ * at fault, not run (a neutral bar) — as each streamed result arrives, then a placeholder row for each one still
+ * to answer (`pendingRowHtml`). The
  * rule is the database picker's (`queryIsAtFault`), checked again on every
  * answer, so the pills and the rows always agree. */
-function perDatabaseHtml(results: DatabaseResult[], databases: Database[] | null): string {
-  if (!results.length) return "";
+function perDatabaseHtml(
+  results: DatabaseResult[],
+  databases: Database[] | null,
+  pendingIds: string[],
+): string {
+  if (!results.length && !pendingIds.length) return "";
   const atFault = queryIsAtFault(results);
   return `<h3 class="qb-stat-subtitle">By database</h3>
     <div class="qb-stat-perdb">
@@ -113,7 +135,17 @@ function perDatabaseHtml(results: DatabaseResult[], databases: Database[] | null
           return atFault ? notRunRowHtml(db, result.databaseId) : failureRowHtml(result, db);
         })
         .join("")}
+      ${pendingIds.map((id) => pendingRowHtml(databaseFor(databases, id), id)).join("")}
     </div>`;
+}
+
+/** The selected databases that have not answered yet, while the statistics
+ *  load; none once they are done (a database that never answered then has
+ *  no row, as before). */
+export function pendingDatabaseIds(stats: StatsWithResults, selectedIds: string[]): string[] {
+  if (stats.status !== "loading") return [];
+  const answered = new Set(stats.results.map((r) => r.databaseId));
+  return selectedIds.filter((id) => !answered.has(id));
 }
 
 /** How the events of the selected databases split up. */
@@ -214,14 +246,6 @@ export function headlineHtml(
   </div>`;
 }
 
-/** While loading, how many selected databases haven't reported a line yet. */
-function pendingHtml(stats: StatsWithResults, selectedCount: number): string {
-  if (stats.status !== "loading") return "";
-  const remaining = selectedCount - stats.results.length;
-  if (remaining <= 0) return "";
-  return `<div class="qb-stat-pending"><span class="ui active mini inline loader"></span>Waiting on ${countLabel(remaining, "more database", "more databases")}…</div>`;
-}
-
 /** The panel's card is its `data-focus-landing` (not in the Tab order, tabindex
  *  -1): Try again turns into the "Counting matches…" text, and a keyboard user
  *  who pressed it stays in this card instead of dropping to the page. */
@@ -259,8 +283,15 @@ export function statsPanelHtml(state: AppState): string {
     );
   }
   // "idle" with a complete query = the debounce before the fetch starts.
-  if (stats.status === "idle" || (stats.status === "loading" && stats.results.length === 0)) {
-    return card(state, placeholder("Counting matches…"));
+  if (stats.status === "idle") return card(state, placeholder("Counting matches…"));
+  if (stats.results.length === 0) {
+    // Nothing answered yet: the rows are already there, waiting, so the first
+    // answer does not change the panel's height.
+    return card(
+      state,
+      placeholder("Counting matches…") +
+        perDatabaseHtml([], state.databases, pendingDatabaseIds(stats, state.selectedDatabaseIds)),
+    );
   }
   // The headline stays on top; the per-database list follows. Above 900 px the
   // whole column is sticky and scrolls internally; at 900 px and below it sits
@@ -270,8 +301,11 @@ export function statsPanelHtml(state: AppState): string {
     state,
     headlineHtml(stats, state.databases, state.selectedDatabaseIds) +
       showProblemButton(state) +
-      perDatabaseHtml(stats.results, state.databases) +
-      pendingHtml(stats, state.selectedDatabaseIds.length),
+      perDatabaseHtml(
+        stats.results,
+        state.databases,
+        pendingDatabaseIds(stats, state.selectedDatabaseIds),
+      ),
   );
 }
 

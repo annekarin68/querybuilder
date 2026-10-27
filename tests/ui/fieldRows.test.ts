@@ -56,7 +56,9 @@ describe("fieldRowsHtml", () => {
     const html = fieldRowsHtml(ctx, block("small"), false, null);
     expect(html).toContain('class="qb-field-row is-unset"');
     expect(html).toContain('<span class="qb-sr-only"> (not filtered)</span>');
-    expect(html).toContain('data-action="edit-field" data-field-id="x" aria-label="Filter on x"');
+    expect(html).toContain(
+      'data-action="edit-field" data-field-id="x" aria-label="Filter on x" title="Filter on x"',
+    );
     expect(html).not.toContain("<select");
     expect(html).not.toMatch(/any value/i);
   });

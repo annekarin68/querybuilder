@@ -180,7 +180,21 @@ desktop windows, not for tablets.
   on `<main>` and `order` on the stats and the Run query section; the stats are
   static there and hidden while empty). The HTML order is unchanged (stats last),
   so a screen reader still reads them after the events; the panel has no
-  controls, so keyboard focus order is not affected.
+  controls, so keyboard focus order is not affected. While the statistics load
+  they already have their final height: a placeholder row stands for every
+  selected database that has not answered ("Right — `statsPanel.ts`"), so
+  **Run query** does not move under the pointer as the lines arrive.
+- **The floating dictionary steps aside during a drag** (maintainers,
+  2026-10-27). At 1100 px and below the dictionary covers part of the page,
+  including the builder's drop targets. When a drag starts from a dictionary
+  grip, `docsSidebar.ts` puts `is-dragging-from-docs` on `.qb-body` (one tick
+  after `dragstart`, because changing layout inside `dragstart` can cancel the
+  drag), and the 1100 px block of `styles.css` slides the column off to the
+  left with a short transition and `pointer-events: none`. It comes back on
+  `dragend`, also after a cancelled drag. It is a transform, not
+  `display: none`: the dragged element has to stay in the DOM or `dragend` may
+  never fire. With `prefers-reduced-motion` there is no transition. Above
+  1100 px the dictionary is in the grid and nothing moves.
 - **Workflow steps** — `Filter | Review | Approval | Done`. Only **Filter** is
   a real view; the others show a "Coming soon" placeholder (signed off for the
   first release, issue #19).
@@ -1848,8 +1862,8 @@ on whether it exists. Hence:
   text**: not "any value", which reads as "must have a value" (maintainers,
   2026-10-27). A screen reader hears the label plus a visually hidden " (not
   filtered)" (`.qb-sr-only`). It is drawn with **plain buttons, not Fomantic
-  dropdowns**: its first empty slot is a real `<button>` ("Filter on <field>"),
-  and the second only keeps the row's shape. **Why:** the builder repaints
+  dropdowns**: its first empty slot is a real `<button>` ("Filter on <field>", also its
+  `title`, so a mouse user hovering the empty slot is told what it does), and the second only keeps the row's shape. **Why:** the builder repaints
   whole on every edit, and a Fomantic dropdown is expensive to initialise. A
   facet can have over 20 fields, so ten such blocks would otherwise rebuild
   about 400 dropdowns on every edit.
@@ -2171,8 +2185,11 @@ striped red bar, a red icon and why it failed on one line under it, cut off
 with "…" if long, all of it in the row's tooltip, `failureReasons`; or, when
 the query itself is at fault, `queryIsAtFault`, a "not run" row: an empty grey
 bar and a mustard ⚠ pointing at **Show problem**, `notRunRowHtml`), then
-"Waiting on N more databases…" while loading. The
-backend can only return counts, so there are no per-field statistics.
+a placeholder row (`pendingRowHtml`: the name, an empty bar and a quiet "…")
+for every selected database that has not answered yet while loading, so the
+panel's height does not change as lines arrive (there is no "Waiting on N more
+databases…" line any more; the spinner in the title still shows the loading).
+The backend can only return counts, so there are no per-field statistics.
 
 Each kind of error is shown once, where the person who can fix it looks:
 
