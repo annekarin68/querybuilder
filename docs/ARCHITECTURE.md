@@ -1285,10 +1285,10 @@ condition).
   nothing else on screen tells the user about them (users missed them in grey,
   2026-10-13). `app.ts` stores the result in `AppState.serverIssues`.
   `placeIssues` moves an issue to a node that is drawn: the outermost
-  collapsed group or folded block around a hidden node, or the root group for
-  an id the query doesn't have. Issues that end up the same on one node are
-  kept once; if one of them came from the server, the one kept is marked
-  `fromServer`, so it is still drawn as the server's.
+  collapsed group around a hidden node, or the root group for an id the query
+  doesn't have. Issues that end up the same on one node are kept once; if
+  one of them came from the server, the one kept is marked `fromServer`, so
+  it is still drawn as the server's.
 - **`conditionEdit.ts`** — `nextCondition`, the row cascade: a new facet clears
   field, operator and value; a new field clears operator and value; an operator
   change that alters the arity resets the value instead of reading the old
@@ -1636,10 +1636,10 @@ tooltip is mouse-only; keyboard and screen-reader users get the same text from
 the control itself. Issues — the local ones and the backend's — show under their
 row or group (`placeIssues`): the user's own unfinished parts as a grey hint,
 the backend's "incomplete" ones in mustard with a warning icon, anything invalid
-in red. An issue inside a collapsed group or folded block shows on the outermost
-one around it, and one whose node is unknown on the root group, so none is
-lost. The footer shows the whole query in plain English (wrapped, never cut off
-with "…") once nothing needs attention, otherwise how many parts do.
+in red. An issue inside a collapsed group shows on that group, and one whose
+node is unknown on the root group, so none is lost. The footer shows the whole
+query in plain English (wrapped, never cut off with "…") once nothing needs
+attention, otherwise how many parts do.
 
 **The Field dropdown's two kinds of choice.** The second dropdown answers
 "what do I want to say about this facet?", so its menu has two sections:
