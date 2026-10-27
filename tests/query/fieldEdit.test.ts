@@ -43,6 +43,12 @@ describe("nextFieldCondition", () => {
     expect(next).toEqual({ ...c, operatorId: "lt", value: 7 });
   });
 
+  it("never reads a control for an operator with no value (present -> absent)", () => {
+    const c = newFieldCondition("size", "present", null);
+    const next = nextFieldCondition(c, "thing", "size", "absent", catalog, never)!;
+    expect(next).toEqual({ ...c, operatorId: "absent", value: null });
+  });
+
   it("resets the value when the operator's shape changes", () => {
     const c = newFieldCondition("size", "gt", 3);
     expect(nextFieldCondition(c, "thing", "size", "between", catalog, never)!.value).toBeNull();

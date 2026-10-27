@@ -89,6 +89,7 @@ interface FacetBlock {
   collapsed?: boolean;          // folded to header + summary (display only)
 }
 interface FieldCondition {
+  kind: "condition";
   id: string; fieldId: string; operatorId: string | null; value: ConditionValue;
 }
 ```
@@ -119,7 +120,7 @@ work on groups and blocks; a field condition is never moved.
 { "kind": "group", "id": "g-…", "operator": "AND", "children": [
   { "kind": "facet", "id": "f-…", "facet_id": "…", "negated": false,
     "operator": "AND", "conditions": [
-      { "id": "c-…", "field_id": "…", "operator_id": "gt", "value": 40 } ] } ] }
+      { "kind": "condition", "id": "c-…", "field_id": "…", "operator_id": "gt", "value": 40 } ] } ] }
 ```
 
 - Meaning (the backend's to implement): the event **has** (when `negated`,
@@ -134,9 +135,13 @@ work on groups and blocks; a field condition is never moved.
 `null`), without node ids. The backend checks the shape only.
 
 **Backend hand-off**: the `facet` node and its meaning, `negated`, `not_in`,
-`node_id` on blocks and field conditions, no more `field_id: null` or
-group-level conditions, `co_occurrence` on facets (section 6), and emptying
-the saved-query store.
+`node_id` on blocks and field conditions, `kind: "condition"` on every field
+condition, no more `field_id: null` or group-level conditions, `co_occurrence`
+on facets (section 6), and emptying the saved-query store.
+
+Question for the backend: the mock reports `Facet contains no valid conditions.`
+on a block whose every set field failed (by analogy with the group message);
+does the real backend do the same?
 
 ## 5. The builder (`src/ui/queryBuilder.ts`)
 

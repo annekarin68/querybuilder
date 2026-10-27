@@ -58,6 +58,11 @@ function typeProblem(valueType: ValueType, v: unknown): string | null {
   }
 }
 
+/** Issues about a condition sit on its row (`c.id`), except two: the builder
+ *  draws one row per field the data dictionary knows, so a condition for an
+ *  unknown field, or a second one for the same field, has no row on screen.
+ *  Those issues sit on the block, where they are always visible, and name the
+ *  field instead. */
 function checkCondition(
   block: FacetBlock,
   c: FieldCondition,
@@ -66,7 +71,12 @@ function checkCondition(
 ): void {
   const fieldDef = findField(catalog, block.facetId, c.fieldId);
   if (!fieldDef) {
-    out.push(invalid(c.id, "Unknown field."));
+    out.push(
+      invalid(
+        block.id,
+        `Unknown field “${c.fieldId}”. The data dictionary may have changed; remove this facet and add it again.`,
+      ),
+    );
     return;
   }
   if (!c.operatorId) {
@@ -118,9 +128,10 @@ function checkBlock(block: FacetBlock, catalog: FieldCatalog, out: Issue[]): voi
   const seen = new Set<string>();
   for (const c of block.conditions) {
     // The builder keeps one condition per field; two only come from a
-    // tampered saved query, and the row could show only one of them.
+    // tampered saved query, and the row could show only one of them. The
+    // issue sits on the block (see checkCondition).
     if (seen.has(c.fieldId)) {
-      out.push(invalid(c.id, "This field is set twice in this facet."));
+      out.push(invalid(block.id, `The field “${c.fieldId}” is set twice in this facet.`));
       continue;
     }
     seen.add(c.fieldId);

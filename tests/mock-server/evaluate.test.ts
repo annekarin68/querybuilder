@@ -19,6 +19,8 @@ import { EVENTS, toMockEvent, type MockEvent } from "../../mock-server/rows";
 import { ENTRYSETS } from "../../mock-server/vehicleData";
 import { eventMatches } from "../../mock-server/evaluate";
 import type { RequestFacet, RequestFieldCondition } from "../../src/api/types";
+import { toQueryRequest } from "../../src/api/request";
+import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
 
 const row = {
   "thing.color": "red",
@@ -448,6 +450,18 @@ describe("facet blocks match within one occurrence", () => {
     expect(eventMatches(facet({ facet_id: "nope" }), two)).toBe(false);
     expect(eventMatches(facet({ facet_id: "nope", negated: true }), two)).toBe(true);
     expect(eventMatches(facet({ negated: true, conditions: mixed }), two)).toBe(true);
+  });
+
+  it("matches a query built with the facet-block model and sent by toQueryRequest", () => {
+    // The seam between the frontend's new model and the mock: no hand-written wire JSON.
+    const block = (value: unknown) => ({
+      ...newBlock("gps_position"),
+      conditions: [newFieldCondition("latitude", "eq", value as number)],
+    });
+    const q = (value: unknown) => groupOf([block(value)]);
+    expect(eventMatches(toQueryRequest(q(first!["latitude"]), ["x"]).query, two)).toBe(true);
+    expect(eventMatches(toQueryRequest(q("no such latitude"), ["x"]).query, two)).toBe(false);
+    expect(eventMatches(toQueryRequest(emptyQuery(), ["x"]).query, two)).toBe(true);
   });
 
   it("knows every event", () => {

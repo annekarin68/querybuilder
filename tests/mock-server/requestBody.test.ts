@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { queryProblem } from "../../mock-server/requestBody";
+import { toQueryRequest } from "../../src/api/request";
+import { groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
 
 const condition = {
   kind: "condition",
@@ -14,6 +16,13 @@ const group = (...children: unknown[]) => ({ kind: "group", id: "g1", operator: 
 describe("queryProblem: is this a well-formed RequestNode?", () => {
   it("accepts a well-formed tree", () => {
     expect(queryProblem(group(condition, group(condition)))).toBeNull();
+  });
+
+  it("accepts a body made by toQueryRequest from the facet-block model", () => {
+    // The seam between the frontend's new model and the mock's check.
+    const block = { ...newBlock("thing"), conditions: [newFieldCondition("size", "gt", 3)] };
+    const body = toQueryRequest(groupOf([block, groupOf([newBlock("other")], "OR")]), ["x"]);
+    expect(queryProblem(body.query)).toBeNull();
   });
 
   // One-element rows: it.each spreads an array row into arguments, so a list

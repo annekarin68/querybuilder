@@ -442,6 +442,13 @@ src/
       types.ts         The old query-tree and saved-query types: QueryRequest, RequestNode, SavedQueryRequest, …
       savedResponse.ts toSavedQuery — a saved query from the backend -> model.
   query/
+    (The files next to `legacy/` are the facet-block model. Nothing imports them until plan A2,
+    docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md, so the running app is described
+    by `legacy/`.)
+    types.ts           FacetBlock, FieldCondition, Group, QueryNode, Issue.
+    tree.ts            Pure, immutable tree helpers (newBlock, newFieldCondition, groupOf, emptyQuery, newGroup,
+                       setFieldCondition, clearFieldCondition, countBlocks, insertNodes, moveNode, moveSibling,
+                       positionOf, groupContents, ungroup, sameSemantics, sameTree, …).
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator,
                        isFacetLevel, isFacetTest (a well-formed whole-facet test).
@@ -456,7 +463,7 @@ src/
                        resets the value); cursorAfterOperator — where the cursor goes next.
     issues.ts          placeIssues(query, issues) — each issue moved to the node drawn for it (inside a folded group
                        or block, the outermost folded one around it); serverIssues(stats) — the errors a database
-                       reports against a node, once each; withoutRepeats. Pure.
+                       reports against a node, once each. Pure.
     saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork` (a query with at
                        least one facet block), `saveTarget`.
     legacy/            The query model before facet blocks. The app still runs on it until plan A2
@@ -576,7 +583,7 @@ brought the kept query back ("Saved query across the login/compliance
 redirect"). Its ✕, **Start fresh** and the first edit (`changeScope`) clear it.
 
 The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
-pure helpers in `src/query/saved.ts`):
+pure helpers in `src/query/legacy/saved.ts`):
 
 - `openSaved`: the saved query on screen as it was when last opened or saved,
   or `null` for one never saved. Whether the user changed it since is worked out
@@ -827,7 +834,7 @@ names.** `client.ts` runs every response through a function in
 `src/api/response.ts` (`toDatabase`, `toFacet`, `toEvent`,
 `toDatabaseResult`, …), which checks it while reading it ("Reading
 responses"), before returning it, and builds every request body with
-`toQueryRequest` (`src/api/request.ts`, "Wire format of the query"; a saved
+`toQueryRequest` (`src/api/legacy/request.ts`, "Wire format of the query"; a saved
 query's body is built by `toSavedQueryRequest`, "Saved queries"). State,
 the app logic and the panels use only the model. ESLint enforces the boundary:
 outside `src/api/`, importing `src/api/types.ts` is an error
@@ -927,7 +934,7 @@ shown **once, in the query builder, next to what is wrong**; the statistics
 panel only offers **Show problem**, which jumps to it ("Right —
 `statsPanel.ts`"). An error without a `node_id` makes that database's row a red
 bar with the reason on one line under it. `app.ts` keeps the errors with a
-`node_id` in `AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`),
+`node_id` in `AppState.serverIssues` (`serverIssues`, `src/query/legacy/issues.ts`),
 once however many databases report them, and they block Run (`runBlocker` →
 `"rejected"`). A line that says `success` but has no `match_count` counts as
 failed rather than as a made-up 0. Both carry `notes` (from `info_messages`).
@@ -1032,6 +1039,8 @@ the `Secure` flag, …) is listed in issue #15 and in §7 of the two historical
 specs in `docs/superpowers/specs/`.
 
 ### Saved queries
+
+Until plan A2, the code this section describes lives in `src/query/legacy/` and `src/api/legacy/` (e.g. `legacy/saved.ts`, `legacy/request.ts`, `legacy/savedResponse.ts`). The files at the paths named below hold the new facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md), which nothing uses yet.
 
 A logged-in user can save the query they are building, with the selected
 databases, a name and a short note, and open it again later. **Stored by the
@@ -1187,6 +1196,8 @@ This is the mock's reading; the real backend owns the rule.
 
 ### Wire format of the query
 
+Until plan A2, the code this section describes lives in `src/query/legacy/` and `src/api/legacy/` (e.g. `legacy/request.ts`). The files at the paths named below hold the new facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md), which nothing uses yet.
+
 `/filter/validate` and `/filter/execute` take a `QueryRequest`
 (`src/api/types.ts`): `{ databases, query }`. `databases` holds the databases'
 `label`s (the model's `Database.id`s), and `query` is a tree of `RequestGroup`s
@@ -1200,7 +1211,7 @@ frontend's `id` for it. The backend treats it as opaque, and quotes it back as
 `node_id` in a stats line's `error_messages` to point at the node a problem is
 in ("Statistics lines").
 
-`toQueryRequest` (`src/api/request.ts`) builds the body from the query on
+`toQueryRequest` (`src/api/legacy/request.ts`) builds the body from the query on
 screen; `getStats` and `runQuery` in `client.ts` call it, so `app.ts` passes
 them the query and the selected database ids as they are in state. It is a
 projection, not a rewrite: operators and values go out exactly as the user
@@ -1244,6 +1255,8 @@ real backend should do the same.
 
 ## 8. The query model
 
+Until plan A2, the code this section describes lives in `src/query/legacy/` and `src/api/legacy/` (e.g. `legacy/tree.ts`, `legacy/validate.ts`). The files at the paths named below hold the new facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md), which nothing uses yet.
+
 `src/query/types.ts`: a query is a tree whose root is always a `Group`
 (`AND`/`OR` over its `children`); the leaves are `Condition`s (`facetId`,
 `fieldId`, `operatorId`, `value`, all `null` until chosen). The shape of
@@ -1266,7 +1279,7 @@ condition).
   `groupContents`). `sameSemantics` tells a
   real edit from a collapse toggle; `sameTree` (collapse included) tells a move
   that changed something from one that put a node back where it was.
-- **`src/api/request.ts`** — `toQueryRequest`, the one place the tree becomes
+- **`src/api/legacy/request.ts`** — `toQueryRequest`, the one place the tree becomes
   the request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
   `incomplete` (not filled in yet, shown as a quiet grey hint; a database's
@@ -2397,8 +2410,8 @@ and `import("…")`; the jQuery one also forbids the `$` / `jQuery` globals and
    `arity`), and to `OPERATOR_PROFILE` for each value type that offers it.
 2. If its arity or value type combination is new, extend
    `renderValueControl` / `readValueControl` (`src/ui/valueControl.ts`),
-   `checkCondition` (`src/query/validate.ts`) and `formatValue`
-   (`src/query/summary.ts`).
+   `checkCondition` (`src/query/legacy/validate.ts`) and `formatValue`
+   (`src/query/legacy/summary.ts`).
 3. Teach the mock: `conditionMatches` in `mock-server/evaluate.ts` (and
    `dateMatches` if it applies to dates).
 4. Tests: `fieldCatalog`, `validate`, `summary`, `evaluate`. Tell the backend

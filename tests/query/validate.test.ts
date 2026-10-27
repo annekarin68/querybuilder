@@ -52,7 +52,10 @@ describe("validateQuery with facet blocks", () => {
       ["invalid", "Enter a number."],
     ]);
     expect(issues(query(block(newFieldCondition("nope", "eq", 1))))).toEqual([
-      ["invalid", "Unknown field."],
+      [
+        "invalid",
+        "Unknown field “nope”. The data dictionary may have changed; remove this facet and add it again.",
+      ],
     ]);
     expect(issues(query(block(newFieldCondition("size", null, null))))).toEqual([
       ["incomplete", "Choose an operator."],
@@ -74,7 +77,9 @@ describe("validateQuery with facet blocks", () => {
 
   it("rejects a field set twice in one block (only a tampered saved query can do that)", () => {
     const twice = block(newFieldCondition("size", "gt", 1), newFieldCondition("size", "lt", 9));
-    expect(issues(query(twice))).toEqual([["invalid", "This field is set twice in this facet."]]);
+    expect(issues(query(twice))).toEqual([
+      ["invalid", "The field “size” is set twice in this facet."],
+    ]);
   });
 
   it("points each issue at the condition, the block or the group", () => {
@@ -84,5 +89,14 @@ describe("validateQuery with facet blocks", () => {
     const g = groupOf([]);
     const ids = validateQuery(query(b, unknown, g), catalog).map((i) => i.nodeId);
     expect(ids).toEqual([c.id, unknown.id, g.id]);
+  });
+
+  it("puts issues about a condition with no row on screen on the block", () => {
+    // The builder draws one row per field the dictionary knows, so an unknown
+    // field and a second condition for one field have no row to show them.
+    const unknownField = block(newFieldCondition("nope", "eq", 1));
+    const twice = block(newFieldCondition("size", "gt", 1), newFieldCondition("size", "lt", 9));
+    const ids = validateQuery(query(unknownField, twice), catalog).map((i) => i.nodeId);
+    expect(ids).toEqual([unknownField.id, twice.id]);
   });
 });

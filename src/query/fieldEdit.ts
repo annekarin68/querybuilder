@@ -29,9 +29,11 @@ export function defaultValueFor(
  * picked, and the block no longer holds a condition for this field.
  *
  * `readValue` reads the row's value control. It is only called while that
- * control still has the right shape: after an operator change that alters the
- * arity ("Greater than" → "Between") the row still shows the old control until
- * the repaint, so the value is reset instead.
+ * control still has the right shape and the new operator takes a value: after
+ * an operator change that alters the arity ("Greater than" → "Between") the
+ * row still shows the old control until the repaint, so the value is reset
+ * instead. An operator with no value ("present" → "absent") has no control to
+ * read, so its value stays null without asking.
  */
 export function nextFieldCondition(
   existing: FieldCondition | undefined,
@@ -47,7 +49,8 @@ export function nextFieldCondition(
   let value = defaultValueFor(field, operator);
   const sameShape =
     existing !== undefined && findOperator(existing.operatorId)?.arity === operator?.arity;
-  if (sameShape && field && operator) value = readValue(operator.arity, field.valueType) ?? value;
+  if (sameShape && field && operator && operator.arity !== "none")
+    value = readValue(operator.arity, field.valueType) ?? value;
   return existing
     ? { ...existing, operatorId, value }
     : newFieldCondition(fieldId, operatorId, value);
