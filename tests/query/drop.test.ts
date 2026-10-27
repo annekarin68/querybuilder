@@ -3,6 +3,7 @@ import {
   addedBesideMessage,
   addedNodesMessage,
   dropItem,
+  dropLandsInBlock,
   dropMessage,
   filledRowMessage,
   focusedRowMessage,
@@ -183,6 +184,44 @@ describe("dropItem", () => {
     const q = emptyQuery();
     const out = dropItem(q, { type: "facet", facetId: "thing" }, "gone", facets, catalog);
     expect(out.query.children).toHaveLength(1);
+  });
+});
+
+describe("dropLandsInBlock", () => {
+  const { query, block } = withBlock();
+  const set = { ...block, conditions: [newFieldCondition("size", "eq", 3)] };
+
+  it("is true for a field of the block's own facet", () => {
+    expect(dropLandsInBlock({ type: "field", facetId: "thing", fieldId: "size" }, block)).toBe(
+      true,
+    );
+    expect(dropLandsInBlock({ type: "field", facetId: "other", fieldId: "size" }, block)).toBe(
+      false,
+    );
+  });
+
+  it("is true for a value of the own facet only while its row is unset", () => {
+    const value = { type: "value", facetId: "thing", fieldId: "size", value: "3" } as const;
+    expect(dropLandsInBlock(value, block)).toBe(true);
+    // A set row: the value arrives as a block of its own, before this one.
+    expect(dropLandsInBlock(value, set)).toBe(false);
+    expect(dropLandsInBlock({ ...value, fieldId: "label", value: "a" }, set)).toBe(true);
+    expect(dropLandsInBlock({ ...value, facetId: "other" }, block)).toBe(false);
+  });
+
+  it("is false for a facet, a tag, a node and an unknown drag", () => {
+    expect(dropLandsInBlock({ type: "facet", facetId: "thing" }, block)).toBe(false);
+    expect(dropLandsInBlock({ type: "tag", tag: "t" }, block)).toBe(false);
+    expect(dropLandsInBlock({ type: "node", nodeId: block.id }, block)).toBe(false);
+    expect(dropLandsInBlock(null, block)).toBe(false);
+  });
+
+  it("agrees with dropItem: inside means the target block is the one that changes", () => {
+    const field = { type: "field", facetId: "thing", fieldId: "size" } as const;
+    const outcome = dropItem(query, field, block.id, facets, catalog);
+    expect(outcome.added).toEqual([]);
+    expect(outcome.select?.blockId).toBe(block.id);
+    expect(dropLandsInBlock(field, block)).toBe(true);
   });
 });
 

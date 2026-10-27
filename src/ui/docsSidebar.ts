@@ -6,6 +6,7 @@ import { fieldPreview } from "./docsField";
 import { filterStatus, groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { TEXT_SOURCES, type TextSource } from "../config";
+import { forgetDrag, rememberDrag } from "./dragMemory";
 import { findField, type FieldCatalog } from "../query/fieldCatalog";
 
 /**
@@ -364,9 +365,12 @@ export function wireDocsSidebar(
       return;
     }
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(grabbed.item));
+    rememberDrag(grabbed.item);
     e.dataTransfer.effectAllowed = "copy";
     e.dataTransfer.setDragImage(grabbed.node, 12, 12);
   });
+
+  container.addEventListener("dragend", forgetDrag);
 
   container.addEventListener("click", (e) => {
     if (!(e.target instanceof Element)) return;

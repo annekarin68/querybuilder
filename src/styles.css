@@ -398,7 +398,7 @@ body {
   outline: 2px solid var(--qb-and);
 }
 /* Labelled buttons need the same keyboard focus ring: the "+ Add" buttons in the
-   data dictionary and "+ Condition" / "+ Group" in the builder. */
+   data dictionary and "+ Group" in the builder. */
 .ui.button.qb-add-btn:focus-visible,
 .qb-card .ui.basic.button:focus-visible {
   outline: 2px solid var(--qb-and);
@@ -832,7 +832,6 @@ body {
 /* "Show" in the statistics panel focuses a row or group by script
    (revealNode, tabindex="-1"). A mouse click does not match :focus-visible, so
    plain :focus is styled here: without a ring the user sees only a scroll. */
-.qb-condition[tabindex="-1"]:focus,
 .qb-block[tabindex="-1"]:focus,
 .qb-field-row[tabindex="-1"]:focus,
 .qb-group[tabindex="-1"]:focus {
@@ -840,117 +839,6 @@ body {
   outline-offset: 2px;
 }
 
-/* One condition = one grid row. Container query: a row squeezed below ~640px
-   (deep nesting on a small screen) moves its value + ✕ onto a second line. */
-.qb-condition {
-  container-type: inline-size;
-  padding: 0.15rem 0;
-}
-.qb-cond-grid {
-  display: grid;
-  grid-template-columns:
-    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)
-    minmax(0, 1.2fr) auto;
-  gap: 0.4rem;
-  align-items: center;
-}
-@container (max-width: 640px) {
-  .qb-cond-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
-  }
-  .qb-cond-grid > .qb-value {
-    grid-column: 1 / 4;
-    grid-row: 2;
-  }
-  .qb-cond-grid > .qb-icon-btn {
-    grid-column: 4;
-    grid-row: 2;
-  }
-}
-/* Fomantic gives selection dropdowns a 14em min-width; the grid sizes them. */
-.qb-cond-grid .ui.selection.dropdown {
-  width: 100%;
-  min-width: 0;
-}
-/* A long name ends in "…". Clipped at the side only: Fomantic's line-height
-   here is 1em, so `overflow: hidden` also cut off the tails of p, g and y. */
-.qb-cond-grid .ui.selection.dropdown > .text {
-  display: block;
-  overflow-x: clip;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* On a narrow row the row's three dropdowns (Facet, Field, Operator) get about
-   114px each at a 512px window. Fomantic pads a selection dropdown 1em on the
-   left and 3.2em on the right, which left only 54px for text, less than
-   "Operator…" (about 66px) and "Choose…" (about 57px) need: both were cut off
-   with an ellipsis before the user had typed anything. The arrow sits in the
-   last ~22px, so 2em on the right still keeps text clear of it. The search
-   input is laid over the dropdown and gets the same padding, so what the user
-   types lines up with the text it replaces. Wide rows (container over 640px)
-   keep Fomantic's own padding, so nothing changes there.
-   Only the grid's direct children (`>`): the Value box lives inside
-   `.qb-value`, and its multi-select ("Is any of") needs Fomantic's own padding:
-   its search input has none and is a small typing area after the tags, so
-   padding it like a row dropdown would leave no room to show what is typed. */
-@container (max-width: 640px) {
-  .qb-cond-grid > .ui.search.selection.dropdown,
-  .qb-cond-grid > .ui.search.selection.dropdown > input.search {
-    padding-left: 0.8em;
-    padding-right: 2em;
-  }
-}
-/* A whole-facet condition ("Is present") has no Operator or Value slot, so its
-   row has its own, shorter template: the facet NAME takes the spare room (a
-   long one was cut off beside a wide, mostly empty "Is present" box), the
-   Field dropdown keeps just enough for "Is present" / "Is absent" to be read
-   whole, and the ✕ is in the last column, at the row's end like the ✕ of the
-   rows above it. Wide and narrow rows alike: the narrow-grid rule near the top of
-   this section (the first `@container (max-width: 640px)` block, which moves
-   the ✕ to row 2) would put the ✕ on a second line, and this rule (more
-   specific) wins over it. */
-.qb-cond-grid.is-facet-level {
-  grid-template-columns: minmax(0, 18rem) minmax(9rem, 9.5rem) 1fr;
-}
-.qb-cond-grid.is-facet-level > .ui.dropdown.qb-field-select {
-  grid-column: 2;
-  grid-row: 1;
-}
-.qb-cond-grid.is-facet-level > .qb-icon-btn {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
-}
-/* The Field dropdown's menu. Fomantic makes a menu only as wide as its
-   dropdown, which on a narrow row (about 80px) left room for one word of the
-   section headers ("About the whole facet"). Give it a readable width, a
-   height that shows both sections, and let the headers wrap. Scoped to the
-   condition row's Field dropdown: the other dropdowns have no headers. */
-.qb-cond-grid .ui.dropdown.qb-field-select .menu {
-  min-width: max(100%, 15rem);
-  max-height: min(22rem, 60vh);
-}
-/* On a narrow row the dropdown sits in the middle, so a 15rem menu opened to
-   the right would run off the screen: open it to the left instead. */
-@container (max-width: 640px) {
-  .qb-cond-grid .ui.dropdown.qb-field-select .menu {
-    left: auto;
-    right: 0;
-  }
-}
-/* A section header stays at the top of the scrolling menu, so a facet with many
-   fields never loses the "About a field" label. It needs its own opaque
-   background (items scroll behind it) and padding instead of Fomantic's
-   margins, which would leave a gap where items show through. */
-.qb-cond-grid .ui.dropdown.qb-field-select .menu > .header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  margin: 0;
-  padding: 0.7rem 1.14rem 0.4rem;
-  background: inherit; /* the menu's own */
-  white-space: normal;
-}
 .qb-value {
   min-width: 0;
 }
@@ -979,7 +867,7 @@ body {
 /* ---- Facet blocks (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 5) */
 /* The block is a card inside its group's bracket. Its own ALL/ANY colour
    (--qb-c, set by .qb-block-and / .qb-block-or above) colours its Has / ALL /
-   ANY buttons. A container, like .qb-condition, so its rows can react to the
+   ANY buttons. A container, so its rows can react to the
    block's width. */
 .qb-block {
   container-type: inline-size;
@@ -1087,6 +975,12 @@ span.qb-unset-slot {
   }
   .qb-field-row > .qb-value {
     grid-column: 1 / 3;
+  }
+  /* An unset row's second slot only keeps the wide row's shape. Beside the
+     label and the first slot there is no room for it, and left alone it
+     would wrap onto a line of its own, as an unexplained empty box. */
+  .qb-field-row > span.qb-unset-slot {
+    display: none;
   }
 }
 .qb-hint {
@@ -1760,7 +1654,7 @@ details[open] > summary > .qb-chevron {
     transition: none;
   }
 }
-/* The labelled "+ Add" button: a mini button, like "+ Condition" in the builder. */
+/* The labelled "+ Add" button: a mini button, like "+ Group" in the builder. */
 .qb-add-btn.ui.button {
   flex: 0 0 auto;
   /* Fomantic's own button margin would otherwise win; the auto left margin keeps
@@ -1826,15 +1720,6 @@ details[open] > summary > .qb-chevron {
 }
 
 /* Drag and drop in the query builder: node grips, drop markers, the warning. */
-.qb-cond-row {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-.qb-cond-row > .qb-cond-grid {
-  flex: 1 1 auto;
-  min-width: 0;
-}
 .qb-group-head .qb-grip {
   margin-right: 0.2rem;
 }
@@ -1872,11 +1757,11 @@ details[open] > summary > .qb-chevron {
 .qb-grip.qb-grip-group:hover {
   background: var(--qb-tint-strong);
 }
-.qb-condition.is-drop-before,
 .qb-block.is-drop-before {
   box-shadow: 0 -2px 0 0 var(--qb-and);
 }
-.qb-group.is-drop-target {
+.qb-group.is-drop-target,
+.qb-block.is-drop-target {
   outline: 2px dashed var(--qb-and);
   outline-offset: 1px;
   background: var(--qb-and-tint-strong);

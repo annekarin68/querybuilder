@@ -175,6 +175,24 @@ export function dropItem(
   }
 }
 
+/**
+ * Whether dropping `item` on `block` changes that block itself (a field row
+ * is selected, an unset row is filled) instead of adding a new block next to
+ * it. The builder uses it to show the right drop mark while the drag is over
+ * the block: a bar "before" the block would promise a new block there.
+ * `null` is a drag we know nothing about, which is never "inside".
+ */
+export function dropLandsInBlock(item: DragItem | null, block: FacetBlock): boolean {
+  if (item?.type === "field") return item.facetId === block.facetId;
+  if (item?.type === "value") {
+    // A value on a row that is set already arrives as a block of its own.
+    return (
+      item.facetId === block.facetId && !block.conditions.some((c) => c.fieldId === item.fieldId)
+    );
+  }
+  return false;
+}
+
 /** The warning to show for a drop's problems, or null when there were none. */
 export function dropNotice(problems: string[]): string | null {
   return problems.length > 0 ? problems.join(" ") : null;

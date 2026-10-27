@@ -3,6 +3,7 @@ import {
   fieldRowsHtml,
   NOT_FILTERED,
   pickedOperatorId,
+  showsFoldButton,
   visibleFieldIds,
 } from "../../src/ui/fieldRows";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
@@ -108,6 +109,27 @@ describe("fieldRowsHtml", () => {
     );
     expect(fieldRowsHtml(ctx, block("thing"), true, null)).toContain(">Show fewer fields</button>");
     expect(fieldRowsHtml(ctx, block("small"), false, null)).not.toContain("toggle-fields");
+  });
+
+  it("draws no fold button when a large facet hides nothing", () => {
+    // The set fields d..g plus the first three leave nothing behind the fold.
+    const setAll = ["d", "e", "f", "g"].map((id) => newFieldCondition(id, "gt", 1));
+    const html = fieldRowsHtml(ctx, block("thing", ...setAll), false, null);
+    expect(html.match(/qb-field-row/g)).toHaveLength(7);
+    expect(html).not.toContain("toggle-fields");
+    expect(html).not.toContain("0 more");
+    // Open, it still offers to close again.
+    expect(fieldRowsHtml(ctx, block("thing", ...setAll), true, null)).toContain(
+      ">Show fewer fields</button>",
+    );
+  });
+
+  it("decides the fold button from the field count, the hidden count and whether it is open", () => {
+    expect(showsFoldButton(3, 0, false)).toBe(false); // small facet
+    expect(showsFoldButton(3, 0, true)).toBe(false);
+    expect(showsFoldButton(7, 4, false)).toBe(true);
+    expect(showsFoldButton(7, 0, false)).toBe(false); // nothing hidden
+    expect(showsFoldButton(7, 0, true)).toBe(true); // open: can close
   });
 
   it("keeps an unknown or doubled field as a removable read-only row with its error", () => {

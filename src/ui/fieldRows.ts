@@ -122,6 +122,18 @@ function strayRowHtml(ctx: RowCtx, c: FieldCondition): string {
     </div>${issuesHtml(c.id, ctx.issues)}`;
 }
 
+/** Whether a block draws the fold button: only a large facet, and only when
+ *  it would do something: it hides some fields, or it is open and can close
+ *  again. (A large facet whose set fields already fill the first rows hides
+ *  nothing, and "+ 0 more fields" would be a button that does nothing.) */
+export function showsFoldButton(
+  fieldCount: number,
+  hiddenCount: number,
+  expanded: boolean,
+): boolean {
+  return fieldCount > FOLD_AFTER && (hiddenCount > 0 || expanded);
+}
+
 function foldButton(hiddenCount: number, expanded: boolean): string {
   const label = expanded
     ? "Show fewer fields"
@@ -157,6 +169,8 @@ export function fieldRowsHtml(
       const c = firstOf.get(f.fieldId);
       return c || f.fieldId === selectedFieldId ? activeRowHtml(ctx, f, c) : unsetRowHtml(f);
     });
-  const fold = fields.length > FOLD_AFTER ? foldButton(hiddenCount, expanded) : "";
+  const fold = showsFoldButton(fields.length, hiddenCount, expanded)
+    ? foldButton(hiddenCount, expanded)
+    : "";
   return rows.join("") + strays.map((c) => strayRowHtml(ctx, c)).join("") + fold;
 }

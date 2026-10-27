@@ -13,8 +13,8 @@ export interface CatalogField {
   fieldId: string;
   /** Display name, "Facet name: field name" — used in summaries. */
   name: string;
-  /** The field's own `Field.name` — used in the Field dropdown, where the
-   *  facet is already chosen. */
+  /** The field's own `Field.name` — used in a facet block's rows, where the
+   *  facet is already named by the block. */
   fieldName: string;
   valueType: ValueType;
   /** Known values to suggest, from the field's `values` (see `pickListFor`).
@@ -75,8 +75,7 @@ export function findField(
     : undefined;
 }
 
-/** The fields of one facet, in catalog order — what the Field dropdown lists
- *  once a facet is chosen. */
+/** The fields of one facet, in catalog order — the rows of a facet block. */
 export function fieldsOfFacet(catalog: FieldCatalog, facetId: string | null): CatalogField[] {
   return facetId ? catalog.fields.filter((f) => f.facetId === facetId) : [];
 }

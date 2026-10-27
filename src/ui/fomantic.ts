@@ -14,13 +14,8 @@ import { hoverTitle } from "./format";
  * picks. Fomantic's default selects on every arrow press, which fires
  * onChange, and the repaint that follows replaces the open dropdown with a
  * closed one — so the first ↓ picked the next item and closed the menu.
- *
- * `hideDividers: "empty"`: the Field dropdown's <optgroup>s become a header and
- * a divider in the menu, and Fomantic leaves them showing while the search
- * filters. This hides each one that has no matching item under it, so typing
- * never leaves a heading over nothing.
  */
-const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false, hideDividers: "empty" };
+const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false };
 
 /**
  * A free-entry dropdown (`data-free-entry`, set by valueControl.ts) also

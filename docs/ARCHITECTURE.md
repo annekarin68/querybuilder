@@ -455,7 +455,7 @@ src/
                        it refuses), `dropNotice`, and the spoken messages: `dropMessage`, `addedNodesMessage`,
                        `filledRowMessage`, `focusedRowMessage`, `addedBesideMessage`, `ADDED_GROUP_MESSAGE`,
                        `groupedMessage`, `UNGROUPED_MESSAGE`, `movedMessage`, `reorderedMessage` — pure.
-                       Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`) and `FieldRef`, `DropOutcome`.
+                       `dropLandsInBlock` (does a drop change the block it is over, or add one). Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`) and `FieldRef`, `DropOutcome`.
     fieldEdit.ts       nextFieldCondition — a field row after an operator or value was picked (its arity change
                        resets the value); queryAfterFieldEdit — the query with that row set, or ("Not filtered") without that
                        row's own condition; cursorAfterOperator — where the cursor goes next.
@@ -506,6 +506,7 @@ src/
     docsField.ts       fieldPreview — what a dictionary field row shows closed, and what opening adds (pure).
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
+    dragMemory.ts      Which dictionary item is being dragged (a browser hides a drag's data until the drop; see "Centre — `queryBuilder.ts`", Drag and drop).
     statsPanel.ts      The statistics column (render + wiring: Show problem, Try again).
     dataPreview.ts     Matching events and the Run button (render + wiring: Run, Previous / Next, an id).
     eventTable.ts      The Matching events table (pure, Node-tested): tableColumns, cellSets, shortId, eventTableHtml, pagingHtml.
@@ -1174,7 +1175,8 @@ query on a reload (#69).
 
    Either way the entry is untrusted (a deploy may land in between), so it is
    structurally checked (`isQueryNode` in `keptQuery.ts`: the root is a group;
-   a node is a group, or a facet block with `facetId`, a boolean `negated`, an
+   every node and every condition has a string `id`, which the builder needs
+   to find it again; a node is a group, or a facet block with `facetId`, a boolean `negated`, an
    ALL/ANY `operator` and `conditions` that are `kind: "condition"` nodes with
    a `fieldId` and an `operatorId` that is text or `null`; a condition's
    `value` is not checked, because `validateQuery` flags a bad one and Run
@@ -1832,7 +1834,9 @@ on whether it exists. Hence:
   condition only. The error from `validateQuery` is under that row, next to the
   ✕. This reloads a saved query as close to how it was saved as possible and
   hides nothing (maintainers, 2026-10-27). For a block whose facet is unknown
-  to the dictionary every condition is a stray.
+  to the dictionary every condition is a stray, drawn without an error of its
+  own: only the block carries one ("Unknown facet.", under its header), as
+  repeating it on every row would say the same thing again.
 - **Narrow blocks.** A block is a CSS container (`container-type: inline-size`).
   Below 420 px of block width (a 512 px window, or deep nesting) the value
   moves under the label and operator instead of beside them. The rows use the
@@ -1914,7 +1918,12 @@ learns the rule instead of wondering where the button went.
 - **Targets.** Every group and every block (`.qb-group` / `.qb-block` with a
   `[data-node-id]`) is a drop target, shown while a drag is over it: a group
   gets a dashed outline (the item goes at its end), a block a bar above it (the
-  item goes just before it). A field row is not a target of its own: a
+  item goes just before it). The exception is a dictionary field, or a value for
+  an unset row, of the block's own facet: it lands *inside* that block, so the
+  block gets the dashed outline instead of a bar that would promise a new block
+  (`dropLandsInBlock`). A browser lets a drag's data be read only at the drop,
+  so the dictionary tells the builder what it picked up (`dragMemory.ts`,
+  cleared when the drag ends); for a drag from elsewhere the bar stays. A field row is not a target of its own: a
   dictionary item dropped on one is about its block. Only our own drags are
   accepted: the builder offers itself as a target only when the drag carries
   `DRAG_MIME`, so files or text dragged in from elsewhere get the browser's

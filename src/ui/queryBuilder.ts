@@ -21,6 +21,7 @@ import {
   ADDED_GROUP_MESSAGE,
   addedNodesMessage,
   DRAG_MIME,
+  dropLandsInBlock,
   groupedMessage,
   parseDragItem,
   UNGROUPED_MESSAGE,
@@ -39,6 +40,7 @@ import { escapeHtml, paint } from "./panel";
 import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
 import { pickedOperatorId } from "./fieldRows";
 import { onDropdownChange, openDropdown } from "./fomantic";
+import { forgetDrag, draggedItem } from "./dragMemory";
 import { hoverTitle } from "./format";
 import { readValueControl } from "./valueControl";
 
@@ -529,6 +531,21 @@ export function wireQueryBuilder(
     marked?.classList.remove("is-drop-target", "is-drop-before");
     marked = null;
   };
+  /**
+   * How to mark `target` while a drag is over it. A drop on a group lands at
+   * its end (outline). A drop on a block lands just before it (a bar), except
+   * a dictionary field or value of the block's own facet, which lands inside
+   * the block: that block is the target (outline), as a bar would promise a
+   * new block. The browser hides the drag's data until the drop, so the
+   * dictionary item comes from `draggedItem`; when it is unknown (a drag
+   * from elsewhere) the bar stays.
+   */
+  const dropMark = (target: HTMLElement): "is-drop-before" | "is-drop-target" => {
+    if (!target.classList.contains("qb-block")) return "is-drop-target";
+    const node = findNode(getState().query, target.dataset.nodeId!);
+    const inside = node?.kind === "facet" && dropLandsInBlock(draggedItem(), node);
+    return inside ? "is-drop-target" : "is-drop-before";
+  };
   /** Where a drop at `el` lands: the nearest block or group. (A field row's
    *  `data-node-id` is its condition's, which is never a drop target: a field
    *  row never moves, and a dictionary item dropped on it is about its block.) */
@@ -541,6 +558,7 @@ export function wireQueryBuilder(
     if (!(e.target instanceof Element)) return; // e.g. a Text node
     const grip = e.target.closest<HTMLElement>("[data-node-item]");
     if (!grip || !e.dataTransfer) return;
+    forgetDrag(); // a drag of our own, not a dictionary item
     const nodeId = grip.dataset.nodeItem!;
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type: "node", nodeId }));
     e.dataTransfer.effectAllowed = "move";
@@ -560,10 +578,7 @@ export function wireQueryBuilder(
     if (target !== marked) {
       unmark();
       marked = target;
-      // A drop on a block lands just before it; on a group, at its end.
-      target.classList.add(
-        target.classList.contains("qb-block") ? "is-drop-before" : "is-drop-target",
-      );
+      target.classList.add(dropMark(target));
     }
   });
 
@@ -575,6 +590,7 @@ export function wireQueryBuilder(
     if (!isOurs(e)) return;
     e.preventDefault();
     unmark();
+    forgetDrag();
     const target = targetOf(e.target);
     if (!target) return;
     // An unreadable payload arrives as null; the app explains it to the user.

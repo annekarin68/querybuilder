@@ -10,7 +10,7 @@ type MascotInputs = Pick<AppState, "issues" | "stats" | "preview">;
  * - busy while statistics or Matching events load;
  * - disappointed when something went wrong or nothing was found (`letDown`);
  * - neutral otherwise, also while the query is merely unfinished: every query
- *   starts as a blank row, and a pickle that is sad from page load would mean
+ *   starts as an empty group, and a pickle that is sad from page load would mean
  *   nothing (maintainers' decision, 2026-10-13).
  */
 export function mascotFor(s: MascotInputs): MascotState {
