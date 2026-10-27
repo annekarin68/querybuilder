@@ -154,6 +154,8 @@ function conditionMatches(c: RequestCondition, row: Row): boolean {
     }
     case "in":
       return Array.isArray(c.value) && c.value.includes(v as never);
+    case "not_in":
+      return Array.isArray(c.value) && !c.value.includes(v as never);
     case "absent":
       return isBlank(v);
     case "present":

@@ -442,6 +442,7 @@ src/
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator,
                        isFacetLevel, isFacetTest (a well-formed whole-facet test).
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
+    validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue.
     legacy/            The query model before facet blocks. The app still runs on it until plan A2
                        (docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md) switches it over
                        and deletes this folder; new code goes in the files next to it.
@@ -929,8 +930,8 @@ by the pair `facetId` / `fieldId`. The operators are the fixed
 
 | Value type | Operators |
 |---|---|
-| string | `eq`, `neq`, `contains`, `in`, `present`, `absent` |
-| number | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `present`, `absent` |
+| string | `eq`, `neq`, `contains`, `in`, `not_in`, `present`, `absent` |
+| number | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `not_in`, `present`, `absent` |
 | boolean | `eq`, `neq` |
 | date | `eq`, `neq`, `before`, `after`, `between`, `present`, `absent` |
 
@@ -1200,7 +1201,10 @@ does).
 | `none` (`present`, `absent`) | `null` |
 | `one` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `before`, `after`, `contains`) | one value |
 | `two` (`between`) | `[from, to]` |
-| `many` (`in`) | a non-empty list with no blank item |
+| `many` (`in`, `not_in`) | a non-empty list with no blank item |
+
+`not_in` ("Is none of") matches a value that is none of the list. **Backend
+hand-off:** implement `not_in`.
 
 Each value has the field's type (the value control converts what the user
 picks or types, `parseEntry`):

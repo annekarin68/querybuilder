@@ -70,6 +70,10 @@ describe("matches", () => {
     expect(matches(cond("color", "in", ["red", "blue"]), row)).toBe(true);
     expect(matches(cond("color", "in", ["blue"]), row)).toBe(false);
   });
+  it("not_in matches a value that is none of the list", () => {
+    expect(matches(cond("count", "not_in", [1, 2]), row)).toBe(true);
+    expect(matches(cond("count", "not_in", [12, 13]), row)).toBe(false);
+  });
   it("contains on text", () => {
     expect(matches(cond("note", "contains", "good"), row)).toBe(true);
   });

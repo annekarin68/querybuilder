@@ -136,6 +136,7 @@ describe("buildFieldCatalog", () => {
       "neq",
       "contains",
       "in",
+      "not_in",
       "present",
       "absent",
     ]);
@@ -148,6 +149,7 @@ describe("buildFieldCatalog", () => {
       "lte",
       "between",
       "in",
+      "not_in",
       "present",
       "absent",
     ]);
@@ -228,6 +230,10 @@ describe("field identity: the (facet id, field id) pair", () => {
 describe("OPERATORS", () => {
   it("arities are from the allowed set", () => {
     for (const o of OPERATORS) expect(["none", "one", "two", "many"]).toContain(o.arity);
+  });
+
+  it("offers Is none of wherever it offers Is any of", () => {
+    expect(findOperator("not_in")).toEqual({ id: "not_in", name: "Is none of", arity: "many" });
   });
 
   it("findOperator looks an operator up by id", () => {

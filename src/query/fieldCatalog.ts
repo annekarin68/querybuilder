@@ -56,6 +56,7 @@ export const OPERATORS: CatalogOperator[] = [
   { id: "contains", name: "Contains", arity: "one" },
   { id: "between", name: "Between", arity: "two" },
   { id: "in", name: "Is any of", arity: "many" },
+  { id: "not_in", name: "Is none of", arity: "many" },
   { id: "present", name: "Has any value", arity: "none" },
   { id: "absent", name: "Has no value", arity: "none" },
 ];
@@ -132,8 +133,8 @@ export function findOperator(id: string | null): CatalogOperator | undefined {
  * which specific field it is, nor by whether it has a pick-list.
  */
 const OPERATOR_PROFILE: Record<ValueType, string[]> = {
-  string: ["eq", "neq", "contains", "in", "present", "absent"],
-  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "present", "absent"],
+  string: ["eq", "neq", "contains", "in", "not_in", "present", "absent"],
+  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "not_in", "present", "absent"],
   boolean: ["eq", "neq"],
   date: ["eq", "neq", "before", "after", "between", "present", "absent"],
 };
