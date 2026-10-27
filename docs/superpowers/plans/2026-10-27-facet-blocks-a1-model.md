@@ -105,7 +105,7 @@ Do the same for `api/request.ts` (now `api/legacy/request.ts`, plus `legacy/type
 - [ ] **Step 6: Run the checks**
 
 Run: `npm run typecheck && npm test && npm run lint && npm run build`
-Expected: all pass, same test count as before the move (1437 on this branch).
+Expected: all pass, same test count as before the move (1439 on this branch).
 
 - [ ] **Step 7: Commit**
 
