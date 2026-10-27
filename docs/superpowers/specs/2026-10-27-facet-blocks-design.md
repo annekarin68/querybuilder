@@ -50,7 +50,8 @@ ids. This design assumes that change.
     "Never seen together with another facet." (no visible words).
 12. **This block's own facet** is a round mustard mark (no ring).
 13. **Cell meaning**: a dot = ever seen together; the colour behind it = how
-    often; never seen together = plain grey with no dot (variant A).
+    often; never seen together = plain grey with no dot (variant A); a value
+    too small for a JavaScript number = an empty box with a dot.
 14. **Colour scale**: log scale from the smallest non-zero value in the whole
     matrix to the largest; designer-chosen colour stops with a smooth blend
     between neighbouring stops. The range is the whole matrix, never a single
@@ -68,6 +69,10 @@ ids. This design assumes that change.
     (`localStorage`); dark mode starts as "follow the operating system".
 20. **The dictionary sidebar** only gains "open at facet X" here; its wider
     rethink comes after users have tried the blocks.
+21. **The summary is as short as possible** (it is often cut off), with
+    brackets around a block's fields and `between (20, 80)` (section 5).
+22. **The legend is only a popover**, from a "?" on every block's row
+    (section 6).
 
 ## 3. Query model (`src/query/types.ts`)
 
@@ -167,8 +172,21 @@ width too). `AppState.panelTab` (`"seen" | "about" | null`, all blocks) and
 by clicking its label or focusing its row, and stays selected until another
 is selected or Escape is pressed; the About panel offers "← About <facet>".
 
-**Summary** (`summary.ts`): "<Facet> has an occurrence where <field> Greater
-than 40 AND …" / "has no occurrence where …" / "<Facet> is present".
+**Summary** (`summary.ts`) is as short as it can be without becoming
+ambiguous, because it is often cut off (maintainers, 2026-10-27):
+- `<Facet> has <field> <op> <value>`; with two or more set fields, in
+  brackets: `Battery pack has (cell_temp > 40 AND charge_level between (20, 80))`. The
+  brackets are the one addition to the maintainers' wording: without them, an
+  AND inside a block (same occurrence) reads like the AND between two blocks,
+  and "has no" would seem to cover only the first field.
+- Has no: `Battery pack has no (…)` / `has no cell_temp > 40`.
+- Nothing set: `Battery pack present` / `Battery pack absent`.
+- Operators as symbols or one word: `=`, `≠`, `>`, `≥`, `<`, `≤`, `before`,
+  `after`, `contains`, `in (a, b)`, `not in (a, b)`, `between (20, 80)`
+  (not `20–80`, which can read as "twenty minus eighty"), and
+  `cell_temp present` / `absent` for the field-level tests.
+- Groups join blocks with AND / OR and are bracketed as today; an unfinished
+  value shows as `(value?)` as today.
 
 ## 6. Co-occurrence
 
@@ -180,6 +198,19 @@ reach about 1e-308). `response.ts` reads it into `Facet.coOccurrence`
 value that is not a number from 0 to 100, is left out with a console warning;
 ids of unknown facets are left out with **one warning per facet listing
 them**. The mock computes the map from its sample events at startup.
+
+**Values too small for a JavaScript number.** The smallest positive number is
+about `5e-324`; `Number("1e-400")` gives `0`, which would silently turn "seen
+together, very rarely" into "never". The reader treats a text that is not a
+zero but parses to `0` as **too rare to colour**: it keeps the flag (and the
+original text), logs one console warning per facet listing them, and
+leaves those values **out of the colour range and the square pie chart's
+sizes**. Clamping them to `5e-324` instead was rejected: one such value would
+stretch the log scale over 300 powers of ten and squash every real value into
+the dark end. On screen such a cell is an **empty box with a dot** (seen
+together, but no colour exists for it); in the square pie chart it joins
+"+ N less often". Hover always shows the original text from the backend
+(`"1e-400 %"`), never a re-formatted number, so nothing is lost or rounded.
 
 **Pure functions** (Node-tested):
 - `connectedFacets(facets)`: facets with a value above 0 for some other facet,
@@ -194,8 +225,30 @@ them**. The mock computes the map from its sample events at startup.
 
 **Top row**: 11 px cells in a wrapping row, the same facets in the same order
 in every block. A dot on every cell above 0, the gradient behind it; never
-seen together: plain grey, no dot; this block's facet: a round mustard mark.
-A legend under the row shows the actual range. One tab stop, arrow keys move;
+seen together: plain grey, no dot; this block's facet: a round mustard mark;
+too rare to colour: an empty box with a dot.
+
+**Legend** (it must make the row and the square pie chart readable to a
+first-time user): one sentence saying what is measured ("How often each facet
+is seen together with <facet>: the share of <facet>'s events that also hold
+it"); the blended colour bar built from the same stops, labelled at each stop
+with the actual values of the range (`1e-12 %` … `100 %`) and "rarer" / "more
+often" at the ends, with "log scale: each step is about N times more often"
+(N computed from the range); and keys for all four marks: seen together,
+never seen together, the facet itself, too rare to colour. Tick labels are
+computed by a pure function (`legendTicks(range, stopCount)`).
+
+**Where the legend is shown** (maintainers, 2026-10-27): only in a popover,
+from a small "?" button at the end of **every** block's row, the first block
+included; never as a permanent legend, to keep the builder compact. The
+sentence names that block's facet. The button has an accessible name
+("Explain the colours"); click or Enter opens it, Escape or a click outside
+closes it and returns the focus to the button. It is a Fomantic popup, so it
+lives in `src/ui/fomantic.ts` like every other jQuery call. The Seen together
+tab has the same "?" next to its tabs, because the square pie chart uses the
+same colours.
+
+One tab stop, arrow keys move;
 hover and focus show name and value; click or Enter opens the dictionary at
 that facet (opening it if folded, scrolling, expanding and highlighting it;
 closing it returns the focus to the cell; under 1100 px it floats as today).
@@ -240,7 +293,8 @@ against their box (4.5:1). The own mark must be darker than the mockup's
 - Chromium (Playwright, realistic clicks) at 1280 and 512 px: add by drop and
   by "+ Facet", set and clear a field, fold and unfold, hide and show the
   panel, select a field and Escape, keyboard through the top row and the
-  square pie chart, a cell opening the dictionary, save and open.
+  square pie chart, a cell opening the dictionary, the legend popover in the
+  first and a later block (open, Escape, focus back), save and open.
 
 ## 10. Order of work
 
