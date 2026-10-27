@@ -9,11 +9,16 @@ import {
   rowKey,
   scaleCount,
   utcSpan,
+  type MockNode,
   type Row,
 } from "../../mock-server/evaluate";
 import type { RequestNode } from "../../src/api/legacy/types";
 import type { RequestValue } from "../../src/api/types";
 import { MALFORMED, WELL_FORMED } from "../dateCases";
+import { EVENTS, toMockEvent, type MockEvent } from "../../mock-server/rows";
+import { ENTRYSETS } from "../../mock-server/vehicleData";
+import { eventMatches } from "../../mock-server/evaluate";
+import type { RequestFacet, RequestFieldCondition } from "../../src/api/types";
 
 const row = {
   "thing.color": "red",
@@ -198,15 +203,21 @@ describe("date conditions: the user's operator at the precision they typed (UTC)
 
 // ---- database scoping and counts ------------------------------------------
 
-const rows: Row[] = [
-  { __db: "alpha", id: 1, "thing.count": 5 },
-  { __db: "beta", id: 2, "thing.count": 20 },
-  { __db: "alpha", id: 3, "thing.count": 30 },
-  { __db: "gamma", id: 4, "thing.count": 1 },
+const event = (db: string, id: number, count: number): MockEvent => ({
+  id,
+  db,
+  row: { __db: db, id, "thing.count": count },
+  occurrences: { thing: [{ count }] },
+});
+const rows: MockEvent[] = [
+  event("alpha", 1, 5),
+  event("beta", 2, 20),
+  event("alpha", 3, 30),
+  event("gamma", 4, 1),
 ];
 
-const matchAll: RequestNode = { kind: "group", id: "g", operator: "AND", children: [] };
-const countGte10: RequestNode = {
+const matchAll: MockNode = { kind: "group", id: "g", operator: "AND", children: [] };
+const countGte10: MockNode = {
   kind: "group",
   id: "g",
   operator: "AND",
@@ -223,7 +234,7 @@ const countGte10: RequestNode = {
 };
 
 describe("filterByDatabases", () => {
-  it("keeps only rows whose __db is a selected database id", () => {
+  it("keeps only events whose db is a selected database id", () => {
     expect(filterByDatabases(rows, ["alpha"]).map((r) => r.id)).toEqual([1, 3]);
     expect(filterByDatabases(rows, ["beta", "gamma"]).map((r) => r.id)).toEqual([2, 4]);
   });
@@ -372,5 +383,74 @@ describe("queryErrors", () => {
       cond("spare", "isEmpty", null),
     );
     expect(queryErrors(query)).toEqual([]);
+  });
+});
+
+describe("facet blocks match within one occurrence", () => {
+  const two = toMockEvent(ENTRYSETS["2"]!);
+  const [first, second] = two.occurrences["gps_position"]!;
+  const cond = (field_id: string, value: unknown): RequestFieldCondition => ({
+    kind: "condition",
+    id: `c-${field_id}`,
+    field_id,
+    operator_id: "eq",
+    value: value as RequestFieldCondition["value"],
+  });
+  const facet = (over: Partial<RequestFacet>): RequestFacet => ({
+    kind: "facet",
+    id: "f",
+    facet_id: "gps_position",
+    negated: false,
+    operator: "AND",
+    conditions: [],
+    ...over,
+  });
+  // Latitude of the first occurrence with longitude of the second: no single
+  // occurrence has both.
+  const mixed = [cond("latitude", first!["latitude"]), cond("longitude", second!["longitude"])];
+
+  it("has two occurrences in the sample event", () => {
+    expect(two.occurrences["gps_position"]).toHaveLength(2);
+  });
+
+  it("ALL needs one occurrence that has every value", () => {
+    expect(eventMatches(facet({ conditions: mixed }), two)).toBe(false);
+    expect(
+      eventMatches(
+        facet({
+          conditions: [
+            cond("latitude", second!["latitude"]),
+            cond("longitude", second!["longitude"]),
+          ],
+        }),
+        two,
+      ),
+    ).toBe(true);
+  });
+
+  it("ANY needs one occurrence with one of them; two blocks may use different occurrences", () => {
+    expect(eventMatches(facet({ operator: "OR", conditions: mixed }), two)).toBe(true);
+    const both = {
+      kind: "group" as const,
+      id: "g",
+      operator: "AND" as const,
+      children: [
+        facet({ id: "a", conditions: [mixed[0]!] }),
+        facet({ id: "b", conditions: [mixed[1]!] }),
+      ],
+    };
+    expect(eventMatches(both, two)).toBe(true);
+  });
+
+  it("has no inverts the block; an empty block is presence", () => {
+    expect(eventMatches(facet({}), two)).toBe(true);
+    expect(eventMatches(facet({ negated: true }), two)).toBe(false);
+    expect(eventMatches(facet({ facet_id: "nope" }), two)).toBe(false);
+    expect(eventMatches(facet({ facet_id: "nope", negated: true }), two)).toBe(true);
+    expect(eventMatches(facet({ negated: true, conditions: mixed }), two)).toBe(true);
+  });
+
+  it("knows every event", () => {
+    expect(EVENTS).toHaveLength(Object.keys(ENTRYSETS).length);
   });
 });

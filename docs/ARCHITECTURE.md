@@ -2193,9 +2193,13 @@ to a named handler function — add a route there, and a test in
   enforces that direction).
 - **Data:** 7 databases (`ALPHA`…`ETA`, sizes 12K to 5.6B) in `databases.ts`;
   each event is assigned to one database by a hash of its numeric id
-  (`dbIndexForEntrysetId`), never by its content. `rows.ts` flattens every
-  event into a `Row` keyed by `rowKey(facetLabel, fieldLabel)` plus a `__db`
-  key; `evaluate.ts` matches the query against rows.
+  (`dbIndexForEntrysetId`), never by its content. `rows.ts` prepares every
+  event once as a `MockEvent` (`EVENTS`): its database, every occurrence of
+  every facet, and a flattened `Row` keyed by `rowKey(facetLabel, fieldLabel)`
+  (the first occurrence of each facet, for the old condition nodes);
+  `evaluate.ts` matches the query against it (`eventMatches`). An event may
+  hold a facet more than once (stored as a list in `entrysets.json`; event 2
+  has two `gps_position` occurrences), so facet blocks can be tried in dev.
 - **`/api/filter/validate`** projects the 21-event sample's match rate onto each
   database's real size (`scaleCount`) and streams one line per database with a
   pause between lines; now and then it simulates a database that can't be
@@ -2210,20 +2214,28 @@ to a named handler function — add a route there, and a test in
   that cause it stay red. An empty group gets none: the frontend's own
   validation reports it.
 - **`/api/filter/execute`** returns the matching events themselves, as
-  `EventResponse`s (`events.ts`: a GUID made from the stored numeric id, one
-  occurrence per individual): a random sample of at most `QUERY_RESULT_CAP`
+  `EventResponse`s (`events.ts`: a GUID made from the stored numeric id, every
+  occurrence of each individual): a random sample of at most `QUERY_RESULT_CAP`
   (2,000) of the matches (`sampleOf` in `events.ts`: a shuffle, then the first
   N, with the random source passed in so a test can pin it). The 21-event
   sample data never reaches the cap, so there the order is the only thing that
   varies.
-- **`present` / `absent`** work at both levels (`conditionMatches` in
-  `evaluate.ts`). On a field, `present` matches a non-blank value (not `null`,
+- **Facet blocks** (`facetMatches` in `evaluate.ts`) match within one
+  occurrence: ALL needs one occurrence in which every set field matches, ANY
+  one in which one does; `negated` inverts the block; no set fields means the
+  facet is present. Until the app switches over (plan A2) the mock also
+  accepts the old condition nodes, matched against an event's first occurrence
+  of a facet. A block whose every set field has a too-long text value also
+  gets `"Facet contains no valid conditions."` (`queryErrors`), like a group.
+  **`present` / `absent`** work at both levels (`conditionMatches` and
+  `fieldMatches` in `evaluate.ts`). On a field, `present` matches a non-blank value (not `null`,
   missing or `""`) and `absent` a blank one. With `field_id: null`, `present`
   matches an event holding any non-null value for any key of that facet
   (`rowHasFacet`) and `absent` the opposite; any other operator on a facet
   matches nothing. This is the mock's reading; the real backend owns the rule.
 - **Request bodies** are checked against `QueryRequest` before anything reads
-  them (`requestBody.ts`, `queryProblem`); `field_id: null` is accepted (a
+  them (`requestBody.ts`, `queryProblem`; facet blocks and their set fields
+  too, `fieldConditionProblem`); `field_id: null` is accepted (a
   facet-level condition), an empty string is not: a malformed one gets a `400`
   naming the first problem, e.g.
   `Malformed query: query.children[0].field_id must be a non-empty string or null.`

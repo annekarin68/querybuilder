@@ -14,8 +14,8 @@ const isNonEmptyString = (v: unknown) => typeof v === "string" && v !== "";
  */
 export function queryProblem(node: unknown, at = "query"): string | null {
   if (!isObject(node)) return `${at} must be an object.`;
-  if (node.kind !== "group" && node.kind !== "condition") {
-    return `${at}.kind must be "group" or "condition".`;
+  if (node.kind !== "group" && node.kind !== "facet" && node.kind !== "condition") {
+    return `${at}.kind must be "group", "facet" or "condition".`;
   }
   if (typeof node.id !== "string") return `${at}.id must be a string.`;
   if (node.kind === "group") {
@@ -31,6 +31,19 @@ export function queryProblem(node: unknown, at = "query"): string | null {
     }
     return null;
   }
+  if (node.kind === "facet") {
+    if (!isNonEmptyString(node.facet_id)) return `${at}.facet_id must be a non-empty string.`;
+    if (typeof node.negated !== "boolean") return `${at}.negated must be true or false.`;
+    if (node.operator !== "AND" && node.operator !== "OR") {
+      return `${at}.operator must be "AND" or "OR".`;
+    }
+    if (!Array.isArray(node.conditions)) return `${at}.conditions must be a list.`;
+    for (const [i, c] of node.conditions.entries()) {
+      const problem = fieldConditionProblem(c, `${at}.conditions[${i}]`);
+      if (problem) return problem;
+    }
+    return null;
+  }
   for (const key of ["facet_id", "operator_id"] as const) {
     if (!isNonEmptyString(node[key])) return `${at}.${key} must be a non-empty string.`;
   }
@@ -38,6 +51,18 @@ export function queryProblem(node: unknown, at = "query"): string | null {
     return `${at}.field_id must be a non-empty string or null.`;
   }
   const v = node.value;
+  if (v === null || isScalar(v) || (Array.isArray(v) && v.every(isScalar))) return null;
+  return `${at}.value must be null, a string, number or boolean, or a list of them.`;
+}
+
+/** What is wrong with `c` as a RequestFieldCondition (a set field of a block), or null. */
+function fieldConditionProblem(c: unknown, at: string): string | null {
+  if (!isObject(c) || c.kind !== "condition") return `${at} must be a condition.`;
+  if (typeof c.id !== "string") return `${at}.id must be a string.`;
+  for (const key of ["field_id", "operator_id"] as const) {
+    if (!isNonEmptyString(c[key])) return `${at}.${key} must be a non-empty string.`;
+  }
+  const v = c.value;
   if (v === null || isScalar(v) || (Array.isArray(v) && v.every(isScalar))) return null;
   return `${at}.value must be null, a string, number or boolean, or a list of them.`;
 }

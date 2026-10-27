@@ -1,17 +1,18 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { DATABASES } from "./databases";
 import {
-  matches,
+  eventMatches,
   buildStatsLine,
   filterByDatabases,
   perDatabaseCounts,
   queryErrors,
   scaleCount,
   type DatabaseOutcome,
+  type MockGroup,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { sampleOf, toEventResponse } from "./events";
-import { ROWS } from "./rows";
+import { EVENTS } from "./rows";
 import { queryProblem } from "./requestBody";
 import { httpErrorFor, type HttpErrorRule } from "./httpErrors";
 import { pathBelow } from "./paths";
@@ -22,7 +23,6 @@ import {
   savedQueryOwner,
   type SavedQueryAnswer,
 } from "./savedQueries";
-import type { QueryRequest } from "../src/api/legacy/types";
 import type { StatsErrorMessage } from "../src/api/types";
 import {
   startLogin,
@@ -173,7 +173,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 async function readQueryBody(
   req: IncomingMessage,
   res: ServerResponse,
-): Promise<QueryRequest | null> {
+): Promise<{ query: MockGroup; databases: string[] } | null> {
   const body = await readJson(req);
   const { query, databases } = (typeof body === "object" && body !== null ? body : {}) as {
     query?: unknown;
@@ -197,7 +197,7 @@ async function readQueryBody(
     sendJson(res, 400, { error: `Malformed query: ${problem}` });
     return null;
   }
-  return { query: query as QueryRequest["query"], databases };
+  return { query: query as MockGroup, databases };
 }
 
 /** Sends a store's answer; a 204 has no body at all. */
@@ -256,7 +256,7 @@ async function streamStats(req: IncomingMessage, res: ServerResponse, config: Mo
   // Compute before committing the response header: if this (pure, cheap)
   // computation ever threw, the server's catch block must still be able to
   // send a normal JSON error response — which requires no header sent yet.
-  const counts = perDatabaseCounts(body.query, ROWS, body.databases);
+  const counts = perDatabaseCounts(body.query, EVENTS, body.databases);
   const errorMessages = queryErrors(body.query);
   res.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8" });
   for (const c of counts) {
@@ -276,9 +276,9 @@ async function queryEvents(req: IncomingMessage, res: ServerResponse) {
   }
   const body = await readQueryBody(req, res);
   if (!body) return;
-  const matching = filterByDatabases(ROWS, body.databases)
-    .filter((row) => matches(body.query, row))
-    .map((row) => ENTRYSETS[String(row.id)])
+  const matching = filterByDatabases(EVENTS, body.databases)
+    .filter((event) => eventMatches(body.query, event))
+    .map((event) => ENTRYSETS[String(event.id)])
     .filter((e): e is Entryset => e !== undefined);
   const events = sampleOf(matching, QUERY_RESULT_CAP, Math.random).map(toEventResponse);
   logQueryAudit(session.user.display_name, session.compliance.reason);

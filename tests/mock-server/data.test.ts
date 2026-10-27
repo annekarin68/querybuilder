@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { dbIndexForEntrysetId } from "../../mock-server/databases";
-import { ENTRYSETS, INDIVIDUALS } from "../../mock-server/vehicleData";
+import { ENTRYSETS, INDIVIDUALS, occurrencesOf } from "../../mock-server/vehicleData";
 import type { IndividualFieldResponse } from "../../src/api/types";
 
 // The mock's sample data files (mock-server/data/*.json), as loaded by
@@ -46,14 +46,16 @@ describe("entrysets.json sample data", () => {
 
   it("every field an event uses is declared on its facet, with a value of the declared type", () => {
     for (const entryset of entrysets) {
-      for (const [label, fields] of Object.entries(entryset.items)) {
+      for (const label of Object.keys(entryset.items)) {
         const individual = individualsByLabel.get(label)!;
         const fieldsByLabel = new Map(individual.fields.map((f) => [f.label, f]));
-        for (const [fieldLabel, value] of Object.entries(fields)) {
-          const where = `entryset ${entryset.id}: ${label}.${fieldLabel}`;
-          const field = fieldsByLabel.get(fieldLabel);
-          expect(field, `${where} is not a declared field`).toBeTruthy();
-          expect(typeof value, where).toBe(expectedJsType(field!));
+        for (const occurrence of occurrencesOf(entryset, label)) {
+          for (const [fieldLabel, value] of Object.entries(occurrence)) {
+            const where = `entryset ${entryset.id}: ${label}.${fieldLabel}`;
+            const field = fieldsByLabel.get(fieldLabel);
+            expect(field, `${where} is not a declared field`).toBeTruthy();
+            expect(typeof value, where).toBe(expectedJsType(field!));
+          }
         }
       }
     }
@@ -61,8 +63,8 @@ describe("entrysets.json sample data", () => {
 
   it("every event has observation_window and a vehicle_identity.vehicle_type", () => {
     for (const entryset of entrysets) {
-      expect(entryset.items.observation_window).toBeTruthy();
-      expect(entryset.items.vehicle_identity?.vehicle_type).toBeTruthy();
+      expect(occurrencesOf(entryset, "observation_window")).not.toHaveLength(0);
+      expect(occurrencesOf(entryset, "vehicle_identity")[0]?.["vehicle_type"]).toBeTruthy();
     }
   });
 
@@ -81,7 +83,7 @@ describe("individual.json sample data", () => {
     const declared = new Set(vehicleType!.values);
     const used = new Set(
       entrysets
-        .map((e) => e.items.vehicle_identity?.vehicle_type)
+        .map((e) => occurrencesOf(e, "vehicle_identity")[0]?.["vehicle_type"])
         .filter((v): v is string => typeof v === "string"),
     );
     for (const v of used) expect(declared.has(v)).toBe(true);
@@ -112,7 +114,7 @@ describe("individual.json sample data", () => {
     expect(gear.type).toBe("BIGINT");
     expect(gear.values.length).toBeGreaterThan(0);
     const used = entrysets
-      .map((e) => e.items.transmission_gear?.current_gear)
+      .map((e) => occurrencesOf(e, "transmission_gear")[0]?.["current_gear"])
       .filter((v) => v !== undefined)
       .map(String);
     expect(used.some((v) => !gear.values.includes(v))).toBe(true);

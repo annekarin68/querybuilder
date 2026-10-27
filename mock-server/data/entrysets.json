@@ -145,12 +145,20 @@
         "driver_id": "DRV-2044",
         "route_id": "ROUTE-CHI-STL"
       },
-      "gps_position": {
-        "latitude": 41.8781,
-        "longitude": -87.6298,
-        "altitude_m": 181.0,
-        "heading_deg": 225.0
-      },
+      "gps_position": [
+        {
+          "latitude": 41.8781,
+          "longitude": -87.6298,
+          "altitude_m": 181.0,
+          "heading_deg": 225.0
+        },
+        {
+          "latitude": 40.7128,
+          "longitude": -74.006,
+          "altitude_m": 10,
+          "heading_deg": 90
+        }
+      ],
       "engine_rpm": {
         "value_rpm": 1450,
         "redline_rpm": 2600,

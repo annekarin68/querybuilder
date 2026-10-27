@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { eventGuid, sampleOf, toEventResponse } from "../../mock-server/events";
+import { ENTRYSETS } from "../../mock-server/vehicleData";
 
 describe("eventGuid", () => {
   it("is a GUID made from the numeric id, the same every time", () => {
@@ -9,7 +10,7 @@ describe("eventGuid", () => {
 });
 
 describe("toEventResponse", () => {
-  it("lists one item per individual, each with one occurrence", () => {
+  it("lists one item per individual, each with its occurrence", () => {
     expect(toEventResponse({ id: 1, items: { thing: { size: 5 }, other: { on: true } } })).toEqual({
       id: eventGuid(1),
       items: [
@@ -17,6 +18,15 @@ describe("toEventResponse", () => {
         { facet_label: "other", values: [{ on: true }] },
       ],
     });
+  });
+});
+
+describe("toEventResponse with a facet that occurs twice", () => {
+  it("lists every occurrence in the item's values", () => {
+    const item = toEventResponse(ENTRYSETS["2"]!).items.find(
+      (i) => i.facet_label === "gps_position",
+    );
+    expect(item?.values).toHaveLength(2);
   });
 });
 

@@ -30,7 +30,7 @@ describe("queryProblem: is this a well-formed RequestNode?", () => {
     [
       "an unknown kind",
       { ...condition, kind: "rule" },
-      'query.kind must be "group" or "condition".',
+      'query.kind must be "group", "facet" or "condition".',
     ],
     ["no id", { ...group(condition), id: 7 }, "query.id must be a string."],
     [
@@ -85,5 +85,47 @@ describe("queryProblem: a condition about a whole facet", () => {
     const base = { kind: "condition", id: "c", facet_id: "f", operator_id: "present", value: null };
     expect(queryProblem({ ...base, field_id: "" })).toMatch(/field_id/);
     expect(queryProblem({ ...base, field_id: 3 })).toMatch(/field_id/);
+  });
+});
+
+describe("queryProblem with facet blocks", () => {
+  const facet = (over: object) => ({
+    kind: "group",
+    id: "g",
+    operator: "AND",
+    children: [
+      {
+        kind: "facet",
+        id: "f",
+        facet_id: "thing",
+        negated: false,
+        operator: "AND",
+        conditions: [],
+        ...over,
+      },
+    ],
+  });
+  it("accepts a block, with or without conditions", () => {
+    expect(queryProblem(facet({}))).toBeNull();
+    expect(
+      queryProblem(
+        facet({
+          conditions: [
+            { kind: "condition", id: "c", field_id: "size", operator_id: "gt", value: 3 },
+          ],
+        }),
+      ),
+    ).toBeNull();
+  });
+  it.each([
+    [{ facet_id: "" }, "query.children[0].facet_id must be a non-empty string."],
+    [{ negated: "no" }, "query.children[0].negated must be true or false."],
+    [{ conditions: {} }, "query.children[0].conditions must be a list."],
+    [
+      { conditions: [{ kind: "condition", id: "c", field_id: null, operator_id: "gt", value: 3 }] },
+      "query.children[0].conditions[0].field_id must be a non-empty string.",
+    ],
+  ])("names the first problem of %o", (over, message) => {
+    expect(queryProblem(facet(over))).toBe(message);
   });
 });

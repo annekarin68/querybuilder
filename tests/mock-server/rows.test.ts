@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { flattenEntryset } from "../../mock-server/rows";
+import { flattenEntryset, toMockEvent } from "../../mock-server/rows";
 import { databaseIdForEntrysetId } from "../../mock-server/databases";
 import type { Entryset } from "../../mock-server/vehicleData";
 
@@ -26,5 +26,25 @@ describe("flattenEntryset", () => {
   it("attaches __db from databaseIdForEntrysetId(id)", () => {
     const entryset: Entryset = { id: 3, items: {} };
     expect(flattenEntryset(entryset).__db).toBe(databaseIdForEntrysetId(3));
+  });
+});
+
+describe("flattenEntryset with a facet that occurs twice", () => {
+  const entryset: Entryset = { id: 3, items: { thing: [{ size: 1 }, { size: 2 }] } };
+
+  it("keeps the first occurrence, as the old condition nodes read it", () => {
+    expect(flattenEntryset(entryset)["thing.size"]).toBe(1);
+  });
+});
+
+describe("toMockEvent", () => {
+  it("keeps every occurrence of every facet, one or several", () => {
+    const event = toMockEvent({
+      id: 3,
+      items: { thing: [{ size: 1 }, { size: 2 }], other: { on: true } },
+    });
+    expect(event.occurrences).toEqual({ thing: [{ size: 1 }, { size: 2 }], other: [{ on: true }] });
+    expect(event.id).toBe(3);
+    expect(event.db).toBe(String(databaseIdForEntrysetId(3)));
   });
 });

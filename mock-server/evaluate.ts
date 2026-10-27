@@ -1,5 +1,12 @@
 import type { RequestCondition, RequestNode } from "../src/api/legacy/types";
-import type { StatsErrorMessage, StatsResponse } from "../src/api/types";
+import type {
+  RequestFacet,
+  RequestGroup,
+  StatsErrorMessage,
+  StatsResponse,
+} from "../src/api/types";
+import type { MockEvent } from "./rows";
+import type { Occurrence } from "./vehicleData";
 
 export type Row = Record<string, string | number | boolean | null>;
 
@@ -82,19 +89,23 @@ export function utcSpan(v: unknown): [number, number] | null {
  * precision they typed. Undefined when this isn't one — the generic
  * comparison applies instead.
  */
-function dateMatches(c: RequestCondition, v: Row[string] | undefined): boolean | undefined {
+function dateMatches(
+  operatorId: string,
+  value: unknown,
+  v: Row[string] | undefined,
+): boolean | undefined {
   const t = typeof v === "string" ? Date.parse(v) : NaN;
   if (Number.isNaN(t)) return undefined;
-  if (c.operator_id === "between") {
-    if (!Array.isArray(c.value) || c.value.length !== 2) return undefined;
-    const from = utcSpan(c.value[0]);
-    const to = utcSpan(c.value[1]);
+  if (operatorId === "between") {
+    if (!Array.isArray(value) || value.length !== 2) return undefined;
+    const from = utcSpan(value[0]);
+    const to = utcSpan(value[1]);
     return from && to ? t >= from[0] && t < to[1] : undefined;
   }
-  const span = utcSpan(c.value);
+  const span = utcSpan(value);
   if (!span) return undefined;
   const [start, end] = span;
-  switch (c.operator_id) {
+  switch (operatorId) {
     case "eq":
       return t >= start && t < end;
     case "neq":
@@ -119,43 +130,38 @@ function rowHasFacet(row: Row, facetId: string): boolean {
   return Object.keys(row).some((k) => k.startsWith(prefix) && row[k] !== null);
 }
 
-function conditionMatches(c: RequestCondition, row: Row): boolean {
-  if (c.field_id === null) {
-    // A condition about the facet itself: only presence makes sense.
-    if (c.operator_id === "present") return rowHasFacet(row, c.facet_id);
-    if (c.operator_id === "absent") return !rowHasFacet(row, c.facet_id);
-    return false;
-  }
-  const v = row[rowKey(c.facet_id, c.field_id)];
-  const asDate = dateMatches(c, v);
+/** Whether a stored value `v` matches `operatorId` with the condition's
+ *  `value`: the mock's reading of every field-level operator. */
+function fieldMatches(operatorId: string, value: unknown, v: Row[string] | undefined): boolean {
+  const asDate = dateMatches(operatorId, value, v);
   if (asDate !== undefined) return asDate;
-  switch (c.operator_id) {
+  switch (operatorId) {
     case "eq":
-      return v === c.value;
+      return v === value;
     case "neq":
-      return v !== c.value;
+      return v !== value;
     case "gt":
-      return v != null && cmp(v, c.value) > 0;
+      return v != null && cmp(v, value) > 0;
     case "gte":
-      return v != null && cmp(v, c.value) >= 0;
+      return v != null && cmp(v, value) >= 0;
     case "lt":
-      return v != null && cmp(v, c.value) < 0;
+      return v != null && cmp(v, value) < 0;
     case "lte":
-      return v != null && cmp(v, c.value) <= 0;
+      return v != null && cmp(v, value) <= 0;
     case "before":
-      return v != null && String(v) < String(c.value);
+      return v != null && String(v) < String(value);
     case "after":
-      return v != null && String(v) > String(c.value);
+      return v != null && String(v) > String(value);
     case "contains":
-      return v != null && String(v).includes(String(c.value));
+      return v != null && String(v).includes(String(value));
     case "between": {
-      if (!Array.isArray(c.value) || c.value.length !== 2 || v == null) return false;
-      return cmp(v, c.value[0]!) >= 0 && cmp(v, c.value[1]!) <= 0;
+      if (!Array.isArray(value) || value.length !== 2 || v == null) return false;
+      return cmp(v, value[0]!) >= 0 && cmp(v, value[1]!) <= 0;
     }
     case "in":
-      return Array.isArray(c.value) && c.value.includes(v as never);
+      return Array.isArray(value) && value.includes(v as never);
     case "not_in":
-      return Array.isArray(c.value) && !c.value.includes(v as never);
+      return Array.isArray(value) && !value.includes(v as never);
     case "absent":
       return isBlank(v);
     case "present":
@@ -165,15 +171,24 @@ function conditionMatches(c: RequestCondition, row: Row): boolean {
   }
 }
 
+function conditionMatches(c: RequestCondition, row: Row): boolean {
+  if (c.field_id === null) {
+    // A condition about the facet itself: only presence makes sense.
+    if (c.operator_id === "present") return rowHasFacet(row, c.facet_id);
+    if (c.operator_id === "absent") return !rowHasFacet(row, c.facet_id);
+    return false;
+  }
+  return fieldMatches(c.operator_id, c.value, row[rowKey(c.facet_id, c.field_id)]);
+}
+
 /**
- * Restrict rows to the selected databases. Rows are flattened entrysets
- * (see mock-server/rows.ts), each carrying a synthetic `__db` key assigned
- * purely from the entryset's numeric id (see mock-server/databases.ts) —
- * never from anything inside the entryset's own fields.
+ * Restrict events to the selected databases. An event's `db` comes purely from
+ * the entryset's numeric id (see mock-server/databases.ts and `toMockEvent` in
+ * mock-server/rows.ts), never from anything inside the entryset's own fields.
  */
-export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
+export function filterByDatabases(events: MockEvent[], databaseIds: string[]): MockEvent[] {
   const ids = new Set(databaseIds);
-  return rows.filter((r) => ids.has(String(r.__db)));
+  return events.filter((e) => ids.has(e.db));
 }
 
 /**
@@ -181,20 +196,56 @@ export function filterByDatabases(rows: Row[], databaseIds: string[]): Row[] {
  * backend does this as `COUNT(*) ... GROUP BY database`, cheap at any scale.
  */
 export function perDatabaseCounts(
-  query: RequestNode,
-  rows: Row[],
+  query: MockNode,
+  events: MockEvent[],
   databaseIds: string[],
 ): { label: string; matchCount: number; totalCount: number }[] {
   return databaseIds.map((label) => {
-    const inDb = rows.filter((r) => String(r.__db) === label);
+    const inDb = events.filter((e) => e.db === label);
     return {
       label,
       totalCount: inDb.length,
-      matchCount: inDb.filter((r) => matches(query, r)).length,
+      matchCount: inDb.filter((e) => eventMatches(query, e)).length,
     };
   });
 }
 
+/** A query tree as the mock accepts it while the app moves to facet blocks:
+ *  groups may hold facet blocks and, until plan A2, the old condition nodes. */
+export interface MockGroup {
+  kind: "group";
+  id: string;
+  operator: RequestGroup["operator"];
+  children: MockNode[];
+}
+export type MockNode = MockGroup | RequestFacet | RequestCondition;
+
+/** Whether one occurrence matches the block's set fields; no set fields: yes. */
+function occurrenceMatches(f: RequestFacet, occ: Occurrence): boolean {
+  if (f.conditions.length === 0) return true;
+  const test = (c: RequestFacet["conditions"][number]) =>
+    fieldMatches(c.operator_id, c.value, occ[c.field_id]);
+  return f.operator === "AND" ? f.conditions.every(test) : f.conditions.some(test);
+}
+
+/** The event has (or, negated, has no) occurrence of the facet in which the
+ *  block's fields match: "ALL" means all within ONE occurrence. This is the
+ *  mock's reading; the real backend owns the rule. */
+export function facetMatches(f: RequestFacet, event: MockEvent): boolean {
+  const has = (event.occurrences[f.facet_id] ?? []).some((occ) => occurrenceMatches(f, occ));
+  return f.negated ? !has : has;
+}
+
+export function eventMatches(node: MockNode, event: MockEvent): boolean {
+  if (node.kind === "facet") return facetMatches(node, event);
+  if (node.kind === "condition") return conditionMatches(node, event.row);
+  if (node.children.length === 0) return true;
+  return node.operator === "AND"
+    ? node.children.every((c) => eventMatches(c, event))
+    : node.children.some((c) => eventMatches(c, event));
+}
+
+/** The old condition-node matcher, on a flattened row (mock-server/rows.ts). */
 export function matches(node: RequestNode, row: Row): boolean {
   if (node.kind === "condition") return conditionMatches(node, row);
   if (node.children.length === 0) return true;
@@ -226,7 +277,19 @@ export const MAX_TEXT_LENGTH = 100;
  *
  * Empty when there are none.
  */
-export function queryErrors(node: RequestNode): StatsErrorMessage[] {
+export function queryErrors(node: MockNode): StatsErrorMessage[] {
+  if (node.kind === "facet") {
+    const errors = node.conditions.flatMap(textTooLong);
+    // Mirrors the group rule below: a block whose every set field failed.
+    if (node.conditions.length > 0 && errors.length === node.conditions.length) {
+      errors.push({
+        node_id: node.id,
+        kind: "incomplete",
+        message: "Facet contains no valid conditions.",
+      });
+    }
+    return errors;
+  }
   if (node.kind === "group") {
     const perChild = node.children.map(queryErrors);
     const errors = perChild.flat();
@@ -242,12 +305,17 @@ export function queryErrors(node: RequestNode): StatsErrorMessage[] {
     }
     return errors;
   }
-  const values = Array.isArray(node.value) ? node.value : [node.value];
+  return textTooLong(node);
+}
+
+/** The "text is too long" error of one condition, if it has one. */
+function textTooLong(c: { id: string; value: unknown }): StatsErrorMessage[] {
+  const values = Array.isArray(c.value) ? c.value : [c.value];
   const tooLong = values.some((v) => typeof v === "string" && v.length > MAX_TEXT_LENGTH);
   if (!tooLong) return [];
   return [
     {
-      node_id: node.id,
+      node_id: c.id,
       kind: "invalid",
       message: `Text is too long (at most ${MAX_TEXT_LENGTH} characters).`,
     },

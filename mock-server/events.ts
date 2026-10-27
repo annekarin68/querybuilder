@@ -1,5 +1,5 @@
 import type { EventResponse } from "../src/api/types";
-import type { Entryset } from "./vehicleData";
+import { occurrencesOf, type Entryset } from "./vehicleData";
 
 /**
  * The GUID the mock gives an event. Made from its numeric id, so it is the
@@ -12,14 +12,14 @@ export function eventGuid(id: number): string {
   return `${id.toString(16).padStart(8, "0")}-0000-4000-8000-000000000000`;
 }
 
-/** An event in the shape POST …/filter/execute answers with. The sample data
- *  holds each individual once, so every item has one occurrence. */
+/** An event in the shape POST …/filter/execute answers with: one item per
+ *  facet, holding every occurrence of it. */
 export function toEventResponse(e: Entryset): EventResponse {
   return {
     id: eventGuid(e.id),
-    items: Object.entries(e.items).map(([facet_label, values]) => ({
+    items: Object.keys(e.items).map((facet_label) => ({
       facet_label,
-      values: [values],
+      values: occurrencesOf(e, facet_label),
     })),
   };
 }
