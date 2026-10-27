@@ -4,6 +4,7 @@ import {
   failureRowHtml,
   notRunRowHtml,
   pendingRowHtml,
+  pendingHeadlineHtml,
   headlineHtml,
   showProblemButton,
   splitLabel,
@@ -45,8 +46,19 @@ describe("pendingRowHtml", () => {
     const html = pendingRowHtml(db("a", 1), "a");
     expect(html).toContain('class="qb-db-row is-pending"');
     expect(html).toContain("…");
+    expect(html).toContain('<span class="qb-sr-only">still counting</span>');
+    expect(html).not.toContain("title=");
     expect(pendingRowHtml({ ...db("a", 1), name: "<b>" }, "a")).not.toContain("<b>");
     expect(pendingRowHtml(undefined, "zz")).toContain("zz");
+  });
+});
+
+describe("pendingHeadlineHtml", () => {
+  it("has the headline's parts, so the first answer keeps the height", () => {
+    const html = pendingHeadlineHtml();
+    for (const part of ["qb-stat-big", "qb-stat-label", "qb-stat-sub", "qb-bar"]) {
+      expect(html).toContain(part);
+    }
   });
 });
 
@@ -223,9 +235,17 @@ describe("statsPanelHtml", () => {
       const half = loading([ok("a", 5)]);
       expect(rowCount(half)).toBe(2);
       expect(half.match(/is-pending/g)).toHaveLength(1);
+      // The wait before the fetch starts holds the same layout.
+      const idle = statsPanelHtml({ ...ready, stats: { status: "idle", results: [] } });
+      expect(rowCount(idle)).toBe(2);
+      expect(idle).toContain("Counting matches…");
+      // The headline's place is held too, and the card says it is busy.
+      expect(loading([])).toContain("qb-stat-headline is-pending");
+      expect(half).toContain('aria-busy="true"');
       // Done: the placeholders are gone.
       const done = statsPanelHtml({ ...ready, stats: { status: "ok", results: [ok("a", 5)] } });
       expect(done).not.toContain("is-pending");
+      expect(done).toContain('aria-busy="false"');
     });
 
     it("explains a database's own failure in one line under its red bar", () => {

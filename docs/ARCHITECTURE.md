@@ -181,9 +181,12 @@ desktop windows, not for tablets.
   static there and hidden while empty). The HTML order is unchanged (stats last),
   so a screen reader still reads them after the events; the panel has no
   controls, so keyboard focus order is not affected. While the statistics load
-  they already have their final height: a placeholder row stands for every
-  selected database that has not answered ("Right — `statsPanel.ts`"), so
-  **Run query** does not move under the pointer as the lines arrive.
+  almost their final height: a headline placeholder and a placeholder row for
+  every selected database that has not answered ("Right — `statsPanel.ts`")
+  stand in until the answers arrive, so **Run query** does not move as they
+  do. The one growth left is a database whose answer carries a note line or
+  a failure reason: neither can be predicted, so that row grows by a line (accepted by the
+  maintainers, 2026-10-27).
 - **The floating dictionary steps aside during a drag** (maintainers,
   2026-10-27). At 1100 px and below the dictionary covers part of the page,
   including the builder's drop targets. When a drag starts from a dictionary
@@ -1862,8 +1865,8 @@ on whether it exists. Hence:
   text**: not "any value", which reads as "must have a value" (maintainers,
   2026-10-27). A screen reader hears the label plus a visually hidden " (not
   filtered)" (`.qb-sr-only`). It is drawn with **plain buttons, not Fomantic
-  dropdowns**: its first empty slot is a real `<button>` ("Filter on <field>", also its
-  `title`, so a mouse user hovering the empty slot is told what it does), and the second only keeps the row's shape. **Why:** the builder repaints
+  dropdowns**: its first empty slot is a real `<button>` ("Filter on <field>", also its `title`, so a
+  mouse user hovering the empty slot is told what it does), and the second only keeps the row's shape. **Why:** the builder repaints
   whole on every edit, and a Fomantic dropdown is expensive to initialise. A
   facet can have over 20 fields, so ten such blocks would otherwise rebuild
   about 400 dropdowns on every edit.
@@ -2185,9 +2188,13 @@ striped red bar, a red icon and why it failed on one line under it, cut off
 with "…" if long, all of it in the row's tooltip, `failureReasons`; or, when
 the query itself is at fault, `queryIsAtFault`, a "not run" row: an empty grey
 bar and a mustard ⚠ pointing at **Show problem**, `notRunRowHtml`), then
-a placeholder row (`pendingRowHtml`: the name, an empty bar and a quiet "…")
-for every selected database that has not answered yet while loading, so the
-panel's height does not change as lines arrive (there is no "Waiting on N more
+a placeholder row (`pendingRowHtml`: the name, an empty bar and a quiet "…",
+with "still counting" in visually hidden text) for every selected database
+that has not answered yet while loading, and before the first answer a
+headline placeholder (`pendingHeadlineHtml`, the same parts as the headline;
+also drawn while the fetch's debounce is still running),
+so the panel's height changes only by a note line or failure reason a database adds to its
+answer (unpredictable, accepted); the card has `aria-busy` while loading (there is no "Waiting on N more
 databases…" line any more; the spinner in the title still shows the loading).
 The backend can only return counts, so there are no per-field statistics.
 

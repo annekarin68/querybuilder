@@ -45,10 +45,11 @@ function successRowHtml(result: Ok, db: Database | undefined): string {
  */
 export function pendingRowHtml(db: Database | undefined, databaseId: string): string {
   const name = db?.name ?? databaseId;
-  return `<div class="qb-db-row is-pending" title="${escapeHtml(name)}: still counting">
+  // The "…" is decoration; the hidden words are what a screen reader hears.
+  return `<div class="qb-db-row is-pending">
     <span class="qb-db-name">${escapeHtml(name)}</span>
     <span class="qb-bar" aria-hidden="true"></span>
-    <span class="qb-db-ratio" aria-label="still counting">…</span>
+    <span class="qb-db-ratio"><span aria-hidden="true">…</span><span class="qb-sr-only">still counting</span></span>
   </div>`;
 }
 
@@ -113,12 +114,15 @@ export function showProblemButton(state: AppState): string {
 /** Statistics that have (some) results: everything but the error state. */
 type StatsWithResults = Exclude<StatsState, { status: "error" }>;
 
-/** One row per selected database: those that have reported so far — success (ratio + bar),
- * failure (a red bar, an icon and the reason), or, when the query itself is
- * at fault, not run (a neutral bar) — as each streamed result arrives, then a placeholder row for each one still
- * to answer (`pendingRowHtml`). The
- * rule is the database picker's (`queryIsAtFault`), checked again on every
- * answer, so the pills and the rows always agree. */
+/**
+ * One row per selected database: first those that have reported so far, as
+ * each streamed result arrives (success: ratio + bar; failure: a red bar, an
+ * icon and the reason; or, when the query itself is at fault, not run: a
+ * neutral bar), then a placeholder row for each one still to answer
+ * (`pendingRowHtml`). The fault rule is the database picker's
+ * (`queryIsAtFault`), checked again on every answer, so the pills and the
+ * rows always agree.
+ */
 function perDatabaseHtml(
   results: DatabaseResult[],
   databases: Database[] | null,
@@ -246,6 +250,21 @@ export function headlineHtml(
   </div>`;
 }
 
+/**
+ * The headline's place before any database has answered: the same markup as
+ * `headlineHtml`, with a quiet "…" and an empty bar, so the first answer swaps
+ * it for the real one without changing the panel's height (**Run query** sits
+ * below it at 900 px and below).
+ */
+export function pendingHeadlineHtml(): string {
+  return `<div class="qb-stat-headline is-pending">
+    <span class="qb-stat-big" aria-hidden="true">…</span>
+    <div class="qb-stat-label">matching events</div>
+    <div class="qb-stat-sub">Counting matches…</div>
+    <span class="qb-bar" aria-hidden="true"></span>
+  </div>`;
+}
+
 /** The panel's card is its `data-focus-landing` (not in the Tab order, tabindex
  *  -1): Try again turns into the "Counting matches…" text, and a keyboard user
  *  who pressed it stays in this card instead of dropping to the page. */
@@ -254,7 +273,7 @@ function card(state: AppState, body: string): string {
   // the panel's own text, "Counting matches…" or the headline, says what is up.)
   const busy =
     state.stats.status === "loading" ? `<span class="ui active mini inline loader"></span>` : "";
-  return `<div class="qb-card qb-stats" tabindex="-1" data-focus-landing><h2 class="qb-card-title">Statistics${busy ? " " + busy : ""}</h2>${body}</div>`;
+  return `<div class="qb-card qb-stats" tabindex="-1" data-focus-landing aria-busy="${state.stats.status === "loading"}"><h2 class="qb-card-title">Statistics${busy ? " " + busy : ""}</h2>${body}</div>`;
 }
 
 const placeholder = (text: string) => `<p class="qb-placeholder">${escapeHtml(text)}</p>`;
@@ -283,14 +302,13 @@ export function statsPanelHtml(state: AppState): string {
     );
   }
   // "idle" with a complete query = the debounce before the fetch starts.
-  if (stats.status === "idle") return card(state, placeholder("Counting matches…"));
-  if (stats.results.length === 0) {
-    // Nothing answered yet: the rows are already there, waiting, so the first
-    // answer does not change the panel's height.
+  if (stats.status === "idle" || stats.results.length === 0) {
+    // Idle is the short wait before the fetch starts; loading with no answer
+    // is the wait for the first one. Either way the final layout is already
+    // there, waiting, so the first answer does not change the panel's height.
     return card(
       state,
-      placeholder("Counting matches…") +
-        perDatabaseHtml([], state.databases, pendingDatabaseIds(stats, state.selectedDatabaseIds)),
+      pendingHeadlineHtml() + perDatabaseHtml([], state.databases, state.selectedDatabaseIds),
     );
   }
   // The headline stays on top; the per-database list follows. Above 900 px the
