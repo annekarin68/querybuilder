@@ -16,6 +16,8 @@ const catalog = buildFieldCatalog([
   facet("thing", [
     ["size", "BIGINT"],
     ["label", "VARCHAR"],
+    ["active", "BOOLEAN"],
+    ["seenAt", "TIMESTAMP"],
   ]),
 ]);
 
@@ -101,5 +103,63 @@ describe("validateQuery with facet blocks", () => {
       (i) => i.nodeId,
     );
     expect(ids).toEqual([gone.id, second.id]);
+  });
+});
+
+// Ported from the old model's tests before it was deleted: branches of
+// checkCondition that its tests were the only ones to pin down.
+describe("validateQuery: the messages for a tampered or odd value", () => {
+  const one = (c: FieldCondition) => issues(query(block(c)));
+
+  it("rejects an operator that is not in the catalog", () => {
+    expect(one(newFieldCondition("label", "nope", "x"))).toEqual([
+      ["invalid", "Unknown operator."],
+    ]);
+  });
+
+  it("takes no value for a no-value operator, whatever else is stored", () => {
+    expect(one(newFieldCondition("label", "absent", null))).toEqual([]);
+    for (const value of [{}, "", "red", 0, false, [], undefined]) {
+      expect(one(newFieldCondition("label", "absent", value))).toEqual([
+        ["invalid", "This operator takes no value."],
+      ]);
+    }
+  });
+
+  it("asks to remove a blank item inside a list", () => {
+    for (const value of [[""], ["a", ""], [null]]) {
+      expect(one(newFieldCondition("label", "in", value))).toEqual([
+        ["incomplete", "Remove the empty value."],
+      ]);
+    }
+  });
+
+  it("asks for true or false on a boolean field", () => {
+    expect(one(newFieldCondition("active", "eq", "true"))).toEqual([
+      ["invalid", "Choose true or false."],
+    ]);
+    expect(one(newFieldCondition("active", "eq", false))).toEqual([]);
+  });
+
+  describe("dates", () => {
+    const badDate = "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.";
+
+    it("accepts a full or partial UTC timestamp, also as a range", () => {
+      expect(one(newFieldCondition("seenAt", "eq", "2024-11"))).toEqual([]);
+      expect(one(newFieldCondition("seenAt", "between", ["2024", "2024-11-06T14:30Z"]))).toEqual(
+        [],
+      );
+    });
+
+    it("rejects anything else, in either end of a range", () => {
+      expect(one(newFieldCondition("seenAt", "eq", "06/11/2024"))).toEqual([["invalid", badDate]]);
+      expect(one(newFieldCondition("seenAt", "between", ["2024", "2024-11-06 14:30"]))).toEqual([
+        ["invalid", badDate],
+      ]);
+    });
+
+    it("leaves a date range's order to the backend", () => {
+      expect(one(newFieldCondition("seenAt", "between", ["2025", "2024"]))).toEqual([]);
+    });
   });
 });

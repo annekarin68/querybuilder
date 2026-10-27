@@ -433,20 +433,13 @@ src/
                        `fromSavedTree`, the saved tree of facet blocks -> model.
     request.ts         toQueryRequest(query, databases) — the facet-block body of /filter/validate and /filter/execute;
                        toSavedQueryRequest(draft) — the body of a saved query, on toSavedTree(query).
-    legacy/            The wire format before facet blocks. Only the mock server's shim for old condition nodes
-                       still reads it; plan A2, Task 4 deletes this folder.
-      request.ts       toQueryRequest(query, databaseIds) for the old tree.
-      types.ts         The old query-tree types: QueryRequest, RequestNode, RequestCondition.
   query/
-    (The files next to `legacy/` are the facet-block model the app runs on. Nothing outside
-    `legacy/` imports `legacy/` any more; plan A2, Task 4 deletes it.)
     types.ts           FacetBlock, FieldCondition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (newBlock, newFieldCondition, groupOf, emptyQuery, newGroup,
                        setFieldCondition, clearFieldCondition, removeCondition, countBlocks, insertNodes, moveNode, moveSibling,
                        positionOf, groupContents, ungroup, sameSemantics, sameTree, …).
-    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
-                       TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator,
-                       isFacetLevel, isFacetTest (a well-formed whole-facet test).
+    fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE,
+                       TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator.
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
     validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue. An unknown field or a
                        field set twice is an issue on that condition (it gets its own removable row).
@@ -456,7 +449,7 @@ src/
                        it refuses), `dropNotice`, `dropMessage` (what a screen reader hears after a drop:
                        `addedNodesMessage`, `filledRowMessage`, `focusedRowMessage`, `addedBesideMessage`),
                        `movedMessage`, `reorderedMessage` — pure.
-                       Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`). Not legacy/drop.ts.
+                       Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`).
     fieldEdit.ts       nextFieldCondition — a field row after an operator or value was picked (its arity change
                        resets the value); cursorAfterOperator — where the cursor goes next.
     issues.ts          placeIssues(query, issues) — each issue moved to the node drawn for it (inside a folded group
@@ -464,12 +457,6 @@ src/
                        reports against a node, once each. Pure.
     saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork` (a query with at
                        least one facet block), `saveTarget`.
-    legacy/            The query model before facet blocks. Nothing outside it imports it any more;
-                       plan A2, Task 4 deletes this folder.
-      types.ts           Condition, Group, QueryNode, Issue.
-      tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
-                         moveSibling, positionOf, groupOf, sameSemantics, sameTree, …).
-      saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork`, `saveTarget`.
       drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
                          docs item creates, and what it couldn't), `dropNotice`, `addedNodesMessage` — pure.
       conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row,
@@ -545,8 +532,8 @@ public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.sv
                        easter-egg faces egg-logo.svg, egg-disappointed.svg, egg-loading.svg — replaceable
                        files, named in `MASCOT` and `EASTER_EGG_MASCOT`, the favicon in `index.html`
                        ("Pickle theme and mascot"). Served as-is, scanned by `check:offline`.
-tests/                 One test file per source file it tests (tests/query/legacy/tree.test.ts ↔
-                       src/query/legacy/tree.ts), plus app.test, appScripts, env, lintRules, docReferences,
+tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
+                       src/query/tree.ts), plus app.test, appScripts, env, lintRules, docReferences,
                        offlineCheck, thirdPartyNotices, themeContrast, noBackendDataInSrc and
                        api/mockContract; shared fixtures in dateCases, savedQueryFixtures and statsFixtures.
 scripts/check-offline.mjs  The offline guard ("Offline-first"); findOffOrigin(text) is pure and tested.
@@ -841,7 +828,7 @@ names.** `client.ts` runs every response through a function in
 `src/api/response.ts` (`toDatabase`, `toFacet`, `toEvent`,
 `toDatabaseResult`, …), which checks it while reading it ("Reading
 responses"), before returning it, and builds every request body with
-`toQueryRequest` (`src/api/legacy/request.ts`, "Wire format of the query"; a saved
+`toQueryRequest` (`src/api/request.ts`, "Wire format of the query"; a saved
 query's body is built by `toSavedQueryRequest`, "Saved queries"). State,
 the app logic and the panels use only the model. ESLint enforces the boundary:
 outside `src/api/`, importing `src/api/types.ts` is an error
@@ -941,7 +928,7 @@ shown **once, in the query builder, next to what is wrong**; the statistics
 panel only offers **Show problem**, which jumps to it ("Right —
 `statsPanel.ts`"). An error without a `node_id` makes that database's row a red
 bar with the reason on one line under it. `app.ts` keeps the errors with a
-`node_id` in `AppState.serverIssues` (`serverIssues`, `src/query/legacy/issues.ts`),
+`node_id` in `AppState.serverIssues` (`serverIssues`, `src/query/issues.ts`),
 once however many databases report them, and they block Run (`runBlocker` →
 `"rejected"`). A line that says `success` but has no `match_count` counts as
 failed rather than as a made-up 0. Both carry `notes` (from `info_messages`).
@@ -1047,7 +1034,7 @@ specs in `docs/superpowers/specs/`.
 
 ### Saved queries
 
-Since plan A2, Task 3, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md) at the paths named below; nothing outside `src/query/legacy/` and `src/api/legacy/` imports those folders any more (only the mock server's shim for old condition nodes), and plan A2, Task 4 deletes them. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
+Since plan A2, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md); the old model is deleted. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
 
 A logged-in user can save the query they are building, with the selected
 databases, a name and a short note, and open it again later. **Stored by the
@@ -1203,7 +1190,7 @@ This is the mock's reading; the real backend owns the rule.
 
 ### Wire format of the query
 
-Since plan A2, Task 3, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md) at the paths named below; nothing outside `src/query/legacy/` and `src/api/legacy/` imports those folders any more (only the mock server's shim for old condition nodes), and plan A2, Task 4 deletes them. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
+Since plan A2, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md); the old model is deleted. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
 
 `/filter/validate` and `/filter/execute` take a `QueryRequest`
 (`src/api/types.ts`): `{ databases, query }`. `databases` holds the databases'
@@ -1218,7 +1205,7 @@ frontend's `id` for it. The backend treats it as opaque, and quotes it back as
 `node_id` in a stats line's `error_messages` to point at the node a problem is
 in ("Statistics lines").
 
-`toQueryRequest` (`src/api/legacy/request.ts`) builds the body from the query on
+`toQueryRequest` (`src/api/request.ts`) builds the body from the query on
 screen; `getStats` and `runQuery` in `client.ts` call it, so `app.ts` passes
 them the query and the selected database ids as they are in state. It is a
 projection, not a rewrite: operators and values go out exactly as the user
@@ -1264,7 +1251,7 @@ real backend should do the same.
 
 ## 8. The query model
 
-Since plan A2, Task 3, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md) at the paths named below; nothing outside `src/query/legacy/` and `src/api/legacy/` imports those folders any more (only the mock server's shim for old condition nodes), and plan A2, Task 4 deletes them. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
+Since plan A2, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md); the old model is deleted. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
 
 `src/query/types.ts`: a query is a tree whose root is always a `Group`
 (`AND`/`OR` over its `children`); the leaves are `Condition`s (`facetId`,
@@ -1288,7 +1275,7 @@ condition).
   `groupContents`). `sameSemantics` tells a
   real edit from a collapse toggle; `sameTree` (collapse included) tells a move
   that changed something from one that put a node back where it was.
-- **`src/api/legacy/request.ts`** — `toQueryRequest`, the one place the tree becomes
+- **`src/api/request.ts`** — `toQueryRequest`, the one place the tree becomes
   the request body ("Wire format of the query").
 - **`validate.ts`** — `validateQuery` returns an `Issue` per problem:
   `incomplete` (not filled in yet, shown as a quiet grey hint; a database's
@@ -2216,10 +2203,8 @@ to a named handler function — add a route there, and a test in
 - **Data:** 7 databases (`ALPHA`…`ETA`, sizes 12K to 5.6B) in `databases.ts`;
   each event is assigned to one database by a hash of its numeric id
   (`dbIndexForEntrysetId`), never by its content. `rows.ts` prepares every
-  event once as a `MockEvent` (`EVENTS`): its database, every occurrence of
-  every facet, and a flattened `Row` keyed by `rowKey(facetLabel, fieldLabel)`
-  (the first occurrence of each facet, for the old condition nodes);
-  `evaluate.ts` matches the query against it (`eventMatches`). An event may
+  event once as a `MockEvent` (`EVENTS`): its database and every occurrence of
+  every facet; `evaluate.ts` matches the query against it (`eventMatches`). An event may
   hold a facet more than once (stored as a list in `entrysets.json`; event 2
   has two `gps_position` occurrences), so facet blocks can be tried in dev.
 - **`/api/filter/validate`** projects the 21-event sample's match rate onto each
@@ -2245,22 +2230,19 @@ to a named handler function — add a route there, and a test in
 - **Facet blocks** (`facetMatches` in `evaluate.ts`) match within one
   occurrence: ALL needs one occurrence in which every set field matches, ANY
   one in which one does; `negated` inverts the block; no set fields means the
-  facet is present. Until the app switches over (plan A2) the mock also
-  accepts the old condition nodes, matched against an event's first occurrence
-  of a facet. A block whose every set field has a too-long text value also
+  facet is present. The mock accepts only groups and facet blocks. A block whose every set field has a too-long text value also
   gets `"Facet contains no valid conditions."` (`queryErrors`), like a group.
-  **`present` / `absent`** work at both levels (`conditionMatches` and
-  `fieldMatches` in `evaluate.ts`). On a field, `present` matches a non-blank value (not `null`,
-  missing or `""`) and `absent` a blank one. With `field_id: null`, `present`
-  matches an event holding any non-null value for any key of that facet
-  (`rowHasFacet`) and `absent` the opposite; any other operator on a facet
-  matches nothing. This is the mock's reading; the real backend owns the rule.
+  **`present` / `absent`** on a set field (`fieldMatches` in `evaluate.ts`):
+  `present` matches a non-blank value (not `null`, missing or `""`) and
+  `absent` a blank one. A whole facet's presence is a block with no set fields
+  (`negated` for absence). This is the mock's reading; the real backend owns
+  the rule.
 - **Request bodies** are checked against `QueryRequest` before anything reads
-  them (`requestBody.ts`, `queryProblem`; facet blocks and their set fields
-  too, `fieldConditionProblem`); `field_id: null` is accepted (a
-  facet-level condition), an empty string is not: a malformed one gets a `400`
-  naming the first problem, e.g.
-  `Malformed query: query.children[0].field_id must be a non-empty string or null.`
+  them (`requestBody.ts`, `queryProblem`: groups, facet blocks and their set fields,
+  `fieldConditionProblem`); a node of any other `kind` (such as the old
+  condition node) is refused. A malformed one gets a `400` naming the first
+  problem, e.g.
+  `Malformed query: query.children[0].facet_id must be a non-empty string.`
 - **Saved queries** (`savedQueries.ts`) are kept in memory, per user, and are
   lost when the mock restarts; the list starts empty. The user is the session
   user's `sub`; every mock login is the same fictional user, so they all share
@@ -2419,9 +2401,9 @@ and `import("…")`; the jQuery one also forbids the `$` / `jQuery` globals and
    `arity`), and to `OPERATOR_PROFILE` for each value type that offers it.
 2. If its arity or value type combination is new, extend
    `renderValueControl` / `readValueControl` (`src/ui/valueControl.ts`),
-   `checkCondition` (`src/query/legacy/validate.ts`) and `formatValue`
-   (`src/query/legacy/summary.ts`).
-3. Teach the mock: `conditionMatches` in `mock-server/evaluate.ts` (and
+   `checkCondition` (`src/query/validate.ts`) and `conditionText`
+   (`src/query/summary.ts`).
+3. Teach the mock: `fieldMatches` in `mock-server/evaluate.ts` (and
    `dateMatches` if it applies to dates).
 4. Tests: `fieldCatalog`, `validate`, `summary`, `evaluate`. Tell the backend
    team — the operator's `id` is part of the wire format.

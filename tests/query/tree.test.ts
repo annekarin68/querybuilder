@@ -134,6 +134,16 @@ describe("placing and moving", () => {
     expect(positionOf(swapped, b.id)).toEqual({ index: 1, count: 3 });
     expect(moveSibling(root, a.id, "up")).toBeNull();
   });
+
+  it("swaps down too, and stops at the end", () => {
+    const { root, a, b, inner } = sample();
+    const swapped = moveSibling(root, a.id, "down")!;
+    expect(swapped.children.map((c) => c.id)).toEqual([b.id, a.id, inner.id]);
+    expect(positionOf(swapped, a.id)).toEqual({ index: 2, count: 3 });
+    expect(moveSibling(root, inner.id, "down")).toBeNull();
+    expect(moveSibling(root, root.id, "down")).toBeNull();
+    expect(moveSibling(root, "gone", "up")).toBeNull();
+  });
 });
 
 describe("grouping", () => {
@@ -146,6 +156,16 @@ describe("grouping", () => {
     expect(ungroup(grouped, innerId)!.children.map((c) => c.id)).toEqual(
       root.children.map((c) => c.id),
     );
+  });
+
+  it("ungroups a one-item group whatever its ALL/ANY, in its place", () => {
+    const { root, a, c, inner } = sample(); // inner: OR of c only, root: AND
+    expect(ungroupBlocker(root, inner.id)).toBeNull();
+    expect(ungroup(root, inner.id)!.children.map((n) => n.id)).toEqual([
+      a.id,
+      root.children[1]!.id,
+      c.id,
+    ]);
   });
 
   it("refuses to ungroup when the meaning would change", () => {

@@ -61,49 +61,6 @@ export const OPERATORS: CatalogOperator[] = [
   { id: "absent", name: "Has no value", arity: "none" },
 ];
 
-/** The only operators a condition about a whole facet (no field) offers. */
-export const FACET_OPERATOR_IDS = ["present", "absent"];
-
-/** Those operators themselves, in `OPERATORS` order: the Field dropdown's
- *  "About the whole facet" choices. Computed once, not on every paint. */
-export const FACET_OPERATORS = OPERATORS.filter((o) => FACET_OPERATOR_IDS.includes(o.id));
-
-const FACET_OPERATOR_NAMES: Record<string, string> = {
-  present: "Is present",
-  absent: "Is absent",
-};
-
-/** An operator's label. "present" / "absent" read differently for a whole
- *  facet ("Is present") than for a field ("Has any value"); the id is the same. */
-export function operatorName(op: CatalogOperator, facetLevel: boolean): string {
-  return (facetLevel && FACET_OPERATOR_NAMES[op.id]) || op.name;
-}
-
-/** Whether a condition is about the facet itself: a facet and an operator are
- *  chosen, but no field. (A facet with nothing else chosen is just unfinished.) */
-export function isFacetLevel(c: {
-  facetId: string | null;
-  fieldId: string | null;
-  operatorId: string | null;
-}): boolean {
-  return c.facetId !== null && c.fieldId === null && c.operatorId !== null;
-}
-
-/** Whether a condition is a well-formed whole-facet test: facet-level, one of
- *  the presence operators, and no value. Only such a condition may show
- *  "Is present" / "Is absent" as chosen in the Field dropdown. A malformed one
- *  (a hand-edited or odd restored query) shows "Choose…" instead, so picking a
- *  test is a real change and `nextCondition` repairs the row — its Operator
- *  and Value slots are not drawn, so this dropdown is the only way to fix it. */
-export function isFacetTest(c: {
-  facetId: string | null;
-  fieldId: string | null;
-  operatorId: string | null;
-  value: unknown;
-}): boolean {
-  return isFacetLevel(c) && FACET_OPERATOR_IDS.includes(c.operatorId as string) && c.value === null;
-}
-
 export function findFacet(catalog: FieldCatalog, facetId: string | null): CatalogFacet | undefined {
   return facetId ? catalog.facets.find((f) => f.id === facetId) : undefined;
 }

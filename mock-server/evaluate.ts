@@ -1,24 +1,12 @@
-import type { RequestCondition, RequestNode } from "../src/api/legacy/types";
-import type {
-  RequestFacet,
-  RequestGroup,
-  StatsErrorMessage,
-  StatsResponse,
-} from "../src/api/types";
+import type { RequestFacet, RequestNode, StatsErrorMessage, StatsResponse } from "../src/api/types";
 import type { MockEvent } from "./rows";
 import type { Occurrence } from "./vehicleData";
-
-export type Row = Record<string, string | number | boolean | null>;
 
 // The query arrives as a QueryRequest (src/api/types.ts). server.ts checks its
 // shape (requestBody.ts) before anything here reads it.
 
-/** The key a facet's field value is stored under in a Row (mock-server/rows.ts).
- *  A dotted key is fine here: it never leaves the mock, and the fictional data
- *  has no dots in its labels. */
-export function rowKey(facetId: string, fieldId: string): string {
-  return `${facetId}.${fieldId}`;
-}
+/** One stored field value: what an occurrence holds under a field id. */
+type StoredValue = Occurrence[string];
 
 function cmp(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
@@ -92,7 +80,7 @@ export function utcSpan(v: unknown): [number, number] | null {
 function dateMatches(
   operatorId: string,
   value: unknown,
-  v: Row[string] | undefined,
+  v: StoredValue | undefined,
 ): boolean | undefined {
   const t = typeof v === "string" ? Date.parse(v) : NaN;
   if (Number.isNaN(t)) return undefined;
@@ -123,16 +111,9 @@ function isBlank(v: unknown): boolean {
   return v === null || v === undefined || v === "";
 }
 
-/** Whether the event holds any value at all for the facet (see `rowKey`). A
- *  key whose value is null holds nothing, so it does not count. */
-function rowHasFacet(row: Row, facetId: string): boolean {
-  const prefix = `${facetId}.`;
-  return Object.keys(row).some((k) => k.startsWith(prefix) && row[k] !== null);
-}
-
 /** Whether a stored value `v` matches `operatorId` with the condition's
  *  `value`: the mock's reading of every field-level operator. */
-function fieldMatches(operatorId: string, value: unknown, v: Row[string] | undefined): boolean {
+function fieldMatches(operatorId: string, value: unknown, v: StoredValue | undefined): boolean {
   const asDate = dateMatches(operatorId, value, v);
   if (asDate !== undefined) return asDate;
   switch (operatorId) {
@@ -173,16 +154,6 @@ function fieldMatches(operatorId: string, value: unknown, v: Row[string] | undef
   }
 }
 
-function conditionMatches(c: RequestCondition, row: Row): boolean {
-  if (c.field_id === null) {
-    // A condition about the facet itself: only presence makes sense.
-    if (c.operator_id === "present") return rowHasFacet(row, c.facet_id);
-    if (c.operator_id === "absent") return !rowHasFacet(row, c.facet_id);
-    return false;
-  }
-  return fieldMatches(c.operator_id, c.value, row[rowKey(c.facet_id, c.field_id)]);
-}
-
 /**
  * Restrict events to the selected databases. An event's `db` comes purely from
  * the entryset's numeric id (see mock-server/databases.ts and `toMockEvent` in
@@ -198,7 +169,7 @@ export function filterByDatabases(events: MockEvent[], databaseIds: string[]): M
  * backend does this as `COUNT(*) ... GROUP BY database`, cheap at any scale.
  */
 export function perDatabaseCounts(
-  query: MockNode,
+  query: RequestNode,
   events: MockEvent[],
   databaseIds: string[],
 ): { label: string; matchCount: number; totalCount: number }[] {
@@ -211,16 +182,6 @@ export function perDatabaseCounts(
     };
   });
 }
-
-/** A query tree as the mock accepts it while the app moves to facet blocks:
- *  groups may hold facet blocks and, until plan A2, the old condition nodes. */
-export interface MockGroup {
-  kind: "group";
-  id: string;
-  operator: RequestGroup["operator"];
-  children: MockNode[];
-}
-export type MockNode = MockGroup | RequestFacet | RequestCondition;
 
 /** Whether one occurrence matches the block's set fields; no set fields: yes. */
 function occurrenceMatches(f: RequestFacet, occ: Occurrence): boolean {
@@ -238,22 +199,12 @@ export function facetMatches(f: RequestFacet, event: MockEvent): boolean {
   return f.negated ? !has : has;
 }
 
-export function eventMatches(node: MockNode, event: MockEvent): boolean {
+export function eventMatches(node: RequestNode, event: MockEvent): boolean {
   if (node.kind === "facet") return facetMatches(node, event);
-  if (node.kind === "condition") return conditionMatches(node, event.row);
   if (node.children.length === 0) return true;
   return node.operator === "AND"
     ? node.children.every((c) => eventMatches(c, event))
     : node.children.some((c) => eventMatches(c, event));
-}
-
-/** The old condition-node matcher, on a flattened row (mock-server/rows.ts). */
-export function matches(node: RequestNode, row: Row): boolean {
-  if (node.kind === "condition") return conditionMatches(node, row);
-  if (node.children.length === 0) return true;
-  return node.operator === "AND"
-    ? node.children.every((c) => matches(c, row))
-    : node.children.some((c) => matches(c, row));
 }
 
 /** part / whole, scaled to `target`, rounded. Zero whole → zero. */
@@ -268,18 +219,18 @@ export const MAX_TEXT_LENGTH = 100;
  * The problems the mock's databases find in a query, each pointed at by the
  * `id` of its node — the way a real backend reports what only it can check:
  *
- * - a condition with a text value (or a text item in a list) longer than
- *   MAX_TEXT_LENGTH (`invalid`);
- * - a group whose every child has an error of its own (a condition's, or a
- *   child group's own "no valid conditions"): "Group contains no valid
- *   conditions." This mirrors the real backend. It is `incomplete`, not
+ * - a field condition with a text value (or a text item in a list) longer
+ *   than MAX_TEXT_LENGTH (`invalid`);
+ * - a block whose every set field has an error, or a group whose every child
+ *   has an error of its own (a block's, or a child group's own "no valid
+ *   conditions"): "… contains no valid conditions." This mirrors the real backend. It is `incomplete`, not
  *   `invalid`: the frontend shows it as a warning, while the condition
  *   errors that cause it stay red. An empty group gets none; the frontend's
  *   own validation reports that.
  *
  * Empty when there are none.
  */
-export function queryErrors(node: MockNode): StatsErrorMessage[] {
+export function queryErrors(node: RequestNode): StatsErrorMessage[] {
   if (node.kind === "facet") {
     const errors = node.conditions.flatMap(textTooLong);
     // Mirrors the group rule below: a block whose every set field failed.
@@ -292,22 +243,19 @@ export function queryErrors(node: MockNode): StatsErrorMessage[] {
     }
     return errors;
   }
-  if (node.kind === "group") {
-    const perChild = node.children.map(queryErrors);
-    const errors = perChild.flat();
-    const everyChildFailed =
-      node.children.length > 0 &&
-      node.children.every((child, i) => perChild[i]!.some((e) => e.node_id === child.id));
-    if (everyChildFailed) {
-      errors.push({
-        node_id: node.id,
-        kind: "incomplete",
-        message: "Group contains no valid conditions.",
-      });
-    }
-    return errors;
+  const perChild = node.children.map(queryErrors);
+  const errors = perChild.flat();
+  const everyChildFailed =
+    node.children.length > 0 &&
+    node.children.every((child, i) => perChild[i]!.some((e) => e.node_id === child.id));
+  if (everyChildFailed) {
+    errors.push({
+      node_id: node.id,
+      kind: "incomplete",
+      message: "Group contains no valid conditions.",
+    });
   }
-  return textTooLong(node);
+  return errors;
 }
 
 /** The "text is too long" error of one condition, if it has one. */

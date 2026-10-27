@@ -2,16 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   buildFieldCatalog,
   fieldsOfFacet,
-  FACET_OPERATOR_IDS,
-  FACET_OPERATORS,
-  isFacetTest,
   findFacet,
   findField,
   findOperator,
-  isFacetLevel,
   isNumberText,
   OPERATORS,
-  operatorName,
   pickListFor,
   valueTypeFor,
 } from "../../src/query/fieldCatalog";
@@ -292,44 +287,5 @@ describe("presence operators", () => {
     expect(findOperator("absent")).toMatchObject({ arity: "none" });
     expect(findOperator("isEmpty")).toBeUndefined();
     expect(findOperator("isNotEmpty")).toBeUndefined();
-  });
-
-  it("labels depend on whether the condition is about a facet or a field", () => {
-    const present = findOperator("present")!;
-    const absent = findOperator("absent")!;
-    expect(operatorName(present, false)).toBe("Has any value");
-    expect(operatorName(present, true)).toBe("Is present");
-    expect(operatorName(absent, false)).toBe("Has no value");
-    expect(operatorName(absent, true)).toBe("Is absent");
-    expect(operatorName(findOperator("eq")!, true)).toBe("Equals");
-  });
-
-  it("a facet-level condition offers only present / absent", () => {
-    expect(FACET_OPERATOR_IDS).toEqual(["present", "absent"]);
-  });
-
-  it("FACET_OPERATORS is those operators, in order, computed once", () => {
-    expect(FACET_OPERATORS.map((o) => o.id)).toEqual(FACET_OPERATOR_IDS);
-    expect(FACET_OPERATORS[0]).toBe(findOperator("present"));
-  });
-
-  it("isFacetTest: only a well-formed whole-facet test, which the Field dropdown may show as chosen", () => {
-    const base = { facetId: "a", fieldId: null, operatorId: "present", value: null };
-    expect(isFacetTest(base)).toBe(true);
-    expect(isFacetTest({ ...base, operatorId: "absent" })).toBe(true);
-    // Foreign operator, or a value a presence test cannot take: malformed.
-    expect(isFacetTest({ ...base, operatorId: "eq" })).toBe(false);
-    expect(isFacetTest({ ...base, value: 5 })).toBe(false);
-    expect(isFacetTest({ ...base, value: false })).toBe(false);
-    // Not facet-level at all.
-    expect(isFacetTest({ ...base, operatorId: null })).toBe(false);
-    expect(isFacetTest({ ...base, fieldId: "f" })).toBe(false);
-  });
-
-  it("isFacetLevel needs a facet, no field and an operator", () => {
-    expect(isFacetLevel({ facetId: "a", fieldId: null, operatorId: "present" })).toBe(true);
-    expect(isFacetLevel({ facetId: "a", fieldId: null, operatorId: null })).toBe(false);
-    expect(isFacetLevel({ facetId: "a", fieldId: "f", operatorId: "present" })).toBe(false);
-    expect(isFacetLevel({ facetId: null, fieldId: null, operatorId: "present" })).toBe(false);
   });
 });

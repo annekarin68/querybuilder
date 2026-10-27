@@ -8,7 +8,6 @@ import {
   queryErrors,
   scaleCount,
   type DatabaseOutcome,
-  type MockGroup,
 } from "./evaluate";
 import { ENTRYSETS, INDIVIDUALS, type Entryset } from "./vehicleData";
 import { sampleOf, toEventResponse } from "./events";
@@ -23,7 +22,7 @@ import {
   savedQueryOwner,
   type SavedQueryAnswer,
 } from "./savedQueries";
-import type { StatsErrorMessage } from "../src/api/types";
+import type { RequestGroup, StatsErrorMessage } from "../src/api/types";
 import {
   startLogin,
   issueFakeCode,
@@ -173,7 +172,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 async function readQueryBody(
   req: IncomingMessage,
   res: ServerResponse,
-): Promise<{ query: MockGroup; databases: string[] } | null> {
+): Promise<{ query: RequestGroup; databases: string[] } | null> {
   const body = await readJson(req);
   const { query, databases } = (typeof body === "object" && body !== null ? body : {}) as {
     query?: unknown;
@@ -197,7 +196,7 @@ async function readQueryBody(
     sendJson(res, 400, { error: `Malformed query: ${problem}` });
     return null;
   }
-  return { query: query as MockGroup, databases };
+  return { query: query as RequestGroup, databases };
 }
 
 /** Sends a store's answer; a 204 has no body at all. */

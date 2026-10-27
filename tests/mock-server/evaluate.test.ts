@@ -1,133 +1,131 @@
 import { describe, it, expect } from "vitest";
 import {
   buildStatsLine,
+  eventMatches,
   filterByDatabases,
-  matches,
   MAX_TEXT_LENGTH,
   perDatabaseCounts,
   queryErrors,
-  rowKey,
   scaleCount,
   utcSpan,
-  type MockNode,
-  type Row,
 } from "../../mock-server/evaluate";
-import type { RequestNode } from "../../src/api/legacy/types";
-import type { RequestValue } from "../../src/api/types";
+import type {
+  RequestFacet,
+  RequestFieldCondition,
+  RequestGroup,
+  RequestNode,
+  RequestValue,
+} from "../../src/api/types";
 import { MALFORMED, WELL_FORMED } from "../dateCases";
 import { EVENTS, toMockEvent, type MockEvent } from "../../mock-server/rows";
-import { ENTRYSETS } from "../../mock-server/vehicleData";
-import { eventMatches } from "../../mock-server/evaluate";
-import type { RequestFacet, RequestFieldCondition } from "../../src/api/types";
+import { ENTRYSETS, type Occurrence } from "../../mock-server/vehicleData";
 import { toQueryRequest } from "../../src/api/request";
 import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
 
-const row = {
-  "thing.color": "red",
-  "thing.count": 12,
-  "thing.size": 200,
-  "thing.active": true,
-  "thing.spare": null,
-  "thing.madeOn": "2018-05-01",
-  "thing.note": "all good",
-};
+// ---- building queries and events --------------------------------------------
 
-const cond = (fieldId: string, operatorId: string, value: RequestValue) => ({
+const cond = (fieldId: string, operatorId: string, value: RequestValue, id = "c") => ({
   kind: "condition" as const,
-  id: "c",
-  facet_id: "thing",
+  id,
   field_id: fieldId,
   operator_id: operatorId,
   value,
 });
-const facetCond = (facetId: string, operatorId: string) => ({
-  kind: "condition" as const,
-  id: "x",
-  facet_id: facetId,
-  field_id: null,
-  operator_id: operatorId,
-  value: null,
+/** A block on the facet "thing" with `conditions`, ALL of them by default. */
+const block = (
+  conditions: RequestFieldCondition[],
+  over: Partial<RequestFacet> = {},
+): RequestFacet => ({
+  kind: "facet",
+  id: "f",
+  facet_id: "thing",
+  negated: false,
+  operator: "AND",
+  conditions,
+  ...over,
 });
-const group = (operator: "AND" | "OR", ...children: RequestNode[]) => ({
-  kind: "group" as const,
+const group = (operator: "AND" | "OR", ...children: RequestNode[]): RequestGroup => ({
+  kind: "group",
   id: "g",
   operator,
   children,
 });
+/** An event whose facet "thing" occurs once, with these values. */
+const eventWith = (occurrence: Occurrence): MockEvent => ({
+  id: 1,
+  db: "a",
+  occurrences: { thing: [occurrence] },
+});
 
-describe("matches", () => {
-  it("empty group matches everything", () => {
-    expect(matches(group("AND"), row)).toBe(true);
+const thing: Occurrence = {
+  color: "red",
+  count: 12,
+  size: 200,
+  active: true,
+  madeOn: "2018-05-01",
+  note: "all good",
+};
+/** Whether one condition on the field matches the sample `thing`. */
+const holds = (fieldId: string, operatorId: string, value: RequestValue, o: Occurrence = thing) =>
+  eventMatches(block([cond(fieldId, operatorId, value)]), eventWith(o));
+
+describe("a field condition's operators (the mock's reading)", () => {
+  it("an empty group matches everything", () => {
+    expect(eventMatches(group("AND"), eventWith(thing))).toBe(true);
   });
   it("eq / neq on strings and numbers", () => {
-    expect(matches(cond("color", "eq", "red"), row)).toBe(true);
-    expect(matches(cond("color", "neq", "red"), row)).toBe(false);
-    expect(matches(cond("count", "eq", 12), row)).toBe(true);
+    expect(holds("color", "eq", "red")).toBe(true);
+    expect(holds("color", "neq", "red")).toBe(false);
+    expect(holds("count", "eq", 12)).toBe(true);
   });
   it("numeric comparisons", () => {
-    expect(matches(cond("count", "gte", 12), row)).toBe(true);
-    expect(matches(cond("count", "gt", 12), row)).toBe(false);
-    expect(matches(cond("size", "lt", 300), row)).toBe(true);
+    expect(holds("count", "gte", 12)).toBe(true);
+    expect(holds("count", "gt", 12)).toBe(false);
+    expect(holds("size", "lt", 300)).toBe(true);
   });
   it("between is inclusive", () => {
-    expect(matches(cond("count", "between", [10, 12]), row)).toBe(true);
-    expect(matches(cond("count", "between", [0, 11]), row)).toBe(false);
+    expect(holds("count", "between", [10, 12])).toBe(true);
+    expect(holds("count", "between", [0, 11])).toBe(false);
   });
   it("in", () => {
-    expect(matches(cond("color", "in", ["red", "blue"]), row)).toBe(true);
-    expect(matches(cond("color", "in", ["blue"]), row)).toBe(false);
+    expect(holds("color", "in", ["red", "blue"])).toBe(true);
+    expect(holds("color", "in", ["blue"])).toBe(false);
   });
   it("not_in matches a value that is none of the list", () => {
-    expect(matches(cond("count", "not_in", [1, 2]), row)).toBe(true);
-    expect(matches(cond("count", "not_in", [12, 13]), row)).toBe(false);
+    expect(holds("count", "not_in", [1, 2])).toBe(true);
+    expect(holds("count", "not_in", [12, 13])).toBe(false);
   });
   it("contains on text", () => {
-    expect(matches(cond("note", "contains", "good"), row)).toBe(true);
+    expect(holds("note", "contains", "good")).toBe(true);
   });
   it("date before / after", () => {
-    expect(matches(cond("madeOn", "before", "2019-01-01"), row)).toBe(true);
-    expect(matches(cond("madeOn", "after", "2019-01-01"), row)).toBe(false);
+    expect(holds("madeOn", "before", "2019-01-01")).toBe(true);
+    expect(holds("madeOn", "after", "2019-01-01")).toBe(false);
   });
-  it("absent / present", () => {
-    expect(matches(cond("spare", "absent", null), row)).toBe(true);
-    expect(matches(cond("color", "present", null), row)).toBe(true);
+  it("absent / present: a field the occurrence doesn't hold is blank", () => {
+    expect(holds("spare", "absent", null)).toBe(true);
+    expect(holds("spare", "present", null)).toBe(false);
+    expect(holds("color", "present", null)).toBe(true);
+    expect(holds("color", "absent", null)).toBe(false);
   });
-  it("facet-level present / absent look at whether the event holds any value for the facet", () => {
-    const r: Row = { id: 1, __db: "a", [rowKey("engine", "rpm")]: 3000 };
-    expect(matches(facetCond("engine", "present"), r)).toBe(true);
-    expect(matches(facetCond("engine", "absent"), r)).toBe(false);
-    expect(matches(facetCond("brakes", "present"), r)).toBe(false);
-    expect(matches(facetCond("brakes", "absent"), r)).toBe(true);
+  it("AND / OR groups of blocks", () => {
+    const red = block([cond("color", "eq", "red")], { id: "a" });
+    const blue = block([cond("color", "eq", "blue")], { id: "b" });
+    expect(eventMatches(group("AND", red, blue), eventWith(thing))).toBe(false);
+    expect(eventMatches(group("OR", red, blue), eventWith(thing))).toBe(true);
   });
-  it("a key holding null does not count as a value for the facet", () => {
-    const r: Row = { id: 1, __db: "a", [rowKey("engine", "rpm")]: null };
-    expect(matches(facetCond("engine", "present"), r)).toBe(false);
-    expect(matches(facetCond("engine", "absent"), r)).toBe(true);
+  it("reads the value stored under the field id, in the block's own facet", () => {
+    expect(
+      eventMatches(block([cond("color", "eq", "red")], { facet_id: "other" }), eventWith(thing)),
+    ).toBe(false);
   });
-  it("a facet whose name starts with another facet's name is not confused with it", () => {
-    const r: Row = { id: 1, __db: "a", [rowKey("engine_oil", "level")]: 1 };
-    expect(matches(facetCond("engine", "present"), r)).toBe(false);
-  });
-  it("AND / OR groups", () => {
-    expect(matches(group("AND", cond("color", "eq", "red"), cond("count", "gte", 12)), row)).toBe(
-      true,
-    );
-    expect(matches(group("AND", cond("color", "eq", "red"), cond("count", "gt", 12)), row)).toBe(
-      false,
-    );
-    expect(matches(group("OR", cond("color", "eq", "blue"), cond("count", "gte", 12)), row)).toBe(
-      true,
-    );
-  });
-  it("reads the value stored under rowKey(facetId, fieldId)", () => {
-    expect(rowKey("thing", "color")).toBe("thing.color");
-    expect(matches({ ...cond("color", "eq", "red"), facet_id: "other" }, row)).toBe(false);
-  });
-
   it("typed values match typed stored values, not their text", () => {
-    expect(matches(cond("active", "eq", true), row)).toBe(true);
-    expect(matches(cond("count", "in", [12, 13]), row)).toBe(true);
-    expect(matches(cond("count", "eq", "12"), row)).toBe(false);
+    expect(holds("active", "eq", true)).toBe(true);
+    expect(holds("count", "in", [12, 13])).toBe(true);
+    expect(holds("count", "eq", "12")).toBe(false);
+  });
+  it("an unknown operator matches nothing", () => {
+    expect(holds("color", "nope", "red")).toBe(false);
   });
 });
 
@@ -162,9 +160,8 @@ describe("utcSpan: the time a (partial) UTC timestamp covers", () => {
 });
 
 describe("date conditions: the user's operator at the precision they typed (UTC)", () => {
-  const seen = { "thing.seenAt": "2024-11-06T14:32:00Z" };
-  const is = (operatorId: string, value: RequestValue) =>
-    matches(cond("seenAt", operatorId, value), seen);
+  const seen = { seenAt: "2024-11-06T14:32:00Z" };
+  const is = (operatorId: string, value: RequestValue) => holds("seenAt", operatorId, value, seen);
 
   it("eq / neq: the stored time falls inside / outside the span", () => {
     expect(is("eq", "2024")).toBe(true);
@@ -192,14 +189,14 @@ describe("date conditions: the user's operator at the precision they typed (UTC)
   });
 
   it("uses UTC, whatever offset the stored value is written in", () => {
-    const late = { "thing.seenAt": "2024-11-06T23:30:00-02:00" }; // 2024-11-07 01:30 UTC
-    expect(matches(cond("seenAt", "eq", "2024-11-07"), late)).toBe(true);
+    const late = { seenAt: "2024-11-06T23:30:00-02:00" }; // 2024-11-07 01:30 UTC
+    expect(holds("seenAt", "eq", "2024-11-07", late)).toBe(true);
   });
 
   it('a plain "YYYY-MM-DD" stored value is midnight UTC', () => {
-    const day = { "thing.madeOn": "2024-11-06" };
-    expect(matches(cond("madeOn", "eq", "2024-11-06T00"), day)).toBe(true);
-    expect(matches(cond("madeOn", "before", "2024-11-06"), day)).toBe(false);
+    const day = { madeOn: "2024-11-06" };
+    expect(holds("madeOn", "eq", "2024-11-06T00", day)).toBe(true);
+    expect(holds("madeOn", "before", "2024-11-06", day)).toBe(false);
   });
 });
 
@@ -208,7 +205,6 @@ describe("date conditions: the user's operator at the precision they typed (UTC)
 const event = (db: string, id: number, count: number): MockEvent => ({
   id,
   db,
-  row: { __db: db, id, "thing.count": count },
   occurrences: { thing: [{ count }] },
 });
 const rows: MockEvent[] = [
@@ -218,22 +214,8 @@ const rows: MockEvent[] = [
   event("gamma", 4, 1),
 ];
 
-const matchAll: MockNode = { kind: "group", id: "g", operator: "AND", children: [] };
-const countGte10: MockNode = {
-  kind: "group",
-  id: "g",
-  operator: "AND",
-  children: [
-    {
-      kind: "condition",
-      id: "c",
-      facet_id: "thing",
-      field_id: "count",
-      operator_id: "gte",
-      value: 10,
-    },
-  ],
-};
+const matchAll: RequestNode = group("AND");
+const countGte10: RequestNode = group("AND", block([cond("count", "gte", 10)]));
 
 describe("filterByDatabases", () => {
   it("keeps only events whose db is a selected database id", () => {
@@ -321,68 +303,99 @@ describe("queryErrors", () => {
     kind: "invalid",
     message: "Text is too long (at most 100 characters).",
   });
+  const noValid = (kind: string, nodeId: string) => ({
+    node_id: nodeId,
+    kind: "incomplete",
+    message: `${kind} contains no valid conditions.`,
+  });
+  /** A block with one set field: too long (`bad`) or fine (`good`). */
+  const bad = (id: string): RequestFacet => ({
+    ...block([cond("note", "eq", tooLong, `${id}-c`)]),
+    id,
+  });
+  const good = (id: string): RequestFacet => ({
+    ...block([cond("note", "eq", "fine", `${id}-c`)]),
+    id,
+  });
+  const named = (id: string, g: RequestGroup): RequestGroup => ({ ...g, id });
 
-  it("points at each condition with a too-long text, inside groups too", () => {
+  it("points at each set field with a too-long text, inside groups too", () => {
     const query = group(
       "AND",
-      { ...cond("note", "eq", tooLong), id: "c1" },
-      cond("note", "eq", "fine"),
-      {
-        ...group(
+      block([cond("note", "eq", tooLong, "c1"), cond("note", "eq", "fine", "c2")]),
+      named(
+        "g2",
+        group(
           "OR",
-          { ...cond("note", "in", ["ok", tooLong]), id: "c2" },
-          cond("note", "eq", ""),
+          block([cond("note", "in", ["ok", tooLong], "c3"), cond("note", "eq", "", "c4")], {
+            id: "f2",
+          }),
         ),
-        id: "g2",
-      },
+      ),
     );
-    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2")]);
+    expect(queryErrors(query)).toEqual([problem("c1"), problem("c3")]);
   });
 
-  const noValidConditions = (groupId: string) => ({
-    node_id: groupId,
-    kind: "incomplete",
-    message: "Group contains no valid conditions.",
+  it("reports a block whose every set field has an error, as incomplete", () => {
+    const query = block([cond("note", "eq", tooLong, "c1"), cond("note", "eq", tooLong, "c2")]);
+    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2"), noValid("Facet", "f")]);
   });
-  const bad = (id: string) => ({ ...cond("note", "eq", tooLong), id });
-  const good = (id: string) => ({ ...cond("note", "eq", "fine"), id });
+
+  it("does not report a block with one good field, or with none set", () => {
+    const mixed = block([cond("note", "eq", tooLong, "c1"), cond("note", "eq", "fine", "c2")]);
+    expect(queryErrors(mixed)).toEqual([problem("c1")]);
+    expect(queryErrors(block([]))).toEqual([]);
+  });
 
   it("reports a group whose every child has an error, as incomplete", () => {
-    const query = { ...group("AND", bad("c1"), bad("c2")), id: "g1" };
-    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2"), noValidConditions("g1")]);
+    const query = named("g1", group("AND", bad("f1"), bad("f2")));
+    expect(queryErrors(query)).toEqual([
+      problem("f1-c"),
+      noValid("Facet", "f1"),
+      problem("f2-c"),
+      noValid("Facet", "f2"),
+      noValid("Group", "g1"),
+    ]);
   });
 
   it("does not report a group with one good child", () => {
-    const query = { ...group("OR", bad("c1"), good("c2")), id: "g1" };
-    expect(queryErrors(query)).toEqual([problem("c1")]);
+    const query = named("g1", group("OR", bad("f1"), good("f2")));
+    expect(queryErrors(query)).toEqual([problem("f1-c"), noValid("Facet", "f1")]);
   });
 
   it("reports an all-bad inner group but not a root that has another good child", () => {
-    const inner = { ...group("AND", bad("c1"), bad("c2")), id: "inner" };
-    const query = { ...group("AND", inner, good("c3")), id: "root" };
-    expect(queryErrors(query)).toEqual([problem("c1"), problem("c2"), noValidConditions("inner")]);
+    const inner = named("inner", group("AND", bad("f1")));
+    const query = named("root", group("AND", inner, good("f3")));
+    expect(queryErrors(query)).toEqual([
+      problem("f1-c"),
+      noValid("Facet", "f1"),
+      noValid("Group", "inner"),
+    ]);
   });
 
   it("reports the root too when its only child is an all-bad group", () => {
-    const inner = { ...group("AND", bad("c1")), id: "inner" };
-    const query = { ...group("AND", inner), id: "root" };
+    const inner = named("inner", group("AND", bad("f1")));
+    const query = named("root", group("AND", inner));
     expect(queryErrors(query)).toEqual([
-      problem("c1"),
-      noValidConditions("inner"),
-      noValidConditions("root"),
+      problem("f1-c"),
+      noValid("Facet", "f1"),
+      noValid("Group", "inner"),
+      noValid("Group", "root"),
     ]);
   });
 
   it("does not report an empty group (the frontend's own validation does)", () => {
-    expect(queryErrors({ ...group("AND"), id: "g1" })).toEqual([]);
+    expect(queryErrors(named("g1", group("AND")))).toEqual([]);
   });
 
   it("accepts text up to the limit, and values that aren't text", () => {
     const query = group(
       "AND",
-      cond("note", "eq", "x".repeat(MAX_TEXT_LENGTH)),
-      cond("count", "gt", 5),
-      cond("spare", "isEmpty", null),
+      block([
+        cond("note", "eq", "x".repeat(MAX_TEXT_LENGTH)),
+        cond("count", "gt", 5),
+        cond("spare", "absent", null),
+      ]),
     );
     expect(queryErrors(query)).toEqual([]);
   });

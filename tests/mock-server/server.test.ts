@@ -70,12 +70,12 @@ const everyEvent = {
   operator: "AND",
   children: [
     {
-      kind: "condition",
-      id: "c1",
+      kind: "facet",
+      id: "f1",
       facet_id: "observation_window",
-      field_id: "from_timestamp",
-      operator_id: "present",
-      value: null,
+      negated: false,
+      operator: "AND",
+      conditions: [],
     },
   ],
 };
@@ -111,11 +111,22 @@ describe("POST /api/filter/validate", () => {
     }
   });
 
-  it("fails every database, pointing at the condition and its group, when a text is too long", async () => {
+  it("fails every database, pointing at the set field, its block and its group, when a text is too long", async () => {
     const tooLong = {
       ...everyEvent,
       children: [
-        { ...everyEvent.children[0], operator_id: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
+        {
+          ...everyEvent.children[0],
+          conditions: [
+            {
+              kind: "condition",
+              id: "c1",
+              field_id: "from_timestamp",
+              operator_id: "eq",
+              value: "x".repeat(MAX_TEXT_LENGTH + 1),
+            },
+          ],
+        },
       ],
     };
     const res = await post(`${API}/filter/validate`, body(["alpha", "beta"], tooLong));
@@ -130,6 +141,7 @@ describe("POST /api/filter/validate", () => {
         success: false,
         error_messages: [
           { node_id: "c1", kind: "invalid", message: "Text is too long (at most 100 characters)." },
+          { node_id: "f1", kind: "incomplete", message: "Facet contains no valid conditions." },
           { node_id: "g1", kind: "incomplete", message: "Group contains no valid conditions." },
         ],
         info_messages: [],
@@ -147,7 +159,7 @@ describe("POST /api/filter/validate", () => {
     ],
     ["query that is an array", body(["alpha"], []), "Body must include a `query` tree."],
     [
-      "query whose root is a condition",
+      "query whose root is a block",
       body(["alpha"], everyEvent.children[0]),
       "Malformed query: query must be a group.",
     ],
@@ -157,9 +169,9 @@ describe("POST /api/filter/validate", () => {
       "Malformed query: query.children must be a non-empty list.",
     ],
     [
-      "condition without a field",
-      body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], field_id: "" }] }),
-      "Malformed query: query.children[0].field_id must be a non-empty string or null.",
+      "block without a facet",
+      body(["alpha"], { ...everyEvent, children: [{ ...everyEvent.children[0], facet_id: "" }] }),
+      "Malformed query: query.children[0].facet_id must be a non-empty string.",
     ],
     ["no databases", body([]), "Select at least one database."],
   ])("answers 400 for a %s", async (_label, payload, error) => {
@@ -201,7 +213,7 @@ describe("POST /api/filter/execute", () => {
   it("returns only events that match the query", async () => {
     const nobody = {
       ...everyEvent,
-      children: [{ ...everyEvent.children[0], operator_id: "absent" }],
+      children: [{ ...everyEvent.children[0], negated: true }],
     };
     const all = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"];
     const res = await post(`${API}/filter/execute`, body(all, nobody), compliant());

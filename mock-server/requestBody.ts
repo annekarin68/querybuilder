@@ -14,8 +14,8 @@ const isNonEmptyString = (v: unknown) => typeof v === "string" && v !== "";
  */
 export function queryProblem(node: unknown, at = "query"): string | null {
   if (!isObject(node)) return `${at} must be an object.`;
-  if (node.kind !== "group" && node.kind !== "facet" && node.kind !== "condition") {
-    return `${at}.kind must be "group", "facet" or "condition".`;
+  if (node.kind !== "group" && node.kind !== "facet") {
+    return `${at}.kind must be "group" or "facet".`;
   }
   if (typeof node.id !== "string") return `${at}.id must be a string.`;
   if (node.kind === "group") {
@@ -31,28 +31,18 @@ export function queryProblem(node: unknown, at = "query"): string | null {
     }
     return null;
   }
-  if (node.kind === "facet") {
-    if (!isNonEmptyString(node.facet_id)) return `${at}.facet_id must be a non-empty string.`;
-    if (typeof node.negated !== "boolean") return `${at}.negated must be true or false.`;
-    if (node.operator !== "AND" && node.operator !== "OR") {
-      return `${at}.operator must be "AND" or "OR".`;
-    }
-    if (!Array.isArray(node.conditions)) return `${at}.conditions must be a list.`;
-    for (const [i, c] of node.conditions.entries()) {
-      const problem = fieldConditionProblem(c, `${at}.conditions[${i}]`);
-      if (problem) return problem;
-    }
-    return null;
+  // A facet block.
+  if (!isNonEmptyString(node.facet_id)) return `${at}.facet_id must be a non-empty string.`;
+  if (typeof node.negated !== "boolean") return `${at}.negated must be true or false.`;
+  if (node.operator !== "AND" && node.operator !== "OR") {
+    return `${at}.operator must be "AND" or "OR".`;
   }
-  for (const key of ["facet_id", "operator_id"] as const) {
-    if (!isNonEmptyString(node[key])) return `${at}.${key} must be a non-empty string.`;
+  if (!Array.isArray(node.conditions)) return `${at}.conditions must be a list.`;
+  for (const [i, c] of node.conditions.entries()) {
+    const problem = fieldConditionProblem(c, `${at}.conditions[${i}]`);
+    if (problem) return problem;
   }
-  if (node.field_id !== null && !isNonEmptyString(node.field_id)) {
-    return `${at}.field_id must be a non-empty string or null.`;
-  }
-  const v = node.value;
-  if (v === null || isScalar(v) || (Array.isArray(v) && v.every(isScalar))) return null;
-  return `${at}.value must be null, a string, number or boolean, or a list of them.`;
+  return null;
 }
 
 /** What is wrong with `c` as a RequestFieldCondition (a set field of a block), or null. */
