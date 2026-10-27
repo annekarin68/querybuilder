@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { queryToText } from "../../src/query/summary";
-import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
-import { emptyQuery, newCondition, newGroup, addChild, updateNode } from "../../src/query/tree";
+import { queryToText } from "../../../src/query/legacy/summary";
+import type { CatalogField, FieldCatalog } from "../../../src/query/fieldCatalog";
+import {
+  emptyQuery,
+  newCondition,
+  newGroup,
+  addChild,
+  updateNode,
+} from "../../../src/query/legacy/tree";
 
 const field = (fieldId: string, name: string, options?: string[]): CatalogField => ({
   facetId: "thing",

@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import * as client from "../../src/api/client";
 import type { DatabaseResult } from "../../src/model";
-import type { Condition, Group } from "../../src/query/types";
+import type { Condition, Group } from "../../src/query/legacy/types";
 import { createMockServer } from "../../mock-server/server";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
 import { unfinishedDraft, unfinishedTree, withoutNodeIds } from "../savedQueryFixtures";

@@ -1,5 +1,5 @@
-import type { Facet } from "../model";
-import { findField, type FieldCatalog } from "./fieldCatalog";
+import type { Facet } from "../../model";
+import { findField, type FieldCatalog } from "../fieldCatalog";
 import { countConditions, groupOf, newCondition, type Direction } from "./tree";
 import type { Condition, QueryNode } from "./types";
 

@@ -1,4 +1,4 @@
-import type { StatsState } from "../state";
+import type { StatsState } from "../../state";
 import type { Group, Issue, QueryNode } from "./types";
 
 /** `issues` without repeats: the same kind and message on the same node is

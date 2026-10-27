@@ -7,7 +7,7 @@ import {
   type CatalogOperator,
   type FieldCatalog,
   type ValueType,
-} from "./fieldCatalog";
+} from "../fieldCatalog";
 import { queryToText } from "./summary";
 import type { Condition } from "./types";
 

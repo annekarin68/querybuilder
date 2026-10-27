@@ -5,9 +5,15 @@ import {
   sameName,
   saveTarget,
   type OpenSaved,
-} from "../../src/query/saved";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
-import type { Group } from "../../src/query/types";
+} from "../../../src/query/legacy/saved";
+import {
+  addChild,
+  emptyQuery,
+  newCondition,
+  newGroup,
+  updateNode,
+} from "../../../src/query/legacy/tree";
+import type { Group } from "../../../src/query/legacy/types";
 
 /** A query with one chosen condition. */
 function chosenQuery(value: number | null = 3): Group {

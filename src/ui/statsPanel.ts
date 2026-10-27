@@ -1,7 +1,7 @@
 import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../state";
 import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
-import { placeIssues } from "../query/issues";
+import { placeIssues } from "../query/legacy/issues";
 import { failureReasons, queryIsAtFault } from "./databasePicker";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 

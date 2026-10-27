@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createStore, initialState, runBlocker, type RunInputs } from "../src/state";
-import { addChild, emptyQuery, newCondition } from "../src/query/tree";
+import { addChild, emptyQuery, newCondition } from "../src/query/legacy/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
 describe("store", () => {

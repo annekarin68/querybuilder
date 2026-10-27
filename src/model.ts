@@ -12,7 +12,7 @@
  * blank is "" (already trimmed), never missing.
  */
 
-import type { Group } from "./query/types";
+import type { Group } from "./query/legacy/types";
 
 /** A partition of the events the query can be scoped to. */
 export interface Database {

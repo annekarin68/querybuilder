@@ -7,23 +7,23 @@ import {
   toEvent,
   toFacet,
   toField,
-  toSavedQuery,
   toUser,
 } from "../../src/api/response";
-import { toSavedQueryRequest } from "../../src/api/request";
+import { toSavedQuery } from "../../src/api/legacy/savedResponse";
+import { toSavedQueryRequest } from "../../src/api/legacy/request";
 import {
   unfinishedDraft,
   unfinishedResponse,
   unfinishedTree,
   withoutNodeIds,
 } from "../savedQueryFixtures";
-import type { Group, QueryNode } from "../../src/query/types";
+import type { Group, QueryNode } from "../../src/query/legacy/types";
+import type { SavedQueryResponse } from "../../src/api/legacy/types";
 import type {
   DatabasesResponse,
   EventResponse,
   IndividualFieldResponse,
   IndividualResponse,
-  SavedQueryResponse,
   StatsResponse,
   UserResponse,
 } from "../../src/api/types";

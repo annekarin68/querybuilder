@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { emptyQuery, newCondition } from "../../src/query/tree";
+import { emptyQuery, newCondition } from "../../src/query/legacy/tree";
 import { initialState, runBlocker, type AppState } from "../../src/state";
 import { EVENT_TITLE_ID, eventDialogHtml, openEventOf } from "../../src/ui/eventDialog";
 

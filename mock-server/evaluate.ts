@@ -1,9 +1,5 @@
-import type {
-  RequestCondition,
-  RequestNode,
-  StatsErrorMessage,
-  StatsResponse,
-} from "../src/api/types";
+import type { RequestCondition, RequestNode } from "../src/api/legacy/types";
+import type { StatsErrorMessage, StatsResponse } from "../src/api/types";
 
 export type Row = Record<string, string | number | boolean | null>;
 

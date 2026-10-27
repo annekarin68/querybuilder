@@ -22,7 +22,8 @@ import {
   savedQueryOwner,
   type SavedQueryAnswer,
 } from "./savedQueries";
-import type { QueryRequest, StatsErrorMessage } from "../src/api/types";
+import type { QueryRequest } from "../src/api/legacy/types";
+import type { StatsErrorMessage } from "../src/api/types";
 import {
   startLogin,
   issueFakeCode,

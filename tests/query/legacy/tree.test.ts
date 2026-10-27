@@ -21,8 +21,8 @@ import {
   ungroupBlocker,
   ungroup,
   UNGROUP_BLOCKED_MESSAGE,
-} from "../../src/query/tree";
-import type { Condition, Group, QueryNode } from "../../src/query/types";
+} from "../../../src/query/legacy/tree";
+import type { Condition, Group, QueryNode } from "../../../src/query/legacy/types";
 
 describe("tree", () => {
   it("emptyQuery is an AND group with no children", () => {

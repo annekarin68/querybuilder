@@ -7,8 +7,8 @@ import {
   type Arity,
   type FieldCatalog,
   type ValueType,
-} from "./fieldCatalog";
-import { isUtcTimestamp } from "./dates";
+} from "../fieldCatalog";
+import { isUtcTimestamp } from "../dates";
 
 /** Whether a single value is still unset: nothing chosen or typed yet. */
 export function isBlankValue(v: unknown): boolean {

@@ -1,10 +1,5 @@
-import type {
-  SavedNode,
-  SavedQueryRequest,
-  SavedQueryResponse,
-  SavedValue,
-  UserResponse,
-} from "../src/api/types";
+import type { SavedNode, SavedQueryRequest, SavedQueryResponse } from "../src/api/legacy/types";
+import type { SavedValue, UserResponse } from "../src/api/types";
 import { isObject, isScalar } from "./requestBody";
 import { pathBelow } from "./paths";
 

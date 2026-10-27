@@ -14,10 +14,10 @@ import {
 } from "../../src/ui/queryBuilder";
 import { initialState, type AppState } from "../../src/state";
 import { RESTORED_MESSAGE } from "../../src/util/keptQuery";
-import { addChild, emptyQuery, newCondition } from "../../src/query/tree";
+import { addChild, emptyQuery, newCondition } from "../../src/query/legacy/tree";
 import { buildFieldCatalog, type FieldCatalog } from "../../src/query/fieldCatalog";
-import { UNGROUP_BLOCKED_MESSAGE } from "../../src/query/tree";
-import type { Condition, Group, Issue } from "../../src/query/types";
+import { UNGROUP_BLOCKED_MESSAGE } from "../../src/query/legacy/tree";
+import type { Condition, Group, Issue } from "../../src/query/legacy/types";
 
 describe("condition row dropdowns", () => {
   // There can be many facets and fields: typing filters the list (Fomantic's

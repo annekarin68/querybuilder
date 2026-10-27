@@ -1,10 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { toQueryRequest, toSavedQueryRequest } from "../../src/api/request";
-import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
-import type { Group } from "../../src/query/types";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
-import type { NodePatch } from "../../src/query/tree";
-import type { RequestCondition } from "../../src/api/types";
+import { toQueryRequest, toSavedQueryRequest } from "../../../src/api/legacy/request";
+import { unfinishedDraft, unfinishedRequest } from "../../savedQueryFixtures";
+import type { Group } from "../../../src/query/legacy/types";
+import {
+  addChild,
+  emptyQuery,
+  newCondition,
+  newGroup,
+  updateNode,
+} from "../../../src/query/legacy/tree";
+import type { NodePatch } from "../../../src/query/legacy/tree";
+import type { RequestCondition } from "../../../src/api/legacy/types";
 
 /** Root AND of: size > 3, and a collapsed OR group holding color in [red, blue]. */
 function sample() {

@@ -1,4 +1,4 @@
-import type { Group, QueryNode } from "../query/types";
+import type { Group, QueryNode } from "../query/legacy/types";
 
 /**
  * The **kept query** (docs/ARCHITECTURE.md, "Saved query across the

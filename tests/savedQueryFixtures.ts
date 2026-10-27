@@ -1,6 +1,6 @@
-import type { SavedQueryResponse, SavedQueryRequest } from "../src/api/types";
+import type { SavedQueryResponse, SavedQueryRequest } from "../src/api/legacy/types";
 import type { SavedQueryDraft } from "../src/model";
-import type { Group, QueryNode } from "../src/query/types";
+import type { Group, QueryNode } from "../src/query/legacy/types";
 
 // One saved query shared by the conversion, client and mock tests. The `unfinishedRequest` and `unfinishedResponse` use the wire's snake_case keys; the draft and tree use the frontend's own.
 

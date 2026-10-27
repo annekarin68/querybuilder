@@ -3,7 +3,7 @@ import type * as client from "./api/client";
 import { userMessage } from "./api/errorText";
 import type { Compliance, DatabaseResult, SavedQuery, SavedQueryDraft } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
-import { serverIssues } from "./query/issues";
+import { serverIssues } from "./query/legacy/issues";
 import {
   addedNodesMessage,
   dropNotice,
@@ -11,7 +11,7 @@ import {
   nodesForItem,
   reorderedMessage,
   type DragItem,
-} from "./query/drop";
+} from "./query/legacy/drop";
 import {
   addChild,
   emptyQuery,
@@ -25,10 +25,10 @@ import {
   sameTree,
   updateNode,
   type Direction,
-} from "./query/tree";
-import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/saved";
-import type { Group } from "./query/types";
-import { validateQuery } from "./query/validate";
+} from "./query/legacy/tree";
+import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/legacy/saved";
+import type { Group } from "./query/legacy/types";
+import { validateQuery } from "./query/legacy/validate";
 import {
   runBlocker,
   type AppState,

@@ -11,8 +11,14 @@ import {
   type Failed,
 } from "../../src/ui/statsPanel";
 import { initialState, type AppState } from "../../src/state";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
-import { placeIssues } from "../../src/query/issues";
+import {
+  addChild,
+  emptyQuery,
+  newCondition,
+  newGroup,
+  updateNode,
+} from "../../src/query/legacy/tree";
+import { placeIssues } from "../../src/query/legacy/issues";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { dbError, failed, ok } from "../statsFixtures";
 

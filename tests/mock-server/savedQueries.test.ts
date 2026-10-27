@@ -5,7 +5,7 @@ import {
   savedQueryIdFrom,
   savedQueryOwner,
 } from "../../mock-server/savedQueries";
-import type { SavedQueryRequest, SavedQueryResponse } from "../../src/api/types";
+import type { SavedQueryRequest, SavedQueryResponse } from "../../src/api/legacy/types";
 import { unfinishedRequest } from "../savedQueryFixtures";
 
 /** A store whose clock and ids the test controls. `tick` moves the clock on. */

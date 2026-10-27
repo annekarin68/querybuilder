@@ -3,16 +3,14 @@ import type {
   RequestCondition,
   RequestGroup,
   RequestNode,
-  RequestScalar,
-  RequestValue,
   SavedCondition,
   SavedGroup,
   SavedNode,
   SavedQueryRequest,
-  SavedValue,
 } from "./types";
-import type { SavedQueryDraft } from "../model";
-import type { Condition, Group, QueryNode } from "../query/types";
+import type { RequestScalar, RequestValue, SavedValue } from "../types";
+import type { SavedQueryDraft } from "../../model";
+import type { Condition, Group, QueryNode } from "../../query/legacy/types";
 
 // Both builders below write the wire's snake_case keys (`facet_id`) from the
 // model's camelCase properties (`facetId`): this file is where the two meet.

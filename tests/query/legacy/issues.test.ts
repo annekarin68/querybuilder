@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { placeIssues, serverIssues } from "../../src/query/issues";
-import { emptyQuery, newCondition } from "../../src/query/tree";
-import type { Condition, Group, Issue, QueryNode } from "../../src/query/types";
-import { dbError, failed, ok } from "../statsFixtures";
+import { placeIssues, serverIssues } from "../../../src/query/legacy/issues";
+import { emptyQuery, newCondition } from "../../../src/query/legacy/tree";
+import type { Condition, Group, Issue, QueryNode } from "../../../src/query/legacy/types";
+import { dbError, failed, ok } from "../../statsFixtures";
 
 const cond = (id: string): Condition => ({ ...newCondition(), id });
 const group = (id: string, children: QueryNode[], collapsed = false): Group => ({

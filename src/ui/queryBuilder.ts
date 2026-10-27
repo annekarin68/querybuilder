@@ -1,5 +1,5 @@
 import type { AppState } from "../state";
-import type { Condition, Group, Issue, QueryNode } from "../query/types";
+import type { Condition, Group, Issue, QueryNode } from "../query/legacy/types";
 import type { Facet } from "../model";
 import {
   FACET_OPERATOR_IDS,
@@ -26,8 +26,12 @@ import {
   UNGROUP_BLOCKED_MESSAGE,
   updateNode,
   type Direction,
-} from "../query/tree";
-import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
+} from "../query/legacy/tree";
+import {
+  announcementAfterChange,
+  cursorAfterChange,
+  nextCondition,
+} from "../query/legacy/conditionEdit";
 import {
   ADDED_GROUP_MESSAGE,
   addedMessage,
@@ -36,10 +40,10 @@ import {
   parseDragItem,
   UNGROUPED_MESSAGE,
   type DragItem,
-} from "../query/drop";
-import { placeIssues } from "../query/issues";
-import { isEdited } from "../query/saved";
-import { queryToText } from "../query/summary";
+} from "../query/legacy/drop";
+import { placeIssues } from "../query/legacy/issues";
+import { isEdited } from "../query/legacy/saved";
+import { queryToText } from "../query/legacy/summary";
 import {
   createAfterPointer,
   shouldFlushBeforeClick,

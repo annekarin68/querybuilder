@@ -7,7 +7,7 @@ import {
   operatorName,
   type Arity,
   type FieldCatalog,
-} from "./fieldCatalog";
+} from "../fieldCatalog";
 import { isBlankValue } from "./validate";
 
 /** Stands in for a value the user hasn't entered yet, like "(field?)" below. */

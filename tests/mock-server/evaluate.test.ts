@@ -11,7 +11,8 @@ import {
   utcSpan,
   type Row,
 } from "../../mock-server/evaluate";
-import type { RequestNode, RequestValue } from "../../src/api/types";
+import type { RequestNode } from "../../src/api/legacy/types";
+import type { RequestValue } from "../../src/api/types";
 import { MALFORMED, WELL_FORMED } from "../dateCases";
 
 const row = {

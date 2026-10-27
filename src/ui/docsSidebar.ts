@@ -4,7 +4,7 @@ import { escapeHtml, paint } from "./panel";
 import { compact, countLabel, displayLabel, exact, matchRatio } from "./format";
 import { fieldPreview } from "./docsField";
 import { filterStatus, groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
-import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
+import { DRAG_MIME, parseDragItem, type DragItem } from "../query/legacy/drop";
 import { TEXT_SOURCES, type TextSource } from "../config";
 import { findField, type FieldCatalog } from "../query/fieldCatalog";
 

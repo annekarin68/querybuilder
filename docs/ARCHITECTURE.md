@@ -429,27 +429,35 @@ src/
     types.ts           The backend's request/response types. This IS the API contract.
     contract.ts        Checks each response value against the contract as it is read: ResponseValue,
                        ResponseObject, ContractError ("Reading responses").
-    response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, …).
-    request.ts         toQueryRequest(query, databaseIds) — the body sent to /filter/validate and /filter/execute;
+    response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, …; the saved-query reader is in legacy/).
+    legacy/            The wire format before facet blocks. The app still runs on it until plan A2
+                       (docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md) switches it over
+                       and deletes this folder; new code goes in the files next to it.
+      request.ts       toQueryRequest(query, databaseIds) — the body sent to /filter/validate and /filter/execute;
                        toSavedQueryRequest(draft) — the body of a saved query.
+      types.ts         The old query-tree and saved-query types: QueryRequest, RequestNode, SavedQueryRequest, …
+      savedResponse.ts toSavedQuery — a saved query from the backend -> model.
   query/
-    types.ts           Condition, Group, QueryNode, Issue.
-    tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
-                       moveSibling, positionOf, groupOf, sameSemantics, sameTree, …).
-    saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork`, `saveTarget`.
-    drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
-                       docs item creates, and what it couldn't), `dropNotice`, `addedNodesMessage` — pure.
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator,
                        isFacetLevel, isFacetTest (a well-formed whole-facet test).
-    conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row,
-                       including the whole-facet tests of the Field dropdown; cursorAfterChange — where
-                       the cursor goes after a row change; announcementAfterChange — what a screen
-                       reader is told after one.
-    validate.ts        validateQuery(tree, catalog) -> Issue[].
-    issues.ts          serverIssues / placeIssues — the backend's issues, and where every issue is shown.
-    summary.ts         queryToText — the query in plain English (display only).
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
+    legacy/            The query model before facet blocks. The app still runs on it until plan A2
+                       (docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md) switches it over
+                       and deletes this folder; new code goes in the files next to it.
+      types.ts           Condition, Group, QueryNode, Issue.
+      tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
+                         moveSibling, positionOf, groupOf, sameSemantics, sameTree, …).
+      saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork`, `saveTarget`.
+      drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
+                         docs item creates, and what it couldn't), `dropNotice`, `addedNodesMessage` — pure.
+      conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row,
+                         including the whole-facet tests of the Field dropdown; cursorAfterChange — where
+                         the cursor goes after a row change; announcementAfterChange — what a screen
+                         reader is told after one.
+      validate.ts        validateQuery(tree, catalog) -> Issue[].
+      issues.ts          serverIssues / placeIssues — the backend's issues, and where every issue is shown.
+      summary.ts         queryToText — the query in plain English (display only).
   util/
     debounce.ts        debounce(fn, ms) (the live-stats trigger).
     afterPointer.ts    When a typed value may be committed: not while the mouse button is down (see "Centre — `queryBuilder.ts`", Wiring).
@@ -507,8 +515,8 @@ public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.sv
                        easter-egg faces egg-logo.svg, egg-disappointed.svg, egg-loading.svg — replaceable
                        files, named in `MASCOT` and `EASTER_EGG_MASCOT`, the favicon in `index.html`
                        ("Pickle theme and mascot"). Served as-is, scanned by `check:offline`.
-tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
-                       src/query/tree.ts), plus app.test, appScripts, env, lintRules, docReferences,
+tests/                 One test file per source file it tests (tests/query/legacy/tree.test.ts ↔
+                       src/query/legacy/tree.ts), plus app.test, appScripts, env, lintRules, docReferences,
                        offlineCheck, thirdPartyNotices, themeContrast, noBackendDataInSrc and
                        api/mockContract; shared fixtures in dateCases, savedQueryFixtures and statsFixtures.
 scripts/check-offline.mjs  The offline guard ("Offline-first"); findOffOrigin(text) is pure and tested.

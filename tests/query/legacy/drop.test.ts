@@ -10,11 +10,11 @@ import {
   nodesForItem,
   parseDragItem,
   UNGROUPED_MESSAGE,
-} from "../../src/query/drop";
-import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { newCondition, newGroup } from "../../src/query/tree";
-import type { Condition } from "../../src/query/types";
-import type { Facet } from "../../src/model";
+} from "../../../src/query/legacy/drop";
+import { buildFieldCatalog } from "../../../src/query/fieldCatalog";
+import { newCondition, newGroup } from "../../../src/query/legacy/tree";
+import type { Condition } from "../../../src/query/legacy/types";
+import type { Facet } from "../../../src/model";
 
 const facet = (id: string, tags: string[], fields: Facet["fields"] = [], number = 1): Facet => ({
   id,

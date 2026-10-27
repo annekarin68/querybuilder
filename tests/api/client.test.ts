@@ -20,9 +20,9 @@ import {
   updateSavedQuery,
 } from "../../src/api/client";
 import { ContractError } from "../../src/api/contract";
-import { toQueryRequest } from "../../src/api/request";
-import { toSavedQueryRequest } from "../../src/api/request";
-import type { Group } from "../../src/query/types";
+import { toQueryRequest } from "../../src/api/legacy/request";
+import { toSavedQueryRequest } from "../../src/api/legacy/request";
+import type { Group } from "../../src/query/legacy/types";
 import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
 
 const query: Group = {

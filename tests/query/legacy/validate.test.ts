@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { validateQuery } from "../../src/query/validate";
-import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
+import { validateQuery } from "../../../src/query/legacy/validate";
+import type { CatalogField, FieldCatalog } from "../../../src/query/fieldCatalog";
 import {
   emptyQuery,
   newCondition,
@@ -8,8 +8,8 @@ import {
   addChild,
   updateNode,
   type NodePatch,
-} from "../../src/query/tree";
-import type { Issue } from "../../src/query/types";
+} from "../../../src/query/legacy/tree";
+import type { Issue } from "../../../src/query/legacy/types";
 
 const field = (
   fieldId: string,

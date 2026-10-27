@@ -5,7 +5,13 @@ import {
   keepQuery,
   readKeptQuery,
 } from "../../src/util/keptQuery";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
+import {
+  addChild,
+  emptyQuery,
+  newCondition,
+  newGroup,
+  updateNode,
+} from "../../src/query/legacy/tree";
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();

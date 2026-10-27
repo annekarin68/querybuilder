@@ -4,9 +4,9 @@ import {
   cursorAfterChange,
   defaultValueFor,
   nextCondition,
-} from "../../src/query/conditionEdit";
-import type { CatalogField, CatalogOperator, FieldCatalog } from "../../src/query/fieldCatalog";
-import type { Condition } from "../../src/query/types";
+} from "../../../src/query/legacy/conditionEdit";
+import type { CatalogField, CatalogOperator, FieldCatalog } from "../../../src/query/fieldCatalog";
+import type { Condition } from "../../../src/query/legacy/types";
 
 const field = (fieldId: string, valueType: CatalogField["valueType"]): CatalogField => ({
   facetId: "thing",

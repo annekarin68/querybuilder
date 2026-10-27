@@ -1,5 +1,5 @@
-import type { Group, Issue } from "./query/types";
-import { countConditions, emptyQuery } from "./query/tree";
+import type { Group, Issue } from "./query/legacy/types";
+import { countConditions, emptyQuery } from "./query/legacy/tree";
 import type {
   Compliance,
   Database,
@@ -10,7 +10,7 @@ import type {
   User,
 } from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
-import type { OpenSaved } from "./query/saved";
+import type { OpenSaved } from "./query/legacy/saved";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 

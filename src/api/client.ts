@@ -3,10 +3,10 @@ import type {
   EventResponse,
   EventsResponse,
   IndividualResponse,
-  SavedQueryResponse,
   StatsResponse,
   UserResponse,
 } from "./types";
+import type { SavedQueryResponse } from "./legacy/types";
 import type {
   Compliance,
   Database,
@@ -17,18 +17,11 @@ import type {
   SavedQueryDraft,
   User,
 } from "../model";
-import type { Group } from "../query/types";
+import type { Group } from "../query/legacy/types";
 import { ContractError, ResponseValue } from "./contract";
-import { toQueryRequest, toSavedQueryRequest } from "./request";
-import {
-  toCompliance,
-  toDatabase,
-  toDatabaseResult,
-  toEvent,
-  toFacet,
-  toSavedQuery,
-  toUser,
-} from "./response";
+import { toQueryRequest, toSavedQueryRequest } from "./legacy/request";
+import { toCompliance, toDatabase, toDatabaseResult, toEvent, toFacet, toUser } from "./response";
+import { toSavedQuery } from "./legacy/savedResponse";
 
 // The only file that calls fetch(): one function per endpoint. Every one of
 // them speaks the frontend's model (src/model.ts): request bodies are built by

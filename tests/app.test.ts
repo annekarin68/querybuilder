@@ -10,10 +10,10 @@ import type {
   SavedQueryDraft,
 } from "../src/model";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../src/query/tree";
-import type { Group } from "../src/query/types";
-import { isEdited, type OpenSaved } from "../src/query/saved";
-import { validateQuery } from "../src/query/validate";
+import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../src/query/legacy/tree";
+import type { Group } from "../src/query/legacy/types";
+import { isEdited, type OpenSaved } from "../src/query/legacy/saved";
+import { validateQuery } from "../src/query/legacy/validate";
 import { createStore, initialState, type AppState } from "../src/state";
 import {
   keepQuery,
