@@ -5,6 +5,10 @@ import type {
   EventResponse,
   IndividualFieldResponse,
   IndividualResponse,
+  SavedFacet,
+  SavedFieldCondition,
+  SavedGroup,
+  SavedNode,
   StatsErrorMessage,
   StatsResponse,
   UserResponse,
@@ -21,6 +25,8 @@ import type {
   Scalar,
   User,
 } from "../model";
+import { groupOf, newBlock, newFieldCondition } from "../query/tree";
+import type { FacetBlock, FieldCondition, Group, QueryNode } from "../query/types";
 
 /**
  * Backend response → the frontend's own model (src/model.ts). client.ts runs
@@ -154,4 +160,40 @@ export function toUser(u: ResponseObject<UserResponse>): User {
 export function toCompliance(body: ResponseValue): Compliance {
   body.object<ComplianceLogResponse>();
   return { status: "acknowledged", log: body.formatted() };
+}
+
+/**
+ * A saved query's tree, read strictly (a malformed node is a ContractError
+ * naming its path: half of a user's query would be worse than saying it can't
+ * be read). Every node gets a fresh id, as any new node does: a saved tree
+ * has none. The tree comes back as it was saved, unfinished parts included.
+ */
+export function fromSavedTree(root: ResponseObject<SavedGroup>): Group {
+  root.oneOf("kind", ["group"]); // a saved query's root is always a group
+  return savedGroupOf(root);
+}
+
+function savedNodeOf(n: ResponseObject<SavedNode>): QueryNode {
+  return n.oneOf("kind", ["group", "facet"]) === "group"
+    ? savedGroupOf(n as ResponseObject<SavedGroup>)
+    : savedFacetOf(n as ResponseObject<SavedFacet>);
+}
+
+function savedGroupOf(g: ResponseObject<SavedGroup>): Group {
+  const operator = g.oneOf("operator", ["AND", "OR"]);
+  return groupOf(g.list<SavedNode>("children").map(savedNodeOf), operator);
+}
+
+function savedFacetOf(f: ResponseObject<SavedFacet>): FacetBlock {
+  return {
+    ...newBlock(f.id("facet_id")),
+    negated: f.boolean("negated"),
+    operator: f.oneOf("operator", ["AND", "OR"]),
+    conditions: f.list<SavedFieldCondition>("conditions").map(savedConditionOf),
+  };
+}
+
+function savedConditionOf(c: ResponseObject<SavedFieldCondition>): FieldCondition {
+  c.oneOf("kind", ["condition"]);
+  return newFieldCondition(c.id("field_id"), c.nullableId("operator_id"), c.savedValue("value"));
 }

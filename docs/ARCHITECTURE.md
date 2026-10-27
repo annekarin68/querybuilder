@@ -430,6 +430,10 @@ src/
     contract.ts        Checks each response value against the contract as it is read: ResponseValue,
                        ResponseObject, ContractError ("Reading responses").
     response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, …; the saved-query reader is in legacy/).
+                       Also `fromSavedTree`, the saved tree of facet blocks -> model (not wired in until plan A2, see legacy/).
+    request.ts         NEW wire format, not wired in until plan A2 (client.ts still uses legacy/request.ts):
+                       toQueryRequest(query, databases) — the facet-block body of /filter/validate and /filter/execute;
+                       toSavedTree(query) — a saved query's tree. Plan A2 builds the saved-query body on these.
     legacy/            The wire format before facet blocks. The app still runs on it until plan A2
                        (docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md) switches it over
                        and deletes this folder; new code goes in the files next to it.

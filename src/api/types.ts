@@ -187,3 +187,76 @@ export type RequestValue = null | RequestScalar | RequestScalar[];
 
 /** Like `RequestValue`, but a list may hold nulls (an unfinished from–to pair). */
 export type SavedValue = null | RequestScalar | (RequestScalar | null)[];
+
+// ---- the query tree with facet blocks (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 4)
+
+/** The body of POST {prefix}/filter/validate and /filter/execute. */
+export interface QueryRequest {
+  /** `DatabasesResponse.label` of each database to run against. Never empty. */
+  databases: string[];
+  query: RequestGroup;
+}
+
+export type RequestNode = RequestGroup | RequestFacet;
+
+export interface RequestGroup {
+  kind: "group";
+  /** The frontend's id for this node: opaque, unique within the request.
+   *  Quoted back as `StatsErrorMessage.node_id`. */
+  id: string;
+  operator: "AND" | "OR";
+  /** Never empty. */
+  children: RequestNode[];
+}
+
+/**
+ * The event has (when `negated`: has no) occurrence of `facet_id` in which
+ * ALL ("AND") / ANY ("OR") of `conditions` hold. No conditions: the facet is
+ * present (absent). The backend interprets it.
+ */
+export interface RequestFacet {
+  kind: "facet";
+  id: string;
+  /** `IndividualResponse.label`. */
+  facet_id: string;
+  negated: boolean;
+  operator: "AND" | "OR";
+  /** At most one per field; may be empty. */
+  conditions: RequestFieldCondition[];
+}
+
+export interface RequestFieldCondition {
+  kind: "condition";
+  id: string;
+  /** `IndividualFieldResponse.label`, within the facet of the block. */
+  field_id: string;
+  /** An operator label, e.g. "gt". */
+  operator_id: string;
+  value: RequestValue;
+}
+
+/** A saved query's tree: the request's shape without node ids (they only
+ *  live for one page load) and with unfinished parts allowed. */
+export type SavedNode = SavedGroup | SavedFacet;
+
+export interface SavedGroup {
+  kind: "group";
+  operator: "AND" | "OR";
+  /** May be empty. */
+  children: SavedNode[];
+}
+
+export interface SavedFacet {
+  kind: "facet";
+  facet_id: string;
+  negated: boolean;
+  operator: "AND" | "OR";
+  conditions: SavedFieldCondition[];
+}
+
+export interface SavedFieldCondition {
+  kind: "condition";
+  field_id: string;
+  operator_id: string | null;
+  value: SavedValue;
+}
