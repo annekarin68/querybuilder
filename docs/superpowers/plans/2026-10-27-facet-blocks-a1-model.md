@@ -2735,3 +2735,18 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - Spec coverage for A1: section 3 (model) → Tasks 2, 3, 5, 6; section 4 (wire, saved shape, `not_in`, backend hand-off) → Tasks 3, 7 (the hand-off text lands with the doc rewrite in A2); section 5 "Adding" and "Summary" → Tasks 4, 5; section 9 Node tests for model/wire/mock → every task; mock per occurrence → Task 8. Not in A1 by design: the builder UI, `AppState.panelTab` / `selectedField`, the switch-over, the saved-query endpoints' new shape (`toSavedQueryRequest`, `toSavedQuery`, `readSavedQueryBody`), the kept-query check, deleting `legacy/`, the full ARCHITECTURE rewrite → plan A2; co-occurrence and palette → plan B.
 - Names used across tasks: `newBlock`, `newFieldCondition`, `setFieldCondition`, `clearFieldCondition`, `countBlocks`, `insertNodes`, `findNode` (Task 2) are the ones Tasks 5–8 import; `FieldRef` / `DropOutcome` (Task 5) and `blockText` (Task 4) are for A2.
+
+## Carried into plan A2 (from the reviews of A1, 2026-10-27)
+
+Small findings the reviews deferred to A2, because A2 rewrites or deletes the code involved:
+
+- Rewrite "The query model", "Wire format of the query" and "Saved queries" in `docs/ARCHITECTURE.md` for the new model; drop the "until plan A2" notes and the remaining bare `request.ts` / `response.ts` / `validate.ts` mentions; record that "+ N more fields" only hides unset rows.
+- Fix stale path comments: `src/api/client.ts` (names `src/api/request.ts`), `src/ui/queryBuilder.ts`, `src/state.ts` (name `src/query/issues.ts`).
+- `ungroupBlocker` on a block id says "That group is no longer in the query."; `NodePatch` lets `negated` land on a group — add a block-only setter when the header handlers are written.
+- Move the legacy tests for `moveSibling` down, one-child ungroup and the untested `validate.ts` branches (Unknown operator, takes no value, Remove the empty value, boolean/date type messages) to the new modules before deleting `legacy/`.
+- Announcements: a value dropped on a set row says "Added 1 facet" without saying it is a separate block; a drop that only fills or focuses a row has `added: []` and needs its own message (e.g. "Set size to 3.").
+- `isEdited` compares JSON in key and condition order; `setFieldCondition` appends, so clear-then-set moves a condition to the end (shows *(edited)*). Consider inserting in field order.
+- `src/api/request.ts`: `savedValueOf` error says "cannot be sent" on the save path; `fromSavedTree` / `toSavedTree` naming reads as two directions with one pattern.
+- `drop.ts`: `Number(item.value)` is unguarded (`Number("")` is 0).
+- Mock: split the long "Facet blocks" bullet in "Mock server"; share one value-shape check in `requestBody.ts`; drop `Row.__db` and the redundant `String(...)` in `rows.ts` with the legacy shim; the saved-queries body check (`savedTreeProblem`) still only knows the old shape.
+- Ask the maintainers: should "Is none of" match an occurrence with no value for the field (the mock says yes, like `neq`)? Should a negated single field be bracketed ("has no (size > 40)")? Should an unknown field get a removable row, or only the error on its block?
