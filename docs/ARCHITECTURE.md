@@ -445,6 +445,11 @@ src/
     validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue.
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
                        for facet blocks (display only; a folded block's line).
+    drop.ts            Facet-block drops: `dropItem` (what a dropped docs item adds, which row it focuses, or what
+                       it refuses), `dropNotice`, `addedNodesMessage`, `movedMessage`, `reorderedMessage` — pure.
+                       Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`). Not legacy/drop.ts.
+    fieldEdit.ts       nextFieldCondition — a field row after an operator or value was picked (its arity change
+                       resets the value); cursorAfterOperator — where the cursor goes next.
     legacy/            The query model before facet blocks. The app still runs on it until plan A2
                        (docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md) switches it over
                        and deletes this folder; new code goes in the files next to it.
