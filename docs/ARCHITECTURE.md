@@ -1230,8 +1230,10 @@ does).
 | `two` (`between`) | `[from, to]` |
 | `many` (`in`, `not_in`) | a non-empty list with no blank item |
 
-`not_in` ("Is none of") matches a value that is none of the list. **Backend
-hand-off:** implement `not_in`.
+`not_in` ("Is none of") means the value is none of the list. Whether a field
+with no value matches is **the backend's to decide** (it can differ per
+database; maintainers, 2026-10-27); the mock matches it, as it does for `neq`.
+**Backend hand-off:** implement `not_in`.
 
 Each value has the field's type (the value control converts what the user
 picks or types, `parseEntry`):

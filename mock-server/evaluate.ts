@@ -160,6 +160,8 @@ function fieldMatches(operatorId: string, value: unknown, v: Row[string] | undef
     }
     case "in":
       return Array.isArray(value) && value.includes(v as never);
+    // A missing value matches, as for neq. That is only the mock's reading:
+    // the real backend decides, and it can differ per database.
     case "not_in":
       return Array.isArray(value) && !value.includes(v as never);
     case "absent":

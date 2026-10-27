@@ -73,13 +73,16 @@ function inFieldOrder(block: FacetBlock, catalog: FieldCatalog): FieldCondition[
 }
 
 /** One block in words: "Thing present", "Thing has size > 40",
- *  "Thing has no (size > 40 AND label = x)". */
+ *  "Thing has no (size > 40)", "Thing has (size > 40 AND label = x)". */
 export function blockText(block: FacetBlock, catalog: FieldCatalog): string {
   const facet = findFacet(catalog, block.facetId)?.name ?? "(facet?)";
   const parts = inFieldOrder(block, catalog).map((c) => conditionText(block, c, catalog));
   if (parts.length === 0) return `${facet} ${block.negated ? "absent" : "present"}`;
   const has = block.negated ? "has no" : "has";
-  const inner = parts.length === 1 ? parts[0]! : `(${parts.join(` ${block.operator} `)})`;
+  // "has no" always gets brackets, even around one field: "has no size > 40"
+  // could be read as "has no size" (maintainers, 2026-10-27).
+  const bare = parts.length === 1 && !block.negated;
+  const inner = bare ? parts[0]! : `(${parts.join(` ${block.operator} `)})`;
   return `${facet} ${has} ${inner}`;
 }
 

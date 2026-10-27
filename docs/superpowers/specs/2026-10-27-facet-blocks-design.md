@@ -73,6 +73,12 @@ ids. This design assumes that change.
     brackets around a block's fields and `between (20, 80)` (section 5).
 22. **The legend is only a popover**, from a "?" on every block's row
     (section 6).
+23. **What `not_in` matches for a field with no value is the backend's
+    call** (it can be database specific). The frontend only sends it.
+24. **"Has no" is always bracketed** in the summary, even for one field.
+25. **Unknown or doubled fields of a saved block get removable rows** with
+    their errors, so a saved query reloads as close to how it was saved as
+    possible (section 5).
 
 ## 3. Query model (`src/query/types.ts`)
 
@@ -126,7 +132,10 @@ work on groups and blocks; a field condition is never moved.
 - Meaning (the backend's to implement): the event **has** (when `negated`,
   **has no**) occurrence of `facet_id` in which ALL / ANY of `conditions`
   hold. Empty `conditions`: the facet is present / absent.
-- `not_in`, arity `many`: the value is none of the list.
+- `not_in`, arity `many`: the value is none of the list. Whether an
+  occurrence with no value for the field matches is **the backend's to
+  decide** (it can differ per database; maintainers, 2026-10-27). The mock
+  matches it, as it does for `neq`; that is only the mock's reading.
 - `node_id` in a stats error may name a block or a field condition.
 - The frontend still sends the query as the user built it; unset fields are
   not part of the query, so leaving them out is not a rewrite.
@@ -169,6 +178,15 @@ does the real backend do the same?
   keystroke.
 - Folded block: header plus a one-line summary.
 - Issues: on the row or the block, colours as today.
+- **A saved query is reloaded as close as possible to how it was saved**
+  (maintainers, 2026-10-27). A condition on a field the dictionary no longer
+  has, or a second condition on the same field (only a tampered save), gets
+  its own extra row after the facet's fields: the field id as its label,
+  its operator and value shown read-only, a ✕ to remove it, and the error
+  from `validate.ts` ("Unknown field “x”. …" / "The field “x” is set twice
+  in this facet.") on that row. Until those rows exist (plan A1) the errors
+  sit on the block, so they are never invisible; plan A2 moves them to the
+  rows when it draws them.
 
 **Panel**: beside the rows; under them when the builder itself is narrow (a
 CSS container query on the builder's width, since the open dictionary takes
@@ -184,7 +202,9 @@ ambiguous, because it is often cut off (maintainers, 2026-10-27):
   brackets are the one addition to the maintainers' wording: without them, an
   AND inside a block (same occurrence) reads like the AND between two blocks,
   and "has no" would seem to cover only the first field.
-- Has no: `Battery pack has no (…)` / `has no cell_temp > 40`.
+- Has no: always bracketed, even around one field: `Battery pack has no
+  (cell_temp > 40)`. Without the brackets it could read as "has no cell_temp"
+  (maintainers, 2026-10-27).
 - Nothing set: `Battery pack present` / `Battery pack absent`.
 - Operators as symbols or one word: `=`, `≠`, `>`, `≥`, `<`, `≤`, `before`,
   `after`, `contains`, `in (a, b)`, `not in (a, b)`, `between (20, 80)`

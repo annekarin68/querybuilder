@@ -36,6 +36,11 @@ describe("blockText", () => {
     );
   });
 
+  it("always brackets what has no applies to, even one field", () => {
+    const one = { ...block("thing", newFieldCondition("size", "gt", 40)), negated: true };
+    expect(blockText(one, catalog)).toBe("Thing has no (size > 40)");
+  });
+
   it("brackets two or more, joined by the block's ALL / ANY, in the facet's field order", () => {
     const b = block(
       "thing",
