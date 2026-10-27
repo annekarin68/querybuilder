@@ -899,6 +899,17 @@ The mapping is also where the backend's quirks are dealt with, once:
   without a value; a `null` is tolerated and dropped.
 - **A facet's number** (`id_number`) becomes `Facet.number`; the Matching
   events table orders its columns by it.
+- **Co-occurrence** (`co_occurrence`, "Seen together") becomes
+  `Facet.coOccurrence`, a map by the other facet's id to a `CoValue`
+  (`text`, the backend's own text kept for display; `percent`, 0 to 100;
+  `tooRare`). `toFacet` reads it with `readCoOccurrence`; a missing map is
+  empty, and `getFacets` warns once for the whole list (`countWithoutCoOccurrence`).
+  A value that is not a plain number from 0 to 100 is left out, and one too
+  small for a JavaScript number (`"1e-400"` reads as 0) is kept as
+  `tooRare` with `percent` 0, each with one warning per facet listing them.
+  Ids of facets that are not in the list are dropped afterwards by
+  `pruneUnknownCoOccurrence`, with one warning per facet. It is display data:
+  nothing here throws.
 - **A missing name.** A database or facet with a blank `name` shows its id.
 - **The user's name** is the backend's `display_name` (it already falls back from
   the username to the email to the id); a blank one shows `sub` / `user_id`.
@@ -928,6 +939,7 @@ the value it reads. There are two kinds:
 | `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
 | `formatted` | a whole message whose fields the backend owns (the compliance log): it returns the value as indented JSON (`JSON.stringify(value, null, 2)`), to be shown as it is | nothing to check, so it never throws or warns; the caller first asks for `object` when the message must be an object |
 | `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` in `types.ts` | becomes `""`, `[]` or `undefined`; a warning only if the value is there but of the wrong kind |
+| `optionalEntries`, `hasKey` | an object keyed by the backend's own ids that the app only shows (a facet's `co_occurrence`): the pairs come back unchecked, for the caller to read and warn about once per object (`readCoOccurrence`) | a missing key is `undefined` without a word; a value that is not an object is `undefined` with a warning |
 | `items` | a list read one item at a time, so that one item that can't be read is skipped instead of failing the list (the saved queries: "Saved queries") | throws a `ContractError` if the value is not a list; each item comes back unchecked, for the caller to read |
 | `textForMessage` | naming an item in a console message (a skipped saved query's `name`) | `null`; it never throws or warns |
 
@@ -2459,6 +2471,11 @@ to a named handler function — add a route there, and a test in
   `import type` from `src/api/types.ts`, so the two can't drift. It shares no
   runtime code with `src/`, and `src/` never imports `mock-server/` (ESLint
   enforces that direction).
+- **Co-occurrence.** `coOccurrenceOf` (`mock-server/coOccurrence.ts`, pure and
+  tested) works out, at startup, for every individual the share of its sample
+  events that also hold each other individual (`"100"` for itself, `"0"` for
+  never), as text like the real backend's; `vehicleData.ts` adds it to every
+  individual the mock answers.
 - **Data:** 7 databases (`ALPHA`…`ETA`, sizes 12K to 5.6B) in `databases.ts`;
   each event is assigned to one database by a hash of its numeric id
   (`dbIndexForEntrysetId`), never by its content. `rows.ts` prepares every

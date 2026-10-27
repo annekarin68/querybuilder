@@ -14,8 +14,9 @@ import type {
   StatsResponse,
   UserResponse,
 } from "./types";
-import { setOwnKey, type ResponseObject, type ResponseValue } from "./contract";
+import { setOwnKey, warnOnce, type ResponseObject, type ResponseValue } from "./contract";
 import type {
+  CoValue,
   Compliance,
   Database,
   DatabaseError,
@@ -92,8 +93,113 @@ export function toFacet(i: ResponseObject<IndividualResponse>): Facet {
     comment: i.text("comment"),
     description: i.text("description"),
     eventCount: i.number("total_count"),
+    coOccurrence: readCoOccurrence(i, id),
     fields: i.list<IndividualFieldResponse>("fields").map(toField),
   };
+}
+
+/** A plain decimal, with an optional exponent. Stricter than `Number()`, which
+ *  also accepts "", " ", "0x10" and "Infinity". */
+const DECIMAL_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
+/**
+ * One co-occurrence text as a CoValue, or `null` when it is not a percentage
+ * (not text, not a plain number, or outside 0 to 100). Pure, so tests reach it.
+ *
+ * "Too rare": a JavaScript number cannot hold "1e-400" and gives 0, which
+ * would turn "seen together, very rarely" into "never seen together". A text
+ * whose digits before the `e` are not all zero but which still gives 0 is
+ * flagged instead ("Values too small for a JavaScript number", spec section 6).
+ */
+export function toCoValue(raw: unknown): CoValue | null {
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  if (!DECIMAL_TEXT.test(text)) return null;
+  const percent = Number(text);
+  if (!(percent >= 0 && percent <= 100)) return null;
+  const mantissa = text.split(/e/i)[0]!;
+  const tooRare = percent === 0 && /[1-9]/.test(mantissa);
+  // `+ 0` turns a "-0" into 0.
+  return { text, percent: percent + 0, tooRare };
+}
+
+/** At most this many ids in a warning; a backend with thousands of bad ids would flood the console. */
+const NAMES_IN_WARNING = 5;
+
+function namesForWarning(ids: string[]): string {
+  const shown = ids.slice(0, NAMES_IN_WARNING).map((id) => JSON.stringify(id));
+  const more = ids.length - shown.length;
+  return shown.join(", ") + (more > 0 ? ` and ${more} more` : "");
+}
+
+/**
+ * A facet's `co_occurrence` as a map by the other facet's id. Display data,
+ * so nothing here throws: a value that is not a percentage is left out and a
+ * too-rare one is flagged, each with one warning per facet listing them. A
+ * missing map is empty and silent here; `countWithoutCoOccurrence` reports
+ * those once for the whole list.
+ */
+export function readCoOccurrence(
+  i: ResponseObject<IndividualResponse>,
+  facetId: string,
+): Map<string, CoValue> {
+  const map = new Map<string, CoValue>();
+  const notPercentages: string[] = [];
+  const tooRare: string[] = [];
+  for (const [otherId, raw] of i.optionalEntries("co_occurrence") ?? []) {
+    const value = toCoValue(raw);
+    if (value === null) notPercentages.push(otherId);
+    else {
+      map.set(otherId, value);
+      if (value.tooRare) tooRare.push(otherId);
+    }
+  }
+  const where = `Unexpected response from ${i.requestName()}, facet ${JSON.stringify(facetId)}`;
+  if (notPercentages.length > 0) {
+    warnOnce(
+      `${where}: co_occurrence for ${namesForWarning(notPercentages)} should be a percentage from 0 to 100 as text. Leaving it out.`,
+    );
+  }
+  if (tooRare.length > 0) {
+    warnOnce(
+      `${where}: co_occurrence for ${namesForWarning(tooRare)} is too small for a JavaScript number. Showing it as seen together, too rare to colour.`,
+    );
+  }
+  return map;
+}
+
+/**
+ * How many facets of the list sent no `co_occurrence`, with one warning for
+ * the whole list (a backend that does not send it yet would otherwise log
+ * one line per facet).
+ */
+export function countWithoutCoOccurrence(items: ResponseObject<IndividualResponse>[]): number {
+  const missing = items.filter((i) => !i.hasKey("co_occurrence")).length;
+  if (missing > 0) {
+    warnOnce(
+      `Unexpected response from ${items[0]!.requestName()}: ${missing} of ${items.length} facets have no co_occurrence. Treating it as empty.`,
+    );
+  }
+  return missing;
+}
+
+/**
+ * Drops co-occurrence ids that name no facet of the list, with one warning per
+ * facet listing them. It needs the whole list, so it runs after `toFacet`.
+ */
+export function pruneUnknownCoOccurrence(facets: Facet[]): Facet[] {
+  const known = new Set(facets.map((f) => f.id));
+  return facets.map((facet) => {
+    const unknown = [...facet.coOccurrence.keys()].filter((id) => !known.has(id));
+    if (unknown.length === 0) return facet;
+    warnOnce(
+      `Unexpected facet list: co_occurrence of facet ${JSON.stringify(facet.id)} names facets that do not exist: ${namesForWarning(unknown)}. Leaving them out.`,
+    );
+    return {
+      ...facet,
+      coOccurrence: new Map([...facet.coOccurrence].filter(([id]) => known.has(id))),
+    };
+  });
 }
 
 export function toEvent(e: ResponseObject<EventResponse>): EventRecord {

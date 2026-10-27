@@ -22,6 +22,7 @@ const facet: Facet = {
   comment: "backend note",
   description: "third party note",
   eventCount: 5,
+  coOccurrence: new Map(),
   fields: [
     {
       id: "size",
@@ -322,6 +323,7 @@ describe("source logos", () => {
     comment: "",
     description: "",
     eventCount: 1,
+    coOccurrence: new Map(),
     fields: [
       {
         id: "size",
@@ -398,6 +400,7 @@ describe("field rows", () => {
     comment: "",
     description: "",
     eventCount: 1,
+    coOccurrence: new Map(),
     fields: [
       {
         id: "size",

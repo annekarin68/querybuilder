@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
   ApiError,
   COMPLIANCE_START_URL,
@@ -19,7 +19,7 @@ import {
   TimeoutError,
   updateSavedQuery,
 } from "../../src/api/client";
-import { ContractError } from "../../src/api/contract";
+import { ContractError, forgetWarnings } from "../../src/api/contract";
 import { toQueryRequest, toSavedQueryRequest } from "../../src/api/request";
 import type { Group } from "../../src/query/types";
 import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
@@ -98,7 +98,11 @@ function feedableStreamFetch() {
 
 const alphaLine = JSON.stringify({ label: "alpha", success: true, match_count: 1 });
 
+// A warning is logged once per page load; each test starts as a new page.
+beforeEach(forgetWarnings);
+
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -149,6 +153,36 @@ describe("api client", () => {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it("getFacets keeps co-occurrence, drops unknown ids, and warns once when maps are missing", async () => {
+    const wire = (label: string, extra: object) => ({
+      label,
+      group: "",
+      tags: [],
+      id_number: 1,
+      name: label,
+      description: "",
+      comment: "",
+      total_count: 1,
+      fields: [],
+      ...extra,
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(200, [
+        wire("a", { co_occurrence: { b: "5", ghost: "1" } }),
+        wire("b", {}),
+        wire("c", {}),
+      ]),
+    );
+    const out = await getFacets();
+    expect([...out[0]!.coOccurrence.keys()]).toEqual(["b"]);
+    expect(out[1]!.coOccurrence.size).toBe(0);
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages.filter((m) => m.includes("ghost"))).toHaveLength(1);
+    expect(messages.filter((m) => m.includes("2 of 3"))).toHaveLength(1);
   });
 
   it("getStats POSTs the request body as JSON", async () => {

@@ -47,6 +47,19 @@ export interface Field {
 }
 
 /** One described aspect of an event: a signal, a reading, a piece of context. */
+/** How often events holding one facet also hold another (the backend's
+ *  `co_occurrence`, "Seen together" in docs/ARCHITECTURE.md). */
+export interface CoValue {
+  /** The backend's text, trimmed, for display ("1.2e-20"): never re-formatted. */
+  text: string;
+  /** 0 to 100: the share of this facet's events that also hold the other.
+   *  0 for a value `tooRare` to be told from zero. */
+  percent: number;
+  /** The text is not zero, but is too small for a JavaScript number, which
+   *  would round it to 0 and so say "never seen together". */
+  tooRare: boolean;
+}
+
 export interface Facet {
   id: string;
   name: string;
@@ -63,6 +76,9 @@ export interface Facet {
   description: string;
   /** How many events, across all databases, hold a value for this facet. */
   eventCount: number;
+  /** By the other facet's id (this facet's own id too, at 100). Empty when
+   *  the backend sent none. Display data only: nothing depends on it. */
+  coOccurrence: ReadonlyMap<string, CoValue>;
   fields: Field[];
 }
 

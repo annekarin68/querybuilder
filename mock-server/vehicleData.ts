@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { coOccurrenceOf } from "./coOccurrence";
 
 const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 
@@ -45,5 +46,15 @@ function loadEntrysets(): Record<string, Entryset> {
   >;
 }
 
-export const INDIVIDUALS: Individual[] = loadIndividuals();
 export const ENTRYSETS: Record<string, Entryset> = loadEntrysets();
+
+/** The individuals, each answering with the co-occurrence worked out from the sample events. */
+function withCoOccurrence(individuals: Individual[]): Individual[] {
+  const table = coOccurrenceOf(
+    Object.values(ENTRYSETS),
+    individuals.map((i) => i.label),
+  );
+  return individuals.map((i) => ({ ...i, co_occurrence: table[i.label]! }));
+}
+
+export const INDIVIDUALS: Individual[] = withCoOccurrence(loadIndividuals());

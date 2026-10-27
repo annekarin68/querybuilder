@@ -33,6 +33,7 @@ const facets: Facet[] = [
     comment: "",
     description: "Engine rotational speed.",
     eventCount: 100,
+    coOccurrence: new Map(),
     fields: [
       field("value_rpm", "BIGINT"),
       field("redline_rpm", "BIGINT", { description: "Redline for this engine." }),
@@ -48,6 +49,7 @@ const facets: Facet[] = [
     comment: "",
     description: "Identifying info for the vehicle.",
     eventCount: 100,
+    coOccurrence: new Map(),
     fields: [field("vin", "VARCHAR"), field("vehicle_type", "VARCHAR")],
   },
 ];
@@ -95,6 +97,7 @@ describe("buildFieldCatalog", () => {
         comment: "",
         description: "",
         eventCount: 1,
+        coOccurrence: new Map(),
         fields: [],
       },
     ]);

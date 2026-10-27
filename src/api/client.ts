@@ -22,6 +22,8 @@ import type { Group } from "../query/types";
 import { ContractError, ResponseValue } from "./contract";
 import { toQueryRequest, toSavedQueryRequest } from "./request";
 import {
+  countWithoutCoOccurrence,
+  pruneUnknownCoOccurrence,
   toCompliance,
   toDatabase,
   toDatabaseResult,
@@ -108,7 +110,9 @@ export async function getDatabases(): Promise<Database[]> {
 
 export async function getFacets(): Promise<Facet[]> {
   const body = await getJson("/documentation/individuals");
-  return body.list<IndividualResponse>().map(toFacet);
+  const items = body.list<IndividualResponse>();
+  countWithoutCoOccurrence(items);
+  return pruneUnknownCoOccurrence(items.map(toFacet));
 }
 
 /**

@@ -19,6 +19,7 @@ const facet = (id: string, number: number, fields: string[] = []): Facet => ({
   comment: "",
   description: "",
   eventCount: 0,
+  coOccurrence: new Map(),
   fields: fields.map((f) => ({
     id: f,
     name: `${f} name`,

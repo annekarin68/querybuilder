@@ -113,7 +113,13 @@ function notJson(text: string): string {
  */
 const warned = new Set<string>();
 
-function warnOnce(message: string): void {
+/** Forget what was warned about, so each test starts with a clean console. */
+export function forgetWarnings(): void {
+  warned.clear();
+}
+
+/** Log a display-only problem, once per page load (see `warned`). */
+export function warnOnce(message: string): void {
   const key = message.replace(/\d+/g, "#");
   if (warned.has(key)) return;
   warned.add(key);
@@ -299,6 +305,27 @@ export class ResponseObject<T> {
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (!isAbsent(v)) this.warn(join(this.path, key), "a number", v, "Treating it as missing.");
     return undefined;
+  }
+
+  /** Whether the backend sent this key at all (`null` counts as not sent). */
+  hasKey(key: Key<T>): boolean {
+    return !isAbsent(this.fields[key]);
+  }
+
+  /** The key/value pairs of an object the backend may leave out (marked `?`
+   *  in src/api/types.ts), values unchecked, for the caller to read. `undefined`
+   *  when it is missing, or (with a warning) when it isn't an object. */
+  optionalEntries(key: Key<T>): [string, unknown][] | undefined {
+    const v = this.fields[key];
+    if (isAbsent(v)) return undefined;
+    if (isObject(v)) return Object.entries(v);
+    this.warn(join(this.path, key), "an object", v, "Treating it as missing.");
+    return undefined;
+  }
+
+  /** The request this object came from ("GET /api/v1/…"), for the caller's own warnings. */
+  requestName(): string {
+    return this.source;
   }
 
   // ---- for objects keyed by the backend's own ids (an event's values) -----

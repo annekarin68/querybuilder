@@ -45,6 +45,7 @@ const facets: Facet[] = [
     comment: "",
     description: "",
     eventCount: 10,
+    coOccurrence: new Map(),
     fields: [
       { id: "size", name: "size", typeName: "BIGINT", comment: "", description: "", values: [] },
     ],

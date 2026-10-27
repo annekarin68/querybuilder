@@ -152,6 +152,11 @@ export interface IndividualResponse {
    *  percentage is supplied — the frontend derives one from
    *  DatabasesResponse[].total_entrysets. */
   total_count: number;
+  /** For each facet label (this one included): the percentage of THIS
+   *  facet's events that also hold that facet, as text so that scientific
+   *  notation works ("0.000123", "1.2e-20", "100"). Display data: the app
+   *  works without it. */
+  co_occurrence?: Record<string, string>;
   fields: IndividualFieldResponse[];
 }
 
