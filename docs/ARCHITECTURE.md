@@ -185,7 +185,9 @@ desktop windows, not for tablets.
   every selected database that has not answered ("Right — `statsPanel.ts`")
   stand in until the answers arrive, so **Run query** does not move as they
   do. The one growth left is a database whose answer carries a note line or
-  a failure reason: neither can be predicted, so that row grows by a line (accepted by the
+  a failure reason (neither can be predicted, so that row grows by a line), and
+  **Show problem**, which appears with the first answer that reports a
+  problem in the query (accepted by the
   maintainers, 2026-10-27).
 - **The floating dictionary steps aside during a drag** (maintainers,
   2026-10-27). At 1100 px and below the dictionary covers part of the page,
@@ -2194,7 +2196,8 @@ that has not answered yet while loading, and before the first answer a
 headline placeholder (`pendingHeadlineHtml`, the same parts as the headline;
 also drawn while the fetch's debounce is still running),
 so the panel's height changes only by a note line or failure reason a database adds to its
-answer (unpredictable, accepted); the card has `aria-busy` while loading (there is no "Waiting on N more
+answer, or by **Show problem** appearing with the first answer that reports a
+problem (unpredictable, accepted); the card has `aria-busy` while loading (there is no "Waiting on N more
 databases…" line any more; the spinner in the title still shows the loading).
 The backend can only return counts, so there are no per-field statistics.
 
