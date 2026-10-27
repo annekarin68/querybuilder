@@ -106,6 +106,17 @@ export function clearFieldCondition(tree: Group, blockId: string, fieldId: strin
   ) as Group;
 }
 
+/** Block `blockId` without the condition `conditionId`: how a stray row (an
+ *  unknown field, or a field set twice in a saved query) is removed. Unlike
+ *  `clearFieldCondition` it leaves another condition on the same field. */
+export function removeCondition(tree: Group, blockId: string, conditionId: string): Group {
+  return mapTree(tree, (n) =>
+    n.kind === "facet" && n.id === blockId
+      ? { ...n, conditions: n.conditions.filter((c) => c.id !== conditionId) }
+      : n,
+  ) as Group;
+}
+
 export function countBlocks(tree: QueryNode): number {
   if (tree.kind === "facet") return 1;
   return tree.children.reduce((sum, c) => sum + countBlocks(c), 0);

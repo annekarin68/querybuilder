@@ -447,13 +447,14 @@ src/
     by `legacy/`.)
     types.ts           FacetBlock, FieldCondition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (newBlock, newFieldCondition, groupOf, emptyQuery, newGroup,
-                       setFieldCondition, clearFieldCondition, countBlocks, insertNodes, moveNode, moveSibling,
+                       setFieldCondition, clearFieldCondition, removeCondition, countBlocks, insertNodes, moveNode, moveSibling,
                        positionOf, groupContents, ungroup, sameSemantics, sameTree, …).
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, FACET_OPERATOR_IDS / FACET_OPERATORS, OPERATOR_PROFILE,
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator,
                        isFacetLevel, isFacetTest (a well-formed whole-facet test).
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
-    validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue.
+    validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue. An unknown field or a
+                       field set twice is an issue on that condition (it gets its own removable row).
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
                        for facet blocks (display only; a folded block's line).
     drop.ts            Facet-block drops: `dropItem` (what a dropped docs item adds, which row it focuses, or what
@@ -505,6 +506,12 @@ src/
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
                        displayLabel, databaseTitle, countLabel, formatWhen, formatDate, hoverTitle.
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
+    builderParts.ts    HTML pieces shared by the old and the new builder: issuesHtml, nodeGrip, iconButton,
+                       moveButtons, collapseButton, Position. Used by queryBuilder.ts; the facet-block builder
+                       will use them too.
+    fieldRows.ts       Pure HTML of a facet block's field rows (set, unset, selected, stray, the fold button):
+                       fieldRowsHtml, visibleFieldIds. Not wired in until Task 3 of plan A2
+                       (docs/superpowers/plans/2026-10-27-facet-blocks-a2-builder.md).
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
     queryBuilder.ts    The query builder (wiring, drop targets, node grips, the title row with Save… and

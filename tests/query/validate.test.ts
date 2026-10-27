@@ -54,7 +54,7 @@ describe("validateQuery with facet blocks", () => {
     expect(issues(query(block(newFieldCondition("nope", "eq", 1))))).toEqual([
       [
         "invalid",
-        "Unknown field “nope”. The data dictionary may have changed; remove this facet and add it again.",
+        "Unknown field “nope”. The data dictionary may have changed; remove this condition.",
       ],
     ]);
     expect(issues(query(block(newFieldCondition("size", null, null))))).toEqual([
@@ -91,12 +91,15 @@ describe("validateQuery with facet blocks", () => {
     expect(ids).toEqual([c.id, unknown.id, g.id]);
   });
 
-  it("puts issues about a condition with no row on screen on the block", () => {
-    // The builder draws one row per field the dictionary knows, so an unknown
-    // field and a second condition for one field have no row to show them.
-    const unknownField = block(newFieldCondition("nope", "eq", 1));
-    const twice = block(newFieldCondition("size", "gt", 1), newFieldCondition("size", "lt", 9));
-    const ids = validateQuery(query(unknownField, twice), catalog).map((i) => i.nodeId);
-    expect(ids).toEqual([unknownField.id, twice.id]);
+  it("puts the issues of a stray condition on that condition, which gets a removable row", () => {
+    // An unknown field and a second condition for one field have no ordinary
+    // row; the builder draws each as a row of its own, so the issue sits there.
+    const gone = newFieldCondition("nope", "eq", 1);
+    const first = newFieldCondition("size", "gt", 1);
+    const second = newFieldCondition("size", "lt", 9);
+    const ids = validateQuery(query(block(gone), block(first, second)), catalog).map(
+      (i) => i.nodeId,
+    );
+    expect(ids).toEqual([gone.id, second.id]);
   });
 });

@@ -14,6 +14,7 @@ import {
   newFieldCondition,
   newGroup,
   positionOf,
+  removeCondition,
   removeNode,
   sameSemantics,
   sameTree,
@@ -153,5 +154,16 @@ describe("grouping", () => {
     expect(ungroupBlocker(two, inner.id)).toMatch(/both ALL or both ANY/);
     expect(ungroup(two, inner.id)).toBeNull();
     expect(ungroupBlocker(two, two.id)).toBe("The whole query can't be ungrouped.");
+  });
+});
+
+describe("removeCondition", () => {
+  it("removes one condition by its id, even when another has the same field", () => {
+    const a = newFieldCondition("size", "gt", 1);
+    const b = newFieldCondition("size", "lt", 9);
+    const block: FacetBlock = { ...newBlock("thing"), conditions: [a, b] };
+    const root: Group = { ...emptyQuery(), children: [block] };
+    const next = removeCondition(root, block.id, b.id);
+    expect((findNode(next, block.id) as FacetBlock).conditions).toEqual([a]);
   });
 });
