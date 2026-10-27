@@ -152,3 +152,30 @@ describe("legend text", () => {
     expect(formatPercent("1.2e-20")).toBe("1.2e-20 %");
   });
 });
+
+describe("robustness", () => {
+  it("squarify keeps very unequal values inside the box", () => {
+    const rects = squarify([1e-12, 100], 300, 200);
+    for (const r of rects) {
+      expect(r.x + r.w).toBeLessThanOrEqual(300 + 1e-6);
+      expect(r.y + r.h).toBeLessThanOrEqual(200 + 1e-6);
+    }
+    const big = rects[1];
+    expect(Math.abs((big?.w ?? 0) * (big?.h ?? 0) - 60000)).toBeLessThan(1e-3);
+  });
+  it("squarify gives non-finite values an empty rect", () => {
+    const rects = squarify([Infinity, 1, NaN], 100, 100);
+    expect(rects.map((r) => r.w * r.h)).toEqual([0, 10000, 0]);
+  });
+  it("needs at least two stops", () => {
+    const range = { min: 1, max: 10 };
+    expect(() => coOccurrenceColour(5, range, ["#000000"])).toThrow(
+      "coOccurrenceColour needs at least two stops",
+    );
+    expect(() => legendTicks(range, 1)).toThrow();
+    expect(() => stepFactorText(range, 1)).toThrow();
+  });
+  it("scalePosition of NaN is 0", () => {
+    expect(scalePosition(NaN, { min: 1, max: 10 })).toBe(0);
+  });
+});

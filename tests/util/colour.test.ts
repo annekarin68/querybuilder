@@ -6,7 +6,7 @@ import {
   parseHex,
   relativeLuminance,
   toHex,
-} from "../../src/ui/colour";
+} from "../../src/util/colour";
 
 describe("hex conversion", () => {
   it("round-trips", () => {

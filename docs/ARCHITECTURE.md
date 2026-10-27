@@ -491,11 +491,11 @@ src/
     requestSlot.ts     At most one request per kind in flight; the whole stale-response guard.
     keptQuery.ts       The kept query: the query on screen copied for the next page load in this tab
                        (sessionStorage); isWorthRestoring.
+    colour.ts          Colour maths (pure): mixOklab (blends that do not go muddy), contrastRatio, betterOn.
     paging.ts          PAGE_SIZE (100), pageOf(total, page) — the clamped page of the Matching events table (pure).
   ui/
     fomantic.ts        The jQuery airlock: activate / destroy / onDropdownChange / openDropdown / showToast.
     panel.ts           paint() (keeps the keyboard focus: focusMemory.ts), dialogBody(), escapeHtml(), optionsHtml().
-    colour.ts          Colour maths (pure): mixOklab (blends that do not go muddy), contrastRatio, betterOn.
     focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries and event <dialog>s

@@ -3,7 +3,7 @@
 // The values are display data: nothing here changes a query.
 
 import type { Facet } from "../model";
-import { mixOklab } from "../ui/colour";
+import { mixOklab } from "../util/colour";
 
 export interface CoRange {
   min: number;
@@ -54,6 +54,7 @@ export function coOccurrenceRange(facets: Facet[]): CoRange | null {
 /** 0 to 1 along the range. Log scale, because the values span many powers of
  *  ten and a linear scale would show almost everything as "nearly nothing". */
 export function scalePosition(percent: number, range: CoRange): number {
+  if (Number.isNaN(percent)) return 0;
   if (range.min === range.max) return 1;
   const t =
     (Math.log10(percent) - Math.log10(range.min)) / (Math.log10(range.max) - Math.log10(range.min));
@@ -63,13 +64,15 @@ export function scalePosition(percent: number, range: CoRange): number {
 /** The colour for a value: blended between the two designer stops around it. */
 export function coOccurrenceColour(percent: number, range: CoRange, stops: string[]): string {
   const n = stops.length;
+  if (n < 2) throw new Error("coOccurrenceColour needs at least two stops");
   const t = scalePosition(percent, range);
   const segment = Math.min(Math.floor(t * (n - 1)), n - 2);
   const local = t * (n - 1) - segment;
-  return mixOklab(stops[segment] ?? "#000000", stops[segment + 1] ?? "#000000", local);
+  return mixOklab(stops[segment] as string, stops[segment + 1] as string, local);
 }
 
 function stopValue(range: CoRange, stopCount: number, k: number): number {
+  if (stopCount < 2) throw new Error("A legend needs at least two stops");
   const lo = Math.log10(range.min);
   const hi = Math.log10(range.max);
   return 10 ** (lo + (k * (hi - lo)) / (stopCount - 1));
@@ -102,7 +105,7 @@ export function squarify(values: number[], width: number, height: number): Rect[
   const rects: Rect[] = values.map(() => ({ x: 0, y: 0, w: 0, h: 0 }));
   const order = values
     .map((value, index) => ({ value, index }))
-    .filter((item) => item.value > 0)
+    .filter((item) => Number.isFinite(item.value) && item.value > 0)
     .sort((a, b) => b.value - a.value);
   const total = order.reduce((sum, item) => sum + item.value, 0);
   if (total === 0 || width <= 0 || height <= 0) return rects;
@@ -124,15 +127,23 @@ export function squarify(values: number[], width: number, height: number): Rect[
     if (row.length === 0) return;
     const sum = row.reduce((s, item) => s + item.area, 0);
     const alongWidth = free.w >= free.h; // lay the row down the shorter side
-    const thickness = sum / (alongWidth ? free.h : free.w);
+    // Never thicker than the free space: after rounding, a tiny last row can
+    // otherwise be laid in a sliver of almost zero width and come out huge.
+    const thickness = Math.min(sum / (alongWidth ? free.h : free.w), alongWidth ? free.w : free.h);
     let offset = 0;
-    for (const item of row) {
-      const length = item.area / thickness;
+    const side = alongWidth ? free.h : free.w;
+    row.forEach((item, position) => {
+      // The last item takes exactly what is left: with very unequal values
+      // the rounded lengths would otherwise overshoot the box.
+      const isLast = position === row.length - 1;
+      const length = isLast
+        ? Math.max(0, side - offset)
+        : Math.min(item.area / thickness, side - offset);
       rects[item.index] = alongWidth
         ? { x: free.x, y: free.y + offset, w: thickness, h: length }
         : { x: free.x + offset, y: free.y, w: length, h: thickness };
       offset += length;
-    }
+    });
     free = alongWidth
       ? { x: free.x + thickness, y: free.y, w: free.w - thickness, h: free.h }
       : { x: free.x, y: free.y + thickness, w: free.w, h: free.h - thickness };
