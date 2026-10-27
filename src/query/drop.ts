@@ -1,5 +1,5 @@
 import type { Facet } from "../model";
-import { findFacet, findField, type FieldCatalog } from "./fieldCatalog";
+import { findFacet, findField, isNumberText, type FieldCatalog } from "./fieldCatalog";
 import {
   countBlocks,
   findNode,
@@ -141,6 +141,11 @@ export function dropItem(
         );
       }
       // The pick-list holds text; a number field's value goes out as a number.
+      // Number("") is 0 and Number("x") is NaN, which would go out as null: so
+      // text that isn't a number is refused rather than converted.
+      if (field.valueType === "number" && !isNumberText(item.value)) {
+        return refused(`Couldn't add “${item.value}”: it isn't a number.`);
+      }
       const value = field.valueType === "number" ? Number(item.value) : item.value;
       const condition = newFieldCondition(item.fieldId, "eq", value);
       const rowIsUnset =

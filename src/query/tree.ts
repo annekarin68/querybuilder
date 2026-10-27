@@ -5,8 +5,9 @@ import type { FacetBlock, FieldCondition, Group, LogicalOperator, QueryNode } fr
 // tree back. Only new nodes get fresh ids. Field conditions live inside facet
 // blocks and are never moved on their own (spec, decision 8).
 
-export type NodePatch = Partial<Pick<Group, "operator" | "collapsed">> &
-  Partial<Pick<FacetBlock, "negated">>;
+/** What `updateNode` may change on a group or a block (both have these).
+ *  Has / Has no is a block's alone: `setNegated`. */
+export type NodePatch = Partial<Pick<Group, "operator" | "collapsed">>;
 
 let counter = 0;
 /** A fresh id: "g-…" for a group, "f-…" for a facet block, "c-…" for a field condition. */
@@ -65,6 +66,14 @@ export function updateNode(tree: Group, nodeId: string, patch: NodePatch): Group
   return mapTree(tree, (n) => (n.id === nodeId ? ({ ...n, ...patch } as QueryNode) : n)) as Group;
 }
 
+/** Block `blockId` as "Has" (`negated` false) or "Has no" (true). Its own
+ *  function, not an `updateNode` patch: a group has no such setting. */
+export function setNegated(tree: Group, blockId: string, negated: boolean): Group {
+  return mapTree(tree, (n) =>
+    n.kind === "facet" && n.id === blockId ? { ...n, negated } : n,
+  ) as Group;
+}
+
 export function removeNode(tree: Group, nodeId: string): Group {
   return mapTree(tree, (n) =>
     n.kind === "group" ? { ...n, children: n.children.filter((c) => c.id !== nodeId) } : n,
@@ -84,31 +93,42 @@ export function findNode(tree: QueryNode, nodeId: string): QueryNode | null {
   return null;
 }
 
-/** Block `blockId` with `condition` for its field: replacing the condition
- *  the field had (a block holds at most one per field), or added at the end. */
-export function setFieldCondition(tree: Group, blockId: string, condition: FieldCondition): Group {
+/**
+ * Block `blockId` with `condition` for its field: replacing the condition the
+ * field had (a block holds at most one per field), otherwise added. Given
+ * `fieldOrder` (the facet's field ids, in the order its rows are drawn), a
+ * new condition goes in that order, so clearing a row and setting it again
+ * does not move it to the end of the block's summary. Without it, or for a
+ * field the order doesn't list, it goes at the end.
+ */
+export function setFieldCondition(
+  tree: Group,
+  blockId: string,
+  condition: FieldCondition,
+  fieldOrder: string[] = [],
+): Group {
+  /** Where a field stands in the order; fields it doesn't list come last. */
+  const rank = (fieldId: string): number => {
+    const at = fieldOrder.indexOf(fieldId);
+    return at === -1 ? Infinity : at;
+  };
   return mapTree(tree, (n) => {
     if (n.kind !== "facet" || n.id !== blockId) return n;
     const at = n.conditions.findIndex((c) => c.fieldId === condition.fieldId);
     const conditions = [...n.conditions];
-    if (at === -1) conditions.push(condition);
-    else conditions[at] = condition;
+    if (at !== -1) {
+      conditions[at] = condition;
+    } else {
+      const firstLater = conditions.findIndex((c) => rank(c.fieldId) > rank(condition.fieldId));
+      conditions.splice(firstLater === -1 ? conditions.length : firstLater, 0, condition);
+    }
     return { ...n, conditions };
   }) as Group;
 }
 
-/** Block `blockId` without a condition on `fieldId`: the row is "not filtered" again. */
-export function clearFieldCondition(tree: Group, blockId: string, fieldId: string): Group {
-  return mapTree(tree, (n) =>
-    n.kind === "facet" && n.id === blockId
-      ? { ...n, conditions: n.conditions.filter((c) => c.fieldId !== fieldId) }
-      : n,
-  ) as Group;
-}
-
-/** Block `blockId` without the condition `conditionId`: how a stray row (an
- *  unknown field, or a field set twice in a saved query) is removed. Unlike
- *  `clearFieldCondition` it leaves another condition on the same field. */
+/** Block `blockId` without the condition `conditionId`: how a row's
+ *  "Not filtered" and a stray row (an unknown field, or a field set twice in
+ *  a saved query) are removed. It leaves another condition on the same field. */
 export function removeCondition(tree: Group, blockId: string, conditionId: string): Group {
   return mapTree(tree, (n) =>
     n.kind === "facet" && n.id === blockId
@@ -244,8 +264,9 @@ export function moveSibling(tree: Group, nodeId: string, direction: Direction): 
 export function ungroupBlocker(tree: Group, groupId: string): string | null {
   if (groupId === tree.id) return "The whole query can't be ungrouped.";
   const node = findNode(tree, groupId);
+  if (node?.kind === "facet") return "Only a group can be ungrouped.";
   const parent = parentOf(tree, groupId);
-  if (!node || node.kind !== "group" || !parent) return "That group is no longer in the query.";
+  if (!node || !parent) return "That group is no longer in the query.";
   if (node.operator === parent.operator || node.children.length === 1) return null;
   return UNGROUP_BLOCKED_MESSAGE;
 }

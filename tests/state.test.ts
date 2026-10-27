@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { createStore, initialState, runBlocker, type RunInputs } from "../src/state";
-import { addChild, emptyQuery, groupOf, newBlock } from "../src/query/tree";
+import {
+  createStore,
+  displayStateFor,
+  initialState,
+  runBlocker,
+  type RunInputs,
+} from "../src/state";
+import { addChild, emptyQuery, groupOf, newBlock, removeNode } from "../src/query/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
 describe("store", () => {
@@ -94,5 +100,47 @@ describe("runBlocker", () => {
     const issue = { nodeId: "x", message: "m", kind: "invalid" as const };
     expect(runBlocker({ ...ready, serverIssues: [issue] })).toBe("rejected");
     expect(runBlocker({ ...ready, serverIssues: [issue], issues: [issue] })).toBe("unfinished");
+  });
+});
+
+describe("displayStateFor", () => {
+  const a = newBlock("thing");
+  const b = newBlock("other");
+  const inner = groupOf([b]);
+  const query = { ...emptyQuery(), children: [a, inner] };
+  const display = {
+    selectedField: { blockId: b.id, fieldId: "size" },
+    expandedBlockIds: [a.id, b.id],
+  };
+
+  it("keeps display state whose blocks are all in the query, as the same object", () => {
+    expect(displayStateFor(query, display)).toBe(display);
+    expect(displayStateFor(query, { selectedField: null, expandedBlockIds: [] })).toEqual({
+      selectedField: null,
+      expandedBlockIds: [],
+    });
+  });
+
+  it("drops the ids of a block that was removed, with the group around it", () => {
+    expect(displayStateFor(removeNode(query, b.id), display)).toEqual({
+      selectedField: null,
+      expandedBlockIds: [a.id],
+    });
+    expect(displayStateFor(removeNode(query, inner.id), display)).toEqual({
+      selectedField: null,
+      expandedBlockIds: [a.id],
+    });
+  });
+
+  it("drops an id that is no block at all (a group's id, or a stranger's)", () => {
+    const odd = { selectedField: null, expandedBlockIds: [inner.id, "gone", a.id] };
+    expect(displayStateFor(query, odd).expandedBlockIds).toEqual([a.id]);
+  });
+
+  it("drops everything when the query was replaced by one without those blocks", () => {
+    expect(displayStateFor(emptyQuery(), display)).toEqual({
+      selectedField: null,
+      expandedBlockIds: [],
+    });
   });
 });

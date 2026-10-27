@@ -2,21 +2,20 @@ import type { AppState } from "../state";
 import type { FacetBlock, Group } from "../query/types";
 import {
   addChild,
-  clearFieldCondition,
   findNode,
   groupContents,
   newBlock,
   newGroup,
   removeCondition,
   removeNode,
-  setFieldCondition,
+  setNegated,
   ungroup,
   ungroupBlocker,
   UNGROUP_BLOCKED_MESSAGE,
   updateNode,
   type Direction,
 } from "../query/tree";
-import { cursorAfterOperator, nextFieldCondition } from "../query/fieldEdit";
+import { cursorAfterOperator, nextFieldCondition, queryAfterFieldEdit } from "../query/fieldEdit";
 import {
   ADDED_GROUP_MESSAGE,
   addedNodesMessage,
@@ -153,7 +152,7 @@ function keepFocusInRow(container: HTMLElement, blockId: string, fieldId: string
  * last saved or opened, then **Save…** and **Saved queries** (docs/ARCHITECTURE.md,
  * "Saved queries — `savedQueries.ts`"). A logged-out user who presses either
  * button is asked to log in first, in the saved-queries dialog (`loginHtml`,
- * savedQueries.ts).
+ * src/ui/savedQueries.ts).
  *
  * The two buttons only exist once startup has loaded the databases and the
  * field catalog: start() sets the query and selection when it ends, so a saved
@@ -185,7 +184,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
     return;
   }
-  // Local issues (validate.ts) and the backend's, each on a node that is drawn.
+  // Local issues (src/query/validate.ts) and the backend's, each on a node that is drawn.
   const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
   const ctx: BlockCtx = {
     catalog: state.catalog,
@@ -228,7 +227,7 @@ export function wireQueryBuilder(
     onNotice(message: string): void;
     /** Say something to screen-reader users (the shell's live region). */
     announce(message: string): void;
-    /** The title's **Save…** and **Saved queries** (savedQueries.ts shows the dialogs). */
+    /** The title's **Save…** and **Saved queries** (src/ui/savedQueries.ts shows the dialogs). */
     onOpenSaveDialog(): void;
     onOpenSavedList(): void;
     /** The Restored notice's **Start fresh** and ✕. */
@@ -260,7 +259,9 @@ export function wireQueryBuilder(
     const fieldId = row.dataset.fieldId;
     if (!catalog || !block || !fieldId) return;
     const picked = row.querySelector<HTMLSelectElement>('select[data-part="operator"]')?.value;
-    const existing = block.conditions.find((c) => c.fieldId === fieldId);
+    // The condition this very row stands for (an unset row has none), never
+    // another one on the same field: a stray duplicate has a row of its own.
+    const existing = block.conditions.find((c) => c.id === row.dataset.nodeId);
     const next = nextFieldCondition(
       existing,
       block.facetId,
@@ -269,13 +270,10 @@ export function wireQueryBuilder(
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
-    if (next) {
-      onChange(setFieldCondition(query, block.id, next));
-    } else {
-      // The row goes back to an unset one: it is no longer being worked on.
-      hooks.selectField(null);
-      onChange(clearFieldCondition(query, block.id, fieldId));
-    }
+    // "Not filtered": the row goes back to an unset one, which is no longer
+    // being worked on.
+    if (!next) hooks.selectField(null);
+    onChange(queryAfterFieldEdit(query, block, existing?.id, next, catalog));
     // The repaint lost the cursor (the row changed shape): on to the value if
     // the operator takes one, otherwise stay in the row.
     if (cursorAfterOperator(next?.operatorId ?? null) === "value") {
@@ -305,7 +303,7 @@ export function wireQueryBuilder(
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
-    if (next) onChange(setFieldCondition(query, block.id, next));
+    if (next) onChange(queryAfterFieldEdit(query, block, existing.id, next, catalog));
   }
 
   /** "+ Facet": a new block for the picked facet at the end of the group.
@@ -455,9 +453,9 @@ export function wireQueryBuilder(
       case "set-or":
         return onChange(updateNode(q, nodeId, { operator: "OR" }));
       case "set-has":
-        return onChange(updateNode(q, nodeId, { negated: false }));
+        return onChange(setNegated(q, nodeId, false));
       case "set-has-no":
-        return onChange(updateNode(q, nodeId, { negated: true }));
+        return onChange(setNegated(q, nodeId, true));
       // paint() keeps the keyboard focus on the pressed button (the same node's
       // button for the same direction), so pressing it again keeps moving.
       case "move-up":
@@ -502,6 +500,12 @@ export function wireQueryBuilder(
     if (!target.closest(".qb-block")) return;
     const wasInRow =
       fieldRowOf(container, selected.blockId, selected.fieldId)?.contains(target) ?? false;
+    // A value still being typed is committed first, as a click elsewhere would
+    // have done (its `change` has not fired yet): the repaint below would
+    // throw the typed text away.
+    afterPointer.flush();
+    const typedRow = target.closest<HTMLElement>(".qb-field-row[data-node-id]");
+    if (typedRow) commitValue(typedRow);
     hooks.selectField(null);
     if (wasInRow) keepFocusInRow(container, selected.blockId, selected.fieldId);
   });

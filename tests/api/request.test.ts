@@ -126,6 +126,8 @@ describe("toSavedQueryRequest", () => {
       ...emptyQuery(),
       children: [{ ...newBlock("thing"), conditions: [newFieldCondition("size", "eq", value)] }],
     };
-    expect(() => toSavedQueryRequest({ ...unfinishedDraft, query: bad })).toThrow(/cannot be sent/);
+    expect(() => toSavedQueryRequest({ ...unfinishedDraft, query: bad })).toThrow(
+      /cannot be saved/,
+    );
   });
 });

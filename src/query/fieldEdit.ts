@@ -1,4 +1,5 @@
 import {
+  fieldsOfFacet,
   findField,
   findOperator,
   type Arity,
@@ -7,8 +8,8 @@ import {
   type FieldCatalog,
   type ValueType,
 } from "./fieldCatalog";
-import { newFieldCondition } from "./tree";
-import type { FieldCondition } from "./types";
+import { newFieldCondition, removeCondition, setFieldCondition } from "./tree";
+import type { FacetBlock, FieldCondition, Group } from "./types";
 
 /**
  * The value a condition holds before the user enters one. Not every control
@@ -61,4 +62,26 @@ export function nextFieldCondition(
 export function cursorAfterOperator(operatorId: string | null): "value" | null {
   const op = findOperator(operatorId);
   return op && op.arity !== "none" ? "value" : null;
+}
+
+/**
+ * The query after a field row of `block` was edited, `next` being what
+ * `nextFieldCondition` made of it. `rowConditionId` is the condition the row
+ * stands for (the row's own id: an unset row has none). A new condition goes
+ * in the facet's field order. "Not filtered" (`next` null) removes that
+ * condition only, never another one on the same field: a stray duplicate from
+ * a tampered saved query has a row of its own and keeps it.
+ */
+export function queryAfterFieldEdit(
+  query: Group,
+  block: FacetBlock,
+  rowConditionId: string | undefined,
+  next: FieldCondition | null,
+  catalog: FieldCatalog,
+): Group {
+  if (next) {
+    const fieldOrder = fieldsOfFacet(catalog, block.facetId).map((f) => f.fieldId);
+    return setFieldCondition(query, block.id, next, fieldOrder);
+  }
+  return rowConditionId === undefined ? query : removeCondition(query, block.id, rowConditionId);
 }

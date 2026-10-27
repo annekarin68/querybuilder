@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   addChild,
-  clearFieldCondition,
   countBlocks,
   emptyQuery,
   findNode,
@@ -19,6 +18,7 @@ import {
   sameSemantics,
   sameTree,
   setFieldCondition,
+  setNegated,
   ungroup,
   ungroupBlocker,
   updateNode,
@@ -67,12 +67,50 @@ describe("editing", () => {
     const added = addChild(root, inner.id, block);
     expect((findNode(added, inner.id) as Group).children).toHaveLength(2);
     expect(inner.children).toHaveLength(1);
-    const negated = updateNode(added, a.id, { negated: true });
-    expect(findNode(negated, a.id)).toMatchObject({ negated: true });
-    expect(findNode(removeNode(negated, a.id), a.id)).toBeNull();
+    const folded = updateNode(added, a.id, { collapsed: true });
+    expect(findNode(folded, a.id)).toMatchObject({ collapsed: true });
+    expect(findNode(removeNode(folded, a.id), a.id)).toBeNull();
   });
 
-  it("sets a field condition, replacing the same field's, and clears it", () => {
+  it("sets Has / Has no on a block, and only on a block", () => {
+    const { root, a, inner } = sample();
+    const negated = setNegated(root, a.id, true);
+    expect(findNode(negated, a.id)).toMatchObject({ negated: true });
+    expect(findNode(setNegated(negated, a.id, false), a.id)).toMatchObject({ negated: false });
+    expect(a.negated).toBe(false); // the old tree is unchanged
+    // A group has no Has / Has no: asking for it changes nothing.
+    expect(findNode(setNegated(root, inner.id, true), inner.id)).not.toHaveProperty("negated");
+    expect(setNegated(root, "nope", true)).toEqual(root);
+  });
+
+  it("puts a new condition in the facet's field order when given it", () => {
+    const { root, a } = sample();
+    const order = ["size", "name", "colour"];
+    const size = newFieldCondition("size", "gt", 3);
+    const colour = newFieldCondition("colour", "eq", "red");
+    const name = newFieldCondition("name", "eq", "x");
+    let tree = setFieldCondition(root, a.id, size, order);
+    tree = setFieldCondition(tree, a.id, colour, order);
+    tree = setFieldCondition(tree, a.id, name, order); // between the two, not at the end
+    const fieldIds = () => (findNode(tree, a.id) as FacetBlock).conditions.map((c) => c.fieldId);
+    expect(fieldIds()).toEqual(["size", "name", "colour"]);
+    // Clear-then-set no longer moves a condition to the end.
+    tree = removeCondition(tree, a.id, size.id);
+    tree = setFieldCondition(tree, a.id, size, order);
+    expect(fieldIds()).toEqual(["size", "name", "colour"]);
+  });
+
+  it("puts a field the order doesn't know at the end", () => {
+    const { root, a } = sample();
+    const first = setFieldCondition(root, a.id, newFieldCondition("size", "gt", 3), ["size"]);
+    const next = setFieldCondition(first, a.id, newFieldCondition("odd", "eq", 1), ["size"]);
+    expect((findNode(next, a.id) as FacetBlock).conditions.map((c) => c.fieldId)).toEqual([
+      "size",
+      "odd",
+    ]);
+  });
+
+  it("sets a field condition, replacing the same field's, and removes it", () => {
     const { root, a } = sample();
     const first = newFieldCondition("size", "gt", 3);
     const once = setFieldCondition(root, a.id, first);
@@ -84,7 +122,8 @@ describe("editing", () => {
       "size",
       "name",
     ]);
-    const cleared = clearFieldCondition(other, a.id, "size");
+    const sizeId = (findNode(other, a.id) as FacetBlock).conditions[0]!.id;
+    const cleared = removeCondition(other, a.id, sizeId);
     expect((findNode(cleared, a.id) as FacetBlock).conditions.map((c) => c.fieldId)).toEqual([
       "name",
     ]);
@@ -100,7 +139,7 @@ describe("editing", () => {
     const folded = updateNode(root, a.id, { collapsed: true });
     expect(sameSemantics(root, folded)).toBe(true);
     expect(sameTree(root, folded)).toBe(false);
-    expect(sameSemantics(root, updateNode(root, a.id, { negated: true }))).toBe(false);
+    expect(sameSemantics(root, setNegated(root, a.id, true))).toBe(false);
   });
 });
 
@@ -174,6 +213,13 @@ describe("grouping", () => {
     expect(ungroupBlocker(two, inner.id)).toMatch(/both ALL or both ANY/);
     expect(ungroup(two, inner.id)).toBeNull();
     expect(ungroupBlocker(two, two.id)).toBe("The whole query can't be ungrouped.");
+  });
+
+  it("says a block is not a group, and an unknown id is gone", () => {
+    const { root, a } = sample();
+    expect(ungroupBlocker(root, a.id)).toBe("Only a group can be ungrouped.");
+    expect(ungroup(root, a.id)).toBeNull();
+    expect(ungroupBlocker(root, "nope")).toBe("That group is no longer in the query.");
   });
 });
 

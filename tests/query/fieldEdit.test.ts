@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { cursorAfterOperator, nextFieldCondition } from "../../src/query/fieldEdit";
+import {
+  cursorAfterOperator,
+  nextFieldCondition,
+  queryAfterFieldEdit,
+} from "../../src/query/fieldEdit";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { newFieldCondition } from "../../src/query/tree";
+import { emptyQuery, findNode, newBlock, newFieldCondition } from "../../src/query/tree";
+import type { FacetBlock, Group } from "../../src/query/types";
 import type { Facet } from "../../src/model";
 
 const catalog = buildFieldCatalog([
@@ -60,5 +65,41 @@ describe("cursorAfterOperator", () => {
     expect(cursorAfterOperator("gt")).toBe("value");
     expect(cursorAfterOperator("present")).toBeNull();
     expect(cursorAfterOperator(null)).toBeNull();
+  });
+});
+
+describe("queryAfterFieldEdit", () => {
+  /** A root with one block of "thing" holding `conditions`. */
+  const withConditions = (...conditions: ReturnType<typeof newFieldCondition>[]) => {
+    const block: FacetBlock = { ...newBlock("thing"), conditions };
+    const query: Group = { ...emptyQuery(), children: [block] };
+    return { query, block };
+  };
+  const fieldsAfter = (query: Group, blockId: string) =>
+    (findNode(query, blockId) as FacetBlock).conditions.map((c) => [c.fieldId, c.operatorId]);
+
+  it("sets the condition, in the facet's field order", () => {
+    const ok = newFieldCondition("ok", "eq", true);
+    const { query, block } = withConditions(ok);
+    const size = newFieldCondition("size", "gt", 3);
+    expect(
+      fieldsAfter(queryAfterFieldEdit(query, block, undefined, size, catalog), block.id),
+    ).toEqual([
+      ["size", "gt"],
+      ["ok", "eq"],
+    ]);
+  });
+
+  it('"Not filtered" removes only the row\'s own condition, never a stray one on the same field', () => {
+    const row = newFieldCondition("size", "gt", 1);
+    const stray = newFieldCondition("size", "lt", 9); // a field set twice: a tampered saved query
+    const { query, block } = withConditions(row, stray);
+    const next = queryAfterFieldEdit(query, block, row.id, null, catalog);
+    expect((findNode(next, block.id) as FacetBlock).conditions).toEqual([stray]);
+  });
+
+  it('"Not filtered" on a row that was never set changes nothing', () => {
+    const { query, block } = withConditions(newFieldCondition("ok", "eq", true));
+    expect(queryAfterFieldEdit(query, block, undefined, null, catalog)).toBe(query);
   });
 });

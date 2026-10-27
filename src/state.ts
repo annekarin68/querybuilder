@@ -1,5 +1,5 @@
 import type { Group, Issue } from "./query/types";
-import { countBlocks, emptyQuery } from "./query/tree";
+import { countBlocks, emptyQuery, findNode } from "./query/tree";
 import type { FieldRef } from "./query/drop";
 import type {
   Compliance,
@@ -193,6 +193,29 @@ export function runBlocker(state: RunInputs): RunBlocker | null {
   // change resets both before the next fetch.
   if (state.serverIssues.length > 0) return "rejected";
   return null;
+}
+
+/** The parts of the state that only say how the query is shown. */
+export type DisplayState = Pick<AppState, "selectedField" | "expandedBlockIds">;
+
+/**
+ * `display` without what points at a block that is no longer in `query`: a
+ * removed block, or a query that was replaced (a saved one opened, Start
+ * fresh). Otherwise the ids would stay in the state for ever, and a new block
+ * is never given an old id, so they could never be used again. The same
+ * object when nothing is stale, so the caller can tell it has nothing to write.
+ */
+export function displayStateFor(query: Group, display: DisplayState): DisplayState {
+  const isBlockInQuery = (id: string) => findNode(query, id)?.kind === "facet";
+  const selectedField =
+    display.selectedField && isBlockInQuery(display.selectedField.blockId)
+      ? display.selectedField
+      : null;
+  const expandedBlockIds = display.expandedBlockIds.filter(isBlockInQuery);
+  const unchanged =
+    selectedField === display.selectedField &&
+    expandedBlockIds.length === display.expandedBlockIds.length;
+  return unchanged ? display : { selectedField, expandedBlockIds };
 }
 
 type Listener = (state: AppState, changed: Set<keyof AppState>) => void;

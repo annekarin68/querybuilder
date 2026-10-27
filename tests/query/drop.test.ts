@@ -148,6 +148,37 @@ describe("dropItem", () => {
     expect(value.problems).toEqual(["Couldn't add “9”: it is not one of size's known values."]);
   });
 
+  it("refuses a value that isn't a number for a number field, instead of sending 0 or NaN", () => {
+    // The pick-list only holds numbers (pickListFor), so this is a catalog
+    // that was built some other way: Number("") is 0 and Number("x") is NaN.
+    const odd = {
+      ...catalog,
+      fields: catalog.fields.map((f) =>
+        f.fieldId === "size" ? { ...f, options: ["", "x", "3"] } : f,
+      ),
+    };
+    const { query, block } = withBlock();
+    for (const value of ["", "x"]) {
+      const out = dropItem(
+        query,
+        { type: "value", facetId: "thing", fieldId: "size", value },
+        block.id,
+        facets,
+        odd,
+      );
+      expect(out.query).toBe(query);
+      expect(out.problems).toEqual([`Couldn't add “${value}”: it isn't a number.`]);
+    }
+    const ok = dropItem(
+      query,
+      { type: "value", facetId: "thing", fieldId: "size", value: "3" },
+      block.id,
+      facets,
+      odd,
+    );
+    expect(ok.problems).toEqual([]);
+  });
+
   it("adds at the root when the target is gone (a stale drop)", () => {
     const q = emptyQuery();
     const out = dropItem(q, { type: "facet", facetId: "thing" }, "gone", facets, catalog);

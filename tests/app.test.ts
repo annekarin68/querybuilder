@@ -16,6 +16,8 @@ import {
   newBlock,
   newFieldCondition,
   newGroup,
+  removeNode,
+  setNegated,
   updateNode,
 } from "../src/query/tree";
 import type { FacetBlock, Group } from "../src/query/types";
@@ -1273,6 +1275,67 @@ describe("the field row being worked on, and folded field lists", () => {
     expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).not.toHaveBeenCalled();
+  });
+});
+
+describe("display state follows the query", () => {
+  // `selectedField` and `expandedBlockIds` point at blocks of the query; they
+  // must not outlive the block or the query they were made for.
+  const block = thingBlock(newFieldCondition("size", "gt", 3));
+  const kept = addChild(emptyQuery(), emptyQuery().id, block);
+  const query = { ...emptyQuery(), children: [block] };
+  const shownBlock: Partial<AppState> = {
+    ...ready(query),
+    selectedField: { blockId: block.id, fieldId: "size" },
+    expandedBlockIds: [block.id],
+  };
+
+  it("removing the block drops its selected row and its open fields", () => {
+    const { app, store } = setup(shownBlock);
+    app.onQueryChange(removeNode(store.getState().query, block.id));
+    expect(store.getState().selectedField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
+  });
+
+  it("an edit that keeps the block keeps them", () => {
+    const { app, store } = setup(shownBlock);
+    app.onQueryChange(setNegated(store.getState().query, block.id, true));
+    expect(store.getState().selectedField).toEqual({ blockId: block.id, fieldId: "size" });
+    expect(store.getState().expandedBlockIds).toEqual([block.id]);
+  });
+
+  it("Start fresh drops them with the old query", () => {
+    const { app, store } = setup({ ...shownBlock, restoredNotice: true });
+    app.startFresh();
+    expect(store.getState().selectedField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
+  });
+
+  it("opening a saved query drops them with the old query", () => {
+    const target = savedQuery("t", "Weekly");
+    const { app, store } = setup({
+      ...shownBlock,
+      auth: { status: "authenticated", user: { name: "pat" } },
+      savedDialog: "list",
+      savedList: { status: "ok", queries: [target] },
+    });
+    app.askOpenSaved("t");
+    // The query on screen is unsaved work: the app asks first.
+    app.confirmSavedAction();
+    expect(store.getState().query).toBe(target.query);
+    expect(store.getState().selectedField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
+  });
+
+  it("a restored query starts with none", async () => {
+    keepQuery(kept, ["beta"]);
+    const { app, store } = setup({
+      selectedField: { blockId: block.id, fieldId: "size" },
+      expandedBlockIds: [block.id],
+    });
+    await app.start(true);
+    expect(store.getState().selectedField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
   });
 });
 

@@ -436,7 +436,7 @@ src/
   query/
     types.ts           FacetBlock, FieldCondition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (newBlock, newFieldCondition, groupOf, emptyQuery, newGroup,
-                       setFieldCondition, clearFieldCondition, removeCondition, countBlocks, insertNodes, moveNode, moveSibling,
+                       setFieldCondition (in the facet's field order), setNegated, removeCondition, countBlocks, insertNodes, moveNode, moveSibling,
                        positionOf, groupContents, ungroup, sameSemantics, sameTree, …).
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE,
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator.
@@ -451,7 +451,8 @@ src/
                        `movedMessage`, `reorderedMessage` — pure.
                        Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`).
     fieldEdit.ts       nextFieldCondition — a field row after an operator or value was picked (its arity change
-                       resets the value); cursorAfterOperator — where the cursor goes next.
+                       resets the value); queryAfterFieldEdit — the query with that row set, or ("Not filtered") without that
+                       row's own condition; cursorAfterOperator — where the cursor goes next.
     issues.ts          placeIssues(query, issues) — each issue moved to the node drawn for it (inside a folded group
                        or block, the outermost folded one around it); serverIssues(stats) — the errors a database
                        reports against a node, once each. Pure.
@@ -627,7 +628,7 @@ binding its Fomantic dropdowns must always happen together.
 |---|---|
 | App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with the starting query, an empty group (or the kept query, restored: "Saved query across the login/compliance redirect"). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
-| User opens a field row (its empty slot, a dropped field), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.selectField` / `app.toggleFields` write `selectedField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. |
+| User opens a field row (its empty slot, a dropped field), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.selectField` / `app.toggleFields` write `selectedField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. Escape first commits a value still being typed in its row. A query edit (`onQueryChange`) drops the ids of blocks that are no longer in the query (`displayStateFor`, `src/state.ts`); Start fresh, opening a saved query and restoring a kept one reset both. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
 | User presses **Previous** / **Next** in the Matching events card | `app.showEventPage(page)` → `preview.page` (clamped by `pageOf`; the same page is a no-op), announced ("Showing results 101 to 200 of 1,987.", numbers in the viewer's format). Only the preview panel repaints; the focus stays on the pressed button (its own `data-action`). At the ends the button is `aria-disabled="true"`, not `disabled`, so it keeps the focus; its click does nothing. |

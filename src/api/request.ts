@@ -128,5 +128,5 @@ function savedValueOf(c: FieldCondition): SavedValue {
   const v = c.value;
   if (v === null || isScalar(v)) return v;
   if (Array.isArray(v) && v.every((item) => item === null || isScalar(item))) return [...v];
-  throw new Error(`Condition ${c.id} has a value that cannot be sent.`);
+  throw new Error(`Condition ${c.id} has a value that cannot be saved.`);
 }

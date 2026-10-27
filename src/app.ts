@@ -28,6 +28,7 @@ import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/sa
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
 import {
+  displayStateFor,
   runBlocker,
   type AppState,
   type PreviewState,
@@ -341,7 +342,13 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       return;
     }
     const issues = catalog ? validateQuery(nextQuery, catalog) : [];
-    changeScope({ query: nextQuery, issues });
+    // A removed block takes its display state with it (see displayStateFor).
+    const { selectedField, expandedBlockIds } = store.getState();
+    changeScope({
+      query: nextQuery,
+      issues,
+      ...displayStateFor(nextQuery, { selectedField, expandedBlockIds }),
+    });
   }
 
   /** Show a drop's problems, or clear an old warning when there are none. */
@@ -501,6 +508,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       issues: catalog ? validateQuery(query, catalog) : [],
       openSaved: null,
       dropNotice: null,
+      // The blocks they pointed at are gone with the old query.
+      selectedField: null,
+      expandedBlockIds: [],
     });
     announce(STARTED_FRESH_MESSAGE);
   }
@@ -559,6 +569,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       facets,
       selectedDatabaseIds,
       query,
+      selectedField: null,
+      expandedBlockIds: [],
       // The first query bypasses onQueryChange, so validate here: a restored
       // query may be unfinished, and Run must stay blocked then.
       issues: validateQuery(query, catalog),
@@ -766,6 +778,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       query: saved.query,
       selectedDatabaseIds: known,
       issues: catalog ? validateQuery(saved.query, catalog) : [],
+      // The blocks they pointed at are gone with the old query.
+      selectedField: null,
+      expandedBlockIds: [],
       // The selection kept, not the saved one: the user did not edit the
       // dropped ids away, so opening must not count as an edit.
       openSaved: {
