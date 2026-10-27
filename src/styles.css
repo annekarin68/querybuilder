@@ -1012,6 +1012,10 @@ body {
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
+/* While About is open, a field's name selects the field for it (blockHtml.ts). */
+.qb-block-body.shows-about .qb-field-label {
+  cursor: pointer;
+}
 .qb-about-title {
   margin: 0 0 0.3rem;
   font-size: 0.95rem;

@@ -137,10 +137,33 @@ function ownedBy(container: HTMLElement, selector: string, nodeId: string | null
   );
 }
 
+/** Whether `restoreFocus` is moving the focus right now. */
+let restoring = false;
+
+/**
+ * True while a repaint puts the focus back (`restoreFocus`), so a `focusin`
+ * listener can tell that focus move from one the user made. The builder's
+ * listener that selects a row's field for the About panel ignores it: a
+ * repaint (say, of a value committed a moment after Escape cleared the
+ * selection) must not select the field again.
+ */
+export function isRestoringFocus(): boolean {
+  return restoring;
+}
+
 /** Put focus back on the remembered control in the new markup, or on the
  *  nearest landing spot (see the top of this file). */
 export function restoreFocus(container: HTMLElement, memory: FocusMemory | null): void {
   if (!memory) return;
+  restoring = true;
+  try {
+    moveFocusBack(container, memory);
+  } finally {
+    restoring = false;
+  }
+}
+
+function moveFocusBack(container: HTMLElement, memory: FocusMemory): void {
   const { control, nodeIds, selection } = memory;
   const ownNode = nodeIds[0] ?? null;
   const same = control

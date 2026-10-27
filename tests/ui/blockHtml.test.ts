@@ -179,6 +179,23 @@ describe("blockHtml", () => {
       expect(html).not.toContain("qb-seen");
     });
 
+    // The panel's name and its title come from one place, so they never differ.
+    it("names the About panel as its title does", () => {
+      const odd = newBlock("gone");
+      const oddQ: Group = { ...emptyQuery(), children: [odd] };
+      const html = blockHtml({ ...ctxFor(oddQ), panelTab: "about" }, odd, pos);
+      expect(html).toContain('aria-label="About gone"');
+      expect(html).toContain('<h3 class="qb-about-title">About gone</h3>');
+    });
+
+    // While About is open a field's name is a click target (it selects the
+    // field), so the body says so for the pointer cursor (styles.css).
+    it("marks the body while About is open, and only then", () => {
+      expect(draw("about")).toContain('<div class="qb-block-body has-panel shows-about">');
+      expect(draw("seen")).not.toContain("shows-about");
+      expect(draw(null)).not.toContain("shows-about");
+    });
+
     it("draws no panel when it is hidden, so the rows take the whole width", () => {
       const html = draw(null);
       expect(html).toContain('<div class="qb-block-body">');

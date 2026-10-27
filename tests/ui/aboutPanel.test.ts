@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ABOUT_PANEL_KEYS, aboutPanelHtml, type AboutCtx } from "../../src/ui/aboutPanel";
+import {
+  ABOUT_PANEL_KEYS,
+  aboutPanelHtml,
+  aboutTitle,
+  type AboutCtx,
+} from "../../src/ui/aboutPanel";
 import { QUERY_BUILDER_KEYS } from "../../src/ui/queryBuilder";
 import { newBlock } from "../../src/query/tree";
 import type { Facet } from "../../src/model";
@@ -79,6 +84,11 @@ describe("aboutPanelHtml", () => {
     const facet = aboutPanelHtml(ctx(null), odd);
     expect(facet).toContain("About missing");
     expect(facet).toContain("This facet is not in the data dictionary.");
+  });
+
+  it("titles the panel with the dictionary's name, or the facet id", () => {
+    expect(aboutTitle(ctx(null), block)).toBe("About Thing <b>");
+    expect(aboutTitle({ ...ctx(null), facets: null }, block)).toBe("About thing");
   });
 
   it("waits for the dictionary while it loads", () => {

@@ -42,6 +42,7 @@ import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
 import { pickedOperatorId } from "./fieldRows";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { forgetDrag, draggedItem } from "./dragMemory";
+import { isRestoringFocus } from "./focusMemory";
 import { hoverTitle } from "./format";
 import { readValueControl } from "./valueControl";
 
@@ -549,7 +550,10 @@ export function wireQueryBuilder(
   // The focus moving into a row (Tab, a click on its slot or dropdown)
   // selects its field for About. This repaints only the About panels, so the
   // dropdown being opened stays open.
+  // A repaint putting the focus back is not the user moving it: it would
+  // undo a selection just cleared (Escape, "← About").
   container.addEventListener("focusin", (e) => {
+    if (isRestoringFocus()) return;
     const target = e.target as HTMLElement;
     if (target.closest(".qb-field-row")) selectRowForPanel(target);
   });
@@ -562,13 +566,19 @@ export function wireQueryBuilder(
     if (e.key !== "Escape") return;
     const target = e.target as HTMLElement;
     const block = blockOf(target);
-    if (block && getState().selectedField?.blockId === block.id) hooks.selectFieldForPanel(null);
+    if (!block) return;
+    closeOpenRow(target);
+    // Last: closing the row puts the focus back into it (keepFocusInRow, a
+    // real focus move), and that row's `focusin` selects its field again.
+    // Cleared before that, it would not stay cleared.
+    if (getState().selectedField?.blockId === block.id) hooks.selectFieldForPanel(null);
   });
-  container.addEventListener("keydown", (e) => {
+
+  /** Escape's first job in a block: close the open field row, if any,
+   *  keeping a value still being typed and the focus in that row. */
+  function closeOpenRow(target: HTMLElement): void {
     const open = getState().openField;
-    if (e.key !== "Escape" || !open) return;
-    const target = e.target as HTMLElement;
-    if (!target.closest(".qb-block")) return;
+    if (!open) return;
     const wasInRow = fieldRowOf(container, open.blockId, open.fieldId)?.contains(target) ?? false;
     // A value still being typed is committed first, as a click elsewhere would
     // have done (its `change` has not fired yet): the repaint below would
@@ -579,7 +589,7 @@ export function wireQueryBuilder(
     if (typedRow) commitValue(typedRow);
     hooks.openFieldRow(null);
     if (wasInRow) keepFocusInRow(container, open.blockId, open.fieldId);
-  });
+  }
 
   // The warning's ✕ is an icon, not a <button>, so Enter/Space need wiring.
   container.addEventListener("keydown", (e) => {

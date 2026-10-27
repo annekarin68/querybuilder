@@ -45,21 +45,33 @@ const NO_DESCRIPTION = "No description in the data dictionary.";
 /** Tells a first-time user that About can say more than the facet. */
 const FIELD_HINT = "Click a field's name, or move into its row, to read about it.";
 
+/** The dictionary's facet of `block`, or null when it does not (yet) know it. */
+function facetOf(ctx: AboutCtx, block: FacetBlock): Facet | null {
+  return ctx.facets?.find((f) => f.id === block.facetId) ?? null;
+}
+
+/** "About <facet>": the panel's title, and (in blockHtml.ts) its accessible
+ *  name, from one place so the two never differ. The facet id stands in for
+ *  a facet the dictionary does not know. Plain text: escape it for HTML. */
+export function aboutTitle(ctx: AboutCtx, block: FacetBlock): string {
+  return `About ${facetOf(ctx, block)?.name ?? block.facetId}`;
+}
+
 /** The About panel's content for `block`: its facet, or the selected field
  *  when that field is in this block. */
 export function aboutPanelHtml(ctx: AboutCtx, block: FacetBlock): string {
-  const facet = ctx.facets?.find((f) => f.id === block.facetId) ?? null;
-  const facetName = facet?.name ?? block.facetId;
+  const facet = facetOf(ctx, block);
+  const title = escapeHtml(aboutTitle(ctx, block));
   const selected = ctx.selectedField?.blockId === block.id ? ctx.selectedField.fieldId : null;
   if (selected === null) {
     const details = facet
       ? facetDetailsHtml(facet, ctx.totalEvents)
       : `<p class="qb-muted">${UNKNOWN_FACET}</p>`;
-    return `<h3 class="qb-about-title">About ${escapeHtml(facetName)}</h3>${details}<p class="qb-about-hint">${FIELD_HINT}</p>`;
+    return `<h3 class="qb-about-title">${title}</h3>${details}<p class="qb-about-hint">${FIELD_HINT}</p>`;
   }
   const field = facet?.fields.find((f) => f.id === selected) ?? null;
   // The way back is drawn first, where the eye lands, before the details.
-  const back = `<button type="button" class="ui mini basic button qb-about-back" data-action="about-facet"><span aria-hidden="true">←</span> About ${escapeHtml(facetName)}</button>`;
+  const back = `<button type="button" class="ui mini basic button qb-about-back" data-action="about-facet"><span aria-hidden="true">←</span> ${title}</button>`;
   if (!field) {
     return `${back}<h3 class="qb-about-title"><code>${escapeHtml(selected)}</code></h3><p class="qb-muted">${UNKNOWN_FIELD}</p>`;
   }

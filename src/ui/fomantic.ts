@@ -77,12 +77,41 @@ function setTitle(el: HTMLElement | null, title: string | null): void {
   else el.removeAttribute("title");
 }
 
+/**
+ * Escape on an open menu closes it and keeps the keyboard focus in the
+ * dropdown. Fomantic's own Escape hides the menu and then blurs its typing
+ * box, which drops the focus to the page: a keyboard user loses their place,
+ * and a second Escape never reaches the block (which would close the row and
+ * take the About panel back to the facet). Listened to in the capture phase,
+ * so it runs before Fomantic's handler on the typing box, which it replaces
+ * for this key; `hide`'s second argument is Fomantic's "prevent blur".
+ */
+function keepFocusOnEscape(node: HTMLElement): void {
+  // As in describeDropdown: `node` may be the <select> Fomantic wrapped, and
+  // the typing box sits in the wrapper, not in the <select>.
+  const dropdown = node.closest<HTMLElement>(".ui.dropdown") ?? node;
+  dropdown.addEventListener(
+    "keydown",
+    (e) => {
+      // The menu's own class, not `dropdown("is visible")`, whose answer is
+      // typed as a jQuery object (always truthy) although it is a boolean.
+      const menuOpen = dropdown.querySelector(":scope > .menu")?.classList.contains("visible");
+      if (e.key !== "Escape" || !menuOpen) return;
+      // The first Escape is the menu's (as before): the block does not see it.
+      e.stopPropagation();
+      $(dropdown).dropdown("hide", undefined, true);
+    },
+    true,
+  );
+}
+
 export function activate(container: HTMLElement): void {
   $(container)
     .find(".ui.dropdown")
     .each((_i, node) => {
       $(node).dropdown(node.hasAttribute("data-free-entry") ? FREE_ENTRY_DROPDOWN : DROPDOWN);
       describeDropdown(node);
+      keepFocusOnEscape(node);
     });
   $(container).find(".ui.checkbox").checkbox();
 }

@@ -406,7 +406,11 @@ state. The hazard is contained in one file and one helper:
   never on a placeholder, and one on each chosen label of a multi-select, so a
   name cut off with "…" can be read on hover (kept in step on every change).
   What the title says is `hoverTitle` (`format.ts`, pure): the text, trimmed,
-  or no attribute at all; a field row's value box uses it too.
+  or no attribute at all; a field row's value box uses it too. And Escape
+  on an open menu closes it **without** blurring the typing box
+  (`keepFocusOnEscape`): Fomantic's own Escape hides the menu and then blurs
+  the box, so the keyboard focus dropped to the page and the next Escape
+  never reached the block.
 - **`src/ui/panel.ts`** — `paint(container, html)`: `destroy`, swap
   `innerHTML`, `activate`. The only way a panel updates its DOM.
 
@@ -753,6 +757,14 @@ control had focus before it repaints and focuses the same control afterwards.
   not in the Tab order (`tabindex="-1"`), but can be given the focus by script.
   The saved-queries dialog has its own rules on top of these
   (`focusAfterRepaint`, "Saved queries — `savedQueries.ts`").
+- **A focus put back fires `focusin`**, and `focusin` in a field row selects
+  that row's field for the About panel ("Centre — `queryBuilder.ts`"). A
+  repaint can come a moment after the user cleared the selection (a value
+  committed by `afterPointer` after Escape), so the builder's `focusin`
+  listener ignores the focus moves of `restoreFocus` (`isRestoringFocus()`,
+  `focusMemory.ts`). A focus move made on purpose (`keepFocusInRow`) does
+  select, so Escape in a block closes the open row first and clears the
+  selection last.
 - **The About panel** (`paintAboutPanels`) repaints with `paint()` too, one
   `.qb-about` element at a time. When the control the focus was on is gone
   (**← About <facet>**, which takes the panel back to the facet), the focus
@@ -1927,7 +1939,8 @@ nesting take width too, not the window's width).
   click is handled directly), or the focus entering its row (`focusin` on
   `.qb-field-row`: Tab, a click on its slot or a dropdown). It stays selected
   until another is selected, **← About** is pressed, or Escape is pressed in
-  the block (which also closes the open row). **Why its own painter:** the
+  the block (which also closes the open row). While About is open, the field
+  names have a pointer cursor (`.shows-about` on the block's body). **Why its own painter:** the
   focus enters a row on every Tab and every click into a dropdown; a builder
   repaint then would close the dropdown just opened. So `selectedField` is
   not among the builder's `QUERY_BUILDER_KEYS` (a test checks this), and
@@ -2042,12 +2055,14 @@ to drag, and each has an equivalent:
   operator list opens. Arrows move and Enter picks (see below); the cursor then
   goes to the value.
 - *Moving:* **Move up / Move down** on every block and group but the root.
-- *Escape in a block:* it closes an open dropdown menu first (Fomantic takes
-  that Escape itself). Then, with a field row open, it **commits a value still
+- *Escape in a block:* it closes an open dropdown menu first (the dropdown
+  takes that Escape itself and keeps the focus: `keepFocusOnEscape`,
+  `fomantic.ts`). Then, with a field row open, it **commits a value still
   being typed** (like leaving the box, so the repaint does not throw the text
   away), and **closes the open row** (`openField`): an unset row closes again, and
   the focus stays in that row. A stray row has no value box, so it has nothing
-  to commit.
+  to commit. Last, it takes the About panel back to the block's facet
+  (`selectedField: null`). One handler does all three in this order.
 
 **Group contents and Ungroup** (header buttons of an open group, after
 **+ Group**; a folded group is one big click target for unfolding and shows

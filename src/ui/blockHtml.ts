@@ -13,7 +13,7 @@ import {
   nodeGrip,
   type Position,
 } from "./builderParts";
-import { aboutPanelHtml, type AboutCtx } from "./aboutPanel";
+import { aboutPanelHtml, aboutTitle, type AboutCtx } from "./aboutPanel";
 import { fieldRowsHtml } from "./fieldRows";
 import { countLabel } from "./format";
 import { escapeHtml } from "./panel";
@@ -110,8 +110,7 @@ function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
     return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}"></div></div>`;
   }
   if (ctx.panelTab === "about") {
-    const name = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
-    return `<div class="qb-panel"><div class="qb-about" data-block-id="${id}" tabindex="-1" role="group" aria-label="About ${escapeHtml(name)}">${aboutPanelHtml(ctx, block)}</div></div>`;
+    return `<div class="qb-panel"><div class="qb-about" data-block-id="${id}" tabindex="-1" role="group" aria-label="${escapeHtml(aboutTitle(ctx, block))}">${aboutPanelHtml(ctx, block)}</div></div>`;
   }
   return "";
 }
@@ -152,7 +151,13 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
     openFieldId,
   );
   const panel = panelHtml(ctx, block);
-  const body = `<div class="qb-block-body${panel ? " has-panel" : ""}"><div class="qb-field-rows">${rows}</div>${panel}</div>`;
+  // `shows-about`: a field's name selects it for About, so styles.css gives
+  // the names a pointer cursor then. (With Seen together a click on a name
+  // still selects, but nothing on screen would show it.)
+  const bodyClasses = ["qb-block-body"];
+  if (panel) bodyClasses.push("has-panel");
+  if (ctx.panelTab === "about") bodyClasses.push("shows-about");
+  const body = `<div class="${bodyClasses.join(" ")}"><div class="qb-field-rows">${rows}</div>${panel}</div>`;
   return `<div class="qb-block ${tone}" data-node-id="${id}"><div class="qb-block-head">${line1}${matchLineHtml(block)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
 }
 
