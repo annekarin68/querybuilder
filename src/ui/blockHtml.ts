@@ -4,6 +4,7 @@ import type { FieldRef } from "../query/drop";
 import { blockText, queryToText } from "../query/summary";
 import { countBlocks, ungroupBlocker } from "../query/tree";
 import type { FacetBlock, Group, Issue, QueryNode } from "../query/types";
+import type { PanelTab } from "../state";
 import {
   collapseButton,
   iconButton,
@@ -12,6 +13,7 @@ import {
   nodeGrip,
   type Position,
 } from "./builderParts";
+import { aboutPanelHtml, type AboutCtx } from "./aboutPanel";
 import { fieldRowsHtml } from "./fieldRows";
 import { countLabel } from "./format";
 import { escapeHtml } from "./panel";
@@ -20,8 +22,9 @@ import { escapeHtml } from "./panel";
 // footer line. Pure strings, so the Node-only tests can reach them;
 // queryBuilder.ts paints them and wires their buttons.
 
-/** What every part of the tree's HTML needs, passed down the recursion. */
-export interface BlockCtx {
+/** What every part of the tree's HTML needs, passed down the recursion.
+ *  (`AboutCtx`: what each block's About panel needs.) */
+export interface BlockCtx extends AboutCtx {
   catalog: FieldCatalog;
   /** The facets the "+ Facet" picker offers; null while they are loading. */
   facets: Facet[] | null;
@@ -32,6 +35,8 @@ export interface BlockCtx {
   expandedBlockIds: readonly string[];
   /** The field row drawn open for editing: an unset one gets its dropdowns. */
   openField: FieldRef | null;
+  /** The tab open in every block's panel; null: no panel. */
+  panelTab: PanelTab | null;
 }
 
 /** How many set fields a block needs before its ALL / ANY is drawn: with
@@ -51,35 +56,93 @@ function blockTone(block: FacetBlock): "qb-block-and" | "qb-block-or" {
   return combines && block.operator === "OR" ? "qb-block-or" : "qb-block-and";
 }
 
-/** A facet block (spec, section 5): its head, its issues and its field rows.
- *  The facet is fixed: to filter on another facet the user adds a block. */
+/** A toggle button of a Has / Has no or ALL / ANY pair. */
+function logicButton(on: boolean, action: string, label: string): string {
+  return `<button type="button" class="qb-logic-btn${on ? " is-on" : ""}" data-action="${action}" aria-pressed="${on}">${label}</button>`;
+}
+
+/**
+ * The panel's two tabs. They are toggle buttons (`aria-pressed`), not ARIA
+ * tabs: pressing the open one hides the panel (for every block), which a tab
+ * never does, and its title says so. Each has its own `data-action`, so the
+ * focus stays on the pressed one across the repaint ("Keyboard focus across
+ * repaints").
+ */
+function panelTabsHtml(open: PanelTab | null): string {
+  const tab = (tab: PanelTab, label: string) => {
+    const on = open === tab;
+    const hide = on ? ` title="Hide panel"` : "";
+    return `<button type="button" class="qb-tab-btn${on ? " is-on" : ""}" data-action="panel-${tab}" aria-pressed="${on}"${hide}>${label}</button>`;
+  };
+  return `<span class="qb-panel-tabs" role="group" aria-label="Panel beside the fields">${tab("seen", "Seen together")}${tab("about", "About")}</span>`;
+}
+
+/** The "?" that will open the colour legend of the co-occurrence row (plan
+ *  B, task 7). Its `data-action` keeps a click on it from unfolding a folded
+ *  block, whose whole head is a toggle. */
+const LEGEND_BUTTON = `<button type="button" class="qb-icon-btn qb-legend-btn" data-action="legend" aria-label="Explain the colours" title="Explain the colours">?</button>`;
+
+/**
+ * The head's second line: which occurrence the block means. Only once a
+ * field is set (with none, the block just says the facet is present or
+ * absent); ALL / ANY only once two are, as with one field they change nothing
+ * (MIN_FIELDS_TO_COMBINE). Empty when there is nothing to say.
+ */
+function matchLineHtml(block: FacetBlock): string {
+  const setCount = block.conditions.length;
+  if (setCount === 0) return "";
+  const words =
+    setCount < MIN_FIELDS_TO_COMBINE
+      ? `<span class="qb-group-label">an occurrence where the set field matches</span>`
+      : `<span class="qb-group-label">an occurrence where</span><span class="qb-logic" role="group" aria-label="Combine the set fields with">${logicButton(block.operator === "AND", "set-and", "ALL")}${logicButton(block.operator === "OR", "set-or", "ANY")}</span><span class="qb-group-label">of the set fields match</span>`;
+  return `<div class="qb-block-line qb-block-match">${words}</div>`;
+}
+
+/** The panel beside (or under) a block's rows: the tab that is open, or
+ *  nothing when the panel is hidden. Seen together is filled in by plan B,
+ *  task 6; About is `aboutPanelHtml`, also repainted on its own
+ *  (`paintAboutPanels`). `tabindex="-1"`: About takes the focus by script when
+ *  the button the focus was on goes ("← About"); its `aria-label` names it
+ *  for screen readers and for focus memory across a builder repaint. */
+function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
+  const id = escapeHtml(block.id);
+  if (ctx.panelTab === "seen") {
+    return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}"></div></div>`;
+  }
+  if (ctx.panelTab === "about") {
+    const name = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
+    return `<div class="qb-panel"><div class="qb-about" data-block-id="${id}" tabindex="-1" role="group" aria-label="About ${escapeHtml(name)}">${aboutPanelHtml(ctx, block)}</div></div>`;
+  }
+  return "";
+}
+
+/**
+ * A facet block (spec, section 5): a head of two lines, its issues, then its
+ * field rows with the panel beside them. Line 1: grip, Move, fold, the
+ * facet's name, Has / Has no, then on the right the panel's tabs, the
+ * legend's "?" and ✕. Line 2 (`matchLineHtml`): which occurrence it means.
+ * The facet is fixed: to filter on another facet the user adds a block.
+ */
 export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position): string {
   const name = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
   const tone = blockTone(block);
-  // A folded block's whole head is a click target for unfolding it, as a
-  // folded group's line is (its buttons and grip keep their own jobs).
-  const headAttributes = block.collapsed
-    ? ` data-action="toggle-collapse" title="Click to expand"`
-    : "";
-  const head = (inner: string) =>
-    `<div class="qb-block-head"${headAttributes}>${nodeGrip(block.id, "facet")}${moveButtons(name, position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>${inner}<span class="qb-spacer"></span>${iconButton("remove-node", `Remove ${name}`, "times")}</div>`;
+  const id = escapeHtml(block.id);
+  const start = `${nodeGrip(block.id, "facet")}${moveButtons(name, position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>`;
+  const remove = iconButton("remove-node", `Remove ${name}`, "times");
   if (block.collapsed) {
+    // A folded block's whole head is a click target for unfolding it, as a
+    // folded group's line is (its buttons and grip keep their own jobs). It
+    // has no rows and no panel, so no tabs either: they would switch nothing.
     const text = blockText(block, ctx.catalog);
-    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${escapeHtml(block.id)}">${head(
-      `<span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`,
-    )}${issuesHtml(block.id, ctx.issues)}</div>`;
+    const summary = `<span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}"><div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${LEGEND_BUTTON}${remove}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
   }
-  const pair = (on: boolean, action: string, label: string) =>
-    `<button type="button" class="qb-logic-btn${on ? " is-on" : ""}" data-action="${action}" aria-pressed="${on}">${label}</button>`;
-  const has = `<span class="qb-logic" role="group" aria-label="Has or has no ${escapeHtml(name)}">${pair(!block.negated, "set-has", "Has")}${pair(block.negated, "set-has-no", "Has no")}</span>`;
-  const setCount = block.conditions.length;
-  // ALL / ANY only matter once two fields are set (MIN_FIELDS_TO_COMBINE);
-  // before that they change nothing.
-  const where = setCount >= 1 ? `<span class="qb-group-label">an occurrence where</span>` : "";
-  const match =
-    setCount >= MIN_FIELDS_TO_COMBINE
-      ? `<span class="qb-logic" role="group" aria-label="Combine the set fields with">${pair(block.operator === "AND", "set-and", "ALL")}${pair(block.operator === "OR", "set-or", "ANY")}</span><span class="qb-group-label">of the set fields match</span>`
-      : "";
+  const has = `<span class="qb-logic" role="group" aria-label="Has or has no ${escapeHtml(name)}">${logicButton(!block.negated, "set-has", "Has")}${logicButton(block.negated, "set-has-no", "Has no")}</span>`;
+  // The tabs, "?" and ✕ share one right-aligned box (as a group's actions
+  // do): when the line wraps they move together and stay on the right, so the
+  // ✕ is never alone at the start of a line.
+  const actions = `<span class="qb-block-actions">${panelTabsHtml(ctx.panelTab)}${LEGEND_BUTTON}${remove}</span>`;
+  const line1 = `<div class="qb-block-line">${start}${has}${actions}</div>`;
   const expanded = ctx.expandedBlockIds.includes(block.id);
   const openFieldId = ctx.openField?.blockId === block.id ? ctx.openField.fieldId : null;
   const rows = fieldRowsHtml(
@@ -88,7 +151,9 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
     expanded,
     openFieldId,
   );
-  return `<div class="qb-block ${tone}" data-node-id="${escapeHtml(block.id)}">${head(has + where + match)}${issuesHtml(block.id, ctx.issues)}<div class="qb-field-rows">${rows}</div></div>`;
+  const panel = panelHtml(ctx, block);
+  const body = `<div class="qb-block-body${panel ? " has-panel" : ""}"><div class="qb-field-rows">${rows}</div>${panel}</div>`;
+  return `<div class="qb-block ${tone}" data-node-id="${id}"><div class="qb-block-head">${line1}${matchLineHtml(block)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
 }
 
 /** The "+ Facet" picker: one choice per facet. Choosing one adds a block to

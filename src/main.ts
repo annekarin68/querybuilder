@@ -23,7 +23,8 @@ import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import { escapeClosesDocs, renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
-import { revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import { QUERY_BUILDER_KEYS, revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import { ABOUT_PANEL_KEYS, paintAboutPanels } from "./ui/aboutPanel";
 import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
@@ -102,6 +103,8 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   onDismissRestored: app.dismissRestoredNotice,
   openFieldRow: app.openFieldRow,
   toggleFields: app.toggleFields,
+  setPanelTab: app.setPanelTab,
+  selectFieldForPanel: app.selectFieldForPanel,
 });
 wireSavedDialog(shell.savedDialog, app);
 wireEventDialog(shell.eventDialog, app.closeEvent);
@@ -122,23 +125,15 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     keys: ["databases", "selectedDatabaseIds", "stats"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
-  {
-    keys: [
-      "catalog",
-      "databases",
-      "query",
-      "expandedBlockIds",
-      "openField",
-      "issues",
-      "serverIssues",
-      "facets",
-      "dropNotice",
-      "restoredNotice",
-      "openSaved",
-      "selectedDatabaseIds",
-    ],
-    run: renderQueryBuilder,
-  },
+  // The builder's keys leave out `selectedField`: a field selected for the
+  // About panel repaints only those panels, after the builder, so a builder
+  // repaint in the same change has drawn them already.
+  { keys: QUERY_BUILDER_KEYS, run: renderQueryBuilder },
+  // It reads the state afresh rather than taking `s`: focusing a row selects
+  // its field (a nested setState), and that can happen inside the builder's
+  // repaint just above, when paint() puts the focus back. With `s` this row
+  // would then paint the older selection over the newer one.
+  { keys: ABOUT_PANEL_KEYS, run: () => paintAboutPanels(panels.center, store.getState()) },
   {
     keys: [
       "catalog",

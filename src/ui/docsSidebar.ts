@@ -26,8 +26,8 @@ export function sourceLogo(
 
 /** Total events across every loaded database — the denominator for a
  * facet's percentage. The backend sends no percentage: a Facet only carries
- * `eventCount`, an absolute figure. */
-function totalEvents(databases: Database[] | null): number {
+ * `eventCount`, an absolute figure. (The About panel uses it too.) */
+export function totalEvents(databases: Database[] | null): number {
   return databases?.reduce((s, d) => s + d.eventCount, 0) ?? 0;
 }
 
@@ -116,6 +116,16 @@ function valuesHtml(
     </div>`;
 }
 
+/**
+ * What the dictionary says about a field when it is opened: our comment and
+ * the third party's description, each behind the logo of who wrote it. Empty
+ * when the field has neither. Shared with the About panel beside a block
+ * (aboutPanel.ts), so both always tell the same story.
+ */
+export function fieldDetailsHtml(f: Facet["fields"][number]): string {
+  return `${f.comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(f.comment)}</p>` : ""}${f.description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(f.description)}</p>` : ""}`;
+}
+
 function fieldHtml(
   facet: Facet,
   f: Facet["fields"][number],
@@ -150,11 +160,28 @@ function fieldHtml(
         <span class="qb-doc-field-more">More: ${escapeHtml(more.join(" · "))}</span>
       </summary>
       <div class="qb-doc-field-body">
-        ${f.comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(f.comment)}</p>` : ""}
-        ${f.description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(f.description)}</p>` : ""}
+        ${fieldDetailsHtml(f)}
         ${valuesHtml(facet, f, options, section)}
       </div>
     </details>`;
+}
+
+/**
+ * A facet's details, as its opened dictionary card shows them above its
+ * fields: tags, the third party's group, both notes, and in how many of the
+ * `total` events it occurs. Shared with the About panel beside a block
+ * (aboutPanel.ts).
+ */
+export function facetDetailsHtml(facet: Facet, total: number): string {
+  const tags = facet.tags.length
+    ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
+    : "";
+  const { group, description, comment } = facet;
+  return `${tags}
+        ${group ? `<p class="qb-doc-source">${sourceLogo("thirdParty")}Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
+        ${comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(comment)}</p>` : ""}
+        ${description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(description)}</p>` : ""}
+        <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>`;
 }
 
 /** One facet card: a draggable header, then (when opened) its details and
@@ -166,10 +193,6 @@ export function facetHtml(
   catalog: FieldCatalog | null,
   section: string,
 ): string {
-  const tags = facet.tags.length
-    ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
-    : "";
-  const { group, description, comment } = facet;
   return `<details class="qb-doc-facet" data-facet-id="${escapeHtml(facet.id)}" data-item="${dragData({ type: "facet", facetId: facet.id })}">
       <summary>
         ${chevron}
@@ -179,11 +202,7 @@ export function facetHtml(
         ${addButton(facet.name, "Add")}
       </summary>
       <div class="qb-doc-facet-body">
-        ${tags}
-        ${group ? `<p class="qb-doc-source">${sourceLogo("thirdParty")}Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
-        ${comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(comment)}</p>` : ""}
-        ${description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(description)}</p>` : ""}
-        <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>
+        ${facetDetailsHtml(facet, total)}
         <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog, section)).join("")}</div>
       </div>
     </details>`;

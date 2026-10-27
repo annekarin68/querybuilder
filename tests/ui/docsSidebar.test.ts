@@ -3,7 +3,9 @@ import {
   DOCS_HINT,
   dragData,
   escapeClosesDocs,
+  facetDetailsHtml,
   facetHtml,
+  fieldDetailsHtml,
   groupHtml,
   sourceLogo,
   valuesHeadingId,
@@ -36,6 +38,28 @@ const facet: Facet = {
   ],
 };
 const html = facetHtml(facet, 100, buildFieldCatalog([facet]), "t");
+
+// The About panel beside a block (aboutPanel.ts) shows these same parts, so
+// the dictionary and About never tell a facet's or a field's story twice.
+describe("the detail parts shared with the About panel", () => {
+  it("a facet's details: tags, both notes and how many events have it, no fields", () => {
+    const details = facetDetailsHtml(facet, 100);
+    expect(details).toContain("backend note");
+    expect(details).toContain("third party note");
+    expect(details).toContain("In 5 events");
+    expect(details).toContain('class="qb-tag"');
+    expect(details).not.toContain("qb-doc-field");
+    expect(html).toContain(details);
+  });
+
+  it("a field's details: both notes, and nothing for a field without any", () => {
+    const details = fieldDetailsHtml(facet.fields[0]!);
+    expect(details).toContain("The size");
+    expect(details).toContain(">tp</p>");
+    expect(html).toContain(details);
+    expect(fieldDetailsHtml(facet.fields[1]!)).toBe("");
+  });
+});
 
 describe("data dictionary markup", () => {
   it("escapes names", () => {

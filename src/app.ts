@@ -10,6 +10,7 @@ import {
   dropNotice,
   movedMessage,
   reorderedMessage,
+  sameFieldRef,
   type DragItem,
   type FieldRef,
 } from "./query/drop";
@@ -31,6 +32,7 @@ import {
   displayStateFor,
   runBlocker,
   type AppState,
+  type PanelTab,
   type PreviewState,
   type SavedListNotice,
   type StatsState,
@@ -343,11 +345,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     }
     const issues = catalog ? validateQuery(nextQuery, catalog) : [];
     // A removed block takes its display state with it (see displayStateFor).
-    const { openField, expandedBlockIds } = store.getState();
+    const { openField, expandedBlockIds, selectedField } = store.getState();
     changeScope({
       query: nextQuery,
       issues,
-      ...displayStateFor(nextQuery, { openField, expandedBlockIds }),
+      ...displayStateFor(nextQuery, { openField, expandedBlockIds, selectedField }),
     });
   }
 
@@ -446,14 +448,25 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
    * refetched.
    */
   function openFieldRow(ref: FieldRef | null): void {
-    const current = store.getState().openField;
-    const same =
-      current === ref ||
-      (current !== null &&
-        ref !== null &&
-        current.blockId === ref.blockId &&
-        current.fieldId === ref.fieldId);
-    if (!same) store.setState({ openField: ref });
+    if (!sameFieldRef(store.getState().openField, ref)) store.setState({ openField: ref });
+  }
+
+  /**
+   * A tab of the panel beside every block. Pressing the tab that is open
+   * hides the panel for every block (`panelTab: null`), so the rows get the
+   * whole width (spec, decision 10). Display state: nothing is refetched.
+   */
+  function setPanelTab(tab: PanelTab): void {
+    store.setState({ panelTab: store.getState().panelTab === tab ? null : tab });
+  }
+
+  /**
+   * The field the About panel describes (`AppState.selectedField`), or null
+   * for the block's facet. Called on every focus move into a row, so the same
+   * field again writes nothing: only a change repaints the About panels.
+   */
+  function selectFieldForPanel(ref: FieldRef | null): void {
+    if (!sameFieldRef(store.getState().selectedField, ref)) store.setState({ selectedField: ref });
   }
 
   /** "+ N more fields" / "Show fewer fields" on block `blockId`. Display
@@ -516,6 +529,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       // The blocks they pointed at are gone with the old query.
       openField: null,
       expandedBlockIds: [],
+      selectedField: null,
     });
     announce(STARTED_FRESH_MESSAGE);
   }
@@ -576,6 +590,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       query,
       openField: null,
       expandedBlockIds: [],
+      selectedField: null,
       // The first query bypasses onQueryChange, so validate here: a restored
       // query may be unfinished, and Run must stay blocked then.
       issues: validateQuery(query, catalog),
@@ -787,6 +802,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       // The blocks they pointed at are gone with the old query.
       openField: null,
       expandedBlockIds: [],
+      selectedField: null,
       // The selection kept, not the saved one: the user did not edit the
       // dropped ids away, so opening must not count as an edit.
       openSaved: {
@@ -903,6 +919,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onAddItem,
     openFieldRow,
     toggleFields,
+    setPanelTab,
+    selectFieldForPanel,
     onMoveNode,
     dismissDropNotice,
     showNotice,

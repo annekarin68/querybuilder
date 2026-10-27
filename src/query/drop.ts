@@ -64,10 +64,17 @@ export function parseDragItem(text: string): DragItem | null {
   }
 }
 
-/** A field row of one block: the row a drop opens. */
+/** A field row of one block: the row a drop opens, or the field the About
+ *  panel describes. */
 export interface FieldRef {
   blockId: string;
   fieldId: string;
+}
+
+/** Whether two refs name the same row (null names none, and matches null). */
+export function sameFieldRef(a: FieldRef | null, b: FieldRef | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.blockId === b.blockId && a.fieldId === b.fieldId;
 }
 
 /** What a dropped dictionary item did to the query. */

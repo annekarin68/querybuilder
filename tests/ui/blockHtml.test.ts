@@ -30,6 +30,9 @@ const ctxFor = (query: Group): BlockCtx => ({
   query,
   expandedBlockIds: [],
   openField: null,
+  panelTab: "seen",
+  selectedField: null,
+  totalEvents: 10,
 });
 const pos = { index: 1, count: 1 };
 
@@ -43,6 +46,7 @@ describe("blockHtml", () => {
     expect(html).toContain('data-action="set-has-no" aria-pressed="false"');
     expect(html).not.toContain("set-and");
     expect(html).not.toContain("an occurrence where");
+    expect(html).not.toContain("qb-block-match");
     expect(html).toContain('aria-label="Remove Thing"');
   });
 
@@ -109,6 +113,90 @@ describe("blockHtml", () => {
     }
   });
 
+  it("says on a second line which occurrence it means, once a field is set", () => {
+    const one: FacetBlock = {
+      ...newBlock("thing"),
+      conditions: [newFieldCondition("size", "gt", 1)],
+    };
+    const html = blockHtml(ctxFor({ ...emptyQuery(), children: [one] }), one, pos);
+    expect(html).toContain(
+      '<div class="qb-block-line qb-block-match"><span class="qb-group-label">an occurrence where the set field matches</span></div>',
+    );
+    expect(html).not.toContain("set-and");
+  });
+
+  it("puts ALL / ANY on the second line with two or more set fields", () => {
+    const two: FacetBlock = {
+      ...newBlock("thing"),
+      conditions: [newFieldCondition("size", "gt", 1), newFieldCondition("label", "eq", "x")],
+    };
+    const html = blockHtml(ctxFor({ ...emptyQuery(), children: [two] }), two, pos);
+    const line2 = html.slice(html.indexOf("qb-block-match"));
+    expect(line2.indexOf("an occurrence where")).toBeLessThan(
+      line2.indexOf('data-action="set-and"'),
+    );
+    expect(line2.indexOf('data-action="set-or"')).toBeLessThan(
+      line2.indexOf("of the set fields match"),
+    );
+    // Has / Has no stays on the first line.
+    expect(html.indexOf("set-has")).toBeLessThan(html.indexOf("qb-block-match"));
+  });
+
+  describe("the panel tabs and the panel", () => {
+    const b = newBlock("thing");
+    const q: Group = { ...emptyQuery(), children: [b] };
+    const draw = (panelTab: BlockCtx["panelTab"]) => blockHtml({ ...ctxFor(q), panelTab }, b, pos);
+
+    it("draws Seen together and About as toggle buttons, the open one says it hides", () => {
+      const html = draw("seen");
+      expect(html).toContain(
+        '<button type="button" class="qb-tab-btn is-on" data-action="panel-seen" aria-pressed="true" title="Hide panel">Seen together</button>',
+      );
+      expect(html).toContain(
+        '<button type="button" class="qb-tab-btn" data-action="panel-about" aria-pressed="false">About</button>',
+      );
+    });
+
+    it("draws the legend's ? button and keeps ✕ last on the first line", () => {
+      const html = draw("seen");
+      expect(html).toContain('aria-label="Explain the colours"');
+      const line1 = html.slice(0, html.indexOf("qb-block-body"));
+      expect(line1.indexOf("panel-about")).toBeLessThan(line1.indexOf("Explain the colours"));
+      expect(line1.indexOf("Explain the colours")).toBeLessThan(line1.indexOf("remove-node"));
+    });
+
+    it("shows the Seen together placeholder beside the rows", () => {
+      const html = draw("seen");
+      expect(html).toContain('<div class="qb-block-body has-panel">');
+      expect(html).toContain(`<div class="qb-seen" data-block-id="${b.id}"></div>`);
+      expect(html).not.toContain("qb-about");
+    });
+
+    it("shows About with the facet's details", () => {
+      const html = draw("about");
+      expect(html).toContain(`class="qb-about" data-block-id="${b.id}"`);
+      expect(html).toContain("About Thing");
+      expect(html).not.toContain("qb-seen");
+    });
+
+    it("draws no panel when it is hidden, so the rows take the whole width", () => {
+      const html = draw(null);
+      expect(html).toContain('<div class="qb-block-body">');
+      expect(html).not.toContain(`class="qb-panel"`);
+      expect(html).toContain('data-action="panel-seen" aria-pressed="false"');
+      expect(html).not.toContain("Hide panel");
+    });
+
+    // A folded block has no rows and no panel: tabs would switch nothing in it.
+    it("draws no tabs on a folded block", () => {
+      const html = blockHtml(ctxFor(q), { ...b, collapsed: true }, pos);
+      expect(html).not.toContain("panel-seen");
+      expect(html).not.toContain(`class="qb-panel"`);
+      // The legend explains the co-occurrence row above every block, folded too.
+      expect(html).toContain('aria-label="Explain the colours"');
+    });
+  });
+
   it("folds to its head and the summary line", () => {
     const b: FacetBlock = {
       ...newBlock("thing"),
@@ -120,7 +208,7 @@ describe("blockHtml", () => {
     expect(html).toContain("Thing has size &gt; 40");
     // Like a folded group's line, the whole head unfolds it on a click.
     expect(html).toContain(
-      '<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand">',
+      '<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">',
     );
     expect(html).not.toContain("qb-field-row");
   });

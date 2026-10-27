@@ -1296,6 +1296,50 @@ describe("the field row being worked on, and folded field lists", () => {
   });
 });
 
+describe("the panel beside each block", () => {
+  // Display state: switching tabs or selecting a field is no query edit, so
+  // the statistics and results stay and nothing is fetched again.
+  const shown: Partial<AppState> = {
+    ...ready(),
+    preview: { status: "ok", events, page: 0 },
+    restoredNotice: true,
+  };
+
+  it("setPanelTab switches the tab, and pressing the open one hides the panel", async () => {
+    vi.useFakeTimers();
+    const { app, api, store } = setup(shown);
+    app.setPanelTab("about");
+    expect(store.getState().panelTab).toBe("about");
+    app.setPanelTab("about");
+    expect(store.getState().panelTab).toBeNull();
+    app.setPanelTab("seen");
+    expect(store.getState().panelTab).toBe("seen");
+    expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    expect(api.getStats).not.toHaveBeenCalled();
+  });
+
+  it("selectFieldForPanel selects a field for About, and null goes back to the facet", () => {
+    const { app, store } = setup(shown);
+    const ref = { blockId: "f-1", fieldId: "size" };
+    app.selectFieldForPanel(ref);
+    expect(store.getState().selectedField).toEqual(ref);
+    expect(store.getState().openField).toBeNull();
+    app.selectFieldForPanel(null);
+    expect(store.getState().selectedField).toBeNull();
+  });
+
+  // Every focus move inside a row asks again: only a change may repaint.
+  it("selecting the field that is already selected changes nothing", () => {
+    const { app, store } = setup(shown);
+    app.selectFieldForPanel({ blockId: "f-1", fieldId: "size" });
+    const seen = vi.fn();
+    store.subscribe(seen);
+    app.selectFieldForPanel({ blockId: "f-1", fieldId: "size" });
+    expect(seen).not.toHaveBeenCalled();
+  });
+});
+
 describe("display state follows the query", () => {
   // `openField` and `expandedBlockIds` point at blocks of the query; they
   // must not outlive the block or the query they were made for.
@@ -1306,13 +1350,15 @@ describe("display state follows the query", () => {
     ...ready(query),
     openField: { blockId: block.id, fieldId: "size" },
     expandedBlockIds: [block.id],
+    selectedField: { blockId: block.id, fieldId: "label" },
   };
 
-  it("removing the block drops its open row and its open fields", () => {
+  it("removing the block drops its open row, its open fields and its selected field", () => {
     const { app, store } = setup(shownBlock);
     app.onQueryChange(removeNode(store.getState().query, block.id));
     expect(store.getState().openField).toBeNull();
     expect(store.getState().expandedBlockIds).toEqual([]);
+    expect(store.getState().selectedField).toBeNull();
   });
 
   it("an edit that keeps the block keeps them", () => {
@@ -1327,6 +1373,7 @@ describe("display state follows the query", () => {
     app.startFresh();
     expect(store.getState().openField).toBeNull();
     expect(store.getState().expandedBlockIds).toEqual([]);
+    expect(store.getState().selectedField).toBeNull();
   });
 
   it("opening a saved query drops them with the old query", () => {
@@ -1343,6 +1390,7 @@ describe("display state follows the query", () => {
     expect(store.getState().query).toBe(target.query);
     expect(store.getState().openField).toBeNull();
     expect(store.getState().expandedBlockIds).toEqual([]);
+    expect(store.getState().selectedField).toBeNull();
   });
 
   it("a restored query starts with none", async () => {

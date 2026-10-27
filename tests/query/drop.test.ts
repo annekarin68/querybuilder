@@ -9,6 +9,7 @@ import {
   focusedRowMessage,
   movedMessage,
   parseDragItem,
+  sameFieldRef,
   reorderedMessage,
 } from "../../src/query/drop";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
@@ -34,6 +35,20 @@ const withBlock = () => {
   const query: Group = { ...emptyQuery(), children: [block] };
   return { query, block };
 };
+
+describe("sameFieldRef", () => {
+  it("matches refs to the same row, and null only with null", () => {
+    expect(sameFieldRef({ blockId: "b", fieldId: "f" }, { blockId: "b", fieldId: "f" })).toBe(true);
+    expect(sameFieldRef({ blockId: "b", fieldId: "f" }, { blockId: "b", fieldId: "g" })).toBe(
+      false,
+    );
+    expect(sameFieldRef({ blockId: "b", fieldId: "f" }, { blockId: "c", fieldId: "f" })).toBe(
+      false,
+    );
+    expect(sameFieldRef(null, { blockId: "b", fieldId: "f" })).toBe(false);
+    expect(sameFieldRef(null, null)).toBe(true);
+  });
+});
 
 describe("parseDragItem", () => {
   it("reads our own payloads and nothing else", () => {

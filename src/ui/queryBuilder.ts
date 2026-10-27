@@ -1,4 +1,4 @@
-import type { AppState } from "../state";
+import type { AppState, PanelTab } from "../state";
 import type { FacetBlock, Group } from "../query/types";
 import {
   addChild,
@@ -37,6 +37,7 @@ import {
 } from "../util/afterPointer";
 import { RESTORED_MESSAGE } from "../util/keptQuery";
 import { escapeHtml, paint } from "./panel";
+import { aboutCtxOf } from "./aboutPanel";
 import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
 import { pickedOperatorId } from "./fieldRows";
 import { onDropdownChange, openDropdown } from "./fomantic";
@@ -183,6 +184,29 @@ export function queryTitleHtml(state: AppState): string {
     </div>`;
 }
 
+/**
+ * The state keys the builder's painter listens to in main.ts. Not
+ * `selectedField`: the builder draws the About panels with it, but a change
+ * of it alone repaints only those (`paintAboutPanels`, `ABOUT_PANEL_KEYS`).
+ * Selecting happens on every focus move into a row, and a builder repaint
+ * would close the dropdown the focus just moved into.
+ */
+export const QUERY_BUILDER_KEYS: (keyof AppState)[] = [
+  "catalog",
+  "databases",
+  "query",
+  "expandedBlockIds",
+  "openField",
+  "panelTab",
+  "issues",
+  "serverIssues",
+  "facets",
+  "dropNotice",
+  "restoredNotice",
+  "openSaved",
+  "selectedDatabaseIds",
+];
+
 function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
@@ -191,12 +215,14 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   // Local issues (src/query/validate.ts) and the backend's, each on a node that is drawn.
   const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
   const ctx: BlockCtx = {
+    // The facets, the event total and the selected field, for About.
+    ...aboutCtxOf(state),
     catalog: state.catalog,
-    facets: state.facets,
     issues,
     query: state.query,
     expandedBlockIds: state.expandedBlockIds,
     openField: state.openField,
+    panelTab: state.panelTab,
   };
   paint(
     el,
@@ -244,6 +270,11 @@ export function wireQueryBuilder(
     openFieldRow(ref: FieldRef | null): void;
     /** "+ N more fields" / "Show fewer fields" on a block. Not a query edit. */
     toggleFields(blockId: string): void;
+    /** A panel tab pressed (the open one again: hide the panel). */
+    setPanelTab(tab: PanelTab): void;
+    /** The field About describes (null: the block's facet). Repaints only
+     *  the About panels, never the rows. */
+    selectFieldForPanel(ref: FieldRef | null): void;
   },
 ): (state: AppState) => void {
   /** The facet block a field row (or anything else inside a block) belongs
@@ -417,6 +448,14 @@ export function wireQueryBuilder(
     if (btn?.dataset.action === "open-saved-list") return hooks.onOpenSavedList();
     if (btn?.dataset.action === "start-fresh") return hooks.onStartFresh();
     if (btn?.dataset.action === "dismiss-restored") return hooks.onDismissRestored();
+    // The panel's tabs switch the panel of every block, not one node.
+    if (btn?.dataset.action === "panel-seen") return hooks.setPanelTab("seen");
+    if (btn?.dataset.action === "panel-about") return hooks.setPanelTab("about");
+    if (btn?.dataset.action === "about-facet") return hooks.selectFieldForPanel(null);
+    // A field's name selects it for About. The name is plain text, not a
+    // control, so the focus does not move there and `focusin` below misses it.
+    const label = (e.target as HTMLElement).closest<HTMLElement>(".qb-field-label");
+    if (label) return selectRowForPanel(label);
     // The group, block or set field row the button sits in.
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
@@ -498,9 +537,33 @@ export function wireQueryBuilder(
     }
   });
 
+  /** Select the field of the row `el` sits in for the About panel. A stray
+   *  row counts too: About then says the dictionary does not know it. */
+  function selectRowForPanel(el: HTMLElement): void {
+    const row = el.closest<HTMLElement>(".qb-field-row");
+    const block = blockOf(el);
+    const fieldId = row?.dataset.fieldId;
+    if (block && fieldId) hooks.selectFieldForPanel({ blockId: block.id, fieldId });
+  }
+
+  // The focus moving into a row (Tab, a click on its slot or dropdown)
+  // selects its field for About. This repaints only the About panels, so the
+  // dropdown being opened stays open.
+  container.addEventListener("focusin", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest(".qb-field-row")) selectRowForPanel(target);
+  });
+
   // Escape inside a block closes the open field row (an open dropdown menu
   // takes the first Escape itself: Fomantic stops it there). An open unset
   // row goes back to a plain one then, so the focus is kept in that row.
+  // It also takes About back to the block's facet (spec, section 5).
+  container.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const target = e.target as HTMLElement;
+    const block = blockOf(target);
+    if (block && getState().selectedField?.blockId === block.id) hooks.selectFieldForPanel(null);
+  });
   container.addEventListener("keydown", (e) => {
     const open = getState().openField;
     if (e.key !== "Escape" || !open) return;

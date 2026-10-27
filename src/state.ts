@@ -67,6 +67,11 @@ export type SavedListNotice = { tone: "error" | "done"; text: string } | null;
 /** An action in the list waiting for the user's yes. */
 export type SavedConfirm = null | { action: "open" | "delete"; id: string };
 
+/** The panel beside every facet block: "seen" (the facets seen together
+ *  with the block's facet) or "about" (the dictionary's words on the facet,
+ *  or on the field selected for the panel). */
+export type PanelTab = "seen" | "about";
+
 export interface AppState {
   /** The queryable fields, derived from `facets` at startup (there is
    *  no schema endpoint — see src/query/fieldCatalog.ts). */
@@ -101,6 +106,16 @@ export interface AppState {
    *  call the selected field: focusing a row never changes this, so it never
    *  repaints the rows.) */
   openField: FieldRef | null;
+  /** The tab open in the panel beside every block, or null: the panel is
+   *  hidden for all blocks at once, and the rows take the whole width.
+   *  Pressing the open tab again hides it. Display state, like the two above. */
+  panelTab: PanelTab | null;
+  /** The field the About panel describes (a label clicked, or the focus moved
+   *  into its row), or null: About describes the block's facet. Only the
+   *  About panels repaint when it changes (main.ts, `ABOUT_PANEL_KEYS`), never
+   *  the rows: a repaint would close an open dropdown under the user's
+   *  cursor. Not `openField`, which says which row is drawn open. */
+  selectedField: FieldRef | null;
   issues: Issue[];
   /** The problems the backend found in the query on screen: the errors in
    *  `stats` that point at a node (src/query/issues.ts, serverIssues). Set by
@@ -156,6 +171,9 @@ export const initialState: AppState = {
   query: emptyQuery(),
   expandedBlockIds: [],
   openField: null,
+  // The co-occurrence chart is the panel's news; About is one click away.
+  panelTab: "seen",
+  selectedField: null,
   issues: [],
   serverIssues: [],
   stats: { status: "idle", results: [] },
@@ -201,8 +219,9 @@ export function runBlocker(state: RunInputs): RunBlocker | null {
   return null;
 }
 
-/** The parts of the state that only say how the query is shown. */
-export type DisplayState = Pick<AppState, "openField" | "expandedBlockIds">;
+/** The parts of the state that only say how the query is shown and point at
+ *  its blocks. (`panelTab` is display state too, but about every block.) */
+export type DisplayState = Pick<AppState, "openField" | "expandedBlockIds" | "selectedField">;
 
 /**
  * `display` without what points at a block that is no longer in `query`: a
@@ -213,12 +232,15 @@ export type DisplayState = Pick<AppState, "openField" | "expandedBlockIds">;
  */
 export function displayStateFor(query: Group, display: DisplayState): DisplayState {
   const isBlockInQuery = (id: string) => findNode(query, id)?.kind === "facet";
-  const openField =
-    display.openField && isBlockInQuery(display.openField.blockId) ? display.openField : null;
+  const keepIfInQuery = (ref: FieldRef | null) => (ref && isBlockInQuery(ref.blockId) ? ref : null);
+  const openField = keepIfInQuery(display.openField);
+  const selectedField = keepIfInQuery(display.selectedField);
   const expandedBlockIds = display.expandedBlockIds.filter(isBlockInQuery);
   const unchanged =
-    openField === display.openField && expandedBlockIds.length === display.expandedBlockIds.length;
-  return unchanged ? display : { openField, expandedBlockIds };
+    openField === display.openField &&
+    selectedField === display.selectedField &&
+    expandedBlockIds.length === display.expandedBlockIds.length;
+  return unchanged ? display : { openField, expandedBlockIds, selectedField };
 }
 
 type Listener = (state: AppState, changed: Set<keyof AppState>) => void;

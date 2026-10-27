@@ -454,7 +454,7 @@ src/
                        actions (`openSaveDialog`, `saveQuery`,
                        `askOpenSaved`, …), previewAnnouncement (what a screen reader hears about Run).
                        Tested with a fake API.
-  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; `restoredNotice`; the saved-queries keys), the
+  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; `restoredNotice`; the builder's display state `openField`, `expandedBlockIds`, `panelTab`, `selectedField` and displayStateFor; the saved-queries keys), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
                        User, Compliance, SavedQuery / SavedQueryDraft / SavedQueryList ("Data model").
@@ -535,20 +535,23 @@ src/
     fieldRows.ts       Pure HTML of a facet block's field rows (set, unset, open, stray, the fold button):
                        fieldRowsHtml, visibleFieldIds; NOT_FILTERED / pickedOperatorId (the operator
                        dropdown's "Not filtered" choice).
-    blockHtml.ts       Pure HTML of the facet-block tree: blockHtml (head, Has / Has no, ALL / ANY, rows),
-                       groupHtml (with the "+ Facet" picker), footerHtml, BlockCtx. Painted by queryBuilder.ts;
-                       its styles are the "Facet blocks" section of styles.css.
+    blockHtml.ts       Pure HTML of the facet-block tree: blockHtml (the two-line head, rows and the panel
+                       beside them), groupHtml (with the "+ Facet" picker), footerHtml, BlockCtx. Painted by
+                       queryBuilder.ts; its styles are the "Facet blocks" section of styles.css.
+    aboutPanel.ts      The About tab of a block's panel: aboutPanelHtml (pure), paintAboutPanels (repaints
+                       only the About panels when `selectedField` changes), ABOUT_PANEL_KEYS.
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
     queryBuilder.ts    The query builder: paints blockHtml.ts's tree and wires it (field rows, "+ Facet",
-                       drop targets, node grips, the title row with Save… and Saved queries; returns its
-                       render function).
+                       drop targets, node grips, the panel's tabs and field selection, the title row with
+                       Save… and Saved queries; returns its render function). QUERY_BUILDER_KEYS.
     savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint and
                        escapeAction (pure), renderSavedDialog (paints and opens/closes the <dialog>),
                        wireSavedDialog.
     docsField.ts       fieldPreview — what a dictionary field row shows closed, and what opening adds (pure).
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
-    docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring).
+    docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring);
+                       facetDetailsHtml / fieldDetailsHtml, shared with the About panel.
     dragMemory.ts      Which dictionary item is being dragged (a browser hides a drag's data until the drop; see "Centre — `queryBuilder.ts`", Drag and drop).
     statsPanel.ts      The statistics column (render + wiring: Show problem, Try again).
     dataPreview.ts     Matching events and the Run button (render + wiring: Run, Previous / Next, an id).
@@ -617,21 +620,27 @@ Run, so the dialog never shows a result that is gone or hidden.
 brought the kept query back ("Saved query across the login/compliance
 redirect"). Its ✕, **Start fresh** and the first edit (`changeScope`) clear it.
 
-**Display state of the builder.** Two keys say how the query is shown, not what
-it means: `openField` (`{ blockId, fieldId }` of the one field row drawn open
-for editing, or `null`: an open unset row gets real dropdowns) and
+**Display state of the builder.** Four keys say how the query is shown, not
+what it means: `openField` (`{ blockId, fieldId }` of the one field row drawn
+open for editing, or `null`: an open unset row gets real dropdowns),
 `expandedBlockIds` (the blocks whose folded field list is open: "+ N more
-fields"). Focusing a row does not open it, so moving through the rows never
-repaints them. (The name `selectedField` is kept free for the panel of plan
-B, whose "About" shows the selected field without changing any row.) They
-are not part of the query, so they are never saved, never sent and never
-compared when the app asks whether the query was edited. Changing them is not
-a query edit either: only the builder repaints, and nothing is reset or
-refetched. They are reset whenever the query
-is replaced (startup, **Start fresh**, opening a saved query), and
-`displayStateFor` (`src/state.ts`) drops the ones that point at a block a query
-edit has removed. Without that, ids of removed blocks would stay in the state
-for ever, because a new block never gets an old id.
+fields"), `panelTab` (`"seen"`, `"about"` or `null`: the tab open in the panel
+beside every block, `"seen"` at first; `null` hides the panel for all blocks)
+and `selectedField` (`{ blockId, fieldId }` of the field the About tab
+describes, or `null` for the block's facet). Focusing a row does not open it,
+so moving through the rows never repaints them; it selects the row's field
+for About, and **only the About panels repaint** for that: `selectedField` is
+not among the builder's keys (`QUERY_BUILDER_KEYS`), but has its own painter
+(`paintAboutPanels`, `ABOUT_PANEL_KEYS`), so a dropdown the focus moved into
+stays open. They are not part of the query, so they are never saved, never
+sent and never compared when the app asks whether the query was edited.
+Changing them is not a query edit either: only the builder (or the About
+panels) repaint, and nothing is reset or refetched. Except `panelTab`, which
+is about every block, they are reset whenever the query is replaced (startup,
+**Start fresh**, opening a saved query), and `displayStateFor`
+(`src/state.ts`) drops the ones that point at a block a query edit has
+removed. Without that, ids of removed blocks would stay in the state for
+ever, because a new block never gets an old id.
 
 The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
 pure helpers in `src/query/saved.ts`):
@@ -670,7 +679,9 @@ stays on screen).
 keys it reads and how to render it. One subscriber runs a panel's render
 function when any of its keys changed. **When a render
 function starts reading a new key, add the key to its row** — otherwise the
-panel won't repaint. A render function that throws is logged
+panel won't repaint. (The builder's keys are `QUERY_BUILDER_KEYS` in
+`queryBuilder.ts`, so a test can check that `selectedField` is not among
+them.) A render function that throws is logged
 (`console.error`) and skipped, so the other panels still repaint: one broken
 panel must not leave another showing the previous query's data.
 
@@ -686,7 +697,9 @@ binding its Fomantic dropdowns must always happen together.
 |---|---|
 | App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with the starting query, an empty group (or the kept query, restored: "Saved query across the login/compliance redirect"). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
-| User opens a field row (its empty slot, a dropped field or value), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.openFieldRow` / `app.toggleFields` write `openField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. Escape first commits a value still being typed in its row. A query edit (`onQueryChange`) drops the ids of blocks that are no longer in the query (`displayStateFor`, `src/state.ts`); Start fresh, opening a saved query and restoring a kept one reset both. |
+| User opens a field row (its empty slot, a dropped field or value), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.openFieldRow` / `app.toggleFields` write `openField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. Escape first commits a value still being typed in its row. A query edit (`onQueryChange`) drops the ids of blocks that are no longer in the query (`displayStateFor`, `src/state.ts`); Start fresh, opening a saved query and restoring a kept one reset both (and `selectedField`). |
+| User presses a panel tab (**Seen together** / **About**) on any block | `app.setPanelTab` writes `panelTab`; the tab that is open sets `null` (no panel in any block). Display state: only the builder repaints. |
+| The focus moves into a field row, the user clicks a field's name, presses **← About <facet>** or Escape in a block | `app.selectFieldForPanel` writes `selectedField` (the same field again writes nothing). Only `paintAboutPanels` runs: it rewrites the content of each `.qb-about` element, never the rows, so an open dropdown stays open. It reads the state afresh, because the selection can change inside the builder's own repaint (paint() puts the focus back into a row, which fires `focusin`). |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
 | User presses **Previous** / **Next** in the Matching events card | `app.showEventPage(page)` → `preview.page` (clamped by `pageOf`; the same page is a no-op), announced ("Showing results 101 to 200 of 1,987.", numbers in the viewer's format). Only the preview panel repaints; the focus stays on the pressed button (its own `data-action`). At the ends the button is `aria-disabled="true"`, not `disabled`, so it keeps the focus; its click does nothing. |
@@ -740,6 +753,10 @@ control had focus before it repaints and focuses the same control afterwards.
   not in the Tab order (`tabindex="-1"`), but can be given the focus by script.
   The saved-queries dialog has its own rules on top of these
   (`focusAfterRepaint`, "Saved queries — `savedQueries.ts`").
+- **The About panel** (`paintAboutPanels`) repaints with `paint()` too, one
+  `.qb-about` element at a time. When the control the focus was on is gone
+  (**← About <facet>**, which takes the panel back to the facet), the focus
+  goes to that panel itself (`tabindex="-1"`, named "About <facet>").
 - **Code that moves the cursor on purpose wins**: it runs after the paint
   (`focusValue` moving on to the value after an operator was picked,
   `keepFocusInRow` keeping the focus in a row that changed shape or that a
@@ -1637,13 +1654,14 @@ Built from `state.facets` and `state.catalog`. It is a stack of native
 2. **Facet cards** — name and field count in the header; opened, the tags, the
    third-party group (if not blank), `comment` and `description`, each starting
    with a small logo saying who wrote it (`TEXT_SOURCES`, below), and "In N
-   events (x%)", then the fields.
+   events (x%)" (`facetDetailsHtml`, which a block's About panel shows too),
+   then the fields.
 3. **Field rows** — name, type and our comment (else the third party's
    description), with the source's logo, in plain sight. A row opens only when
    opening shows something new (`fieldPreview`, `docsField.ts`): a second text,
    or known values. Then its closed line is cut to two lines and followed by
    what opening adds ("More: third-party description · 12 previously seen
-   values"); opened, it shows both texts and the known values. A field with one
+   values"); opened, it shows both texts (`fieldDetailsHtml`, shared with the About panel) and the known values. A field with one
    text and no known values is a plain row (`is-leaf`, a `<div>`, not a
    `<details>`) that shows that text in full, wrapped, with no arrow but a
    spacer of the arrow's width (`.qb-chevron-spacer`) so its grip and name line
@@ -1864,14 +1882,58 @@ buttons are about the block, not its group. Only while those buttons are drawn,
 though: with fewer than two set fields the block is always in the ALL colour,
 so it never shows the ANY colour without an ANY button to explain it (a saved
 ANY block, or one whose second field was cleared, keeps its operator). Its
-header holds, in this order: the grip, Move up / Move down, the collapse
-chevron, the facet's name (its id if the dictionary doesn't know it), the
-**Has | Has no** toggle, the words "an occurrence where" (once one field is
-set), **ALL | ANY** with "of the set fields match" (once two or more are set;
-with one field ALL and ANY would change nothing), and ✕. The facet itself
-cannot be changed: the user adds another block instead. A folded block shows
-its header and a one-line `blockText` summary, and, like a folded group, the
-whole header unfolds it.
+header has **two lines** (each still wraps in a narrow block). Line 1, in this
+order: the grip, Move up / Move down, the collapse chevron, the facet's name
+(its id if the dictionary doesn't know it), the **Has | Has no** toggle, then
+on the right the panel's tabs **Seen together | About**, the legend's **?**
+("Explain the colours"; plan B task 7 makes it open the legend) and ✕, in one
+right-aligned box (`.qb-block-actions`) that wraps as a whole, so the ✕ never
+starts a line on its own.
+Line 2, only once a field is set: "an occurrence where the set field
+matches", or with two or more set fields "an occurrence where **ALL | ANY**
+of the set fields match" (with one field ALL and ANY would change nothing).
+**Why two lines:** with the tabs the single line wrapped at an arbitrary
+place; now the controls about the block and the sentence about its fields
+each keep their own line. The facet itself cannot be changed: the user adds
+another block instead. A folded block shows line 1 with a one-line
+`blockText` summary in place of Has / Has no and the tabs (it has no rows
+and no panel for them to switch), and, like a folded group, the whole header
+unfolds it. Its **?** has a `data-action` of its own, so a click on it does
+not unfold the block.
+
+**The panel** beside a block's rows (spec, section 5, decisions 10 and 17)
+shows the tab that is open in `AppState.panelTab`, the same tab in every
+block. The tabs are toggle buttons (`aria-pressed`), not ARIA tabs: pressing
+the open one hides the panel in **every** block (`panelTab: null`, its title
+says "Hide panel"), and the rows take the whole width. Each tab has its own
+`data-action` (`panel-seen`, `panel-about`), so the focus stays on it across
+the repaint. The rows and the panel sit side by side (3 : 2) once the block
+is at least 640 px wide, and the panel goes under the rows when it is
+narrower (a container query on `.qb-block`, since the open dictionary and
+nesting take width too, not the window's width).
+
+- **Seen together** (`.qb-seen`) is an empty placeholder until plan B task 6
+  draws the co-occurrence chart in it.
+- **About** (`aboutPanelHtml`, `aboutPanel.ts`) shows the dictionary's details
+  of the block's facet (`facetDetailsHtml`, the same markup as the opened
+  dictionary card, without its fields) and a hint that a field can be
+  selected. When `AppState.selectedField` is a field of this block it shows
+  that field's name, type and texts (`fieldDetailsHtml`, the same markup as
+  the opened dictionary field, without the known values, whose drag and "+"
+  buttons belong to the dictionary), or "No description in the data
+  dictionary.", with **← About <facet>** first, which clears the selection.
+  A field or facet the dictionary does not know says so.
+- **Selecting a field** for About: clicking its name (a plain label, so the
+  click is handled directly), or the focus entering its row (`focusin` on
+  `.qb-field-row`: Tab, a click on its slot or a dropdown). It stays selected
+  until another is selected, **← About** is pressed, or Escape is pressed in
+  the block (which also closes the open row). **Why its own painter:** the
+  focus enters a row on every Tab and every click into a dropdown; a builder
+  repaint then would close the dropdown just opened. So `selectedField` is
+  not among the builder's `QUERY_BUILDER_KEYS` (a test checks this), and
+  `paintAboutPanels` rewrites only each `.qb-about` element's content. The
+  builder still draws About from `selectedField` whenever it repaints for
+  another reason, so the two never disagree.
 
 A page holds many blocks, so the accessible names of a block's controls say
 which facet they belong to, with the name from the loaded dictionary (never
@@ -1936,10 +1998,11 @@ on whether it exists. Hence:
   to the dictionary every condition is a stray, drawn without an error of its
   own: only the block carries one ("Unknown facet.", under its header), as
   repeating it on every row would say the same thing again.
-- **Narrow blocks.** A block is a CSS container (`container-type: inline-size`).
-  Below 420 px of block width (a 512 px window, or deep nesting) the value
-  moves under the label and operator instead of beside them. The rows use the
-  block's width, not the window's, because the open dictionary takes width too.
+- **Narrow rows.** A block and its rows (`.qb-field-rows`) are CSS containers
+  (`container-type: inline-size`). Below 420 px of row width (a 512 px window,
+  deep nesting, or the panel beside them) the value moves under the label and
+  operator instead of beside them. The rows use their own width, not the
+  window's, because the open dictionary and the panel take width too.
 
 **The value control** is the one from `valueControl.ts`: nothing; for **Equals**
 / **Not equals** on a field with a pick-list, a free-entry dropdown (its known

@@ -103,6 +103,14 @@ describe("runBlocker", () => {
   });
 });
 
+describe("the panel's starting state", () => {
+  // The panel starts on Seen together, with no field selected for About.
+  it("opens Seen together, with nothing selected", () => {
+    expect(initialState.panelTab).toBe("seen");
+    expect(initialState.selectedField).toBeNull();
+  });
+});
+
 describe("displayStateFor", () => {
   const a = newBlock("thing");
   const b = newBlock("other");
@@ -111,29 +119,45 @@ describe("displayStateFor", () => {
   const display = {
     openField: { blockId: b.id, fieldId: "size" },
     expandedBlockIds: [a.id, b.id],
+    selectedField: { blockId: b.id, fieldId: "label" },
   };
 
   it("keeps display state whose blocks are all in the query, as the same object", () => {
     expect(displayStateFor(query, display)).toBe(display);
-    expect(displayStateFor(query, { openField: null, expandedBlockIds: [] })).toEqual({
-      openField: null,
-      expandedBlockIds: [],
-    });
+    const none = { openField: null, expandedBlockIds: [], selectedField: null };
+    expect(displayStateFor(query, none)).toBe(none);
   });
 
   it("drops the ids of a block that was removed, with the group around it", () => {
     expect(displayStateFor(removeNode(query, b.id), display)).toEqual({
       openField: null,
       expandedBlockIds: [a.id],
+      selectedField: null,
     });
     expect(displayStateFor(removeNode(query, inner.id), display)).toEqual({
       openField: null,
       expandedBlockIds: [a.id],
+      selectedField: null,
+    });
+  });
+
+  // The panel's selected field is pruned like the open row, on its own: the
+  // two can point at different blocks.
+  it("drops the selected field of a removed block, keeping the open row", () => {
+    const own = { ...display, openField: { blockId: a.id, fieldId: "size" } };
+    expect(displayStateFor(removeNode(query, b.id), own)).toEqual({
+      openField: { blockId: a.id, fieldId: "size" },
+      expandedBlockIds: [a.id],
+      selectedField: null,
     });
   });
 
   it("drops an id that is no block at all (a group's id, or a stranger's)", () => {
-    const odd = { openField: null, expandedBlockIds: [inner.id, "gone", a.id] };
+    const odd = {
+      openField: null,
+      expandedBlockIds: [inner.id, "gone", a.id],
+      selectedField: null,
+    };
     expect(displayStateFor(query, odd).expandedBlockIds).toEqual([a.id]);
   });
 
@@ -141,6 +165,7 @@ describe("displayStateFor", () => {
     expect(displayStateFor(emptyQuery(), display)).toEqual({
       openField: null,
       expandedBlockIds: [],
+      selectedField: null,
     });
   });
 });

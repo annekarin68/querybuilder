@@ -897,11 +897,17 @@ body {
   padding: 0.35rem 0.5rem;
   margin: 0.25rem 0;
 }
-.qb-block-head {
+/* The head has two lines (blockHtml.ts): the block's own controls, then,
+   once a field is set, which occurrence it means. Each line still wraps in a
+   narrow block. */
+.qb-block-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
+}
+.qb-block-match {
+  margin-top: 0.15rem;
 }
 /* A facet block's grip is the plain one (small, grey): a block is one leaf
    item, unlike a group's grip, which carries many and is drawn in the
@@ -915,19 +921,112 @@ body {
 /* A folded block is one line, like a folded group: the summary takes the
    spare room (so the spacer is not needed) and is cut with "…". */
 .qb-block.is-collapsed > .qb-block-head {
-  flex-wrap: nowrap;
   /* Like a folded group's line, it opens when clicked anywhere. */
   cursor: pointer;
   border-radius: var(--qb-radius);
 }
+.qb-block.is-collapsed .qb-block-line {
+  flex-wrap: nowrap;
+}
 .qb-block.is-collapsed > .qb-block-head:hover {
   background: var(--qb-selected-bg);
 }
-.qb-block.is-collapsed > .qb-block-head > .qb-spacer {
+.qb-block.is-collapsed .qb-block-line > .qb-spacer {
   display: none;
 }
-.qb-block.is-collapsed > .qb-block-head > .qb-block-name {
+.qb-block.is-collapsed .qb-block-line > .qb-block-name {
   flex: 0 0 auto;
+}
+/* Line 1's tabs, "?" and ✕: right-aligned, and wrapping as one box. */
+.qb-block-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+/* The panel's tabs: a pair of toggle buttons like Has / Has no, but in the
+   neutral "selected" colours, since they are about the view, not the query. */
+.qb-panel-tabs {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 4px;
+  background: var(--qb-surface);
+}
+.qb-tab-btn {
+  min-height: 24px; /* WCAG 2.5.8 target size, as .qb-logic-btn */
+  padding: 0.15rem 0.55rem;
+  border: 0;
+  background: transparent;
+  color: var(--qb-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.qb-tab-btn:hover {
+  background: var(--qb-hover);
+}
+.qb-tab-btn.is-on {
+  background: var(--qb-selected-bg);
+  color: var(--qb-selected-text);
+  font-weight: 700;
+}
+.qb-tab-btn:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: -2px;
+}
+/* The legend's "?" (filled in by plan B, task 7): a round, outlined button,
+   so it reads as "help", not as one of the icon actions beside it. */
+.qb-legend-btn {
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 50%;
+  font-weight: 700;
+}
+/* The rows and the panel side by side once the block is wide enough, the
+   panel under the rows when it is narrower (a 512 px window, the open
+   dictionary, deep nesting). Without a panel the rows take the whole width. */
+.qb-block-body.has-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+@container (min-width: 640px) {
+  .qb-block-body.has-panel {
+    grid-template-columns: minmax(0, 3fr) minmax(13rem, 2fr);
+    align-items: start;
+  }
+  .qb-block-body.has-panel > .qb-panel {
+    padding: 0 0 0 0.6rem;
+    border-top: 0;
+    border-left: 1px solid var(--qb-border);
+  }
+}
+/* A container of its own, so the narrow-row rules below follow the width the
+   rows really get, which a panel beside them takes a part of. */
+.qb-field-rows {
+  container-type: inline-size;
+}
+.qb-panel {
+  min-width: 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px solid var(--qb-border);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.qb-about-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+}
+.qb-about-back {
+  margin: 0 0 0.4rem !important; /* beats Fomantic's .ui.button margin */
+}
+.qb-about-hint {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--qb-muted);
+}
+.qb-about:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 2px;
 }
 /* The "+ Facet" picker in a group's header: Fomantic's 14em minimum would
    crowd the other buttons out of a narrow header. */
@@ -989,8 +1088,8 @@ span.qb-unset-slot {
 .qb-more-fields {
   margin-top: 0.25rem !important;
 }
-/* A narrow block (a 512 px window, or deep nesting): the value moves under
-   the label and operator. */
+/* Narrow rows (a 512 px window, deep nesting, or a panel beside them): the
+   value moves under the label and operator. */
 @container (max-width: 420px) {
   .qb-field-row {
     grid-template-columns: minmax(5rem, 0.8fr) minmax(0, 1fr);
