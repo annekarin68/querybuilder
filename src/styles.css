@@ -963,6 +963,112 @@ body {
   flex: 0 0 auto;
   color: var(--qb-muted);
 }
+/* ---- Facet blocks (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 5) */
+/* The block is a card inside its group's bracket. It reads --qb-c (the ALL/ANY
+   colour) from that group for its own Has / ALL / ANY buttons. A container, like
+   .qb-condition, so its rows can react to the block's width. */
+.qb-block {
+  container-type: inline-size;
+  border: 1px solid var(--qb-border);
+  border-radius: var(--qb-radius);
+  background: var(--qb-surface);
+  padding: 0.35rem 0.5rem;
+  margin: 0.25rem 0;
+}
+.qb-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+/* A facet block's grip looks like a condition's (small, grey): both are one
+   leaf item, unlike a group's grip, which carries many and is drawn in the
+   group's colour. Only the gap to the next button is set here. */
+.qb-block-head .qb-grip {
+  margin-right: 0.2rem;
+}
+.qb-block-name {
+  font-weight: 600;
+}
+/* A folded block is one line, like a folded group: the summary takes the
+   spare room (so the spacer is not needed) and is cut with "…". */
+.qb-block.is-collapsed > .qb-block-head {
+  flex-wrap: nowrap;
+}
+.qb-block.is-collapsed > .qb-block-head > .qb-spacer {
+  display: none;
+}
+.qb-block.is-collapsed > .qb-block-head > .qb-block-name {
+  flex: 0 0 auto;
+}
+/* The "+ Facet" picker in a group's header: Fomantic's 14em minimum would
+   crowd the other buttons out of a narrow header. */
+.qb-add-facet.ui.selection.dropdown {
+  min-width: 7rem;
+}
+.qb-field-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0.4rem;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.1rem 0;
+}
+.qb-field-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* "Don't care": a muted label and empty slots, no words (maintainers, 2026-10-27). */
+.qb-field-row.is-unset .qb-field-label {
+  color: var(--qb-muted);
+}
+.qb-unset-slot {
+  display: block;
+  min-height: 2rem; /* a 24px+ target (WCAG 2.5.8) */
+  padding: 0;
+  border: 1px dashed var(--qb-border-strong);
+  border-radius: var(--qb-radius);
+  background: transparent;
+  cursor: pointer;
+}
+button.qb-unset-slot:hover {
+  background: var(--qb-hover);
+}
+.qb-unset-slot:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 1px;
+}
+/* The second slot is only there to keep the row's shape: it is not a control. */
+span.qb-unset-slot {
+  cursor: default;
+}
+/* A condition the rows cannot show (its field is gone, or a second one on the
+   same field): the label, what it said, and a ✕. */
+.qb-field-row.is-stray {
+  grid-template-columns: minmax(6rem, 0.8fr) minmax(0, 2.4fr) auto;
+}
+.qb-stray-text {
+  min-width: 0;
+  font-family: monospace;
+  overflow-wrap: anywhere;
+}
+.qb-field-rows .ui.selection.dropdown {
+  width: 100%;
+  min-width: 0;
+}
+.qb-more-fields {
+  margin-top: 0.25rem !important;
+}
+/* A narrow block (a 512 px window, or deep nesting): the value moves under
+   the label and operator. */
+@container (max-width: 420px) {
+  .qb-field-row {
+    grid-template-columns: minmax(5rem, 0.8fr) minmax(0, 1fr);
+  }
+  .qb-field-row > .qb-value {
+    grid-column: 1 / 3;
+  }
+}
 .qb-hint {
   margin: 0.2rem 0 0 0.1rem;
   font-size: 0.8rem;

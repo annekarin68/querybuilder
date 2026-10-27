@@ -512,6 +512,9 @@ src/
     fieldRows.ts       Pure HTML of a facet block's field rows (set, unset, selected, stray, the fold button):
                        fieldRowsHtml, visibleFieldIds. Not wired in until Task 3 of plan A2
                        (docs/superpowers/plans/2026-10-27-facet-blocks-a2-builder.md).
+    blockHtml.ts       Pure HTML of the facet-block tree: blockHtml (head, Has / Has no, ALL / ANY, rows),
+                       groupHtml (with the "+ Facet" picker), footerHtml, BlockCtx. Also not wired in until
+                       Task 3 of plan A2; its styles are the "Facet blocks" section of styles.css.
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
     queryBuilder.ts    The query builder (wiring, drop targets, node grips, the title row with Save… and
