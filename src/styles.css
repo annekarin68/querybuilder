@@ -51,6 +51,22 @@
   --qb-danger-stripe: #e7b3a4; /* the light stripes of a failed (red) bar segment */
   --qb-warn: #7d5800;
 
+  /* Co-occurrence (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 7).
+     Stops run from "rarely together" to "often together"; add or remove
+     --qb-cooc-stop-N freely (at least 2, numbered without gaps). */
+  --qb-cooc-stop-1: #eef5e0;
+  --qb-cooc-stop-2: #d3e8b5;
+  --qb-cooc-stop-3: #b0d68a;
+  --qb-cooc-stop-4: #86bd5f;
+  --qb-cooc-stop-5: #5f9a3f;
+  --qb-cooc-stop-6: #3f7a2c;
+  --qb-cooc-stop-7: #24521a;
+  --qb-cooc-never: #e4e1d2;
+  --qb-cooc-cell-border: #85836f;
+  --qb-cooc-own: #8a6400;
+  --qb-cooc-dot-dark: #060a04;
+  --qb-cooc-dot-light: #ffffff;
+
   --qb-radius: 6px;
   --qb-gap: 1rem;
   --qb-topbar-h: 48px;

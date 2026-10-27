@@ -222,6 +222,27 @@ to mark keyboard focus on the dictionary's resize handle stands out 3:1 from the
 page and the card (WCAG 1.4.11), and that the statistics bars (green, red)
 stand out 3:1 from the track and the card.
 
+**Co-occurrence colours.** The heat colours of the co-occurrence cells are the
+`--qb-cooc-*` tokens in the same `:root` block, again opaque `#rrggbb` only:
+`--qb-cooc-stop-1`, `-2`, … run from "rarely together" to "often together", and
+`--qb-cooc-never` (a value of 0), `--qb-cooc-cell-border` (each cell's outline),
+`--qb-cooc-own` (the mark for the facet itself) and the two dot/label colours
+`--qb-cooc-dot-dark` and `--qb-cooc-dot-light`. Change them there, never in a
+rule. The stops may be added or removed freely, but they must be numbered from 1
+without gaps and there must be at least two, because `readCoTokens()` in
+`src/ui/coTokens.ts` (the only DOM read, via `getComputedStyle` at paint time;
+the parsing is the pure `coTokensFrom`) reads them until the first empty one.
+Colours between two stops are blended in OKLab (`src/util/colour.ts`).
+`tests/themeContrast.test.ts` checks, for every stop, three blends between each
+pair of neighbouring stops and the "never" colour, that the better of the dark
+and light dot colour (`betterOn`) reaches 3:1 (the dot) and 4.5:1 (box labels use
+the same choice); and that the cell outline and the own mark reach 3:1 against
+`--qb-surface`. The stops are deliberately **not** checked against the card: the
+light end of a gradient cannot reach 3:1 against it without losing the gradient,
+so the outline carries the shape of the cell and the colour is supplementary (the
+value is always in the accessible name). Because the worst case sits in the
+middle of the gradient, keep the dark dot colour close to black.
+
 The pickle is four small SVG files in `public/pickle/` (plus the three
 easter-egg faces below), served as-is. Three of them are named by `MASCOT` in
 `src/config.ts` (`logo.svg`, `disappointed.svg`, `loading.svg`); the favicon is
