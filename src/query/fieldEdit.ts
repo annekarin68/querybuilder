@@ -46,6 +46,9 @@ export function nextFieldCondition(
 ): FieldCondition | null {
   if (!operatorId) return null;
   const field = findField(catalog, facetId, fieldId);
+  // A field the catalog no longer knows has no value control to read (its row
+  // is a read-only stray): rewriting the condition would erase its value.
+  if (existing && !field) return existing;
   const operator = findOperator(operatorId);
   let value = defaultValueFor(field, operator);
   const sameShape =

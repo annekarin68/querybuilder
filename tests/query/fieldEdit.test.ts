@@ -54,6 +54,13 @@ describe("nextFieldCondition", () => {
     expect(next).toEqual({ ...c, operatorId: "absent", value: null });
   });
 
+  it("leaves a condition on a field the catalog doesn't know as it is", () => {
+    // A stray row has no value control to read; writing its value as null
+    // would erase what the saved query held.
+    const c = newFieldCondition("gone", "eq", "kept");
+    expect(nextFieldCondition(c, "thing", "gone", "eq", catalog, never)).toBe(c);
+  });
+
   it("resets the value when the operator's shape changes", () => {
     const c = newFieldCondition("size", "gt", 3);
     expect(nextFieldCondition(c, "thing", "size", "between", catalog, never)!.value).toBeNull();

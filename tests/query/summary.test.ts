@@ -70,6 +70,31 @@ describe("blockText", () => {
     );
   });
 
+  describe("a value not entered yet", () => {
+    const text = (operatorId: string, value: unknown, fieldId = "size") =>
+      blockText(block("thing", newFieldCondition(fieldId, operatorId, value)), catalog);
+
+    it("shows (value?) for a missing single value, null or empty text", () => {
+      expect(text("gte", null)).toBe("Thing has size ≥ (value?)");
+      expect(text("gte", "")).toBe("Thing has size ≥ (value?)");
+    });
+
+    it("shows (value?) for each missing end of a range", () => {
+      expect(text("between", null)).toBe("Thing has size between (value?)");
+      expect(text("between", [5, ""])).toBe("Thing has size between (5, (value?))");
+      expect(text("between", [null, 9])).toBe("Thing has size between ((value?), 9)");
+    });
+
+    it("shows (value?) when no value of a list is chosen", () => {
+      expect(text("in", [], "label")).toBe("Thing has label in (value?)");
+    });
+
+    it("still prints false and 0: they are values", () => {
+      expect(text("eq", false, "label")).toBe("Thing has label = false");
+      expect(text("eq", 0)).toBe("Thing has size = 0");
+    });
+  });
+
   it("marks what is not filled in yet", () => {
     expect(blockText(block("thing", newFieldCondition("size", "gt", null)), catalog)).toBe(
       "Thing has size > (value?)",

@@ -446,10 +446,10 @@ src/
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
                        for facet blocks (display only; a folded block's line).
     drop.ts            Facet-block drops: `dropItem` (what a dropped docs item adds, which row it focuses, or what
-                       it refuses), `dropNotice`, `dropMessage` (what a screen reader hears after a drop:
-                       `addedNodesMessage`, `filledRowMessage`, `focusedRowMessage`, `addedBesideMessage`),
-                       `movedMessage`, `reorderedMessage` — pure.
-                       Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`).
+                       it refuses), `dropNotice`, and the spoken messages: `dropMessage`, `addedNodesMessage`,
+                       `filledRowMessage`, `focusedRowMessage`, `addedBesideMessage`, `ADDED_GROUP_MESSAGE`,
+                       `groupedMessage`, `UNGROUPED_MESSAGE`, `movedMessage`, `reorderedMessage` — pure.
+                       Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`) and `FieldRef`, `DropOutcome`.
     fieldEdit.ts       nextFieldCondition — a field row after an operator or value was picked (its arity change
                        resets the value); queryAfterFieldEdit — the query with that row set, or ("Not filtered") without that
                        row's own condition; cursorAfterOperator — where the cursor goes next.
@@ -458,15 +458,6 @@ src/
                        reports against a node, once each. Pure.
     saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork` (a query with at
                        least one facet block), `saveTarget`.
-      drop.ts            Drag data (`DragItem`, `parseDragItem`, `DRAG_MIME`), `nodesForItem` (what a dropped
-                         docs item creates, and what it couldn't), `dropNotice`, `addedNodesMessage` — pure.
-      conditionEdit.ts   nextCondition — the Facet → Field → Operator → value cascade of a condition row,
-                         including the whole-facet tests of the Field dropdown; cursorAfterChange — where
-                         the cursor goes after a row change; announcementAfterChange — what a screen
-                         reader is told after one.
-      validate.ts        validateQuery(tree, catalog) -> Issue[].
-      issues.ts          serverIssues / placeIssues — the backend's issues, and where every issue is shown.
-      summary.ts         queryToText — the query in plain English (display only).
   util/
     debounce.ts        debounce(fn, ms) (the live-stats trigger).
     afterPointer.ts    When a typed value may be committed: not while the mouse button is down (see "Centre — `queryBuilder.ts`", Wiring).
@@ -522,7 +513,7 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
   httpErrors.ts        MOCK_HTTP_ERRORS rules: parseHttpErrors, httpErrorFor.
   paths.ts             pathBelow: the part of a path below the API prefix (stops at a "/").
   databases.ts, rows.ts, evaluate.ts, requestBody.ts, vehicleData.ts
-                       The 7 mock databases, the flattened rows, the query evaluator, the request-body check, the data loader.
+                       The 7 mock databases, the events prepared for matching (`MockEvent`), the query evaluator, the request-body check, the data loader.
   events.ts            eventGuid, toEventResponse: a stored event as POST /filter/execute answers it.
   savedQueries.ts      The in-memory saved-queries store, its body check ("Saved queries") and savedQueryOwner
                        (a user without an id is refused, never given a shared list).
@@ -2402,8 +2393,9 @@ and `import("…")`; the jQuery one also forbids the `$` / `jQuery` globals and
    `arity`), and to `OPERATOR_PROFILE` for each value type that offers it.
 2. If its arity or value type combination is new, extend
    `renderValueControl` / `readValueControl` (`src/ui/valueControl.ts`),
-   `checkCondition` (`src/query/validate.ts`) and `conditionText`
-   (`src/query/summary.ts`).
+   and `checkCondition` (`src/query/validate.ts`). Give the operator its short form
+   in `OPERATOR_TEXT` (`src/query/summary.ts`); one missing there is summarised by
+   its name.
 3. Teach the mock: `fieldMatches` in `mock-server/evaluate.ts` (and
    `dateMatches` if it applies to dates).
 4. Tests: `fieldCatalog`, `validate`, `summary`, `evaluate`. Tell the backend

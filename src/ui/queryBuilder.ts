@@ -15,6 +15,7 @@ import {
   updateNode,
   type Direction,
 } from "../query/tree";
+import { findField } from "../query/fieldCatalog";
 import { cursorAfterOperator, nextFieldCondition, queryAfterFieldEdit } from "../query/fieldEdit";
 import {
   ADDED_GROUP_MESSAGE,
@@ -295,6 +296,8 @@ export function wireQueryBuilder(
     // drawn for.
     if (!catalog || !block || !fieldId || !existing?.operatorId) return;
     if (existing.id !== row.dataset.nodeId) return;
+    // A field the catalog doesn't know has no value box to read.
+    if (!findField(catalog, block.facetId, fieldId)) return;
     const next = nextFieldCondition(
       existing,
       block.facetId,
@@ -504,7 +507,8 @@ export function wireQueryBuilder(
     // have done (its `change` has not fired yet): the repaint below would
     // throw the typed text away.
     afterPointer.flush();
-    const typedRow = target.closest<HTMLElement>(".qb-field-row[data-node-id]");
+    // (A stray row has no value box: its `.is-stray` is not a row to commit.)
+    const typedRow = target.closest<HTMLElement>(".qb-field-row:not(.is-stray)[data-node-id]");
     if (typedRow) commitValue(typedRow);
     hooks.selectField(null);
     if (wasInRow) keepFocusInRow(container, selected.blockId, selected.fieldId);
