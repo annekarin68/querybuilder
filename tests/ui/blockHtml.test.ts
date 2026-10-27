@@ -29,7 +29,7 @@ const ctxFor = (query: Group): BlockCtx => ({
   issues: [],
   query,
   expandedBlockIds: [],
-  selectedField: null,
+  openField: null,
 });
 const pos = { index: 1, count: 1 };
 
@@ -43,7 +43,24 @@ describe("blockHtml", () => {
     expect(html).toContain('data-action="set-has-no" aria-pressed="false"');
     expect(html).not.toContain("set-and");
     expect(html).not.toContain("an occurrence where");
-    expect(html).toContain('aria-label="Remove facet"');
+    expect(html).toContain('aria-label="Remove Thing"');
+  });
+
+  // A page holds many blocks: "Remove facet" or "Has or has no" alone would
+  // not say which one a control belongs to. The name comes from the dictionary.
+  it("names its controls after its facet", () => {
+    const b = newBlock("thing");
+    const html = blockHtml(ctxFor({ ...emptyQuery(), children: [b] }), b, pos);
+    expect(html).toContain('aria-label="Remove Thing" title="Remove Thing"');
+    expect(html).toContain('role="group" aria-label="Has or has no Thing"');
+    expect(html).toContain('aria-label="Move Thing up"');
+    expect(html).toContain('aria-label="Move Thing down"');
+  });
+
+  it("uses the facet id in the names when the dictionary does not know the facet", () => {
+    const b = newBlock("gone");
+    const html = blockHtml(ctxFor({ ...emptyQuery(), children: [b] }), b, pos);
+    expect(html).toContain('aria-label="Remove gone"');
   });
 
   it("offers ALL / ANY once two fields are set", () => {
@@ -62,13 +79,34 @@ describe("blockHtml", () => {
 
   // Its own ALL / ANY colour, not its group's: a green "ANY" would read as ALL.
   it("takes the colour of its own ALL / ANY", () => {
-    const b: FacetBlock = { ...newBlock("thing"), operator: "OR" };
+    const b: FacetBlock = {
+      ...newBlock("thing"),
+      operator: "OR",
+      conditions: [newFieldCondition("size", "gt", 1), newFieldCondition("label", "eq", "x")],
+    };
     const q: Group = { ...emptyQuery(), children: [b] };
     expect(blockHtml(ctxFor(q), b, pos)).toContain('class="qb-block qb-block-or"');
     const folded = { ...b, collapsed: true };
     expect(blockHtml(ctxFor(q), folded, pos)).toContain(
       'class="qb-block qb-block-or is-collapsed"',
     );
+  });
+
+  // ALL / ANY are drawn only once two fields are set. Before that an ANY
+  // block (a saved one, or one whose second field was cleared) must not show
+  // the ANY colour with no ANY button to explain it.
+  it("uses the ALL colour while fewer than two fields are set, whatever its ALL / ANY", () => {
+    const one: FacetBlock = {
+      ...newBlock("thing"),
+      operator: "OR",
+      conditions: [newFieldCondition("size", "gt", 1)],
+    };
+    const none: FacetBlock = { ...newBlock("thing"), operator: "OR" };
+    for (const b of [one, none, { ...one, collapsed: true }]) {
+      const html = blockHtml(ctxFor({ ...emptyQuery(), children: [b] }), b, pos);
+      expect(html).toContain('class="qb-block qb-block-and');
+      expect(html).not.toContain("qb-block-or");
+    }
   });
 
   it("folds to its head and the summary line", () => {
@@ -259,7 +297,7 @@ describe("Move up / Move down buttons", () => {
     expect(html.match(/data-action="move-down"/g)).toHaveLength(3);
     expect(html.match(/data-action="move-up"[^>]* aria-disabled="true"/g)).toHaveLength(1);
     expect(html.match(/data-action="move-down"[^>]* aria-disabled="true"/g)).toHaveLength(1);
-    expect(html).toContain('aria-label="Move facet up"');
+    expect(html).toContain('aria-label="Move Thing up"');
   });
 
   it("a nested group has its own buttons, open or folded", () => {

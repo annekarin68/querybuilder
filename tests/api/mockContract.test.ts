@@ -176,7 +176,7 @@ describe("saved queries through the client", () => {
 
   it("saves a half-built query of facet blocks and gets it back whole", async () => {
     logInWithCompliance();
-    expect(await client.listSavedQueries()).toEqual([]);
+    expect(await client.listSavedQueries()).toEqual({ queries: [], unreadable: 0 });
 
     const created = await client.createSavedQuery(unfinishedDraft);
     expect(created).toMatchObject({
@@ -185,7 +185,9 @@ describe("saved queries through the client", () => {
       databaseIds: ["alpha"],
     });
     expect(withoutNodeIds(created.query)).toEqual(withoutNodeIds(unfinishedTree));
-    const [listed, ...others] = await client.listSavedQueries();
+    const { queries, unreadable } = await client.listSavedQueries();
+    expect(unreadable).toBe(0);
+    const [listed, ...others] = queries;
     expect(others).toEqual([]);
     // Each read gives the nodes fresh ids, so compare everything else.
     expect({ ...listed, query: withoutNodeIds(listed!.query) }).toEqual({
@@ -200,7 +202,7 @@ describe("saved queries through the client", () => {
     expect(renamed).toMatchObject({ id: created.id, name: "Renamed" });
 
     await client.deleteSavedQuery(created.id);
-    expect(await client.listSavedQueries()).toEqual([]);
+    expect(await client.listSavedQueries()).toEqual({ queries: [], unreadable: 0 });
   });
 
   it("reports a taken name as a 409 with the server's message, and an unknown id as a 404", async () => {

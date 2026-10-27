@@ -40,7 +40,7 @@ describe("visibleFieldIds", () => {
       hiddenCount: 0,
     });
   });
-  it("folds a large facet to the first 3, the set ones and the selected one, in field order", () => {
+  it("folds a large facet to the first 3, the set ones and the open one, in field order", () => {
     expect(visibleFieldIds(ids, new Set(["f"]), false, "e")).toEqual({
       shown: ["a", "b", "c", "e", "f"],
       hiddenCount: 2,
@@ -74,7 +74,7 @@ describe("fieldRowsHtml", () => {
     expect(html).toContain('class="qb-value"');
   });
 
-  it("draws the selected unset row with real dropdowns and no value yet", () => {
+  it("draws the open unset row with real dropdowns and no value yet", () => {
     const html = fieldRowsHtml(ctx, block("small"), false, "x");
     expect(html).toContain('data-part="operator"');
     expect(html).not.toContain("is-unset");
@@ -105,9 +105,11 @@ describe("fieldRowsHtml", () => {
     const html = fieldRowsHtml(ctx, block("thing"), false, null);
     expect(html.match(/qb-field-row/g)).toHaveLength(3);
     expect(html).toContain(
-      'data-action="toggle-fields" aria-expanded="false">+ 4 more fields</button>',
+      'data-action="toggle-fields" aria-expanded="false" aria-label="+ 4 more fields of Thing">+ 4 more fields</button>',
     );
-    expect(fieldRowsHtml(ctx, block("thing"), true, null)).toContain(">Show fewer fields</button>");
+    expect(fieldRowsHtml(ctx, block("thing"), true, null)).toContain(
+      'aria-label="Show fewer fields of Thing">Show fewer fields</button>',
+    );
     expect(fieldRowsHtml(ctx, block("small"), false, null)).not.toContain("toggle-fields");
   });
 
@@ -150,6 +152,9 @@ describe("fieldRowsHtml", () => {
     expect(html).toContain(`data-node-id="${twice.id}"`);
     expect(html).toContain('data-action="remove-condition"');
     expect(html).toContain("Unknown field “gone”.");
+    // Each ✕ says which condition it removes: the field id, all a stray has.
+    expect(html).toContain('aria-label="Remove the condition on gone"');
+    expect(html).toContain('aria-label="Remove the condition on x"');
   });
 });
 

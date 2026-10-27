@@ -133,12 +133,13 @@ function focusValue(container: HTMLElement, blockId: string, fieldId: string): v
 }
 
 /**
- * Keep the keyboard focus in field `fieldId`'s row of block `blockId` after a
+ * Put the keyboard focus in field `fieldId`'s row of block `blockId`: after a
  * repaint that changed the row's shape (it was set or cleared, or an unset row
- * was opened or closed): focus memory cannot find the control again then, and
- * would send the focus to the group's "+ Group". The operator dropdown gets
- * it (closed), or an unset row's button. Does nothing if the focus is in the
- * row already.
+ * was opened or closed), where focus memory cannot find the control again and
+ * would send the focus to the group's "+ Group", and after a mouse drop that
+ * opened the row. The operator dropdown's typing box gets it (its menu stays
+ * closed), or an unset row's button. Does nothing if the focus is in the row
+ * already.
  */
 function keepFocusInRow(container: HTMLElement, blockId: string, fieldId: string): void {
   const row = fieldRowOf(container, blockId, fieldId);
@@ -195,7 +196,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
     issues,
     query: state.query,
     expandedBlockIds: state.expandedBlockIds,
-    selectedField: state.selectedField,
+    openField: state.openField,
   };
   paint(
     el,
@@ -222,7 +223,9 @@ export function wireQueryBuilder(
   getState: () => AppState,
   onChange: (next: Group) => void,
   hooks: {
-    onDrop(item: DragItem | null, targetNodeId: string): void;
+    /** Returns the field row the drop opened (null: none), which then gets
+     *  the keyboard focus. */
+    onDrop(item: DragItem | null, targetNodeId: string): FieldRef | null;
     /** The Move up / Move down buttons: swap a node with its neighbour. */
     onMove(nodeId: string, direction: Direction): void;
     onDismissNotice(): void;
@@ -236,9 +239,9 @@ export function wireQueryBuilder(
     /** The Restored notice's **Start fresh** and ✕. */
     onStartFresh(): void;
     onDismissRestored(): void;
-    /** The field row the user is working on (`AppState.selectedField`), or
-     *  null for none. Not a query edit. */
-    selectField(ref: FieldRef | null): void;
+    /** Open a field row for editing (`AppState.openField`), or close the
+     *  open one (null). Not a query edit. */
+    openFieldRow(ref: FieldRef | null): void;
     /** "+ N more fields" / "Show fewer fields" on a block. Not a query edit. */
     toggleFields(blockId: string): void;
   },
@@ -273,9 +276,9 @@ export function wireQueryBuilder(
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
-    // "Not filtered": the row goes back to an unset one, which is no longer
-    // being worked on.
-    if (!next) hooks.selectField(null);
+    // "Not filtered": the row goes back to a plain unset one, so it is no
+    // longer the open row.
+    if (!next) hooks.openFieldRow(null);
     onChange(queryAfterFieldEdit(query, block, existing?.id, next, catalog));
     // The repaint lost the cursor (the row changed shape): on to the value if
     // the operator takes one, otherwise stay in the row.
@@ -292,12 +295,12 @@ export function wireQueryBuilder(
     const { query, catalog } = getState();
     const block = blockOf(row);
     const fieldId = row.dataset.fieldId;
-    const existing = block?.conditions.find((c) => c.fieldId === fieldId);
-    // The row may have been repainted since (see afterPointer below): its
-    // boxes still hold what was typed, but only for the condition it was
-    // drawn for.
+    // The condition this very row was drawn for, found by the row's node id
+    // (as in handleOperatorChange). The row may have been repainted since (see
+    // afterPointer below): its boxes still hold what was typed, and if that
+    // condition is gone by now the typed value goes with it.
+    const existing = block?.conditions.find((c) => c.id === row.dataset.nodeId);
     if (!catalog || !block || !fieldId || !existing?.operatorId) return;
-    if (existing.id !== row.dataset.nodeId) return;
     // A field the catalog doesn't know has no value box to read.
     if (!findField(catalog, block.facetId, fieldId)) return;
     const next = nextFieldCondition(
@@ -477,12 +480,12 @@ export function wireQueryBuilder(
         return block ? hooks.toggleFields(block.id) : undefined;
       }
       // An unset row's empty slot: open the row (its dropdowns are drawn once
-      // it is the selected field) with the operator list showing.
+      // it is the open field) with the operator list showing.
       case "edit-field": {
         const block = blockOf(btn);
         const fieldId = btn.dataset.fieldId;
         if (!block || !fieldId) return;
-        hooks.selectField({ blockId: block.id, fieldId });
+        hooks.openFieldRow({ blockId: block.id, fieldId });
         const dropdown = operatorDropdownOf(fieldRowOf(container, block.id, fieldId));
         return dropdown ? openDropdown(dropdown) : undefined;
       }
@@ -495,16 +498,15 @@ export function wireQueryBuilder(
     }
   });
 
-  // Escape inside a block lets go of the selected field (an open dropdown
-  // menu takes the first Escape itself: Fomantic stops it there). A selected
-  // unset row closes again then, so the focus stays in that row.
+  // Escape inside a block closes the open field row (an open dropdown menu
+  // takes the first Escape itself: Fomantic stops it there). An open unset
+  // row goes back to a plain one then, so the focus is kept in that row.
   container.addEventListener("keydown", (e) => {
-    const selected = getState().selectedField;
-    if (e.key !== "Escape" || !selected) return;
+    const open = getState().openField;
+    if (e.key !== "Escape" || !open) return;
     const target = e.target as HTMLElement;
     if (!target.closest(".qb-block")) return;
-    const wasInRow =
-      fieldRowOf(container, selected.blockId, selected.fieldId)?.contains(target) ?? false;
+    const wasInRow = fieldRowOf(container, open.blockId, open.fieldId)?.contains(target) ?? false;
     // A value still being typed is committed first, as a click elsewhere would
     // have done (its `change` has not fired yet): the repaint below would
     // throw the typed text away.
@@ -512,8 +514,8 @@ export function wireQueryBuilder(
     // (A stray row has no value box: its `.is-stray` is not a row to commit.)
     const typedRow = target.closest<HTMLElement>(".qb-field-row:not(.is-stray)[data-node-id]");
     if (typedRow) commitValue(typedRow);
-    hooks.selectField(null);
-    if (wasInRow) keepFocusInRow(container, selected.blockId, selected.fieldId);
+    hooks.openFieldRow(null);
+    if (wasInRow) keepFocusInRow(container, open.blockId, open.fieldId);
   });
 
   // The warning's ✕ is an icon, not a <button>, so Enter/Space need wiring.
@@ -594,7 +596,15 @@ export function wireQueryBuilder(
     const target = targetOf(e.target);
     if (!target) return;
     // An unreadable payload arrives as null; the app explains it to the user.
-    hooks.onDrop(parseDragItem(e.dataTransfer!.getData(DRAG_MIME)), target.dataset.nodeId!);
+    const opened = hooks.onDrop(
+      parseDragItem(e.dataTransfer!.getData(DRAG_MIME)),
+      target.dataset.nodeId!,
+    );
+    // A drop that opened a row (a field, or a value that filled a row) moves
+    // the keyboard focus into it, without opening its menu: the user goes on
+    // with the keyboard where the mouse left off. (The dictionary's "Add to
+    // query" does not come through here: its focus stays in the dictionary.)
+    if (opened) keepFocusInRow(container, opened.blockId, opened.fieldId);
   });
 
   container.addEventListener("dragend", unmark);

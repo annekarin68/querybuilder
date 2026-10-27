@@ -7,8 +7,8 @@
  * same control in the new markup (`restoreFocus`).
  *
  * "The same control" is found by what the control IS, not by where it is:
- * its node (the `data-node-id` of the condition row or group it sits in) and
- * one identifying attribute (`controlOf`). When that control is gone (a row
+ * its node (the `data-node-id` of the set field row, facet block or group it
+ * sits in) and one identifying attribute (`controlOf`). When that control is gone (a row
  * was removed, Run turned into a loader), focus goes to the nearest element
  * marked `data-focus-landing`: first in the control's own node, then in each
  * group around it, then one outside every node (a panel's card).
@@ -81,19 +81,21 @@ export function sameControl(a: Control | null, b: Control | null): boolean {
 /** What `rememberFocus` noted about the focused element. */
 export interface FocusMemory {
   control: Control | null;
-  /** The rows and groups the control sat in, innermost first; empty when it
-   *  sat outside the query tree. */
+  /** The rows, blocks and groups the control sat in, innermost first; empty
+   *  when it sat outside the query tree. */
   nodeIds: string[];
   /** Where the caret was in a text box, so typing carries on where it was. */
   selection: [number, number] | null;
 }
 
-/** The id of the condition row or group `el` sits in (or is), or null. */
+/** The id of the set field row, facet block or group `el` sits in (or is),
+ *  or null. (An unset field row has no node id: its controls belong to the
+ *  block.) */
 function nodeIdOf(el: Element): string | null {
   return el.closest("[data-node-id]")?.getAttribute("data-node-id") ?? null;
 }
 
-/** The ids of every row and group around `el`, innermost first. */
+/** The ids of every row, block and group around `el`, innermost first. */
 function nodeIdsAround(el: Element): string[] {
   const ids: string[] = [];
   let node = el.closest("[data-node-id]");
@@ -127,8 +129,8 @@ function tryFocus(el: HTMLElement | null | undefined): boolean {
   return document.activeElement === el;
 }
 
-/** The elements in `container` matching `selector` whose row or group is
- *  `nodeId` (null: outside every row and group). */
+/** The elements in `container` matching `selector` whose row, block or group is
+ *  `nodeId` (null: outside all of them). */
 function ownedBy(container: HTMLElement, selector: string, nodeId: string | null): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(
     (el) => nodeIdOf(el) === nodeId,

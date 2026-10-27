@@ -47,8 +47,8 @@ describe("store", () => {
     expect(initialState.dropNotice).toBeNull();
   });
 
-  it("initialState has no field selected and no folded field list opened", () => {
-    expect(initialState.selectedField).toBeNull();
+  it("initialState has no open field row and no folded field list opened", () => {
+    expect(initialState.openField).toBeNull();
     expect(initialState.expandedBlockIds).toEqual([]);
   });
 
@@ -109,37 +109,37 @@ describe("displayStateFor", () => {
   const inner = groupOf([b]);
   const query = { ...emptyQuery(), children: [a, inner] };
   const display = {
-    selectedField: { blockId: b.id, fieldId: "size" },
+    openField: { blockId: b.id, fieldId: "size" },
     expandedBlockIds: [a.id, b.id],
   };
 
   it("keeps display state whose blocks are all in the query, as the same object", () => {
     expect(displayStateFor(query, display)).toBe(display);
-    expect(displayStateFor(query, { selectedField: null, expandedBlockIds: [] })).toEqual({
-      selectedField: null,
+    expect(displayStateFor(query, { openField: null, expandedBlockIds: [] })).toEqual({
+      openField: null,
       expandedBlockIds: [],
     });
   });
 
   it("drops the ids of a block that was removed, with the group around it", () => {
     expect(displayStateFor(removeNode(query, b.id), display)).toEqual({
-      selectedField: null,
+      openField: null,
       expandedBlockIds: [a.id],
     });
     expect(displayStateFor(removeNode(query, inner.id), display)).toEqual({
-      selectedField: null,
+      openField: null,
       expandedBlockIds: [a.id],
     });
   });
 
   it("drops an id that is no block at all (a group's id, or a stranger's)", () => {
-    const odd = { selectedField: null, expandedBlockIds: [inner.id, "gone", a.id] };
+    const odd = { openField: null, expandedBlockIds: [inner.id, "gone", a.id] };
     expect(displayStateFor(query, odd).expandedBlockIds).toEqual([a.id]);
   });
 
   it("drops everything when the query was replaced by one without those blocks", () => {
     expect(displayStateFor(emptyQuery(), display)).toEqual({
-      selectedField: null,
+      openField: null,
       expandedBlockIds: [],
     });
   });

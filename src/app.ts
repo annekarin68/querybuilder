@@ -343,11 +343,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     }
     const issues = catalog ? validateQuery(nextQuery, catalog) : [];
     // A removed block takes its display state with it (see displayStateFor).
-    const { selectedField, expandedBlockIds } = store.getState();
+    const { openField, expandedBlockIds } = store.getState();
     changeScope({
       query: nextQuery,
       issues,
-      ...displayStateFor(nextQuery, { selectedField, expandedBlockIds }),
+      ...displayStateFor(nextQuery, { openField, expandedBlockIds }),
     });
   }
 
@@ -386,71 +386,74 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
    * A docs item or a query node was dropped on `targetNodeId` (a group: it goes
    * at the end; a facet block: just before it, or into it — see `dropItem`).
    * Nothing is dropped silently: what can't be done is explained in
-   * `dropNotice`.
+   * `dropNotice`. Returns the field row the drop opened, or null: after a
+   * mouse drop the builder moves the keyboard focus into that row.
    */
-  function onDropItem(item: DragItem | null, targetNodeId: string): void {
+  function onDropItem(item: DragItem | null, targetNodeId: string): FieldRef | null {
     const { query, facets, catalog } = store.getState();
     if (!item) {
       setNotice(["That item can't be added to a query."]);
-      return;
+      return null;
     }
     if (item.type === "node") {
-      if (item.nodeId === targetNodeId) return;
+      if (item.nodeId === targetNodeId) return null;
       // A node that is gone (a stale drag) or the root can't be moved.
       const node = findNode(query, item.nodeId);
       if (item.nodeId === query.id || !node) {
         setNotice(["That item is no longer in the query."]);
-        return;
+        return null;
       }
       const moved = moveNode(query, item.nodeId, targetNodeId);
       if (!moved) {
         // The node exists, so the only refusal left is a group dropped on
         // something inside itself (or a target that is gone).
         setNotice(["A group can't be moved into itself."]);
-        return;
+        return null;
       }
       setNotice([]);
       const next = openGroup(moved, targetNodeId);
       // Dropped where it already was (say, the last block onto its own group):
       // nothing changed, so there is nothing to announce either.
-      if (sameTree(next, query)) return;
+      if (sameTree(next, query)) return null;
       onQueryChange(next);
       announce(movedMessage(node.kind));
-      return;
+      return null;
     }
     if (!facets || !catalog) {
       setNotice(["The data dictionary is still loading; try again in a moment."]);
-      return;
+      return null;
     }
     const outcome = dropItem(query, item, targetNodeId, facets, catalog);
     setNotice(outcome.problems);
     // Refused: the query stays exactly as it was, folds included.
-    if (outcome.query === query && !outcome.select) return;
+    if (outcome.query === query && !outcome.select) return null;
     let next = openGroup(outcome.query, targetNodeId);
     // The row the drop is about must be on screen: its block is unfolded, and
-    // the row is selected, which draws it open with its dropdowns so the user
-    // can go on with it. (A selected row is drawn even in a folded field list:
+    // the row is opened, which draws it with its dropdowns so the user can go
+    // on with it. (The open row is drawn even in a folded field list:
     // see visibleFieldIds in ui/fieldRows.ts, so the list needs no unfolding.)
     if (outcome.select) next = unfold(next, outcome.select.blockId);
     if (next !== query) onQueryChange(next);
-    if (outcome.select) selectField(outcome.select);
+    if (outcome.select) openFieldRow(outcome.select);
     const spoken = dropMessage(query, item, targetNodeId, outcome, catalog);
     if (spoken) announce(spoken);
+    return outcome.select;
   }
 
   /**
-   * The field row the user is working on (`AppState.selectedField`), or null
-   * for none. Not a query edit: the statistics stay, nothing is refetched.
+   * Open field row `ref` for editing (`AppState.openField`), or close the
+   * open one (null). Not a query edit: the statistics stay, nothing is
+   * refetched.
    */
-  function selectField(ref: FieldRef | null): void {
-    const current = store.getState().selectedField;
+  function openFieldRow(ref: FieldRef | null): void {
+    const current = store.getState().openField;
     const same =
       current === ref ||
       (current !== null &&
         ref !== null &&
         current.blockId === ref.blockId &&
         current.fieldId === ref.fieldId);
-    if (!same) store.setState({ selectedField: ref });
+    if (!same) store.setState({ openField: ref });
   }
 
   /** "+ N more fields" / "Show fewer fields" on block `blockId`. Display
@@ -465,7 +468,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   /** The keyboard path: "Add to query" puts the item at the end of the root
-   *  group; a tag's facets arrive as one group. */
+   *  group; a tag's facets arrive as one group. The focus stays on the
+   *  dictionary's button, so the user can add several in a row; the
+   *  announcement says what happened. */
   function onAddItem(item: DragItem): void {
     onDropItem(item, store.getState().query.id);
   }
@@ -509,7 +514,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       openSaved: null,
       dropNotice: null,
       // The blocks they pointed at are gone with the old query.
-      selectedField: null,
+      openField: null,
       expandedBlockIds: [],
     });
     announce(STARTED_FRESH_MESSAGE);
@@ -569,7 +574,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       facets,
       selectedDatabaseIds,
       query,
-      selectedField: null,
+      openField: null,
       expandedBlockIds: [],
       // The first query bypasses onQueryChange, so validate here: a restored
       // query may be unfinished, and Run must stay blocked then.
@@ -629,8 +634,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     store.setState({ savedList: { status: "loading" }, savedListNotice: notice });
     api
       .listSavedQueries()
-      .then((queries) => {
-        if (!req.isStale()) store.setState({ savedList: { status: "ok", queries } });
+      .then(({ queries, unreadable }) => {
+        if (!req.isStale()) store.setState({ savedList: { status: "ok", queries, unreadable } });
       })
       .catch((err) => {
         if (req.isStale()) return;
@@ -745,7 +750,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (save.status !== "conflict") return;
     const draft = draftOf(save.name, save.note);
     sendSave(draft, async () => {
-      const clash = (await api.listSavedQueries()).find((q) => sameName(q.name, draft.name));
+      const { queries } = await api.listSavedQueries();
+      const clash = queries.find((q) => sameName(q.name, draft.name));
       // Deleted in the meantime (another tab): there is nothing left to replace.
       return clash ? updateOrCreate(clash.id, draft) : api.createSavedQuery(draft);
     });
@@ -779,7 +785,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       selectedDatabaseIds: known,
       issues: catalog ? validateQuery(saved.query, catalog) : [],
       // The blocks they pointed at are gone with the old query.
-      selectedField: null,
+      openField: null,
       expandedBlockIds: [],
       // The selection kept, not the saved one: the user did not edit the
       // dropped ids away, so opening must not count as an edit.
@@ -895,7 +901,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onQueryChange,
     onDropItem,
     onAddItem,
-    selectField,
+    openFieldRow,
     toggleFields,
     onMoveNode,
     dismissDropNotice,

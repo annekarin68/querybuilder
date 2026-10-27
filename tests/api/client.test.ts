@@ -572,8 +572,9 @@ describe("saved queries", () => {
     const f = mockFetchOnce(200, [unfinishedResponse]);
     vi.stubGlobal("fetch", f);
     const out = await listSavedQueries();
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
+    expect(out.queries).toHaveLength(1);
+    expect(out.queries[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
+    expect(out.unreadable).toBe(0);
     expect(f).toHaveBeenCalledWith("/api/v1/filter/saved", {
       method: "GET",
       signal: expect.any(AbortSignal),
@@ -625,9 +626,45 @@ describe("saved queries", () => {
   });
 
   it("an answer that breaks the contract is a ContractError naming the field", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce(200, [{ ...unfinishedResponse, id: undefined }]));
-    await expect(listSavedQueries()).rejects.toThrow(
-      'GET /api/v1/filter/saved: "[0].id" should be non-blank text, but it is missing.',
+    vi.stubGlobal("fetch", mockFetchOnce(201, { ...unfinishedResponse, id: undefined }));
+    await expect(createSavedQuery(unfinishedDraft)).rejects.toThrow(
+      'POST /api/v1/filter/saved: "id" should be non-blank text, but it is missing.',
     );
+  });
+
+  describe("a list with entries that can't be read", () => {
+    // An entry saved by an older version (a condition straight in a group)
+    // must not make the whole list unreadable: the others still open.
+    const oldShape = {
+      ...unfinishedResponse,
+      id: "sq-old",
+      name: "Old trips",
+      query: { kind: "group", operator: "AND", children: [{ kind: "condition" }] },
+    };
+
+    it("skips each entry that can't be read, and counts it", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const nameless = { ...oldShape, name: 7 };
+      vi.stubGlobal("fetch", mockFetchOnce(200, [oldShape, unfinishedResponse, nameless, 42]));
+      const out = await listSavedQueries();
+      expect(out.queries.map((q) => q.id)).toEqual(["sq-1"]);
+      expect(out.unreadable).toBe(3);
+      // One warning per skipped entry, naming it when its name can be read.
+      expect(warn).toHaveBeenCalledTimes(3);
+      expect(warn.mock.calls[0]![0]).toContain("“Old trips”");
+      expect(warn.mock.calls[0]![0]).toContain('"[0].query.children[0].kind"');
+      expect(warn.mock.calls[1]![0]).not.toContain("“");
+      warn.mockRestore();
+    });
+
+    it("still fails as a whole when the body is not a list", async () => {
+      vi.stubGlobal("fetch", mockFetchOnce(200, { queries: [] }));
+      await expect(listSavedQueries()).rejects.toBeInstanceOf(ContractError);
+    });
+
+    it("still fails as a whole on an HTTP error", async () => {
+      vi.stubGlobal("fetch", mockFetchOnce(500, { error: "Down." }));
+      await expect(listSavedQueries()).rejects.toBeInstanceOf(ApiError);
+    });
   });
 });

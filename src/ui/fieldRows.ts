@@ -1,5 +1,6 @@
 import {
   fieldsOfFacet,
+  findFacet,
   findOperator,
   OPERATORS,
   type CatalogField,
@@ -28,17 +29,17 @@ export interface RowCtx {
 }
 
 /** Which of a facet's fields get a row: all of them, or — for a large facet
- *  that is not expanded — the first few, the set ones and the selected one,
+ *  that is not expanded — the first few, the set ones and the open one,
  *  in the facet's order. */
 export function visibleFieldIds(
   fieldIds: string[],
   setIds: ReadonlySet<string>,
   expanded: boolean,
-  selectedId: string | null,
+  openFieldId: string | null,
 ): { shown: string[]; hiddenCount: number } {
   if (expanded || fieldIds.length <= FOLD_AFTER) return { shown: fieldIds, hiddenCount: 0 };
   const shown = fieldIds.filter(
-    (id, i) => i < SHOWN_WHEN_FOLDED || setIds.has(id) || id === selectedId,
+    (id, i) => i < SHOWN_WHEN_FOLDED || setIds.has(id) || id === openFieldId,
   );
   return { shown, hiddenCount: fieldIds.length - shown.length };
 }
@@ -84,7 +85,7 @@ function operatorSelect(field: CatalogField, c: FieldCondition | undefined): str
   return `<select class="ui search selection dropdown" data-part="operator" aria-label="Operator for ${escapeHtml(field.fieldName)}">${lead}<option value="${NOT_FILTERED}">Not filtered</option>${opts}</select>`;
 }
 
-/** A field with a condition, or the selected unset field (no condition yet:
+/** A field with a condition, or the open unset field (no condition yet:
  *  its operator dropdown is drawn so it can be opened at once). */
 function activeRowHtml(ctx: RowCtx, field: CatalogField, c: FieldCondition | undefined): string {
   const operator = findOperator(c?.operatorId ?? null);
@@ -118,7 +119,7 @@ function strayRowHtml(ctx: RowCtx, c: FieldCondition): string {
   return `<div class="qb-field-row is-stray" data-field-id="${escapeHtml(c.fieldId)}" data-node-id="${escapeHtml(c.id)}">
       <span class="qb-field-label">${escapeHtml(c.fieldId)}</span>
       <span class="qb-stray-text">${escapeHtml(text)}</span>
-      ${iconButton("remove-condition", "Remove this condition", "times")}
+      ${iconButton("remove-condition", `Remove the condition on ${c.fieldId}`, "times")}
     </div>${issuesHtml(c.id, ctx.issues)}`;
 }
 
@@ -134,11 +135,14 @@ export function showsFoldButton(
   return fieldCount > FOLD_AFTER && (hiddenCount > 0 || expanded);
 }
 
-function foldButton(hiddenCount: number, expanded: boolean): string {
+/** "+ N more fields" / "Show fewer fields". Its accessible name adds the
+ *  facet's name: a page can hold several of these buttons. */
+function foldButton(hiddenCount: number, expanded: boolean, facetName: string): string {
   const label = expanded
     ? "Show fewer fields"
     : `+ ${hiddenCount} more ${hiddenCount === 1 ? "field" : "fields"}`;
-  return `<button type="button" class="ui mini basic button qb-more-fields" data-action="toggle-fields" aria-expanded="${expanded}">${label}</button>`;
+  const name = `${label} of ${facetName}`;
+  return `<button type="button" class="ui mini basic button qb-more-fields" data-action="toggle-fields" aria-expanded="${expanded}" aria-label="${escapeHtml(name)}">${label}</button>`;
 }
 
 /** The rows of `block`: one per visible field of its facet, then any stray
@@ -147,7 +151,7 @@ export function fieldRowsHtml(
   ctx: RowCtx,
   block: FacetBlock,
   expanded: boolean,
-  selectedFieldId: string | null,
+  openFieldId: string | null,
 ): string {
   const fields = fieldsOfFacet(ctx.catalog, block.facetId);
   const known = new Set(fields.map((f) => f.fieldId));
@@ -161,16 +165,17 @@ export function fieldRowsHtml(
     fields.map((f) => f.fieldId),
     new Set(firstOf.keys()),
     expanded,
-    selectedFieldId,
+    openFieldId,
   );
   const rows = fields
     .filter((f) => shown.includes(f.fieldId))
     .map((f) => {
       const c = firstOf.get(f.fieldId);
-      return c || f.fieldId === selectedFieldId ? activeRowHtml(ctx, f, c) : unsetRowHtml(f);
+      return c || f.fieldId === openFieldId ? activeRowHtml(ctx, f, c) : unsetRowHtml(f);
     });
+  const facetName = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
   const fold = showsFoldButton(fields.length, hiddenCount, expanded)
-    ? foldButton(hiddenCount, expanded)
+    ? foldButton(hiddenCount, expanded, facetName)
     : "";
   return rows.join("") + strays.map((c) => strayRowHtml(ctx, c)).join("") + fold;
 }

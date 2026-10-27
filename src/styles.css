@@ -751,6 +751,10 @@ body {
   background: var(--qb-surface);
 }
 .qb-logic-btn {
+  /* At least 24 px tall, the WCAG 2.5.8 target size: the small text and
+     padding alone give about 15 px. The text stays centred, as a button
+     centres its content, and the pair stretches together (inline-flex). */
+  min-height: 24px;
   padding: 0.15rem 0.55rem;
   border: 0;
   background: transparent;
@@ -883,8 +887,8 @@ body {
   align-items: center;
   gap: 0.35rem;
 }
-/* A facet block's grip looks like a condition's (small, grey): both are one
-   leaf item, unlike a group's grip, which carries many and is drawn in the
+/* A facet block's grip is the plain one (small, grey): a block is one leaf
+   item, unlike a group's grip, which carries many and is drawn in the
    group's colour. Only the gap to the next button is set here. */
 .qb-block-head .qb-grip {
   margin-right: 0.2rem;
@@ -964,6 +968,8 @@ span.qb-unset-slot {
   width: 100%;
   min-width: 0;
 }
+/* `!important`: the button is also a Fomantic `.ui.button`, whose own margin
+   rule (two classes) is more specific than this one class and would win. */
 .qb-more-fields {
   margin-top: 0.25rem !important;
 }
@@ -1723,11 +1729,11 @@ details[open] > summary > .qb-chevron {
 .qb-group-head .qb-grip {
   margin-right: 0.2rem;
 }
-/* Move up / Move down (moveButtons in queryBuilder.ts): two ordinary icon
+/* Move up / Move down (moveButtons in builderParts.ts): two ordinary icon
    buttons side by side, after the grip. They are the one-pointer alternative
    to dragging, so each must be at least 24px square (WCAG 2.5.8); stacked
-   they were 14px tall. Side by side adds width, not height, so a condition
-   row or a group header does not grow. */
+   they were 14px tall. Side by side adds width, not height, so a block or
+   group header does not grow. */
 .qb-move {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1747,7 +1753,7 @@ details[open] > summary > .qb-chevron {
 }
 /* A group's grip: bigger and in the group's own colour (green for ALL, mustard
    for ANY; --qb-c-text is the readable shade), so it is not mistaken for the
-   small grey grip of the condition below it. */
+   small grey grip of the facet block below it. */
 .qb-grip.qb-grip-group {
   padding: 0.2rem 0.1rem;
   border-radius: var(--qb-radius);

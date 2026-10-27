@@ -150,10 +150,23 @@ export class ResponseValue {
   /** This value as a list of `T` objects. Throws if it isn't a list, or an
    *  item isn't an object. */
   list<T>(): ResponseObject<T>[] {
+    return this.items().map((item) => item.object<T>());
+  }
+
+  /** This value as a list of values, none of them checked yet: for a list
+   *  whose items are read one at a time, so that one that can't be read can
+   *  be skipped (`listSavedQueries`). Throws if it isn't a list. */
+  items(): ResponseValue[] {
     if (!Array.isArray(this.value)) throw this.error("a list");
-    return this.value.map((item, i) =>
-      new ResponseValue(item, this.source, `${this.path}[${i}]`).object<T>(),
-    );
+    return this.value.map((item, i) => new ResponseValue(item, this.source, `${this.path}[${i}]`));
+  }
+
+  /** The text under `key` if this value is an object with text there, else
+   *  null. Checks nothing and warns about nothing: it only names the value
+   *  in a message about it. */
+  textForMessage(key: string): string | null {
+    const v = isObject(this.value) ? this.value[key] : undefined;
+    return typeof v === "string" ? v : null;
   }
 
   /** This whole value as indented JSON, for showing a message whose fields

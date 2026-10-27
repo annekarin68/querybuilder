@@ -417,7 +417,7 @@ src/
   state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; `restoredNotice`; the saved-queries keys), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
-                       User, Compliance, SavedQuery / SavedQueryDraft ("Data model").
+                       User, Compliance, SavedQuery / SavedQueryDraft / SavedQueryList ("Data model").
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data. Empty by
                        default: FIRST_COLUMNS (the facets the Matching events table shows first). Also MASCOT (the pickle files),
                        EASTER_EGG_MASCOT (the easter-egg faces), EASTER_EGG_TOAST (the
@@ -489,7 +489,7 @@ src/
     valueControl.ts    The value input(s) of a field row, by operator × field valueType; parseEntry.
     builderParts.ts    HTML pieces of the builder's groups and blocks: issuesHtml, nodeGrip, iconButton,
                        moveButtons, collapseButton, Position.
-    fieldRows.ts       Pure HTML of a facet block's field rows (set, unset, selected, stray, the fold button):
+    fieldRows.ts       Pure HTML of a facet block's field rows (set, unset, open, stray, the fold button):
                        fieldRowsHtml, visibleFieldIds; NOT_FILTERED / pickedOperatorId (the operator
                        dropdown's "Not filtered" choice).
     blockHtml.ts       Pure HTML of the facet-block tree: blockHtml (head, Has / Has no, ALL / ANY, rows),
@@ -575,12 +575,16 @@ brought the kept query back ("Saved query across the login/compliance
 redirect"). Its ✕, **Start fresh** and the first edit (`changeScope`) clear it.
 
 **Display state of the builder.** Two keys say how the query is shown, not what
-it means: `selectedField` (`{ blockId, fieldId }` of the field row the user is
-working on, or `null`) and `expandedBlockIds` (the blocks whose folded field
-list is open: "+ N more fields"). They are not part of the query, so they are
-never saved, never sent and never compared when the app asks whether the query
-was edited. Changing them is not a query edit either: only the builder
-repaints, and nothing is reset or refetched. They are reset whenever the query
+it means: `openField` (`{ blockId, fieldId }` of the one field row drawn open
+for editing, or `null`: an open unset row gets real dropdowns) and
+`expandedBlockIds` (the blocks whose folded field list is open: "+ N more
+fields"). Focusing a row does not open it, so moving through the rows never
+repaints them. (The name `selectedField` is kept free for the panel of plan
+B, whose "About" shows the selected field without changing any row.) They
+are not part of the query, so they are never saved, never sent and never
+compared when the app asks whether the query was edited. Changing them is not
+a query edit either: only the builder repaints, and nothing is reset or
+refetched. They are reset whenever the query
 is replaced (startup, **Start fresh**, opening a saved query), and
 `displayStateFor` (`src/state.ts`) drops the ones that point at a block a query
 edit has removed. Without that, ids of removed blocks would stay in the state
@@ -598,7 +602,8 @@ pure helpers in `src/query/saved.ts`):
 - `save`: `idle`, `saving`, `conflict` (the name belongs to another saved query:
   ask "Replace it?") or `error`.
 - `savedList`: the user's saved queries, newest first: `idle`, `loading`, `ok`
-  or `error`. It reloads every time the list opens and after a delete.
+  or `error`. `ok` also holds `unreadable`, how many entries could not be read
+  ("Saved queries"). It reloads every time the list opens and after a delete.
 - `savedConfirm`: an open or delete in the list waiting for the user's yes.
 - `savedListNotice`: how the last **Delete** went, shown above the list
   inside the dialog (`{ tone, text }`; null otherwise). `"error"`:
@@ -638,7 +643,7 @@ binding its Fomantic dropdowns must always happen together.
 |---|---|
 | App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with the starting query, an empty group (or the kept query, restored: "Saved query across the login/compliance redirect"). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
-| User opens a field row (its empty slot, a dropped field), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.selectField` / `app.toggleFields` write `selectedField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. Escape first commits a value still being typed in its row. A query edit (`onQueryChange`) drops the ids of blocks that are no longer in the query (`displayStateFor`, `src/state.ts`); Start fresh, opening a saved query and restoring a kept one reset both. |
+| User opens a field row (its empty slot, a dropped field or value), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.openFieldRow` / `app.toggleFields` write `openField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. Escape first commits a value still being typed in its row. A query edit (`onQueryChange`) drops the ids of blocks that are no longer in the query (`displayStateFor`, `src/state.ts`); Start fresh, opening a saved query and restoring a kept one reset both. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
 | User presses **Previous** / **Next** in the Matching events card | `app.showEventPage(page)` → `preview.page` (clamped by `pageOf`; the same page is a no-op), announced ("Showing results 101 to 200 of 1,987.", numbers in the viewer's format). Only the preview panel repaints; the focus stays on the pressed button (its own `data-action`). At the ends the button is `aria-disabled="true"`, not `disabled`, so it keeps the focus; its click does nothing. |
@@ -651,7 +656,7 @@ binding its Fomantic dropdowns must always happen together.
 | User opens a saved query (**Open**, after "Replace the current query?" if asked) | `openSavedQuery` → `changeScope` with the saved `query`, the databases that still exist, fresh `issues` and `openSaved`, and the dialog closed, in one `setState`: like any edit, so the old statistics and preview go and new ones are fetched. Databases left out are said in `dropNotice`. |
 | User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `savedListNotice`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
 | Five clicks on the logo | `easterEgg` flips → only the mascot repaints (`setMascot`); the rain or toast is started by `main.ts` (`easterEggReaction`). |
-| User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (`dropItem`: a new facet block, a value in an unset row of the target block, or a group of blocks for a tag) and goes through `onQueryChange` like any edit; the row a drop is about becomes `selectedField`; what can't is explained in `dropNotice`. |
+| User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (`dropItem`: a new facet block, a value in an unset row of the target block, or a group of blocks for a tag) and goes through `onQueryChange` like any edit; the row a drop is about becomes `openField` (`onDropItem` returns it, and after a mouse drop the builder moves the keyboard focus into it; "Add to query" keeps the focus in the dictionary); what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
 
 ### Keyboard focus across repaints
@@ -668,6 +673,7 @@ control had focus before it repaints and focuses the same control afterwards.
 - **"The same control"** is found by what it is, not where it is: the row or
   group it sits in (`data-node-id`), its tag, and the first of these attributes
   it has: `data-event-id` (every result's id button shares its `data-action`),
+  `data-field-id` (every unset row's button shares `data-action="edit-field"`),
   `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
   `data-db-deselect-failing`, `data-range`, `data-part`, `id`, `aria-label`
   (`controlOf`). The label comes last because it can change with the state
@@ -692,7 +698,9 @@ control had focus before it repaints and focuses the same control afterwards.
   The saved-queries dialog has its own rules on top of these
   (`focusAfterRepaint`, "Saved queries — `savedQueries.ts`").
 - **Code that moves the cursor on purpose wins**: it runs after the paint
-  (`focusPart` moving on to the next dropdown, `setSidebarCollapsed`).
+  (`focusValue` moving on to the value after an operator was picked,
+  `keepFocusInRow` keeping the focus in a row that changed shape or that a
+  mouse drop opened, `setSidebarCollapsed`).
 - **A mouse click** focuses the button too, but the repainted one shows no
   focus ring: the browser's `:focus-visible` follows the last input device.
 - **A value box commits on `change`, which fires as the box loses the focus,
@@ -901,6 +909,8 @@ the value it reads. There are two kinds:
 | `text`, `strings` | text and lists the app only shows (descriptions, owner, group, tags, pick-list values) | becomes `""` or `[]`, with a console warning |
 | `formatted` | a whole message whose fields the backend owns (the compliance log): it returns the value as indented JSON (`JSON.stringify(value, null, 2)`), to be shown as it is | nothing to check, so it never throws or warns; the caller first asks for `object` when the message must be an object |
 | `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` in `types.ts` | becomes `""`, `[]` or `undefined`; a warning only if the value is there but of the wrong kind |
+| `items` | a list read one item at a time, so that one item that can't be read is skipped instead of failing the list (the saved queries: "Saved queries") | throws a `ContractError` if the value is not a list; each item comes back unchecked, for the caller to read |
+| `textForMessage` | naming an item in a console message (a skipped saved query's `name`) | `null`; it never throws or warns |
 
 A `ContractError`'s message names the request and the place in the body,
 written as it would be in JavaScript:
@@ -1086,8 +1096,14 @@ The endpoints are `GET` and `POST {prefix}/filter/saved`, and `PUT` and
   **The query shape before facet blocks is not read** (decided 2026-10-27:
   users rebuild their queries). A stored tree with a condition directly in a
   group has no `kind: "facet"` node, so `toSavedQuery` throws a `ContractError`
-  for it and the whole list becomes unreadable. The saved-query store must
-  therefore be emptied when this version goes live (backend hand-off below).
+  for it. `listSavedQueries` reads the list one entry at a time: an entry that
+  throws a `ContractError` (that one, or any other entry that breaks the
+  contract) is skipped with one console warning naming it (by its `name`, if
+  that can be read) and counted, so one old entry does not make the whole list
+  unreadable. It returns `{ queries, unreadable }` (`SavedQueryList`), and the
+  dialog says "1 saved query from an older version can't be opened." / "N
+  saved queries from an older version can't be opened." above the list. An
+  HTTP error, or a body that is not a list, still fails the whole list.
 
 `SavedQueryResponse` is the same plus `id` (made by the server) and `updated_at`
 (ISO 8601 UTC). `GET` answers newest `updated_at` first. A `404` means no saved
@@ -1100,7 +1116,8 @@ unfinished conditions, and a validation bug on our side must never stop a user
 saving their work. The frontend still never rewrites a condition ("Wire format
 of the query"): it converts the tree in `src/api/` only, both ways
 (`toSavedQueryRequest` in `request.ts`, `toSavedQuery` in `response.ts`), so the
-rest of the app sees `Group` / `QueryNode` and the model's `SavedQuery`.
+rest of the app sees `Group` / `QueryNode` and the model's `SavedQuery` (and
+`SavedQueryList` for the list).
 `toSavedQueryRequest` trims name and note, drops `collapsed` and the node ids,
 and throws only on a value that is not JSON scalars and nulls (a bug).
 `toSavedQuery` reads the tree strictly (a node of unknown `kind`, a missing
@@ -1115,11 +1132,15 @@ are `listSavedQueries`, `createSavedQuery`, `updateSavedQuery(id, draft)` and
 
 **Backend hand-off:** saved trees no longer carry node ids, and a tree is made
 of `group` and `facet` nodes whose `conditions` are `kind: "condition"` (see
-above). The backend must not require ids, check them or make them unique, must
-check the shape only, and must **empty the saved-query store** when this
-version is deployed: a stored tree in the old shape (conditions directly in a
-group) makes the user's list unreadable for the frontend. The saved query's own
-`id` is unchanged.
+above). The backend must not require ids, check them or make them unique, and
+must check the shape only. **Emptying the saved-query store** when this version
+is deployed is recommended, not required for the app to work: a stored tree in
+the old shape (conditions directly in a group) is skipped by the frontend and
+counted as "from an older version", so it can never be opened or deleted
+from the dialog, and saving under its name cannot replace it: **Replace**
+looks the name up in the readable list, does not find it, creates instead and
+meets the same `409`, so the question comes back. The saved query's own `id`
+is unchanged.
 
 ### Saved query across the login/compliance redirect
 
@@ -1358,7 +1379,7 @@ normal face. An empty group *below* the root is an issue ("Add a facet to this
 group.").
 
 Which of a large facet's rows are folded behind "+ N more fields", which field
-row is selected, and whether a block or group is `collapsed` are display
+row is open, and whether a block or group is `collapsed` are display
 state: none of it changes what the query means, and none is sent or saved
 ("State and the render loop", "Centre — `queryBuilder.ts`").
 
@@ -1470,9 +1491,9 @@ state: none of it changes what the query means, and none is sent or saved
   back as `problems`, in words for the user:
   - a **facet** becomes a new block ("Has", ALL, nothing set);
   - a **field** dropped on a block of its own facet adds nothing: its row is
-    selected so the user can fill it in (the block already has a row for every
+    opened so the user can fill it in (the block already has a row for every
     field). Dropped anywhere else, it becomes a new block with that row
-    selected;
+    open;
   - a **value** fills the field's row as "equals value" if that row is unset
     in the block it was dropped on. If the row is already set, or the drop is
     elsewhere, the value becomes a new block with that one condition (a number
@@ -1772,20 +1793,40 @@ not toggle, because a click there belongs to dragging.
 **+ Facet** is a searchable dropdown (a Fomantic `search` dropdown over a
 `<select>`) listing every facet of the dictionary by name; choosing one adds a
 block for it at the end of that group (`handleAddFacet`) and announces "Added 1
-facet to the query." The picker keeps the focus, so the user can add another;
-it is not the group's `data-focus-landing` because focusing a dropdown opens its
-menu (the landing is **+ Group**: "Keyboard focus across repaints").
+facet to the query." The picker keeps the focus, so the user can add another.
+It is not the group's `data-focus-landing` (the landing is **+ Group**:
+"Keyboard focus across repaints"): a `<button>` is drawn by us and takes the
+focus as itself, so it keeps the focus predictably across repaints. The picker
+is a Fomantic dropdown that `activate()` rebuilds around its `<select>` on
+every paint: the attribute would stay on the `<select>`, which Fomantic hides
+and which cannot take the focus, and the typing box that can is made by
+Fomantic and carries none of our attributes. (Focusing a dropdown does not
+open its menu: `showOnFocus` is off.)
 
 **A facet block** is a card inside its group, tinted by its *own* ALL/ANY
-(`qb-block-and` / `qb-block-or`), since its Has / ALL / ANY buttons are about
-the block, not its group. Its header holds, in this order: the grip, Move up /
-Move down, the collapse chevron, the facet's name (its id if the dictionary
-doesn't know it), the **Has | Has no** toggle, the words "an occurrence where"
-(once one field is set), **ALL | ANY** with "of the set fields match" (once
-two or more are set; with one field ALL and ANY would change nothing), and ✕
-("Remove facet"). The facet itself cannot be changed: the user adds another
-block instead. A folded block shows its header and a one-line `blockText`
-summary, and, like a folded group, the whole header unfolds it.
+(`qb-block-and` / `qb-block-or`, `blockTone`), since its Has / ALL / ANY
+buttons are about the block, not its group. Only while those buttons are drawn,
+though: with fewer than two set fields the block is always in the ALL colour,
+so it never shows the ANY colour without an ANY button to explain it (a saved
+ANY block, or one whose second field was cleared, keeps its operator). Its
+header holds, in this order: the grip, Move up / Move down, the collapse
+chevron, the facet's name (its id if the dictionary doesn't know it), the
+**Has | Has no** toggle, the words "an occurrence where" (once one field is
+set), **ALL | ANY** with "of the set fields match" (once two or more are set;
+with one field ALL and ANY would change nothing), and ✕. The facet itself
+cannot be changed: the user adds another block instead. A folded block shows
+its header and a one-line `blockText` summary, and, like a folded group, the
+whole header unfolds it.
+
+A page holds many blocks, so the accessible names of a block's controls say
+which facet they belong to, with the name from the loaded dictionary (never
+from `src/`): "Remove <facet>", "Move <facet> up" / "Move <facet> down", the
+Has / Has no group "Has or has no <facet>", and the fold button "+ N more
+fields of <facet>" / "Show fewer fields of <facet>" (its visible text stays
+"+ N more fields"). A stray row's ✕ is "Remove the condition on <field
+id>". The small **Has | Has no** and **ALL | ANY** buttons (`.qb-logic-btn`, also a
+group's ALL | ANY) have a `min-height` of 24 px: their text and padding alone
+measured 15.5 px, under the 24 px target size (WCAG 2.5.8).
 
 **Field rows.** Under its header a block draws **one row for every field of its
 facet**, in the dictionary's order (`fieldRowsHtml`, `fieldRows.ts`). A field
@@ -1813,19 +1854,22 @@ on whether it exists. Hence:
   facet can have over 20 fields, so ten such blocks would otherwise rebuild
   about 400 dropdowns on every edit.
 - **Opening an unset row.** Pressing its button (`edit-field`) makes the row
-  the *selected field* (`AppState.selectedField`, "State and the render loop")
-  and opens its operator list. A selected unset row is drawn like a set row
-  without a value (operator dropdown only), so it can be filled in. It goes
-  back to a plain unset row when the field is cleared with **Not filtered**,
-  when another row is selected, or on Escape. A field dropped on the builder
-  selects its row the same way ("Drag and drop").
+  the *open field* (`AppState.openField`, "State and the render loop") and
+  opens its operator list. An open unset row is drawn like a set row without a
+  value (operator dropdown only), so it can be filled in. It goes back to a
+  plain unset row when the field is cleared with **Not filtered**, when
+  another row is opened, or on Escape. A field dropped on the builder opens
+  its row the same way ("Drag and drop").
 - **Folding long facets.** A facet with more than 5 fields (`FOLD_AFTER`) shows
-  only the set rows, the first 3 fields (`SHOWN_WHEN_FOLDED`) and the selected
+  only the set rows, the first 3 fields (`SHOWN_WHEN_FOLDED`) and the open
   one, in the facet's order, and puts the rest behind a **+ N more fields**
   button, which turns into **Show fewer fields** (`expandedBlockIds`, per
   block). **Why:** real facets have 2 to over 20 fields, and a block that
   always shows all of them would push the rest of the query off the screen. A
-  set row is never hidden, so nothing the user chose goes out of sight.
+  set row is never hidden, so nothing the user chose goes out of sight. The
+  fold button is not drawn when it would do nothing: when the set and first
+  rows already show every field and the block is not expanded
+  (`showsFoldButton`), since "+ 0 more fields" would be a dead button.
 - **Stray rows.** A saved or kept query can hold a condition the rows cannot
   show: its field is not in the facet any more, or it is a second condition on
   a field that already has one. Each gets its own row after the facet's fields:
@@ -1881,9 +1925,9 @@ to drag, and each has an equivalent:
   goes to the value.
 - *Moving:* **Move up / Move down** on every block and group but the root.
 - *Escape in a block:* it closes an open dropdown menu first (Fomantic takes
-  that Escape itself). Then, with a field selected, it **commits a value still
+  that Escape itself). Then, with a field row open, it **commits a value still
   being typed** (like leaving the box, so the repaint does not throw the text
-  away), and **clears the selected field**: an unset row closes again, and
+  away), and **closes the open row** (`openField`): an unset row closes again, and
   the focus stays in that row. A stray row has no value box, so it has nothing
   to commit.
 
@@ -1929,12 +1973,20 @@ learns the rule instead of wondering where the button went.
   `DRAG_MIME`, so files or text dragged in from elsewhere get the browser's
   "not allowed".
 - **What a dictionary item does** is `dropItem`'s job ("The query model",
-  `drop.ts`): a facet becomes a block; a field selects its row in a block of
+  `drop.ts`): a facet becomes a block; a field opens its row in a block of
   its own facet, or arrives as a new block; a value fills an unset row, or
   arrives as a new block rather than overwrite a set one; a tag arrives as one
   ALL group of blocks. `onDropItem` then **unfolds the block** whose row it
-  selected and `selectField`s that row, so the user can go on with it; a
-  selected row is drawn even in a folded field list (`visibleFieldIds`).
+  is about and opens that row (`openFieldRow`), so the user can go on with
+  it; the open row is drawn even in a folded field list (`visibleFieldIds`).
+- **Focus after a drop.** After a **mouse drop** that opened a row
+  (`DropOutcome.select`, which `onDropItem` returns), the builder moves the
+  keyboard focus into that row (`keepFocusInRow`: the operator dropdown's
+  typing box, or the row's slot if it is unset and closed), without opening
+  the menu, so the user can go on with the keyboard. The keyboard path,
+  **Add to query** in the dictionary, keeps the focus on the dictionary's
+  button, so several items can be added in a row; the announcement says what
+  happened.
 - **Moving nodes.** Every block and every group but the root has a grip
   (`qb-grip`, `data-node-item`) that drags a `{type: "node"}` payload; dropping
   it on a group or block moves it there (`moveNode`). **Only blocks and groups
@@ -2294,7 +2346,11 @@ contract", and the state in "State and the render loop"); this file only draws
   saved." (`hasUnsavedWork`). The other items keep their buttons, and pressing
   one asks about that item instead. Loading, the empty state ("No saved
   queries yet. Build a query and press Save…") and an error with **Try again**
-  show in the dialog. **Close** closes it. After a **Delete**,
+  show in the dialog. Saved queries that could not be read (an older
+  version's shape, `savedList.unreadable`) are said above the list: "1 saved
+  query from an older version can't be opened." / "N saved queries …"; when
+  no entry could be read, that sentence replaces the empty state, which would
+  be untrue. **Close** closes it. After a **Delete**,
   `savedListNotice` shows above the list: "Deleted “…”." (`ui small positive
   message`, spoken by the dialog's own live region), or, when it failed, why
   (`ui small negative message`, `role="alert"`), and the list stays.
@@ -2383,7 +2439,10 @@ to a named handler function — add a route there, and a test in
   every facet; `evaluate.ts` matches the query against it (`eventMatches`). An event may
   hold a facet more than once (stored as a list in `entrysets.json`; event 2
   has two `gps_position` occurrences), so the "one occurrence" rule below can
-  be tried in dev.
+  be tried in dev. Almost every sample facet has one to four fields; one,
+  `charging_session` (7 fields of every type: text, whole number, decimal,
+  true/false and timestamp; in 5 events), has more than `FOLD_AFTER`, so
+  "Folding long facets" can be tried in dev.
 - **`/api/filter/validate`** projects the 21-event sample's match rate onto each
   database's real size (`scaleCount`) and streams one line per database with a
   pause between lines; now and then it simulates a database that can't be

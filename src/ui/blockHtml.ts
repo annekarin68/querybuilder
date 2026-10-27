@@ -30,24 +30,39 @@ export interface BlockCtx {
   query: Group;
   /** Blocks whose folded field list is open ("+ N more fields"). */
   expandedBlockIds: readonly string[];
-  /** The field row the user is editing; its unset row is drawn open. */
-  selectedField: FieldRef | null;
+  /** The field row drawn open for editing: an unset one gets its dropdowns. */
+  openField: FieldRef | null;
+}
+
+/** How many set fields a block needs before its ALL / ANY is drawn: with
+ *  one field, ALL and ANY mean the same. */
+const MIN_FIELDS_TO_COMBINE = 2;
+
+/**
+ * The block's colour class (styles.css): its *own* ALL / ANY, not its
+ * group's, since its Has / ALL / ANY buttons are about this block. Only while
+ * those buttons are drawn, though: with fewer than two set fields the block
+ * is always in the ALL colour, so it never shows the ANY colour without an ANY
+ * button to explain it (a saved ANY block, or one whose second field was
+ * cleared, keeps its operator).
+ */
+function blockTone(block: FacetBlock): "qb-block-and" | "qb-block-or" {
+  const combines = block.conditions.length >= MIN_FIELDS_TO_COMBINE;
+  return combines && block.operator === "OR" ? "qb-block-or" : "qb-block-and";
 }
 
 /** A facet block (spec, section 5): its head, its issues and its field rows.
  *  The facet is fixed: to filter on another facet the user adds a block. */
 export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position): string {
   const name = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
-  // The block's own ALL / ANY colour (styles.css), not its group's: its Has /
-  // ALL / ANY buttons are about this block.
-  const tone = block.operator === "OR" ? "qb-block-or" : "qb-block-and";
+  const tone = blockTone(block);
   // A folded block's whole head is a click target for unfolding it, as a
   // folded group's line is (its buttons and grip keep their own jobs).
   const headAttributes = block.collapsed
     ? ` data-action="toggle-collapse" title="Click to expand"`
     : "";
   const head = (inner: string) =>
-    `<div class="qb-block-head"${headAttributes}>${nodeGrip(block.id, "facet")}${moveButtons("facet", position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>${inner}<span class="qb-spacer"></span>${iconButton("remove-node", "Remove facet", "times")}</div>`;
+    `<div class="qb-block-head"${headAttributes}>${nodeGrip(block.id, "facet")}${moveButtons(name, position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>${inner}<span class="qb-spacer"></span>${iconButton("remove-node", `Remove ${name}`, "times")}</div>`;
   if (block.collapsed) {
     const text = blockText(block, ctx.catalog);
     return `<div class="qb-block ${tone} is-collapsed" data-node-id="${escapeHtml(block.id)}">${head(
@@ -56,21 +71,22 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
   }
   const pair = (on: boolean, action: string, label: string) =>
     `<button type="button" class="qb-logic-btn${on ? " is-on" : ""}" data-action="${action}" aria-pressed="${on}">${label}</button>`;
-  const has = `<span class="qb-logic" role="group" aria-label="Has or has no">${pair(!block.negated, "set-has", "Has")}${pair(block.negated, "set-has-no", "Has no")}</span>`;
+  const has = `<span class="qb-logic" role="group" aria-label="Has or has no ${escapeHtml(name)}">${pair(!block.negated, "set-has", "Has")}${pair(block.negated, "set-has-no", "Has no")}</span>`;
   const setCount = block.conditions.length;
-  // ALL / ANY only matter once two fields are set; before that they change nothing.
+  // ALL / ANY only matter once two fields are set (MIN_FIELDS_TO_COMBINE);
+  // before that they change nothing.
   const where = setCount >= 1 ? `<span class="qb-group-label">an occurrence where</span>` : "";
   const match =
-    setCount >= 2
+    setCount >= MIN_FIELDS_TO_COMBINE
       ? `<span class="qb-logic" role="group" aria-label="Combine the set fields with">${pair(block.operator === "AND", "set-and", "ALL")}${pair(block.operator === "OR", "set-or", "ANY")}</span><span class="qb-group-label">of the set fields match</span>`
       : "";
   const expanded = ctx.expandedBlockIds.includes(block.id);
-  const selected = ctx.selectedField?.blockId === block.id ? ctx.selectedField.fieldId : null;
+  const openFieldId = ctx.openField?.blockId === block.id ? ctx.openField.fieldId : null;
   const rows = fieldRowsHtml(
     { catalog: ctx.catalog, issues: ctx.issues },
     block,
     expanded,
-    selected,
+    openFieldId,
   );
   return `<div class="qb-block ${tone}" data-node-id="${escapeHtml(block.id)}">${head(has + where + match)}${issuesHtml(block.id, ctx.issues)}<div class="qb-field-rows">${rows}</div></div>`;
 }
@@ -94,8 +110,11 @@ function addFacetPicker(facets: Facet[] | null): string {
  * "+ Group" is the group's `data-focus-landing`: when the control that had
  * the keyboard focus is removed (a block's or a sub-group's ✕), focus goes there,
  * in the same group, and not onto a neighbour's ✕ where a second Enter would
- * delete something else (see focusMemory.ts). The "+ Facet" picker is not the
- * landing: focusing a dropdown opens its menu.
+ * delete something else (see focusMemory.ts). It is a <button> we draw, so it
+ * takes the focus as itself after every repaint. The "+ Facet" picker is not
+ * the landing: it is a Fomantic dropdown rebuilt on every paint, the attribute
+ * would stay on its hidden <select>, which cannot take the focus, and the
+ * typing box that can is made by Fomantic, not by this markup.
  */
 export function groupHtml(
   ctx: BlockCtx,

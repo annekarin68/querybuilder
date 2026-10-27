@@ -100,7 +100,7 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   onOpenSavedList: app.openSavedList,
   onStartFresh: app.startFresh,
   onDismissRestored: app.dismissRestoredNotice,
-  selectField: app.selectField,
+  openFieldRow: app.openFieldRow,
   toggleFields: app.toggleFields,
 });
 wireSavedDialog(shell.savedDialog, app);
@@ -128,7 +128,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
       "databases",
       "query",
       "expandedBlockIds",
-      "selectedField",
+      "openField",
       "issues",
       "serverIssues",
       "facets",

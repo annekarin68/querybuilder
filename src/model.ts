@@ -139,5 +139,13 @@ export interface SavedQuery {
   updatedAt: string;
 }
 
+/** The user's saved queries as the list endpoint gives them: the ones that
+ *  could be read, newest first, and how many could not (saved by an older
+ *  version, in a shape this one does not read). */
+export interface SavedQueryList {
+  queries: SavedQuery[];
+  unreadable: number;
+}
+
 /** What is sent to save a query. */
 export type SavedQueryDraft = Omit<SavedQuery, "id" | "updatedAt">;

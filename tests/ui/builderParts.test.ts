@@ -54,45 +54,52 @@ describe("Move up / Move down buttons", () => {
   };
 
   it("names what moves and which way, for screen readers", () => {
-    const html = moveButtons("condition", { index: 2, count: 3 });
-    expect(button(html, "move-up")).toContain('aria-label="Move condition up"');
-    expect(button(html, "move-down")).toContain('aria-label="Move condition down"');
+    const html = moveButtons("Thing", { index: 2, count: 3 });
+    expect(button(html, "move-up")).toContain('aria-label="Move Thing up"');
+    expect(button(html, "move-down")).toContain('aria-label="Move Thing down"');
+    expect(html).toContain('role="group" aria-label="Move Thing"');
     expect(moveButtons("group", { index: 2, count: 3 })).toContain('aria-label="Move group up"');
   });
 
+  it("escapes the name it is given", () => {
+    expect(moveButtons('A "B"', { index: 2, count: 3 })).toContain(
+      'aria-label="Move A &quot;B&quot; up"',
+    );
+  });
+
   it("a middle node can go either way", () => {
-    const html = moveButtons("condition", { index: 2, count: 3 });
+    const html = moveButtons("Thing", { index: 2, count: 3 });
     expect(html).not.toContain("disabled");
   });
 
   // aria-disabled, not disabled: a disabled button loses keyboard focus, and
   // Enter pressed repeatedly would then bounce the node back the other way.
   it("the first node can't go up and the last can't go down", () => {
-    const first = moveButtons("condition", { index: 1, count: 3 });
+    const first = moveButtons("Thing", { index: 1, count: 3 });
     expect(button(first, "move-up")).toContain('aria-disabled="true"');
     expect(button(first, "move-down")).not.toContain("disabled");
-    const last = moveButtons("condition", { index: 3, count: 3 });
+    const last = moveButtons("Thing", { index: 3, count: 3 });
     expect(button(last, "move-up")).not.toContain("disabled");
     expect(button(last, "move-down")).toContain('aria-disabled="true"');
   });
 
   it("an unavailable end stays focusable: it has no disabled attribute", () => {
-    const first = moveButtons("condition", { index: 1, count: 3 });
+    const first = moveButtons("Thing", { index: 1, count: 3 });
     expect(button(first, "move-up")).not.toMatch(/ disabled[ >=]/);
   });
 
   it("an only child has nothing to pass either way", () => {
-    const only = moveButtons("condition", { index: 1, count: 1 });
+    const only = moveButtons("Thing", { index: 1, count: 1 });
     expect(only.match(/aria-disabled="true"/g)).toHaveLength(2);
     expect(only).not.toMatch(/ disabled[ >=]/);
   });
 });
 
 describe("facet block parts", () => {
-  it("labels a facet's grip, move buttons and fold button as a facet's", () => {
+  it("labels a facet's grip and fold button as a facet's", () => {
     expect(nodeGrip("f-1", "facet")).toContain('title="Drag to move this facet"');
     expect(nodeGrip("f-1", "facet")).toContain("qb-grip-facet");
-    expect(moveButtons("facet", { index: 1, count: 2 })).toContain('aria-label="Move facet down"');
+    expect(nodeGrip("g-1", "group")).toContain("qb-grip qb-grip-group");
     expect(collapseButton(false, "facet")).toContain('aria-label="Collapse facet"');
     expect(collapseButton(true)).toContain('aria-label="Expand group"');
   });

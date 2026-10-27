@@ -15,6 +15,7 @@ import type {
   Facet,
   SavedQuery,
   SavedQueryDraft,
+  SavedQueryList,
   User,
 } from "../model";
 import type { Group } from "../query/types";
@@ -194,9 +195,28 @@ export function invalidateCompliance(): Promise<void> {
 // update or delete adds 404 (no such saved query), a create or update 409 (the
 // name is taken) and 400 (a malformed body, which is a bug on our side).
 
-export async function listSavedQueries(): Promise<SavedQuery[]> {
+/**
+ * The user's saved queries. An entry that can't be read (a `ContractError`:
+ * saved by an older version, in a shape this one does not read) is skipped
+ * with a console warning and counted, so one old entry does not make the
+ * whole list unreadable. Anything else (an HTTP error, a body that is not a
+ * list) still fails as a whole.
+ */
+export async function listSavedQueries(): Promise<SavedQueryList> {
   const body = await getJson("/filter/saved");
-  return body.list<SavedQueryResponse>().map(toSavedQuery);
+  const queries: SavedQuery[] = [];
+  let unreadable = 0;
+  for (const entry of body.items()) {
+    try {
+      queries.push(toSavedQuery(entry.object<SavedQueryResponse>()));
+    } catch (err) {
+      if (!(err instanceof ContractError)) throw err;
+      unreadable += 1;
+      const name = entry.textForMessage("name");
+      console.warn(`Skipped the saved query${name ? ` “${name}”` : ""}: ${err.message}`);
+    }
+  }
+  return { queries, unreadable };
 }
 
 export async function createSavedQuery(draft: SavedQueryDraft): Promise<SavedQuery> {

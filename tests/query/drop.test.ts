@@ -106,6 +106,25 @@ describe("dropItem", () => {
     expect(out.select).toEqual({ blockId: block.id, fieldId: "size" });
   });
 
+  // As when the row is set by hand: the block's conditions (and so its
+  // summary) follow the facet's field order, not the order they were set in.
+  it("puts the condition a value fills in at its place in the facet's field order", () => {
+    const block: FacetBlock = {
+      ...newBlock("thing"),
+      conditions: [newFieldCondition("label", "eq", "a")],
+    };
+    const query: Group = { ...emptyQuery(), children: [block] };
+    const out = dropItem(
+      query,
+      { type: "value", facetId: "thing", fieldId: "size", value: "3" },
+      block.id,
+      facets,
+      catalog,
+    );
+    const filled = findNode(out.query, block.id) as FacetBlock;
+    expect(filled.conditions.map((c) => c.fieldId)).toEqual(["size", "label"]);
+  });
+
   it("never overwrites a set row: a value for it becomes a new block", () => {
     const block: FacetBlock = {
       ...newBlock("thing"),

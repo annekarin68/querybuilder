@@ -52,10 +52,12 @@ export type SaveState =
   | { status: "conflict"; name: string; note: string }
   | { status: "error"; error: string };
 
-/** The logged-in user's saved queries, newest first, as the list dialog shows them. */
+/** The logged-in user's saved queries, newest first, as the list dialog
+ *  shows them. `unreadable` counts the ones that could not be read (saved by
+ *  an older version): the dialog says how many, above the list. */
 export type SavedListState =
   | { status: "idle" | "loading" }
-  | { status: "ok"; queries: SavedQuery[] }
+  | { status: "ok"; queries: SavedQuery[]; unreadable: number }
   | { status: "error"; error: string };
 
 /** A line above the saved-queries list: a delete that failed ("error",
@@ -91,10 +93,14 @@ export interface AppState {
    *  pressed). Display state: never saved or sent, and not part of `query`,
    *  so opening it is not an edit (spec, section 3). */
   expandedBlockIds: string[];
-  /** The field row the user is working on (clicked, dropped on, or opened
-   *  with its operator dropdown), or null. An unset selected row is drawn
-   *  with its dropdowns, so it can be filled in; Escape clears it. */
-  selectedField: FieldRef | null;
+  /** The one field row drawn open for editing, or null: an unset row whose
+   *  slot was pressed, or the row a dropped field or value is about. An open
+   *  unset row is drawn with real dropdowns (its operator), so it can be
+   *  filled in; a set row looks the same open or not. "Not filtered", Escape
+   *  in a block and opening another row close it. (Not what a panel would
+   *  call the selected field: focusing a row never changes this, so it never
+   *  repaints the rows.) */
+  openField: FieldRef | null;
   issues: Issue[];
   /** The problems the backend found in the query on screen: the errors in
    *  `stats` that point at a node (src/query/issues.ts, serverIssues). Set by
@@ -149,7 +155,7 @@ export const initialState: AppState = {
   activeView: "filter",
   query: emptyQuery(),
   expandedBlockIds: [],
-  selectedField: null,
+  openField: null,
   issues: [],
   serverIssues: [],
   stats: { status: "idle", results: [] },
@@ -196,7 +202,7 @@ export function runBlocker(state: RunInputs): RunBlocker | null {
 }
 
 /** The parts of the state that only say how the query is shown. */
-export type DisplayState = Pick<AppState, "selectedField" | "expandedBlockIds">;
+export type DisplayState = Pick<AppState, "openField" | "expandedBlockIds">;
 
 /**
  * `display` without what points at a block that is no longer in `query`: a
@@ -207,15 +213,12 @@ export type DisplayState = Pick<AppState, "selectedField" | "expandedBlockIds">;
  */
 export function displayStateFor(query: Group, display: DisplayState): DisplayState {
   const isBlockInQuery = (id: string) => findNode(query, id)?.kind === "facet";
-  const selectedField =
-    display.selectedField && isBlockInQuery(display.selectedField.blockId)
-      ? display.selectedField
-      : null;
+  const openField =
+    display.openField && isBlockInQuery(display.openField.blockId) ? display.openField : null;
   const expandedBlockIds = display.expandedBlockIds.filter(isBlockInQuery);
   const unchanged =
-    selectedField === display.selectedField &&
-    expandedBlockIds.length === display.expandedBlockIds.length;
-  return unchanged ? display : { selectedField, expandedBlockIds };
+    openField === display.openField && expandedBlockIds.length === display.expandedBlockIds.length;
+  return unchanged ? display : { openField, expandedBlockIds };
 }
 
 type Listener = (state: AppState, changed: Set<keyof AppState>) => void;

@@ -1,5 +1,11 @@
 import type { Facet } from "../model";
-import { findFacet, findField, isNumberText, type FieldCatalog } from "./fieldCatalog";
+import {
+  fieldsOfFacet,
+  findFacet,
+  findField,
+  isNumberText,
+  type FieldCatalog,
+} from "./fieldCatalog";
 import {
   countBlocks,
   findNode,
@@ -58,7 +64,7 @@ export function parseDragItem(text: string): DragItem | null {
   }
 }
 
-/** A field row of one block: what a drop asks the builder to focus. */
+/** A field row of one block: the row a drop opens. */
 export interface FieldRef {
   blockId: string;
   fieldId: string;
@@ -69,9 +75,15 @@ export interface DropOutcome {
   /** The new query; the same object when nothing changed. */
   query: Group;
   /** New blocks or a new group, for the announcement. Empty when the drop
-   *  only focused or filled a row of an existing block. */
+   *  only opened or filled a row of an existing block. */
   added: QueryNode[];
-  /** The row to focus afterwards, or null. */
+  /**
+   * The field row the drop is about, or null: the app opens it
+   * (`AppState.openField`). After a mouse drop the builder also moves the
+   * keyboard focus into it (its operator dropdown, menu closed). The
+   * keyboard's "Add to query" keeps the focus in the dictionary, so several
+   * items can be added in a row; the announcement says what happened.
+   */
   select: FieldRef | null;
   /** What couldn't be added, in words for the user. */
   problems: string[];
@@ -120,7 +132,7 @@ export function dropItem(
       if (!findField(catalog, item.facetId, item.fieldId)) {
         return refused(`Couldn't add “${item.fieldId}”: ${NOT_LOADED}`);
       }
-      // The block already has a row for every field of its facet: focus it.
+      // The block already has a row for every field of its facet: open it.
       if (targetBlock?.facetId === item.facetId) {
         return {
           query,
@@ -152,8 +164,11 @@ export function dropItem(
         targetBlock?.facetId === item.facetId &&
         !targetBlock.conditions.some((c) => c.fieldId === item.fieldId);
       if (targetBlock && rowIsUnset) {
+        // In the facet's field order, as the builder does when a row is set
+        // by hand, so the summary does not depend on the order of setting.
+        const fieldOrder = fieldsOfFacet(catalog, item.facetId).map((f) => f.fieldId);
         return {
-          query: setFieldCondition(query, targetBlock.id, condition),
+          query: setFieldCondition(query, targetBlock.id, condition, fieldOrder),
           added: [],
           select: { blockId: targetBlock.id, fieldId: item.fieldId },
           problems: [],
@@ -177,7 +192,7 @@ export function dropItem(
 
 /**
  * Whether dropping `item` on `block` changes that block itself (a field row
- * is selected, an unset row is filled) instead of adding a new block next to
+ * is opened, an unset row is filled) instead of adding a new block next to
  * it. The builder uses it to show the right drop mark while the drag is over
  * the block: a bar "before" the block would promise a new block there.
  * `null` is a drag we know nothing about, which is never "inside".
@@ -220,7 +235,8 @@ export function filledRowMessage(fieldName: string, value: string): string {
 }
 
 /** What a screen reader hears after a field was dropped on a block of its
- *  facet: nothing was added, the cursor went to the field's row. */
+ *  facet (a mouse drop): nothing was added; its row was opened and has the
+ *  keyboard focus. */
 export function focusedRowMessage(fieldName: string, facetName: string): string {
   return `Showing ${fieldName} in ${facetName}.`;
 }

@@ -156,10 +156,15 @@ does the real backend do the same?
 
 **Adding**
 - Dictionary facet dropped → new block (Has, ALL, nothing set).
-- Field dropped on a block of its facet → that row is focused; dropped
-  elsewhere → new block with that row focused.
+- Field dropped on a block of its facet → that row is opened; dropped
+  elsewhere → new block with that row opened.
 - Value dropped → the field's row becomes "equals value" if it is unset;
   if it is already set, a new block (nothing the user chose is overwritten).
+- Focus: after a **mouse drop** that opened a row (`DropOutcome.select`),
+  the keyboard focus moves into that row (its operator dropdown's typing
+  box, or the row's slot), without opening the menu. The keyboard path,
+  "Add to query" in the dictionary, keeps the focus in the dictionary so
+  several items can be added in a row, and relies on the announcement.
 - Tag dropped / "Add all" → one ALL group of blocks, one per facet.
 - "+ Condition" becomes **"+ Facet"** (a searchable facet picker) in every
   group; "+ Group" stays.
@@ -194,6 +199,9 @@ width too). `AppState.panelTab` (`"seen" | "about" | null`, all blocks) and
 `AppState.selectedField` (`{ blockId, fieldId } | null`): a field is selected
 by clicking its label or focusing its row, and stays selected until another
 is selected or Escape is pressed; the About panel offers "← About <facet>".
+The panel's `selectedField` (what About shows) is separate from plan A2's
+`AppState.openField` (the one row drawn open with real dropdowns) and never
+changes row markup, so focusing rows never repaints them.
 
 **Summary** (`summary.ts`) is as short as it can be without becoming
 ambiguous, because it is often cut off (maintainers, 2026-10-27):

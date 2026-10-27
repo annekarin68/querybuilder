@@ -157,6 +157,14 @@ function statusHtml(text: string): string {
   return `<p class="qb-dialog-status" tabindex="-1" data-initial-focus>${text}</p>`;
 }
 
+/** What the list says about the saved queries that could not be read
+ *  (saved by an older version, `listSavedQueries`); "" for none. */
+function unreadableText(count: number): string {
+  if (count === 0) return "";
+  const what = count === 1 ? "1 saved query" : `${count} saved queries`;
+  return `${what} from an older version can't be opened.`;
+}
+
 /** The list, or what to show instead of it. */
 function savedListBodyHtml(state: AppState): string {
   const list = state.savedList;
@@ -174,13 +182,16 @@ function savedListBodyHtml(state: AppState): string {
           <button type="button" class="ui mini basic button" data-action="retry-saved-list" data-initial-focus>Try again</button>
         </div>`;
     case "ok": {
+      const unreadable = unreadableText(list.unreadable);
+      // Only unreadable ones: "No saved queries yet" would be untrue.
       if (list.queries.length === 0) {
-        return statusHtml("No saved queries yet. Build a query and press Save…");
+        return statusHtml(unreadable || "No saved queries yet. Build a query and press Save…");
       }
+      const note = unreadable ? `<p class="qb-muted">${unreadable}</p>` : "";
       const items = list.queries
         .map((q, i) => savedItemHtml(q, state.savedConfirm, i === 0))
         .join("");
-      return `<ul class="qb-saved-list" aria-labelledby="${SAVED_TITLE_ID}">${items}</ul>`;
+      return `${note}<ul class="qb-saved-list" aria-labelledby="${SAVED_TITLE_ID}">${items}</ul>`;
     }
   }
 }
