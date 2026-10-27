@@ -20,9 +20,8 @@ import {
   updateSavedQuery,
 } from "../../src/api/client";
 import { ContractError } from "../../src/api/contract";
-import { toQueryRequest } from "../../src/api/legacy/request";
-import { toSavedQueryRequest } from "../../src/api/legacy/request";
-import type { Group } from "../../src/query/legacy/types";
+import { toQueryRequest, toSavedQueryRequest } from "../../src/api/request";
+import type { Group } from "../../src/query/types";
 import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
 
 const query: Group = {
@@ -31,12 +30,12 @@ const query: Group = {
   operator: "AND",
   children: [
     {
-      kind: "condition",
-      id: "c1",
+      kind: "facet",
+      id: "f1",
       facetId: "thing",
-      fieldId: "size",
-      operatorId: "gt",
-      value: 3,
+      negated: false,
+      operator: "AND",
+      conditions: [{ kind: "condition", id: "c1", fieldId: "size", operatorId: "gt", value: 3 }],
     },
   ],
 };
@@ -218,12 +217,15 @@ describe("api client", () => {
       ...query,
       children: [
         {
-          kind: "condition",
-          id: "c1",
-          facetId: null,
-          fieldId: null,
-          operatorId: null,
-          value: null,
+          kind: "facet",
+          id: "f1",
+          facetId: "thing",
+          negated: false,
+          operator: "AND",
+          // No operator yet: only a saved query read back holds one.
+          conditions: [
+            { kind: "condition", id: "c1", fieldId: "size", operatorId: null, value: null },
+          ],
         },
       ],
     };

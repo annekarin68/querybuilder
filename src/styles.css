@@ -675,7 +675,18 @@ body {
     background-color 0.12s,
     outline-color 0.12s;
 }
-.qb-group-or {
+/* A facet block's own ALL / ANY colour (blockHtml.ts): its Has / Has no and
+   ALL / ANY buttons are about the block, so they must not take the colour of
+   the group around it (a green "ANY" on an ANY block would read as ALL). */
+.qb-block-and {
+  --qb-c: var(--qb-and);
+  --qb-c-soft: var(--qb-and-soft);
+  --qb-c-text: var(--qb-and);
+  --qb-tint: var(--qb-and-tint);
+  --qb-tint-strong: var(--qb-and-tint-strong);
+}
+.qb-group-or,
+.qb-block-or {
   --qb-c: var(--qb-or);
   --qb-c-soft: var(--qb-or-soft);
   --qb-c-text: var(--qb-or-text);
@@ -822,6 +833,8 @@ body {
    (revealNode, tabindex="-1"). A mouse click does not match :focus-visible, so
    plain :focus is styled here: without a ring the user sees only a scroll. */
 .qb-condition[tabindex="-1"]:focus,
+.qb-block[tabindex="-1"]:focus,
+.qb-field-row[tabindex="-1"]:focus,
 .qb-group[tabindex="-1"]:focus {
   outline: 2px solid var(--qb-and);
   outline-offset: 2px;
@@ -964,9 +977,10 @@ body {
   color: var(--qb-muted);
 }
 /* ---- Facet blocks (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 5) */
-/* The block is a card inside its group's bracket. It reads --qb-c (the ALL/ANY
-   colour) from that group for its own Has / ALL / ANY buttons. A container, like
-   .qb-condition, so its rows can react to the block's width. */
+/* The block is a card inside its group's bracket. Its own ALL/ANY colour
+   (--qb-c, set by .qb-block-and / .qb-block-or above) colours its Has / ALL /
+   ANY buttons. A container, like .qb-condition, so its rows can react to the
+   block's width. */
 .qb-block {
   container-type: inline-size;
   border: 1px solid var(--qb-border);
@@ -994,6 +1008,12 @@ body {
    spare room (so the spacer is not needed) and is cut with "…". */
 .qb-block.is-collapsed > .qb-block-head {
   flex-wrap: nowrap;
+  /* Like a folded group's line, it opens when clicked anywhere. */
+  cursor: pointer;
+  border-radius: var(--qb-radius);
+}
+.qb-block.is-collapsed > .qb-block-head:hover {
+  background: var(--qb-selected-bg);
 }
 .qb-block.is-collapsed > .qb-block-head > .qb-spacer {
   display: none;
@@ -1852,7 +1872,8 @@ details[open] > summary > .qb-chevron {
 .qb-grip.qb-grip-group:hover {
   background: var(--qb-tint-strong);
 }
-.qb-condition.is-drop-before {
+.qb-condition.is-drop-before,
+.qb-block.is-drop-before {
   box-shadow: 0 -2px 0 0 var(--qb-and);
 }
 .qb-group.is-drop-target {

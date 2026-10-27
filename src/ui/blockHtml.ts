@@ -17,8 +17,8 @@ import { countLabel } from "./format";
 import { escapeHtml } from "./panel";
 
 // The HTML of the facet-block builder's tree: groups, facet blocks and the
-// footer line. Pure strings, so the Node-only tests can reach them. Not wired
-// in until Task 3 of plan A2 (docs/superpowers/plans/2026-10-27-facet-blocks-a2-builder.md).
+// footer line. Pure strings, so the Node-only tests can reach them;
+// queryBuilder.ts paints them and wires their buttons.
 
 /** What every part of the tree's HTML needs, passed down the recursion. */
 export interface BlockCtx {
@@ -38,11 +38,19 @@ export interface BlockCtx {
  *  The facet is fixed: to filter on another facet the user adds a block. */
 export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position): string {
   const name = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
+  // The block's own ALL / ANY colour (styles.css), not its group's: its Has /
+  // ALL / ANY buttons are about this block.
+  const tone = block.operator === "OR" ? "qb-block-or" : "qb-block-and";
+  // A folded block's whole head is a click target for unfolding it, as a
+  // folded group's line is (its buttons and grip keep their own jobs).
+  const headAttributes = block.collapsed
+    ? ` data-action="toggle-collapse" title="Click to expand"`
+    : "";
   const head = (inner: string) =>
-    `<div class="qb-block-head">${nodeGrip(block.id, "facet")}${moveButtons("facet", position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>${inner}<span class="qb-spacer"></span>${iconButton("remove-node", "Remove facet", "times")}</div>`;
+    `<div class="qb-block-head"${headAttributes}>${nodeGrip(block.id, "facet")}${moveButtons("facet", position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>${inner}<span class="qb-spacer"></span>${iconButton("remove-node", "Remove facet", "times")}</div>`;
   if (block.collapsed) {
     const text = blockText(block, ctx.catalog);
-    return `<div class="qb-block is-collapsed" data-node-id="${escapeHtml(block.id)}">${head(
+    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${escapeHtml(block.id)}">${head(
       `<span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`,
     )}${issuesHtml(block.id, ctx.issues)}</div>`;
   }
@@ -64,7 +72,7 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
     expanded,
     selected,
   );
-  return `<div class="qb-block" data-node-id="${escapeHtml(block.id)}">${head(has + where + match)}${issuesHtml(block.id, ctx.issues)}<div class="qb-field-rows">${rows}</div></div>`;
+  return `<div class="qb-block ${tone}" data-node-id="${escapeHtml(block.id)}">${head(has + where + match)}${issuesHtml(block.id, ctx.issues)}<div class="qb-field-rows">${rows}</div></div>`;
 }
 
 /** The "+ Facet" picker: one choice per facet. Choosing one adds a block to

@@ -43,7 +43,30 @@ export function visibleFieldIds(
   return { shown, hiddenCount: fieldIds.length - shown.length };
 }
 
-function operatorSelect(field: CatalogField, selectedId: string | null): string {
+/**
+ * The value of the operator dropdown's "Not filtered" choice, which clears the
+ * field. Not "": Fomantic turns an option with an empty value into the
+ * dropdown's placeholder text and leaves it out of the menu, so it could not
+ * be picked.
+ */
+export const NOT_FILTERED = "not-filtered";
+
+/** The operator the user picked in a row's operator dropdown (its `value`),
+ *  or null for "Not filtered" (and for the empty placeholder). */
+export function pickedOperatorId(value: string): string | null {
+  return value === NOT_FILTERED || value === "" ? null : value;
+}
+
+/**
+ * A row's operator dropdown: "Not filtered" first, then the operators the
+ * field offers. A saved query can hold a condition with no operator, or with
+ * one the field does not offer (any more); the row must not say "Not
+ * filtered" then, which its issue would contradict. So a missing operator
+ * shows "Choose an operator…" (the placeholder, an empty first option), and
+ * one that is not offered is shown chosen but cannot be picked again.
+ */
+function operatorSelect(field: CatalogField, c: FieldCondition | undefined): string {
+  const selectedId = c?.operatorId ?? null;
   const choices = OPERATORS.filter((o) => field.operatorIds.includes(o.id));
   const opts = optionsHtml(
     choices,
@@ -51,7 +74,14 @@ function operatorSelect(field: CatalogField, selectedId: string | null): string 
     (o) => o.name,
     (o) => o.id === selectedId,
   );
-  return `<select class="ui search selection dropdown" data-part="operator" aria-label="Operator for ${escapeHtml(field.fieldName)}"><option value="">Not filtered</option>${opts}</select>`;
+  let lead = "";
+  if (c && selectedId === null) {
+    lead = `<option value="">Choose an operator…</option>`;
+  } else if (selectedId !== null && !choices.some((o) => o.id === selectedId)) {
+    const name = findOperator(selectedId)?.name ?? selectedId;
+    lead = `<option value="${escapeHtml(selectedId)}" selected disabled>${escapeHtml(name)}</option>`;
+  }
+  return `<select class="ui search selection dropdown" data-part="operator" aria-label="Operator for ${escapeHtml(field.fieldName)}">${lead}<option value="${NOT_FILTERED}">Not filtered</option>${opts}</select>`;
 }
 
 /** A field with a condition, or the selected unset field (no condition yet:
@@ -64,7 +94,7 @@ function activeRowHtml(ctx: RowCtx, field: CatalogField, c: FieldCondition | und
     : "";
   return `<div class="qb-field-row" data-field-id="${escapeHtml(field.fieldId)}"${nodeId}>
       <span class="qb-field-label">${escapeHtml(field.fieldName)}</span>
-      ${operatorSelect(field, c?.operatorId ?? null)}
+      ${operatorSelect(field, c)}
       ${value}
     </div>${c ? issuesHtml(c.id, ctx.issues) : ""}`;
 }
@@ -73,7 +103,7 @@ function unsetRowHtml(field: CatalogField): string {
   const name = escapeHtml(field.fieldName);
   return `<div class="qb-field-row is-unset" data-field-id="${escapeHtml(field.fieldId)}">
       <span class="qb-field-label">${name}<span class="qb-sr-only"> (not filtered)</span></span>
-      <button type="button" class="qb-unset-slot" data-action="edit-field" aria-label="Filter on ${name}"></button>
+      <button type="button" class="qb-unset-slot" data-action="edit-field" data-field-id="${escapeHtml(field.fieldId)}" aria-label="Filter on ${name}"></button>
       <span class="qb-unset-slot" aria-hidden="true"></span>
     </div>`;
 }

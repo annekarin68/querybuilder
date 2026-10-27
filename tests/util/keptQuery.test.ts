@@ -8,10 +8,12 @@ import {
 import {
   addChild,
   emptyQuery,
-  newCondition,
+  groupOf,
+  newBlock,
+  newFieldCondition,
   newGroup,
-  updateNode,
-} from "../../src/query/legacy/tree";
+} from "../../src/query/tree";
+import type { FacetBlock } from "../../src/query/types";
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
@@ -96,28 +98,62 @@ describe("keptQuery", () => {
     expect(readKeptQuery()).toBeNull();
   });
 
-  it("round-trips a nested tree with conditions", () => {
+  it("round-trips a nested tree with facet blocks and their set fields", () => {
     const root = emptyQuery();
-    const inner = newGroup();
-    const nested = addChild(root, root.id, addChild(inner, inner.id, newCondition()));
-    const withCond = addChild(nested, nested.id, newCondition());
-    keepQuery(withCond, ["alpha"]);
-    expect(readKeptQuery()).toEqual({ query: withCond, selectedDatabaseIds: ["alpha"] });
+    const block: FacetBlock = {
+      ...newBlock("thing"),
+      negated: true,
+      operator: "OR",
+      conditions: [newFieldCondition("size", "gt", 3), newFieldCondition("label", null, null)],
+    };
+    const nested = addChild(root, root.id, groupOf([block]));
+    const withBlock = addChild(nested, nested.id, newBlock("other"));
+    keepQuery(withBlock, ["alpha"]);
+    expect(readKeptQuery()).toEqual({ query: withBlock, selectedDatabaseIds: ["alpha"] });
+  });
+
+  const block = newBlock("thing");
+  const inGroup = (child: unknown) => ({
+    query: { ...emptyQuery(), children: [child] },
+    selectedDatabaseIds: [],
   });
 
   it.each([
     ["a non-object", 42],
     ["a missing query", { selectedDatabaseIds: [] }],
-    ["a condition as root", { query: newCondition(), selectedDatabaseIds: [] }],
-    [
-      "a group with a malformed child",
-      { query: { ...emptyQuery(), children: [{ kind: "condition" }] }, selectedDatabaseIds: [] },
-    ],
+    ["a block as root", { query: block, selectedDatabaseIds: [] }],
+    ["a group with a malformed child", inGroup({ kind: "facet" })],
     [
       "a bad logical operator",
       { query: { ...emptyQuery(), operator: "XOR" }, selectedDatabaseIds: [] },
     ],
     ["non-string database ids", { query: emptyQuery(), selectedDatabaseIds: [1, 2] }],
+    // A query kept by the build before facet blocks: dropped once, not
+    // migrated (spec, decision 9).
+    [
+      "the old shape, a condition in a group",
+      inGroup({
+        kind: "condition",
+        id: "c1",
+        facetId: "thing",
+        fieldId: null,
+        operatorId: "present",
+        value: null,
+      }),
+    ],
+    ["a block without a facet", inGroup({ ...block, facetId: null })],
+    ["a block whose negated is not true or false", inGroup({ ...block, negated: "no" })],
+    ["a block with a bad ALL/ANY", inGroup({ ...block, operator: "all" })],
+    ["a block without conditions", inGroup({ ...block, conditions: undefined })],
+    [
+      "a field condition without a field",
+      inGroup({ ...block, conditions: [{ ...newFieldCondition("size", "gt", 3), fieldId: null }] }),
+    ],
+    [
+      "a field condition with a numeric operator",
+      inGroup({ ...block, conditions: [{ ...newFieldCondition("size", "gt", 3), operatorId: 7 }] }),
+    ],
+    ["a field condition without an id", inGroup({ ...block, conditions: [{ fieldId: "size" }] })],
   ])("returns null for %s", (_label, entry) => {
     sessionStorage.setItem("qb:kept-query", JSON.stringify(entry));
     expect(readKeptQuery()).toBeNull();
@@ -126,22 +162,18 @@ describe("keptQuery", () => {
 
 describe("isWorthRestoring", () => {
   const root = emptyQuery();
-  const blank = newCondition();
 
-  // The starting query is one blank row: bringing that back would only show a
-  // "Restored" notice for nothing.
-  it("is false while nothing has been chosen: no rows, blank rows, or only ALL/ANY", () => {
+  // The starting query is an empty group: bringing that back would only show
+  // a "Restored" notice for nothing.
+  it("is false while no facet has been added: empty groups, or only ALL/ANY", () => {
     expect(isWorthRestoring(root)).toBe(false);
-    expect(isWorthRestoring(addChild(root, root.id, blank))).toBe(false);
-    const nestedBlank = addChild(root, root.id, newGroup()); // a group holding one blank row
-    expect(isWorthRestoring({ ...nestedBlank, operator: "OR" })).toBe(false);
+    const nestedEmpty = addChild(root, root.id, newGroup());
+    expect(isWorthRestoring({ ...nestedEmpty, operator: "OR" })).toBe(false);
   });
 
-  it("is true once any row has a facet, at any depth", () => {
-    const chosen = updateNode(addChild(root, root.id, blank), blank.id, { facetId: "thing" });
-    expect(isWorthRestoring(chosen)).toBe(true);
-    const inner = newGroup();
-    const deep = addChild(root, root.id, { ...inner, children: [{ ...blank, facetId: "x" }] });
+  it("is true once a facet block is in the query, at any depth, even with nothing set", () => {
+    expect(isWorthRestoring(addChild(root, root.id, newBlock("thing")))).toBe(true);
+    const deep = addChild(root, root.id, groupOf([groupOf([newBlock("x")])]));
     expect(isWorthRestoring(deep)).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createStore, initialState, runBlocker, type RunInputs } from "../src/state";
-import { addChild, emptyQuery, newCondition } from "../src/query/legacy/tree";
+import { addChild, emptyQuery, groupOf, newBlock } from "../src/query/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
 describe("store", () => {
@@ -41,6 +41,11 @@ describe("store", () => {
     expect(initialState.dropNotice).toBeNull();
   });
 
+  it("initialState has no field selected and no folded field list opened", () => {
+    expect(initialState.selectedField).toBeNull();
+    expect(initialState.expandedBlockIds).toEqual([]);
+  });
+
   it("initialState has no saved query open and the saved-queries dialogs closed", () => {
     expect(initialState).toMatchObject({
       openSaved: null,
@@ -59,7 +64,7 @@ describe("runBlocker", () => {
     catalog,
     issues: [],
     serverIssues: [],
-    query: addChild(root, root.id, newCondition()),
+    query: addChild(root, root.id, newBlock("thing")),
     selectedDatabaseIds: ["alpha"],
   };
 
@@ -72,7 +77,11 @@ describe("runBlocker", () => {
     expect(runBlocker({ ...ready, selectedDatabaseIds: [], query: emptyQuery() })).toBe(
       "no-database",
     );
-    expect(runBlocker({ ...ready, query: emptyQuery() })).toBe("no-condition");
+    expect(runBlocker({ ...ready, query: emptyQuery() })).toBe("no-facet");
+    // Empty groups are not a facet either.
+    expect(runBlocker({ ...ready, query: { ...emptyQuery(), children: [groupOf([])] } })).toBe(
+      "no-facet",
+    );
     expect(
       runBlocker({
         ...ready,

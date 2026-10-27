@@ -6,7 +6,7 @@ import {
   type ValueType,
 } from "../query/fieldCatalog";
 import { UTC_TIMESTAMP_HINT } from "../query/dates";
-import { isBlankValue } from "../query/legacy/validate";
+import { isBlankValue } from "../query/validate";
 import { escapeHtml, optionsHtml } from "./panel";
 import { hoverTitle } from "./format";
 

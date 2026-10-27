@@ -10,8 +10,10 @@ import type {
   SavedFieldCondition,
   SavedGroup,
   SavedNode,
+  SavedQueryRequest,
   SavedValue,
 } from "./types";
+import type { SavedQueryDraft } from "../model";
 import type { FacetBlock, FieldCondition, Group, QueryNode } from "../query/types";
 
 // The builders below write the wire's snake_case keys (`facet_id`) from the
@@ -69,6 +71,21 @@ function valueOf(c: FieldCondition): RequestValue {
   if (v === null || isScalar(v)) return v;
   if (Array.isArray(v) && v.every(isScalar)) return [...v];
   throw new Error(`Condition ${c.id} has a value that cannot be sent.`);
+}
+
+/**
+ * The body of POST …/filter/saved and PUT …/filter/saved/{id}: the query as
+ * the user left it, finished or not (docs/ARCHITECTURE.md, "Saved queries").
+ * The backend checks the shape only, so a bug in our own validation can never
+ * stop a user saving their work. Name and note are trimmed.
+ */
+export function toSavedQueryRequest(draft: SavedQueryDraft): SavedQueryRequest {
+  return {
+    name: draft.name.trim(),
+    note: draft.note.trim(),
+    databases: [...draft.databaseIds],
+    query: toSavedTree(draft.query),
+  };
 }
 
 /**

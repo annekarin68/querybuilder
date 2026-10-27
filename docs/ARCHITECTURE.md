@@ -212,7 +212,7 @@ swapped in on an already-deployed build).
 |---|---|
 | `favicon.svg` | The browser tab (`<link rel="icon">` in `index.html`). |
 | `logo.svg` | The top bar, normal face. Also the face everything falls back to. |
-| `disappointed.svg` | The top bar when something went wrong or nothing was found: the query is invalid (a red message), a database failed or found a problem in the query, a statistics or events request failed, or the query matches no events. Loading wins when both apply. A merely unfinished query keeps the normal face: every query starts as a blank row (maintainers' decision, 2026-10-13). |
+| `disappointed.svg` | The top bar when something went wrong or nothing was found: the query is invalid (a red message), a database failed or found a problem in the query, a statistics or events request failed, or the query matches no events. Loading wins when both apply. A merely unfinished query keeps the normal face: every query starts unfinished, as an empty group (maintainers' decision, 2026-10-13). |
 | `loading.svg` | The top bar while statistics or Matching events are loading. It turns around its middle (CSS, `qb-spin`, so a replaced file turns too); under reduced motion it slowly fades in and out instead. |
 
 `mascotFor(state)` (`src/ui/mascot.ts`) picks the face from `issues`, `stats`
@@ -429,22 +429,17 @@ src/
     types.ts           The backend's request/response types. This IS the API contract.
     contract.ts        Checks each response value against the contract as it is read: ResponseValue,
                        ResponseObject, ContractError ("Reading responses").
-    response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, …; the saved-query reader is in legacy/).
-                       Also `fromSavedTree`, the saved tree of facet blocks -> model (not wired in until plan A2, see legacy/).
-    request.ts         NEW wire format, not wired in until plan A2 (client.ts still uses legacy/request.ts):
-                       toQueryRequest(query, databases) — the facet-block body of /filter/validate and /filter/execute;
-                       toSavedTree(query) — a saved query's tree. Plan A2 builds the saved-query body on these.
-    legacy/            The wire format before facet blocks. The app still runs on it until plan A2
-                       (docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md) switches it over
-                       and deletes this folder; new code goes in the files next to it.
-      request.ts       toQueryRequest(query, databaseIds) — the body sent to /filter/validate and /filter/execute;
-                       toSavedQueryRequest(draft) — the body of a saved query.
-      types.ts         The old query-tree and saved-query types: QueryRequest, RequestNode, SavedQueryRequest, …
-      savedResponse.ts toSavedQuery — a saved query from the backend -> model.
+    response.ts        Backend response -> model (toDatabase, toFacet, toEvent, toDatabaseResult, toSavedQuery, …);
+                       `fromSavedTree`, the saved tree of facet blocks -> model.
+    request.ts         toQueryRequest(query, databases) — the facet-block body of /filter/validate and /filter/execute;
+                       toSavedQueryRequest(draft) — the body of a saved query, on toSavedTree(query).
+    legacy/            The wire format before facet blocks. Only the mock server's shim for old condition nodes
+                       still reads it; plan A2, Task 4 deletes this folder.
+      request.ts       toQueryRequest(query, databaseIds) for the old tree.
+      types.ts         The old query-tree types: QueryRequest, RequestNode, RequestCondition.
   query/
-    (The files next to `legacy/` are the facet-block model. Nothing imports them until plan A2,
-    docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md, so the running app is described
-    by `legacy/`.)
+    (The files next to `legacy/` are the facet-block model the app runs on. Nothing outside
+    `legacy/` imports `legacy/` any more; plan A2, Task 4 deletes it.)
     types.ts           FacetBlock, FieldCondition, Group, QueryNode, Issue.
     tree.ts            Pure, immutable tree helpers (newBlock, newFieldCondition, groupOf, emptyQuery, newGroup,
                        setFieldCondition, clearFieldCondition, removeCondition, countBlocks, insertNodes, moveNode, moveSibling,
@@ -458,7 +453,9 @@ src/
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
                        for facet blocks (display only; a folded block's line).
     drop.ts            Facet-block drops: `dropItem` (what a dropped docs item adds, which row it focuses, or what
-                       it refuses), `dropNotice`, `addedNodesMessage`, `movedMessage`, `reorderedMessage` — pure.
+                       it refuses), `dropNotice`, `dropMessage` (what a screen reader hears after a drop:
+                       `addedNodesMessage`, `filledRowMessage`, `focusedRowMessage`, `addedBesideMessage`),
+                       `movedMessage`, `reorderedMessage` — pure.
                        Also the drag payload (`DragItem`, `parseDragItem`, `DRAG_MIME`). Not legacy/drop.ts.
     fieldEdit.ts       nextFieldCondition — a field row after an operator or value was picked (its arity change
                        resets the value); cursorAfterOperator — where the cursor goes next.
@@ -467,9 +464,8 @@ src/
                        reports against a node, once each. Pure.
     saved.ts           Saved queries, pure: `OpenSaved`, `sameName`, `isEdited`, `hasUnsavedWork` (a query with at
                        least one facet block), `saveTarget`.
-    legacy/            The query model before facet blocks. The app still runs on it until plan A2
-                       (docs/superpowers/plans/2026-10-27-facet-blocks-a1-model.md) switches it over
-                       and deletes this folder; new code goes in the files next to it.
+    legacy/            The query model before facet blocks. Nothing outside it imports it any more;
+                       plan A2, Task 4 deletes this folder.
       types.ts           Condition, Group, QueryNode, Issue.
       tree.ts            Pure, immutable tree helpers (addChild, updateNode, removeNode, insertNodes, moveNode,
                          moveSibling, positionOf, groupOf, sameSemantics, sameTree, …).
@@ -506,19 +502,19 @@ src/
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
                        displayLabel, databaseTitle, countLabel, formatWhen, formatDate, hoverTitle.
     valueControl.ts    The value input(s) of a condition row, by operator × field valueType; parseEntry.
-    builderParts.ts    HTML pieces shared by the old and the new builder: issuesHtml, nodeGrip, iconButton,
-                       moveButtons, collapseButton, Position. Used by queryBuilder.ts; the facet-block builder
-                       will use them too.
+    builderParts.ts    HTML pieces of the builder's groups and blocks: issuesHtml, nodeGrip, iconButton,
+                       moveButtons, collapseButton, Position.
     fieldRows.ts       Pure HTML of a facet block's field rows (set, unset, selected, stray, the fold button):
-                       fieldRowsHtml, visibleFieldIds. Not wired in until Task 3 of plan A2
-                       (docs/superpowers/plans/2026-10-27-facet-blocks-a2-builder.md).
+                       fieldRowsHtml, visibleFieldIds; NOT_FILTERED / pickedOperatorId (the operator
+                       dropdown's "Not filtered" choice).
     blockHtml.ts       Pure HTML of the facet-block tree: blockHtml (head, Has / Has no, ALL / ANY, rows),
-                       groupHtml (with the "+ Facet" picker), footerHtml, BlockCtx. Also not wired in until
-                       Task 3 of plan A2; its styles are the "Facet blocks" section of styles.css.
+                       groupHtml (with the "+ Facet" picker), footerHtml, BlockCtx. Painted by queryBuilder.ts;
+                       its styles are the "Facet blocks" section of styles.css.
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
-    queryBuilder.ts    The query builder (wiring, drop targets, node grips, the title row with Save… and
-                       Saved queries; returns its render function).
+    queryBuilder.ts    The query builder: paints blockHtml.ts's tree and wires it (field rows, "+ Facet",
+                       drop targets, node grips, the title row with Save… and Saved queries; returns its
+                       render function).
     savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint and
                        escapeAction (pure), renderSavedDialog (paints and opens/closes the <dialog>),
                        wireSavedDialog.
@@ -593,7 +589,7 @@ brought the kept query back ("Saved query across the login/compliance
 redirect"). Its ✕, **Start fresh** and the first edit (`changeScope`) clear it.
 
 The saved-queries state ("Saved queries"; the actions are in `app.ts`, the
-pure helpers in `src/query/legacy/saved.ts`):
+pure helpers in `src/query/saved.ts`):
 
 - `openSaved`: the saved query on screen as it was when last opened or saved,
   or `null` for one never saved. Whether the user changed it since is worked out
@@ -642,8 +638,9 @@ binding its Fomantic dropdowns must always happen together.
 
 | Trigger | Effect |
 |---|---|
-| App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with a seeded empty condition (or the kept query, restored: "Saved query across the login/compliance redirect"). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
+| App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with the starting query, an empty group (or the kept query, restored: "Saved query across the login/compliance redirect"). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
+| User opens a field row (its empty slot, a dropped field), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.selectField` / `app.toggleFields` write `selectedField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
 | User presses **Previous** / **Next** in the Matching events card | `app.showEventPage(page)` → `preview.page` (clamped by `pageOf`; the same page is a no-op), announced ("Showing results 101 to 200 of 1,987.", numbers in the viewer's format). Only the preview panel repaints; the focus stays on the pressed button (its own `data-action`). At the ends the button is `aria-disabled="true"`, not `disabled`, so it keeps the focus; its click does nothing. |
@@ -651,12 +648,12 @@ binding its Fomantic dropdowns must always happen together.
 | User changes the databases | `app.onDatabasesChange`: exactly like a query edit (the same selection in another order is not a change). |
 | User presses **Deselect failing (N)** in the database picker | `onDatabasesChange` with the selection minus the marked databases: a database change like any other. The button and the markers go with the old results; the focus lands on **All**. |
 | User presses **Group contents** or **Ungroup** | `groupContents` / `ungroup` (`tree.ts`) → `app.onQueryChange` like any edit: the tree changes shape, so `changeScope` resets and refetches although the meaning is the same. Success clears an older `dropNotice`. A refused Ungroup changes no query: `app.showNotice` puts the reason in `dropNotice` (and announces it). |
-| User presses **Start fresh** in the Restored notice | `app.startFresh` → `changeScope` with the starting query (one blank row), every database, fresh `issues` and no `openSaved`, then "Started a fresh query." is announced: like any edit, so `restoredNotice` goes and the kept query is now the blank start, which the next load won't bring back. |
+| User presses **Start fresh** in the Restored notice | `app.startFresh` → `changeScope` with the starting query (an empty group), every database, fresh `issues` and no `openSaved`, then "Started a fresh query." is announced: like any edit, so `restoredNotice` goes and the kept query is now the empty start, which the next load won't bring back. |
 | User presses **Try again** in the statistics column | `app.retryStats` → the debounced stats fetch for the same query and scope; it replaces the failed request in the stats slot. Nothing else is reset. |
 | User opens a saved query (**Open**, after "Replace the current query?" if asked) | `openSavedQuery` → `changeScope` with the saved `query`, the databases that still exist, fresh `issues` and `openSaved`, and the dialog closed, in one `setState`: like any edit, so the old statistics and preview go and new ones are fetched. Databases left out are said in `dropNotice`. |
 | User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `savedListNotice`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
 | Five clicks on the logo | `easterEgg` flips → only the mascot repaints (`setMascot`); the rain or toast is started by `main.ts` (`easterEggReaction`). |
-| User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (or, over a lone blank row, put in its place; a moved node too) and goes through `onQueryChange` like any edit; what can't is explained in `dropNotice`. |
+| User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (`dropItem`: a new facet block, a value in an unset row of the target block, or a group of blocks for a tag) and goes through `onQueryChange` like any edit; the row a drop is about becomes `selectedField`; what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
 
 ### Keyboard focus across repaints
@@ -685,7 +682,7 @@ control had focus before it repaints and focuses the same control afterwards.
   account action that rebuilt the menu closed), the focus goes to the nearest
   `data-focus-landing`: one in the control's own row or group, then in each
   group around it, then one outside every row and group. The landings are a
-  group's **+ Condition** (after a row's or sub-group's ✕: the user stays in
+  group's **+ Group** (after a block's or sub-group's ✕: the user stays in
   that group, and not on a neighbour's ✕, where a second Enter would delete
   something else), the query card (after the warning's ✕), the Matching
   events card (after **Run query**, through the loader to the result), the
@@ -1050,7 +1047,7 @@ specs in `docs/superpowers/specs/`.
 
 ### Saved queries
 
-Until plan A2, the code this section describes lives in `src/query/legacy/` and `src/api/legacy/` (e.g. `legacy/saved.ts`, `legacy/request.ts`, `legacy/savedResponse.ts`). The files at the paths named below hold the new facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md), which nothing uses yet.
+Since plan A2, Task 3, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md) at the paths named below; nothing outside `src/query/legacy/` and `src/api/legacy/` imports those folders any more (only the mock server's shim for old condition nodes), and plan A2, Task 4 deletes them. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
 
 A logged-in user can save the query they are building, with the selected
 databases, a name and a short note, and open it again later. **Stored by the
@@ -1206,7 +1203,7 @@ This is the mock's reading; the real backend owns the rule.
 
 ### Wire format of the query
 
-Until plan A2, the code this section describes lives in `src/query/legacy/` and `src/api/legacy/` (e.g. `legacy/request.ts`). The files at the paths named below hold the new facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md), which nothing uses yet.
+Since plan A2, Task 3, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md) at the paths named below; nothing outside `src/query/legacy/` and `src/api/legacy/` imports those folders any more (only the mock server's shim for old condition nodes), and plan A2, Task 4 deletes them. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
 
 `/filter/validate` and `/filter/execute` take a `QueryRequest`
 (`src/api/types.ts`): `{ databases, query }`. `databases` holds the databases'
@@ -1267,7 +1264,7 @@ real backend should do the same.
 
 ## 8. The query model
 
-Until plan A2, the code this section describes lives in `src/query/legacy/` and `src/api/legacy/` (e.g. `legacy/tree.ts`, `legacy/validate.ts`). The files at the paths named below hold the new facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md), which nothing uses yet.
+Since plan A2, Task 3, the app runs on the facet-block model (docs/superpowers/specs/2026-10-27-facet-blocks-design.md) at the paths named below; nothing outside `src/query/legacy/` and `src/api/legacy/` imports those folders any more (only the mock server's shim for old condition nodes), and plan A2, Task 4 deletes them. Where this section still describes the old model, plan A2, Task 5 rewrites it; the code is right.
 
 `src/query/types.ts`: a query is a tree whose root is always a `Group`
 (`AND`/`OR` over its `children`); the leaves are `Condition`s (`facetId`,

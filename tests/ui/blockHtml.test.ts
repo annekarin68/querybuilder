@@ -1,8 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { blockHtml, footerHtml, groupHtml, type BlockCtx } from "../../src/ui/blockHtml";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
-import type { FacetBlock, Group } from "../../src/query/types";
+import {
+  emptyQuery,
+  groupOf,
+  newBlock,
+  newFieldCondition,
+  UNGROUP_BLOCKED_MESSAGE,
+} from "../../src/query/tree";
+import type { FacetBlock, Group, Issue } from "../../src/query/types";
 import type { Facet } from "../../src/model";
 
 const facets = [
@@ -31,7 +37,7 @@ describe("blockHtml", () => {
   it("draws a block: name, Has on, no ALL/ANY while fewer than two fields are set", () => {
     const b = newBlock("thing");
     const html = blockHtml(ctxFor({ ...emptyQuery(), children: [b] }), b, pos);
-    expect(html).toContain(`class="qb-block" data-node-id="${b.id}"`);
+    expect(html).toContain(`class="qb-block qb-block-and" data-node-id="${b.id}"`);
     expect(html).toContain('<span class="qb-block-name">Thing</span>');
     expect(html).toContain('data-action="set-has" aria-pressed="true"');
     expect(html).toContain('data-action="set-has-no" aria-pressed="false"');
@@ -54,6 +60,17 @@ describe("blockHtml", () => {
     expect(html).toContain("of the set fields match");
   });
 
+  // Its own ALL / ANY colour, not its group's: a green "ANY" would read as ALL.
+  it("takes the colour of its own ALL / ANY", () => {
+    const b: FacetBlock = { ...newBlock("thing"), operator: "OR" };
+    const q: Group = { ...emptyQuery(), children: [b] };
+    expect(blockHtml(ctxFor(q), b, pos)).toContain('class="qb-block qb-block-or"');
+    const folded = { ...b, collapsed: true };
+    expect(blockHtml(ctxFor(q), folded, pos)).toContain(
+      'class="qb-block qb-block-or is-collapsed"',
+    );
+  });
+
   it("folds to its head and the summary line", () => {
     const b: FacetBlock = {
       ...newBlock("thing"),
@@ -63,6 +80,10 @@ describe("blockHtml", () => {
     const html = blockHtml(ctxFor({ ...emptyQuery(), children: [b] }), b, pos);
     expect(html).toContain("is-collapsed");
     expect(html).toContain("Thing has size &gt; 40");
+    // Like a folded group's line, the whole head unfolds it on a click.
+    expect(html).toContain(
+      '<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand">',
+    );
     expect(html).not.toContain("qb-field-row");
   });
 });
@@ -92,5 +113,160 @@ describe("footerHtml", () => {
     );
     const q: Group = { ...emptyQuery(), children: [newBlock("thing")] };
     expect(footerHtml(q, [], catalog)).toContain("Thing present");
+  });
+
+  it("counts the parts with an issue, not the issues", () => {
+    const root = emptyQuery();
+    const query: Group = { ...root, children: [newBlock("thing"), newBlock("thing")] };
+    const issue = (nodeId: string): Issue => ({ nodeId, message: "m", kind: "invalid" });
+    expect(footerHtml(query, [issue(root.id), issue(root.id)], catalog)).toContain(
+      "1 part of the query still needs attention.",
+    );
+    expect(footerHtml(query, [issue(root.id), issue("c")], catalog)).toContain(
+      "2 parts of the query still need attention.",
+    );
+  });
+});
+
+// The tests below came from the builder before facet blocks (queryBuilder.ts
+// drew groups then); the group's markup moved here unchanged.
+
+describe("group collapse controls", () => {
+  const group = { ...emptyQuery(), id: "g-inner", children: [newBlock("thing")] };
+  const ctx = ctxFor(emptyQuery());
+
+  it("a collapsed group's whole header expands it, and says so", () => {
+    const html = groupHtml(ctx, { ...group, collapsed: true }, false);
+    const head = html.slice(html.indexOf('<div class="qb-group-head'), html.indexOf("</div>"));
+    expect(head).toContain('data-action="toggle-collapse"');
+    expect(head).toContain('title="Click to expand"');
+  });
+
+  it("an open group's header is not itself a toggle", () => {
+    const html = groupHtml(ctx, group, false);
+    const head = html.slice(html.indexOf('<div class="qb-group-head'), html.indexOf("</div>"));
+    expect(head).not.toContain('class="qb-group-head" data-action');
+    // the only toggle in an open header is the chevron button itself
+    expect(head.match(/data-action="toggle-collapse"/g)).toHaveLength(1);
+    expect(head).toContain('class="qb-icon-btn qb-collapse-btn" data-action="toggle-collapse"');
+  });
+});
+
+describe("node grips", () => {
+  const block = newBlock("thing");
+  const group = { ...emptyQuery(), id: "g-inner", children: [block] };
+  const ctx = ctxFor(emptyQuery());
+  const GROUP_GRIP = 'qb-grip qb-grip-group" draggable="true" data-node-item="g-inner"';
+
+  it("a group's grip says it moves the whole group, in its own style", () => {
+    const html = groupHtml(ctx, group, false);
+    expect(html).toContain(GROUP_GRIP);
+    expect(html).toContain('title="Drag to move this group"');
+  });
+
+  it("a folded group keeps its grip", () => {
+    expect(groupHtml(ctx, { ...group, collapsed: true }, false)).toContain(GROUP_GRIP);
+  });
+
+  it("a block's grip says it moves one facet", () => {
+    const html = groupHtml(ctx, group, false);
+    expect(html).toContain(
+      `class="qb-grip qb-grip-facet" draggable="true" data-node-item="${block.id}"`,
+    );
+    expect(html).toContain('title="Drag to move this facet"');
+  });
+
+  it("the root group has no grip: it can't be moved", () => {
+    expect(groupHtml(ctx, { ...group, children: [] }, true)).not.toContain("qb-grip-group");
+  });
+});
+
+describe("Group contents and Ungroup buttons", () => {
+  const block = () => newBlock("thing");
+  const group = (id: string, operator: "AND" | "OR", children: Group["children"]): Group => ({
+    ...emptyQuery(),
+    id,
+    operator,
+    children,
+  });
+  /** The HTML of the header of the group `id` (up to the start of its children). */
+  const headOf = (root: Group, id: string, isRoot: boolean): string => {
+    const target = isRoot ? root : (root.children.find((c) => c.id === id) as Group);
+    const html = groupHtml(ctxFor(root), target, isRoot);
+    return html.slice(0, html.indexOf('<div class="qb-children">'));
+  };
+
+  it("a group with two items offers Group contents, with a tooltip", () => {
+    const root = group("r", "AND", [block(), block()]);
+    const head = headOf(root, "r", true);
+    expect(head).toContain('data-action="group-contents"');
+    expect(head).toContain("Group contents</button>");
+    expect(head).toContain(
+      'title="Put this group\'s facets and groups into a new group inside it"',
+    );
+  });
+
+  it("a group with one item offers no Group contents", () => {
+    const root = group("r", "AND", [block()]);
+    expect(headOf(root, "r", true)).not.toContain("group-contents");
+  });
+
+  it("the root group never offers Ungroup", () => {
+    const root = group("r", "AND", [block(), block()]);
+    expect(headOf(root, "r", true)).not.toContain('data-action="ungroup"');
+  });
+
+  it("a group that matches its parent's ALL/ANY can be ungrouped", () => {
+    const root = group("r", "AND", [group("g", "AND", [block(), block()])]);
+    const head = headOf(root, "g", false);
+    expect(head).toContain('data-action="ungroup"');
+    expect(head).not.toContain("aria-disabled");
+  });
+
+  it("a group that would change the meaning shows Ungroup as disabled, with the reason", () => {
+    const root = group("r", "AND", [group("g", "OR", [block(), block()])]);
+    const head = headOf(root, "g", false);
+    expect(head).toContain('data-action="ungroup"');
+    expect(head).toContain('aria-disabled="true"');
+    expect(head).toContain(`title="${UNGROUP_BLOCKED_MESSAGE}"`);
+  });
+
+  it("the action buttons share one box and the remove button comes last in it", () => {
+    const root = group("r", "AND", [group("g", "AND", [block(), block()])]);
+    const head = headOf(root, "g", false);
+    const actions = head.slice(head.indexOf('<span class="qb-group-actions">'));
+    expect(actions).toContain('data-part="add-facet"');
+    expect(actions.lastIndexOf('data-action="remove-node"')).toBeGreaterThan(
+      actions.lastIndexOf('data-action="ungroup"'),
+    );
+  });
+
+  it("a folded group shows neither button", () => {
+    const root = group("r", "AND", [{ ...group("g", "AND", [block(), block()]), collapsed: true }]);
+    const html = groupHtml(ctxFor(root), root.children[0] as Group, false);
+    expect(html).not.toContain("group-contents");
+    expect(html).not.toContain('data-action="ungroup"');
+  });
+});
+
+describe("Move up / Move down buttons", () => {
+  const ctx = ctxFor(emptyQuery());
+  const [a, b, c] = [newBlock("thing"), newBlock("thing"), newBlock("thing")];
+
+  it("every child of a group gets buttons that fit its place; the root gets none", () => {
+    const html = groupHtml(ctx, { ...emptyQuery(), children: [a, b, c] }, true);
+    expect(html.match(/data-action="move-up"/g)).toHaveLength(3);
+    expect(html.match(/data-action="move-down"/g)).toHaveLength(3);
+    expect(html.match(/data-action="move-up"[^>]* aria-disabled="true"/g)).toHaveLength(1);
+    expect(html.match(/data-action="move-down"[^>]* aria-disabled="true"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Move facet up"');
+  });
+
+  it("a nested group has its own buttons, open or folded", () => {
+    const inner = { ...emptyQuery(), id: "g-inner", children: [a] };
+    const place = { index: 2, count: 3 };
+    for (const g of [inner, { ...inner, collapsed: true }]) {
+      expect(groupHtml(ctx, g, false, place)).toContain('aria-label="Move group up"');
+    }
   });
 });

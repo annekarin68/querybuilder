@@ -14,11 +14,13 @@ import { initialState, type AppState } from "../../src/state";
 import {
   addChild,
   emptyQuery,
-  newCondition,
+  newBlock,
+  newFieldCondition,
   newGroup,
   updateNode,
-} from "../../src/query/legacy/tree";
-import { placeIssues } from "../../src/query/legacy/issues";
+} from "../../src/query/tree";
+import type { FacetBlock } from "../../src/query/types";
+import { placeIssues } from "../../src/query/issues";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { dbError, failed, ok } from "../statsFixtures";
 
@@ -130,13 +132,15 @@ describe("headlineHtml", () => {
 
 describe("statsPanelHtml", () => {
   const root = emptyQuery();
-  const condition = newCondition();
+  // The node a database's error points at: a set field of a block.
+  const condition = newFieldCondition("size", "gt", 3);
+  const block: FacetBlock = { ...newBlock("thing"), conditions: [condition] };
   const ready: AppState = {
     ...initialState,
     catalog: buildFieldCatalog([]),
     databases,
     selectedDatabaseIds: ["a", "b"],
-    query: addChild(root, root.id, condition),
+    query: addChild(root, root.id, block),
   };
 
   it("keeps showing the results, and where the problem is, while it blocks Run", () => {
@@ -156,6 +160,9 @@ describe("statsPanelHtml", () => {
   it("explains every other blocker instead of showing results", () => {
     expect(statsPanelHtml({ ...ready, selectedDatabaseIds: [] })).toContain(
       "Select at least one database to see statistics.",
+    );
+    expect(statsPanelHtml({ ...ready, query: emptyQuery() })).toContain(
+      "Add a facet to see statistics.",
     );
   });
 
@@ -236,7 +243,7 @@ describe("statsPanelHtml", () => {
 
     it("points Show problem at the collapsed group that hides the problem", () => {
       const inner = newGroup();
-      const query = addChild(addChild(root, root.id, inner), inner.id, condition);
+      const query = addChild(addChild(root, root.id, inner), inner.id, block);
       const collapsed = updateNode(query, inner.id, { collapsed: true }) as typeof query;
       const html = statsPanelHtml(withNodeError({ query: collapsed }));
       const placed = placeIssues(collapsed, [issue])[0]!.nodeId;

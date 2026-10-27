@@ -3,32 +3,30 @@ import type * as client from "./api/client";
 import { userMessage } from "./api/errorText";
 import type { Compliance, DatabaseResult, SavedQuery, SavedQueryDraft } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
-import { serverIssues } from "./query/legacy/issues";
+import { serverIssues } from "./query/issues";
 import {
-  addedNodesMessage,
+  dropItem,
+  dropMessage,
   dropNotice,
   movedMessage,
-  nodesForItem,
   reorderedMessage,
   type DragItem,
-} from "./query/legacy/drop";
+  type FieldRef,
+} from "./query/drop";
 import {
-  addChild,
   emptyQuery,
   findNode,
   moveNode,
   moveSibling,
-  newCondition,
-  placeNodes,
   positionOf,
   sameSemantics,
   sameTree,
   updateNode,
   type Direction,
-} from "./query/legacy/tree";
-import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/legacy/saved";
-import type { Group } from "./query/legacy/types";
-import { validateQuery } from "./query/legacy/validate";
+} from "./query/tree";
+import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/saved";
+import type { Group } from "./query/types";
+import { validateQuery } from "./query/validate";
 import {
   runBlocker,
   type AppState,
@@ -93,11 +91,11 @@ export interface AppDeps {
 /** How long the query must stay unchanged before statistics are fetched. */
 export const STATS_DEBOUNCE_MS = 400;
 
-/** The query a first visit starts with, and Start fresh puts back: one
- *  blank row, so the user can begin by choosing a facet. */
+/** The query a first visit starts with, and Start fresh puts back: an empty
+ *  group. It is "not finished", not invalid: the footer says "Add a facet to
+ *  start…" and "+ Facet" is right there (spec, section 3). */
 function startingQuery(): Group {
-  const root = emptyQuery();
-  return addChild(root, root.id, newCondition());
+  return emptyQuery();
 }
 
 /** The warning for databases a saved or kept selection named that no longer
@@ -363,19 +361,25 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     setNotice([message]);
   }
 
-  /** `tree` with the group `nodeId` expanded, if it is a collapsed group: so
-   *  the user sees what was just dropped into it. */
-  function openGroup(tree: Group, nodeId: string): Group {
-    const node = findNode(tree, nodeId);
-    return node?.kind === "group" && node.collapsed
+  /** `tree` with `nodeId` unfolded, if it is a folded group or block. */
+  function unfold(tree: Group, nodeId: string): Group {
+    return findNode(tree, nodeId)?.collapsed
       ? updateNode(tree, nodeId, { collapsed: false })
       : tree;
   }
 
+  /** `tree` with the group `nodeId` unfolded, if it is a folded group: so the
+   *  user sees what was just dropped into it. (A drop on a block lands before
+   *  it, so the block itself stays as it is.) */
+  function openGroup(tree: Group, nodeId: string): Group {
+    return findNode(tree, nodeId)?.kind === "group" ? unfold(tree, nodeId) : tree;
+  }
+
   /**
    * A docs item or a query node was dropped on `targetNodeId` (a group: it goes
-   * at the end; a condition: just before it). Nothing is dropped silently: what
-   * can't be done is explained in `dropNotice`.
+   * at the end; a facet block: just before it, or into it — see `dropItem`).
+   * Nothing is dropped silently: what can't be done is explained in
+   * `dropNotice`.
    */
   function onDropItem(item: DragItem | null, targetNodeId: string): void {
     const { query, facets, catalog } = store.getState();
@@ -400,7 +404,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       }
       setNotice([]);
       const next = openGroup(moved, targetNodeId);
-      // Dropped where it already was (say, the last row onto its own group):
+      // Dropped where it already was (say, the last block onto its own group):
       // nothing changed, so there is nothing to announce either.
       if (sameTree(next, query)) return;
       onQueryChange(next);
@@ -411,17 +415,50 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       setNotice(["The data dictionary is still loading; try again in a moment."]);
       return;
     }
-    const { nodes, problems } = nodesForItem(item, facets, catalog);
-    setNotice(problems);
-    if (nodes.length === 0) return;
-    // `placeNodes` puts the new nodes in place of a lone blank row (the starting
-    // query, or a new "+ Group"), else at the target like any drop.
-    onQueryChange(openGroup(placeNodes(query, targetNodeId, nodes), targetNodeId));
-    announce(addedNodesMessage(nodes));
+    const outcome = dropItem(query, item, targetNodeId, facets, catalog);
+    setNotice(outcome.problems);
+    // Refused: the query stays exactly as it was, folds included.
+    if (outcome.query === query && !outcome.select) return;
+    let next = openGroup(outcome.query, targetNodeId);
+    // The row the drop is about must be on screen: its block is unfolded, and
+    // the row is selected, which draws it open with its dropdowns so the user
+    // can go on with it. (A selected row is drawn even in a folded field list:
+    // see visibleFieldIds in ui/fieldRows.ts, so the list needs no unfolding.)
+    if (outcome.select) next = unfold(next, outcome.select.blockId);
+    if (next !== query) onQueryChange(next);
+    if (outcome.select) selectField(outcome.select);
+    const spoken = dropMessage(query, item, targetNodeId, outcome, catalog);
+    if (spoken) announce(spoken);
   }
 
-  /** The keyboard path: "Add to query" puts the item in the root group (or, if
-   *  that holds just a blank row, in its place); a tag's facets arrive as one group. */
+  /**
+   * The field row the user is working on (`AppState.selectedField`), or null
+   * for none. Not a query edit: the statistics stay, nothing is refetched.
+   */
+  function selectField(ref: FieldRef | null): void {
+    const current = store.getState().selectedField;
+    const same =
+      current === ref ||
+      (current !== null &&
+        ref !== null &&
+        current.blockId === ref.blockId &&
+        current.fieldId === ref.fieldId);
+    if (!same) store.setState({ selectedField: ref });
+  }
+
+  /** "+ N more fields" / "Show fewer fields" on block `blockId`. Display
+   *  state, like folding: not a query edit, never saved or sent. */
+  function toggleFields(blockId: string): void {
+    const { expandedBlockIds } = store.getState();
+    store.setState({
+      expandedBlockIds: expandedBlockIds.includes(blockId)
+        ? expandedBlockIds.filter((id) => id !== blockId)
+        : [...expandedBlockIds, blockId],
+    });
+  }
+
+  /** The keyboard path: "Add to query" puts the item at the end of the root
+   *  group; a tag's facets arrive as one group. */
   function onAddItem(item: DragItem): void {
     onDropItem(item, store.getState().query.id);
   }
@@ -507,7 +544,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     ]);
 
     const catalog = buildFieldCatalog(facets);
-    // A restored query replaces the normal seed (one empty condition).
+    // A restored query replaces the starting one (an empty group).
     const query = pending ? pending.query : startingQuery();
     // A restored selection may name databases that no longer exist (it can
     // outlive a backend change): keep only the ones this load knows, and say
@@ -522,8 +559,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       facets,
       selectedDatabaseIds,
       query,
-      // The seed bypasses onQueryChange, so validate here — otherwise Run
-      // would be enabled on the empty seeded condition.
+      // The first query bypasses onQueryChange, so validate here: a restored
+      // query may be unfinished, and Run must stay blocked then.
       issues: validateQuery(query, catalog),
       auth: user ? { status: "authenticated", user } : { status: "anonymous" },
       compliance,
@@ -532,7 +569,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (showRestored) announce(RESTORED_MESSAGE);
     setNotice(goneDatabasesMessage(gone, "selected"));
     // Fetch a restored query's statistics now, as any in-app edit would (an
-    // unfinished one fetches nothing). The empty seed has nothing runnable yet.
+    // unfinished one fetches nothing). The empty start has nothing to run yet.
     if (pending) refreshStats();
   }
 
@@ -843,6 +880,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onQueryChange,
     onDropItem,
     onAddItem,
+    selectField,
+    toggleFields,
     onMoveNode,
     dismissDropNotice,
     showNotice,

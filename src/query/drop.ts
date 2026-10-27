@@ -1,5 +1,5 @@
 import type { Facet } from "../model";
-import { findField, type FieldCatalog } from "./fieldCatalog";
+import { findFacet, findField, type FieldCatalog } from "./fieldCatalog";
 import {
   countBlocks,
   findNode,
@@ -189,6 +189,59 @@ export function addedNodesMessage(nodes: QueryNode[]): string {
     return `Added a group of ${facetCount(countBlocks(only))} to the query.`;
   }
   return `Added ${facetCount(nodes.length)} to the query.`;
+}
+
+/** What a screen reader hears after a value filled an unset row. */
+export function filledRowMessage(fieldName: string, value: string): string {
+  return `Set ${fieldName} to ${value}.`;
+}
+
+/** What a screen reader hears after a field was dropped on a block of its
+ *  facet: nothing was added, the cursor went to the field's row. */
+export function focusedRowMessage(fieldName: string, facetName: string): string {
+  return `Showing ${fieldName} in ${facetName}.`;
+}
+
+/** What a screen reader hears after a value was dropped on a row that is set
+ *  already: it arrived as a block of its own, because nothing the user chose
+ *  is overwritten. Says so, or the user would look for it in the row. */
+export function addedBesideMessage(fieldName: string): string {
+  return `Added 1 facet to the query, beside the one that already sets ${fieldName}.`;
+}
+
+/**
+ * What a screen reader hears after `item` was dropped on `targetId` of `query`
+ * (the query before the drop) and `dropItem` gave `outcome`. Null for a drop
+ * that did nothing: its problems are shown and spoken on their own.
+ */
+export function dropMessage(
+  query: Group,
+  item: Exclude<DragItem, { type: "node" }>,
+  targetId: string,
+  outcome: DropOutcome,
+  catalog: FieldCatalog,
+): string | null {
+  const fieldName = (facetId: string, fieldId: string) =>
+    findField(catalog, facetId, fieldId)?.fieldName ?? fieldId;
+  if (outcome.added.length > 0) {
+    const target = findNode(query, targetId);
+    const hitSetRow =
+      item.type === "value" &&
+      target?.kind === "facet" &&
+      target.facetId === item.facetId &&
+      target.conditions.some((c) => c.fieldId === item.fieldId);
+    return hitSetRow
+      ? addedBesideMessage(fieldName(item.facetId, item.fieldId))
+      : addedNodesMessage(outcome.added);
+  }
+  if (item.type === "value" && outcome.query !== query) {
+    return filledRowMessage(fieldName(item.facetId, item.fieldId), item.value);
+  }
+  if (item.type === "field" && outcome.select) {
+    const facetName = findFacet(catalog, item.facetId)?.name ?? item.facetId;
+    return focusedRowMessage(fieldName(item.facetId, item.fieldId), facetName);
+  }
+  return null;
 }
 
 /** What a screen reader hears after the builder's own "+ Group". */

@@ -9,7 +9,7 @@ import {
   valuesHeadingId,
 } from "../../src/ui/docsSidebar";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { parseDragItem } from "../../src/query/legacy/drop";
+import { parseDragItem } from "../../src/query/drop";
 import { TEXT_SOURCES } from "../../src/config";
 import type { Facet } from "../../src/model";
 

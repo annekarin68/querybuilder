@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  addedBesideMessage,
   addedNodesMessage,
   dropItem,
+  dropMessage,
+  filledRowMessage,
+  focusedRowMessage,
   movedMessage,
   parseDragItem,
   reorderedMessage,
@@ -158,5 +162,61 @@ describe("messages", () => {
     expect(reorderedMessage("facet", "up", { index: 1, count: 3 })).toBe(
       "Moved the facet up, to position 1 of 3.",
     );
+  });
+});
+
+describe("what a drop that adds no block says", () => {
+  it("says which row a value filled", () => {
+    expect(filledRowMessage("size", "3")).toBe("Set size to 3.");
+  });
+
+  it("says which row a field dropped on its block put the cursor in", () => {
+    expect(focusedRowMessage("size", "Thing")).toBe("Showing size in Thing.");
+  });
+
+  it("explains why a value for a set row arrived as a new block", () => {
+    expect(addedBesideMessage("size")).toBe(
+      "Added 1 facet to the query, beside the one that already sets size.",
+    );
+  });
+});
+
+describe("dropMessage", () => {
+  const say = (query: Group, item: Parameters<typeof dropItem>[1], targetId: string) =>
+    dropMessage(query, item, targetId, dropItem(query, item, targetId, facets, catalog), catalog);
+
+  it("counts what was added", () => {
+    const q = emptyQuery();
+    expect(say(q, { type: "facet", facetId: "thing" }, q.id)).toBe("Added 1 facet to the query.");
+  });
+
+  it("names the row a value filled", () => {
+    const { query, block } = withBlock();
+    const item = { type: "value", facetId: "thing", fieldId: "size", value: "3" } as const;
+    expect(say(query, item, block.id)).toBe("Set size to 3.");
+  });
+
+  it("names the row and facet a field drop focused", () => {
+    const { query, block } = withBlock();
+    expect(say(query, { type: "field", facetId: "thing", fieldId: "size" }, block.id)).toBe(
+      "Showing size in Thing.",
+    );
+  });
+
+  it("says why a value for a set row is a block of its own", () => {
+    const block: FacetBlock = {
+      ...newBlock("thing"),
+      conditions: [newFieldCondition("size", "gt", 1)],
+    };
+    const query: Group = { ...emptyQuery(), children: [block] };
+    const item = { type: "value", facetId: "thing", fieldId: "size", value: "4" } as const;
+    expect(say(query, item, block.id)).toBe(
+      "Added 1 facet to the query, beside the one that already sets size.",
+    );
+  });
+
+  it("says nothing for a refused drop (its problem is shown and spoken instead)", () => {
+    const q = emptyQuery();
+    expect(say(q, { type: "facet", facetId: "nope" }, q.id)).toBeNull();
   });
 });

@@ -260,3 +260,29 @@ export interface SavedFieldCondition {
   operator_id: string | null;
   value: SavedValue;
 }
+
+// ---- saved queries (GET/POST …/filter/saved, PUT/DELETE …/filter/saved/{id}) --
+
+/**
+ * A saved query as stored by the backend: the query as the user left it,
+ * finished or not (docs/ARCHITECTURE.md, "Saved queries"). The backend checks
+ * the shape only, never the meaning. Built by `toSavedQueryRequest`
+ * (src/api/request.ts).
+ */
+export interface SavedQueryRequest {
+  /** 1–80 characters after trimming; unique per user, ignoring case. */
+  name: string;
+  /** 0–80 characters; "" for none. A few words to recognise the query by. */
+  note: string;
+  /** `DatabasesResponse.label` of each selected database. May be empty. */
+  databases: string[];
+  /** The draft tree. Its root is always a group. */
+  query: SavedGroup;
+}
+
+export interface SavedQueryResponse extends SavedQueryRequest {
+  /** Made by the server. Not a `label`: it names a user's own record, not backend data. */
+  id: string;
+  /** ISO 8601 UTC. */
+  updated_at: string;
+}

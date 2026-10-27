@@ -22,6 +22,9 @@ const IDENTIFYING_ATTRIBUTES = [
   // Every result's id button shares its `data-action`; its event id tells
   // them apart.
   "data-event-id",
+  // The same for a facet block's unset rows: each one's button edits a field
+  // (`data-action="edit-field"`), and its field id says which.
+  "data-field-id",
   "data-action",
   "data-db-id",
   "data-db-all",

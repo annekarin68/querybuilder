@@ -57,6 +57,13 @@ describe("controlOf (which control an element is, in words that survive a repain
     expect(sameControl(controlOf(collapse), controlOf(expand))).toBe(true);
   });
 
+  it("tells a facet block's unset rows apart by their field, though all edit a field", () => {
+    const a = controlOf(el("BUTTON", { "data-action": "edit-field", "data-field-id": "a" }));
+    const b = controlOf(el("BUTTON", { "data-action": "edit-field", "data-field-id": "b" }));
+    expect(a?.attribute).toBe("data-field-id");
+    expect(sameControl(a, b)).toBe(false);
+  });
+
   it("tells the results' id buttons apart by their event id", () => {
     expect(controlOf(el("BUTTON", { "data-action": "open-event", "data-event-id": "e7" }))).toEqual(
       {

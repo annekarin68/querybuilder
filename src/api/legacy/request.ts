@@ -1,18 +1,8 @@
-import type {
-  QueryRequest,
-  RequestCondition,
-  RequestGroup,
-  RequestNode,
-  SavedCondition,
-  SavedGroup,
-  SavedNode,
-  SavedQueryRequest,
-} from "./types";
-import type { RequestScalar, RequestValue, SavedValue } from "../types";
-import type { SavedQueryDraft } from "../../model";
+import type { QueryRequest, RequestCondition, RequestGroup, RequestNode } from "./types";
+import type { RequestScalar, RequestValue } from "../types";
 import type { Condition, Group, QueryNode } from "../../query/legacy/types";
 
-// Both builders below write the wire's snake_case keys (`facet_id`) from the
+// The builder below writes the wire's snake_case keys (`facet_id`) from the
 // model's camelCase properties (`facetId`): this file is where the two meet.
 
 /**
@@ -58,50 +48,5 @@ function valueOf(c: Condition): RequestValue {
   const v = c.value;
   if (v === null || isScalar(v)) return v;
   if (Array.isArray(v) && v.every(isScalar)) return [...v];
-  throw new Error(`Condition ${c.id} has a value that cannot be sent.`);
-}
-
-// ---- saved queries ------------------------------------------------------------
-
-/**
- * The body of POST/PUT …/filter/saved (docs/ARCHITECTURE.md, "Saved queries").
- * Unlike `toQueryRequest` it accepts a half-built query: blank conditions, a
- * missing operator, a from–to pair with one end empty, an empty group. The
- * backend checks the shape only, so a bug in our own validation can never stop
- * a user saving their work. Only display state (`collapsed`) is left out, and
- * name and note are trimmed. It still throws on a value that is not JSON
- * (text, numbers, true/false, nulls): that is a bug, not a user mistake.
- */
-export function toSavedQueryRequest(draft: SavedQueryDraft): SavedQueryRequest {
-  return {
-    name: draft.name.trim(),
-    note: draft.note.trim(),
-    databases: [...draft.databaseIds],
-    query: savedGroupOf(draft.query),
-  };
-}
-
-function savedNodeOf(node: QueryNode): SavedNode {
-  return node.kind === "group" ? savedGroupOf(node) : savedConditionOf(node);
-}
-
-function savedGroupOf(g: Group): SavedGroup {
-  return { kind: "group", operator: g.operator, children: g.children.map(savedNodeOf) };
-}
-
-function savedConditionOf(c: Condition): SavedCondition {
-  return {
-    kind: "condition",
-    facet_id: c.facetId,
-    field_id: c.fieldId,
-    operator_id: c.operatorId,
-    value: savedValueOf(c),
-  };
-}
-
-function savedValueOf(c: Condition): SavedValue {
-  const v = c.value;
-  if (v === null || isScalar(v)) return v;
-  if (Array.isArray(v) && v.every((item) => item === null || isScalar(item))) return [...v];
   throw new Error(`Condition ${c.id} has a value that cannot be sent.`);
 }

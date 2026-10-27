@@ -345,6 +345,29 @@ describe("saved queries (…/filter/saved)", () => {
     expect(notJson.status).toBe(400);
   });
 
+  it("refuses a query in the shape before facet blocks with a 400 naming where", async () => {
+    // Old queries are not migrated (spec, decision 9): a condition directly in
+    // a group is no longer a saved node.
+    const oldShape = {
+      kind: "group",
+      operator: "AND",
+      children: [
+        {
+          kind: "condition",
+          facet_id: "thing",
+          field_id: null,
+          operator_id: "present",
+          value: null,
+        },
+      ],
+    };
+    const res = await send("POST", url, loggedIn(), { ...unfinishedRequest, query: oldShape });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'query.children[0].kind must be "group" or "facet".',
+    });
+  });
+
   it("does not answer other methods on an id path", async () => {
     const res = await send("GET", `${url}/sq-1`, loggedIn());
     expect(res.status).toBe(404);

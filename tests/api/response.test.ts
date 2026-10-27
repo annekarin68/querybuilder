@@ -7,23 +7,23 @@ import {
   toEvent,
   toFacet,
   toField,
+  toSavedQuery,
   toUser,
 } from "../../src/api/response";
-import { toSavedQuery } from "../../src/api/legacy/savedResponse";
-import { toSavedQueryRequest } from "../../src/api/legacy/request";
+import { toSavedQueryRequest } from "../../src/api/request";
 import {
   unfinishedDraft,
   unfinishedResponse,
   unfinishedTree,
   withoutNodeIds,
 } from "../savedQueryFixtures";
-import type { Group, QueryNode } from "../../src/query/legacy/types";
-import type { SavedQueryResponse } from "../../src/api/legacy/types";
+import type { Group, QueryNode } from "../../src/query/types";
 import type {
   DatabasesResponse,
   EventResponse,
   IndividualFieldResponse,
   IndividualResponse,
+  SavedQueryResponse,
   StatsResponse,
   UserResponse,
 } from "../../src/api/types";
@@ -431,34 +431,36 @@ describe("toSavedQuery", () => {
     expect(withoutNodeIds(back.query)).toEqual(withoutNodeIds(unfinishedTree));
   });
 
-  /** Every node id in `node`, depth first. */
+  /** Every node id in `node` (groups, blocks and their field conditions), depth first. */
   const nodeIds = (node: QueryNode): string[] =>
-    node.kind === "group" ? [node.id, ...node.children.flatMap(nodeIds)] : [node.id];
+    node.kind === "group"
+      ? [node.id, ...node.children.flatMap(nodeIds)]
+      : [node.id, ...node.conditions.map((c) => c.id)];
 
   it("gives every node a fresh id of its own, each time it is read", () => {
     const first = nodeIds(toSavedQuery(read(unfinishedResponse)).query);
     const second = nodeIds(toSavedQuery(read(unfinishedResponse)).query);
-    expect(first).toHaveLength(5);
-    expect(new Set([...first, ...second]).size).toBe(10);
+    expect(first).toHaveLength(6);
+    expect(new Set([...first, ...second]).size).toBe(12);
   });
 
   it.each([
     ["text ids (saved by an older build)", "g1", "c1"],
     ["number ids", 1, 2],
     ["the same id twice", "x", "x"],
-  ])("opens a query whose stored nodes carry %s, and ignores them", (_label, groupId, condId) => {
+  ])("opens a query whose stored nodes carry %s, and ignores them", (_label, groupId, blockId) => {
     const stored = {
       ...unfinishedResponse,
       query: {
         ...unfinishedResponse.query,
         id: groupId,
-        children: [{ ...unfinishedResponse.query.children[2], id: condId }],
+        children: [{ ...unfinishedResponse.query.children[1], id: blockId }],
       },
     };
     const query = toSavedQuery(readBroken<SavedQueryResponse>(stored)).query;
     expect(nodeIds(query)).not.toContain(groupId);
-    expect(nodeIds(query)).not.toContain(condId);
-    expect(query.children[0]).toMatchObject({ facetId: "thing", value: [3, null] });
+    expect(nodeIds(query)).not.toContain(blockId);
+    expect(query.children[0]).toMatchObject({ facetId: "thing", negated: true });
   });
 
   it("ignores keys it does not know, on the saved query and on its nodes", () => {
@@ -512,8 +514,8 @@ describe("toSavedQuery", () => {
 
   it.each([
     [
-      "a root that is a condition",
-      { query: { ...unfinishedResponse.query, kind: "condition" } },
+      "a root that is a facet block",
+      { query: { ...unfinishedResponse.query, kind: "facet" } },
       '"query.kind" should be "group"',
     ],
   ])("throws a ContractError for %s", (_label, patch, message) => {
@@ -525,7 +527,14 @@ describe("toSavedQuery", () => {
     [
       "a kind that is neither",
       { kind: "other" },
-      '"query.children[0].kind" should be "group" or "condition", but it is the text "other".',
+      '"query.children[0].kind" should be "group" or "facet", but it is the text "other".',
+    ],
+    [
+      // A query saved before facet blocks: a condition directly in a group.
+      // Old queries are not migrated (spec, decision 9).
+      "the old shape, a condition in a group",
+      { kind: "condition" },
+      '"query.children[0].kind" should be "group" or "facet", but it is the text "condition".',
     ],
     [
       "a facet_id that is a number",
@@ -533,14 +542,40 @@ describe("toSavedQuery", () => {
       '"query.children[0].facet_id" should be non-blank text, but',
     ],
     [
-      "an operator_id that is a list",
-      { operator_id: [] },
-      '"query.children[0].operator_id" should be non-blank text, but',
+      "negated that is not true or false",
+      { negated: "no" },
+      '"query.children[0].negated" should be',
     ],
-    ["a value that is an object", { value: { from: 1 } }, '"query.children[0].value" should be'],
-    ["a value list holding an object", { value: [1, {}] }, '"query.children[0].value" should be'],
   ])("throws a ContractError for a node with %s", (_label, patch, message) => {
     const broken = readBroken<SavedQueryResponse>(withFirstChild(patch));
+    expect(() => toSavedQuery(broken)).toThrow(ContractError);
+    expect(() => toSavedQuery(broken)).toThrow(message);
+  });
+
+  it.each([
+    [
+      "an operator_id that is a list",
+      { operator_id: [] },
+      '"query.children[0].conditions[0].operator_id" should be non-blank text, but',
+    ],
+    [
+      "a value that is an object",
+      { value: { from: 1 } },
+      '"query.children[0].conditions[0].value" should be',
+    ],
+    [
+      "a value list holding an object",
+      { value: [1, {}] },
+      '"query.children[0].conditions[0].value" should be',
+    ],
+  ])("throws a ContractError for a field condition with %s", (_label, patch, message) => {
+    const block = unfinishedResponse.query.children[1]!;
+    const broken = readBroken<SavedQueryResponse>(
+      withFirstChild({
+        ...block,
+        conditions: [{ ...(block.kind === "facet" ? block.conditions[0] : {}), ...patch }],
+      }),
+    );
     expect(() => toSavedQuery(broken)).toThrow(ContractError);
     expect(() => toSavedQuery(broken)).toThrow(message);
   });
@@ -593,13 +628,16 @@ describe("toSavedQuery", () => {
           {
             kind: "group",
             operator: "OR",
-            children: [unfinishedResponse.query.children[2]],
+            children: [unfinishedResponse.query.children[1]],
           },
         ],
       },
     };
     const inner = toSavedQuery(readBroken<SavedQueryResponse>(deep)).query.children[0] as Group;
     expect(inner).toMatchObject({ kind: "group", operator: "OR" });
-    expect(inner.children[0]).toMatchObject({ fieldId: "size", value: [3, null] });
+    expect(inner.children[0]).toMatchObject({
+      kind: "facet",
+      conditions: [{ fieldId: "size" }, { fieldId: "label", value: [3, null] }],
+    });
   });
 });

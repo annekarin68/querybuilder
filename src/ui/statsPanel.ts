@@ -1,7 +1,7 @@
 import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../state";
 import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
-import { placeIssues } from "../query/legacy/issues";
+import { placeIssues } from "../query/issues";
 import { failureReasons, queryIsAtFault } from "./databasePicker";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
@@ -238,7 +238,7 @@ const placeholder = (text: string) => `<p class="qb-placeholder">${escapeHtml(te
 /** Why the statistics column is empty (see `runBlocker`). */
 const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading" | "rejected">, string> = {
   "no-database": "Select at least one database to see statistics.",
-  "no-condition": "Add a condition to see statistics.",
+  "no-facet": "Add a facet to see statistics.",
   unfinished: "Finish the query to see statistics.",
 };
 

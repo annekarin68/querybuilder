@@ -1,5 +1,9 @@
-import type { SavedNode, SavedQueryRequest, SavedQueryResponse } from "../src/api/legacy/types";
-import type { SavedValue, UserResponse } from "../src/api/types";
+import type {
+  SavedQueryRequest,
+  SavedQueryResponse,
+  SavedValue,
+  UserResponse,
+} from "../src/api/types";
 import { isObject, isScalar } from "./requestBody";
 import { pathBelow } from "./paths";
 
@@ -156,33 +160,49 @@ const isNonBlankStringOrNull = (v: unknown) => v === null || isNonBlankString(v)
 /**
  * What is wrong with `node` as a SavedNode, or null if nothing is. Like
  * `queryProblem` (requestBody.ts) but for a draft: a group may be empty, and a
- * condition's ids and value may be null. `at` names the node, e.g.
+ * field condition's operator and value may be null. `at` names the node, e.g.
  * "query.children[1]". Nodes have no ids (the frontend makes fresh ones when
  * it reads the tree back), so an `id` left in by an older build is not
- * checked. The first problem found wins.
+ * checked. A query saved before facet blocks (a condition directly in a
+ * group) is refused here, naming where: old queries are not migrated (spec,
+ * decision 9). The first problem found wins.
  */
 function savedTreeProblem(node: unknown, at: string, isRoot = false): string | null {
   if (!isObject(node)) return `${at} must be an object.`;
   if (isRoot && node.kind !== "group") return `${at}.kind must be "group".`;
-  if (node.kind !== "group" && node.kind !== "condition") {
-    return `${at}.kind must be "group" or "condition".`;
+  if (node.kind !== "group" && node.kind !== "facet") {
+    return `${at}.kind must be "group" or "facet".`;
+  }
+  if (node.operator !== "AND" && node.operator !== "OR") {
+    return `${at}.operator must be "AND" or "OR".`;
   }
   if (node.kind === "group") {
-    if (node.operator !== "AND" && node.operator !== "OR") {
-      return `${at}.operator must be "AND" or "OR".`;
-    }
     if (!Array.isArray(node.children)) return `${at}.children must be a list.`;
-    for (const [i, child] of (node.children as SavedNode[]).entries()) {
+    for (const [i, child] of node.children.entries()) {
       const problem = savedTreeProblem(child, `${at}.children[${i}]`);
       if (problem) return problem;
     }
     return null;
   }
-  for (const key of ["facet_id", "field_id", "operator_id"] as const) {
-    if (!isNonBlankStringOrNull(node[key]))
-      return `${at}.${key} must be a non-blank string or null.`;
+  if (!isNonBlankString(node.facet_id)) return `${at}.facet_id must be a non-blank string.`;
+  if (typeof node.negated !== "boolean") return `${at}.negated must be true or false.`;
+  if (!Array.isArray(node.conditions)) return `${at}.conditions must be a list.`;
+  for (const [i, c] of node.conditions.entries()) {
+    const problem = savedConditionProblem(c, `${at}.conditions[${i}]`);
+    if (problem) return problem;
   }
-  if (!isSavedValue(node.value)) {
+  return null;
+}
+
+/** What is wrong with `c` as a SavedFieldCondition (a set field of a block), or null. */
+function savedConditionProblem(c: unknown, at: string): string | null {
+  if (!isObject(c)) return `${at} must be an object.`;
+  if (c.kind !== "condition") return `${at}.kind must be "condition".`;
+  if (!isNonBlankString(c.field_id)) return `${at}.field_id must be a non-blank string.`;
+  if (!isNonBlankStringOrNull(c.operator_id)) {
+    return `${at}.operator_id must be a non-blank string or null.`;
+  }
+  if (!isSavedValue(c.value)) {
     return `${at}.value must be null, a string, number or boolean, or a list of them (a list may hold nulls).`;
   }
   return null;

@@ -68,7 +68,7 @@ function runNote(state: AppState): string {
 /** Why Run is disabled (see `runBlocker`). */
 const BLOCKED_MESSAGES: Record<Exclude<RunBlocker, "loading">, string> = {
   "no-database": "Select at least one database, then run the query.",
-  "no-condition": "Add a condition, then run the query.",
+  "no-facet": "Add a facet, then run the query.",
   unfinished: "Finish the query to run it.",
   rejected: "A database found a problem in the query (shown above). Change the query to run it.",
 };

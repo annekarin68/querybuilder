@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toQueryRequest, toSavedTree } from "../../src/api/request";
+import { toQueryRequest, toSavedQueryRequest, toSavedTree } from "../../src/api/request";
+import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
 import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
 import type { FacetBlock, Group } from "../../src/query/types";
 
@@ -93,5 +94,38 @@ describe("toSavedTree", () => {
       ],
     });
     expect(JSON.stringify(toSavedTree(query))).not.toMatch(/"id"|collapsed/);
+  });
+});
+
+describe("toSavedQueryRequest", () => {
+  it("keeps every unfinished part, trims name and note, and leaves display state out", () => {
+    expect(toSavedQueryRequest(unfinishedDraft)).toEqual(unfinishedRequest);
+    expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft))).not.toContain("collapsed");
+  });
+
+  it("sends no node ids: they only live for one page load", () => {
+    expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft).query)).not.toContain('"id"');
+  });
+
+  it("does not change the draft it is given", () => {
+    const before = JSON.stringify(unfinishedDraft);
+    toSavedQueryRequest(unfinishedDraft);
+    expect(JSON.stringify(unfinishedDraft)).toBe(before);
+  });
+
+  it("sends a note of only spaces as an empty note", () => {
+    expect(toSavedQueryRequest({ ...unfinishedDraft, note: "   " }).note).toBe("");
+  });
+
+  it.each([
+    ["an object", { from: 1 }],
+    ["a list holding an object", [1, {}]],
+    ["undefined", undefined],
+  ])("throws on a value that is %s", (_label, value) => {
+    const bad: Group = {
+      ...emptyQuery(),
+      children: [{ ...newBlock("thing"), conditions: [newFieldCondition("size", "eq", value)] }],
+    };
+    expect(() => toSavedQueryRequest({ ...unfinishedDraft, query: bad })).toThrow(/cannot be sent/);
   });
 });

@@ -12,7 +12,7 @@
  * blank is "" (already trimmed), never missing.
  */
 
-import type { Group } from "./query/legacy/types";
+import type { Group } from "./query/types";
 
 /** A partition of the events the query can be scoped to. */
 export interface Database {
@@ -83,8 +83,8 @@ export interface DatabaseError {
   message: string;
   /** "incomplete": something is missing. "invalid": something can't work. */
   kind: "incomplete" | "invalid";
-  /** The `id` of the query node (group or condition) it is in, or null when
-   *  it is not in one place. */
+  /** The `id` of the query node (a group, a facet block or a field
+   *  condition) it is in, or null when it is not in one place. */
   nodeId: string | null;
 }
 

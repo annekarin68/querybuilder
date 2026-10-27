@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { fieldRowsHtml, visibleFieldIds } from "../../src/ui/fieldRows";
+import {
+  fieldRowsHtml,
+  NOT_FILTERED,
+  pickedOperatorId,
+  visibleFieldIds,
+} from "../../src/ui/fieldRows";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { newBlock, newFieldCondition } from "../../src/query/tree";
 import type { FacetBlock, FieldCondition } from "../../src/query/types";
@@ -50,7 +55,7 @@ describe("fieldRowsHtml", () => {
     const html = fieldRowsHtml(ctx, block("small"), false, null);
     expect(html).toContain('class="qb-field-row is-unset"');
     expect(html).toContain('<span class="qb-sr-only"> (not filtered)</span>');
-    expect(html).toContain('data-action="edit-field" aria-label="Filter on x"');
+    expect(html).toContain('data-action="edit-field" data-field-id="x" aria-label="Filter on x"');
     expect(html).not.toContain("<select");
     expect(html).not.toMatch(/any value/i);
   });
@@ -59,8 +64,10 @@ describe("fieldRowsHtml", () => {
     const c = newFieldCondition("a", "gt", 3);
     const html = fieldRowsHtml(ctx, block("thing", c), false, null);
     expect(html).toContain(`data-node-id="${c.id}"`);
+    // Not value="": Fomantic would make that option the placeholder and leave
+    // it out of the menu, so "Not filtered" could not be picked.
     expect(html).toContain(
-      'data-part="operator" aria-label="Operator for a"><option value="">Not filtered</option>',
+      `data-part="operator" aria-label="Operator for a"><option value="${NOT_FILTERED}">Not filtered</option>`,
     );
     expect(html).toContain('<option value="gt" selected>');
     expect(html).toContain('class="qb-value"');
@@ -71,6 +78,26 @@ describe("fieldRowsHtml", () => {
     expect(html).toContain('data-part="operator"');
     expect(html).not.toContain("is-unset");
     expect(html).not.toContain('class="qb-value"');
+  });
+
+  it("draws a set row without an operator as unfinished, never as Not filtered", () => {
+    const c = newFieldCondition("x", null, null);
+    const html = fieldRowsHtml(ctx, block("small", c), false, null);
+    // The empty option comes first, so it is what the row shows (Fomantic's
+    // placeholder); "Not filtered" stays in the menu to clear the field.
+    expect(html).toContain(
+      `aria-label="Operator for x"><option value="">Choose an operator…</option><option value="${NOT_FILTERED}">Not filtered</option>`,
+    );
+    expect(html).not.toMatch(/selected/);
+  });
+
+  it("shows an operator the field does not offer as chosen but not choosable", () => {
+    const c = newFieldCondition("x", "gt", 3); // a text field has no "Greater than"
+    const html = fieldRowsHtml(ctx, block("small", c), false, null);
+    expect(html).toContain(
+      `aria-label="Operator for x"><option value="gt" selected disabled>Greater than</option><option value="${NOT_FILTERED}">Not filtered</option>`,
+    );
+    expect(html.match(/ selected/g)).toHaveLength(1);
   });
 
   it("folds a large facet and says how many fields are hidden", () => {
@@ -101,5 +128,13 @@ describe("fieldRowsHtml", () => {
     expect(html).toContain(`data-node-id="${twice.id}"`);
     expect(html).toContain('data-action="remove-condition"');
     expect(html).toContain("Unknown field “gone”.");
+  });
+});
+
+describe("pickedOperatorId", () => {
+  it("reads Not filtered (and an empty choice) as no operator", () => {
+    expect(pickedOperatorId(NOT_FILTERED)).toBeNull();
+    expect(pickedOperatorId("")).toBeNull();
+    expect(pickedOperatorId("gt")).toBe("gt");
   });
 });

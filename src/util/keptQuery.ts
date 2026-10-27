@@ -1,4 +1,5 @@
-import type { Group, QueryNode } from "../query/legacy/types";
+import { countBlocks } from "../query/tree";
+import type { FieldCondition, Group, QueryNode } from "../query/types";
 
 /**
  * The **kept query** (docs/ARCHITECTURE.md, "Saved query across the
@@ -62,21 +63,39 @@ export function forgetKeptQuery(): void {
  * Structural check on a tree read back from storage. The entry may have been
  * written by an older build of the app (a deploy can land between two page
  * loads), so it is untrusted input — a malformed tree must be
- * dropped here rather than crash rendering or validation later.
+ * dropped here rather than crash rendering or validation later. A query in
+ * the shape before facet blocks (a condition directly in a group) fails here
+ * and is dropped once: old queries are not migrated (spec, decision 9).
  */
 function isQueryNode(v: unknown): v is QueryNode {
   if (!isObject(v) || typeof v.id !== "string") return false;
-  if (v.kind === "condition") {
-    // A condition's `value` is not checked here on purpose: `validateQuery`
-    // flags a bad one, and Run stays blocked, so it never reaches the request.
-    const nullableString = (x: unknown) => x === null || typeof x === "string";
-    return nullableString(v.facetId) && nullableString(v.fieldId) && nullableString(v.operatorId);
+  if (v.kind === "facet") {
+    return (
+      typeof v.facetId === "string" &&
+      typeof v.negated === "boolean" &&
+      (v.operator === "AND" || v.operator === "OR") &&
+      Array.isArray(v.conditions) &&
+      v.conditions.every(isFieldCondition)
+    );
   }
   return (
     v.kind === "group" &&
     (v.operator === "AND" || v.operator === "OR") &&
     Array.isArray(v.children) &&
     v.children.every(isQueryNode)
+  );
+}
+
+/** A set field of a block. Its `value` is not checked here on purpose:
+ *  `validateQuery` flags a bad one, and Run stays blocked, so it never
+ *  reaches the request. */
+function isFieldCondition(v: unknown): v is FieldCondition {
+  return (
+    isObject(v) &&
+    v.kind === "condition" &&
+    typeof v.id === "string" &&
+    typeof v.fieldId === "string" &&
+    (v.operatorId === null || typeof v.operatorId === "string")
   );
 }
 
@@ -107,12 +126,10 @@ export function readKeptQuery(): KeptQuery | null {
 }
 
 /**
- * Whether `query` holds anything the user chose: at least one row with a
- * facet, at any depth. The starting query (one blank row), blank rows and an
+ * Whether `query` holds anything the user chose: at least one facet block, at
+ * any depth. The starting query (an empty group), empty groups and an
  * ALL/ANY switch alone are not worth bringing back with a "Restored" notice.
  */
 export function isWorthRestoring(query: Group): boolean {
-  return query.children.some((node) =>
-    node.kind === "group" ? isWorthRestoring(node) : node.facetId !== null,
-  );
+  return countBlocks(query) > 0;
 }

@@ -1,5 +1,6 @@
-import type { Group, Issue } from "./query/legacy/types";
-import { countConditions, emptyQuery } from "./query/legacy/tree";
+import type { Group, Issue } from "./query/types";
+import { countBlocks, emptyQuery } from "./query/tree";
+import type { FieldRef } from "./query/drop";
 import type {
   Compliance,
   Database,
@@ -10,7 +11,7 @@ import type {
   User,
 } from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
-import type { OpenSaved } from "./query/legacy/saved";
+import type { OpenSaved } from "./query/saved";
 
 export type ActiveView = "filter" | "review" | "approval" | "done";
 
@@ -86,6 +87,14 @@ export interface AppState {
 
   /** The query tree. Its root is always a group. */
   query: Group;
+  /** The facet blocks whose folded fields are shown ("+ N more fields"
+   *  pressed). Display state: never saved or sent, and not part of `query`,
+   *  so opening it is not an edit (spec, section 3). */
+  expandedBlockIds: string[];
+  /** The field row the user is working on (clicked, dropped on, or opened
+   *  with its operator dropdown), or null. An unset selected row is drawn
+   *  with its dropdowns, so it can be filled in; Escape clears it. */
+  selectedField: FieldRef | null;
   issues: Issue[];
   /** The problems the backend found in the query on screen: the errors in
    *  `stats` that point at a node (src/query/issues.ts, serverIssues). Set by
@@ -139,6 +148,8 @@ export const initialState: AppState = {
   selectedDatabaseIds: [],
   activeView: "filter",
   query: emptyQuery(),
+  expandedBlockIds: [],
+  selectedField: null,
   issues: [],
   serverIssues: [],
   stats: { status: "idle", results: [] },
@@ -158,7 +169,7 @@ export const initialState: AppState = {
 };
 
 /** Why the current query/scope can't run yet, or null when it can. */
-export type RunBlocker = "loading" | "no-database" | "no-condition" | "unfinished" | "rejected";
+export type RunBlocker = "loading" | "no-database" | "no-facet" | "unfinished" | "rejected";
 
 export type RunInputs = Pick<
   AppState,
@@ -175,7 +186,7 @@ export type RunInputs = Pick<
 export function runBlocker(state: RunInputs): RunBlocker | null {
   if (!state.catalog) return "loading";
   if (state.selectedDatabaseIds.length === 0) return "no-database";
-  if (countConditions(state.query) === 0) return "no-condition";
+  if (countBlocks(state.query) === 0) return "no-facet";
   if (state.issues.length > 0) return "unfinished";
   // A database found a problem in a part of the query. Only Run is blocked:
   // the statistics that report it stay on screen, and a query or database

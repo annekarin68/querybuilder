@@ -9,6 +9,7 @@ import type {
   SavedFieldCondition,
   SavedGroup,
   SavedNode,
+  SavedQueryResponse,
   StatsErrorMessage,
   StatsResponse,
   UserResponse,
@@ -22,6 +23,7 @@ import type {
   EventRecord,
   Facet,
   Field,
+  SavedQuery,
   Scalar,
   User,
 } from "../model";
@@ -160,6 +162,24 @@ export function toUser(u: ResponseObject<UserResponse>): User {
 export function toCompliance(body: ResponseValue): Compliance {
   body.object<ComplianceLogResponse>();
   return { status: "acknowledged", log: body.formatted() };
+}
+
+/**
+ * A saved query. The tree is required data (a malformed one throws a
+ * ContractError naming the node, e.g. "query.children[0].kind"): loading half
+ * of a user's query would be worse than saying it cannot be read. The note is
+ * only shown, so a missing one becomes ""; the database ids are required like
+ * every id.
+ */
+export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery {
+  return {
+    id: q.id("id"),
+    name: q.id("name").trim(),
+    note: q.text("note"),
+    databaseIds: q.ids("databases"),
+    query: fromSavedTree(q.object<SavedGroup>("query")),
+    updatedAt: q.id("updated_at"),
+  };
 }
 
 /**
