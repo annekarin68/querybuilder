@@ -614,6 +614,11 @@ tests/                 One test file per source file it tests (tests/query/tree.
                        offlineCheck, thirdPartyNotices, themeContrast, noBackendDataInSrc and
                        api/mockContract; shared fixtures in dateCases, savedQueryFixtures and statsFixtures.
 scripts/check-offline.mjs  The offline guard ("Offline-first"); findOffOrigin(text) is pure and tested.
+scripts/dev-servers.mjs    `npm run servers -- start|stop`: a second pair of dev servers (app 5191, mock 3091)
+                           for browser checks, stopped by the process ids it saved in test-results/.
+scripts/browser.mjs    Browser-check helpers (Playwright, a dev dependency): open the app logged in, a realistic
+                       click (`press`), `measure`, and the console errors and failed requests seen.
+scripts/doc-section.mjs  `npm run doc -- "<heading>"`: print one section of this file (or `-- --list`).
 vite.config.ts         Dev proxy of the API prefix to DEV_BACKEND_URL, the offline plugins, emitting THIRD-PARTY-NOTICES.txt; stops if VITE_API_BASE or DEV_BACKEND_URL is missing.
 .env                   VITE_API_BASE — the API prefix, and with it the API version ("API contract");
                        DEV_BACKEND_URL — the backend the dev server proxies to ("Mock server").
@@ -628,7 +633,8 @@ vitest.config.ts       Vitest: tests/**/*.test.ts, Node environment (no DOM).
 .prettierrc.json       Prettier options (100 columns, double quotes, trailing commas).
 .prettierignore        What Prettier skips (docs/, README.md, build output, lock file).
 .claude/agents/        The subagents Claude Code dispatches for planned work: sdd-implementer and
-                       sdd-reviewer (narrow tool lists, Sonnet by default; CLAUDE.md says when).
+                       sdd-reviewer (narrow tool lists, Sonnet by default, the scripts above for browser
+                       checks; CLAUDE.md, "Subagents", says when).
 docs/
   ARCHITECTURE.md      This file.
   CHANGELOG.md         The archived design history (not updated any more).
