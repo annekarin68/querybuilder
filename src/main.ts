@@ -20,10 +20,17 @@ import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
 import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
-import { escapeClosesDocs, renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
+import {
+  createReturnFocus,
+  escapeClosesDocs,
+  KEEPS_FLOATING_DOCS_OPEN,
+  renderDocsSidebar,
+  wireDocsSidebar,
+} from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
-import { revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import { QUERY_BUILDER_KEYS, revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import { ABOUT_PANEL_KEYS, paintAboutPanels } from "./ui/aboutPanel";
 import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
@@ -74,7 +81,11 @@ shell.onMenu({
   view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
 });
-wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
+const docs = wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
+// The co-occurrence cell or box that last opened the dictionary: when the
+// user closes the dictionary straight after, the focus goes back there, not
+// to the rail (`createReturnFocus`).
+const returnFocus = createReturnFocus<HTMLElement>();
 wireDocsResize(shell.docsResizeHandle);
 wireDataPreview(panels.preview, {
   onRun: app.runPreview,
@@ -100,7 +111,18 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   onOpenSavedList: app.openSavedList,
   onStartFresh: app.startFresh,
   onDismissRestored: app.dismissRestoredNotice,
+  openFieldRow: app.openFieldRow,
+  toggleFields: app.toggleFields,
+  setPanelTab: app.setPanelTab,
+  selectFieldForPanel: app.selectFieldForPanel,
+  showFacetInDictionary: (facetId, returnFocusTo) => {
+    // The app unfolds the dictionary first: a folded one has no card to show.
+    if (app.showFacetInDictionary(facetId) && docs.showFacet(facetId)) {
+      returnFocus.remember(returnFocusTo);
+    }
+  },
 });
+
 wireSavedDialog(shell.savedDialog, app);
 wireEventDialog(shell.eventDialog, app.closeEvent);
 
@@ -114,27 +136,25 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
     keys: ["issues", "stats", "preview", "easterEgg"],
     run: (s) => shell.setMascot(mascotFor(s), s.easterEgg),
   },
-  { keys: ["sidebarCollapsed"], run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed) },
+  {
+    keys: ["sidebarCollapsed"],
+    run: (s) =>
+      shell.setSidebarCollapsed(s.sidebarCollapsed, s.sidebarCollapsed ? returnFocus.take() : null),
+  },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
     keys: ["databases", "selectedDatabaseIds", "stats"],
     run: (s) => renderDatabasePicker(panels.dbpicker, s),
   },
-  {
-    keys: [
-      "catalog",
-      "databases",
-      "query",
-      "issues",
-      "serverIssues",
-      "facets",
-      "dropNotice",
-      "restoredNotice",
-      "openSaved",
-      "selectedDatabaseIds",
-    ],
-    run: renderQueryBuilder,
-  },
+  // The builder's keys leave out `selectedField`: a field selected for the
+  // About panel repaints only those panels, after the builder, so a builder
+  // repaint in the same change has drawn them already.
+  { keys: QUERY_BUILDER_KEYS, run: renderQueryBuilder },
+  // It reads the state afresh rather than taking `s`: focusing a row selects
+  // its field (a nested setState), and that can happen inside the builder's
+  // repaint just above, when paint() puts the focus back. With `s` this row
+  // would then paint the older selection over the newer one.
+  { keys: ABOUT_PANEL_KEYS, run: () => paintAboutPanels(panels.center, store.getState()) },
   {
     keys: [
       "catalog",
@@ -193,8 +213,9 @@ const NARROW_SCREEN = "(max-width: 1100px)";
 if (window.matchMedia(NARROW_SCREEN).matches) store.setState({ sidebarCollapsed: true });
 
 // Escape closes the floating docs (only while focus is inside them, and not
-// when the search box just used it to clear its text), and
-// focus moves to the rail button so keyboard users are not left on a hidden panel.
+// when the search box just used it to clear its text). Folding them moves the
+// focus to the rail button, or back to the co-occurrence cell that opened
+// them (`setSidebarCollapsed`), so keyboard users are not left on a hidden panel.
 const docsColumn = root.querySelector<HTMLElement>("#qb-docs")!;
 document.addEventListener("keydown", (e) => {
   const closes = escapeClosesDocs({
@@ -206,20 +227,26 @@ document.addEventListener("keydown", (e) => {
   });
   if (!closes) return;
   store.setState({ sidebarCollapsed: true });
-  root.querySelector<HTMLElement>(".qb-docs-rail")?.focus();
+});
+
+// The focus going from the docs to anything outside them ends the round trip
+// from a co-occurrence cell (`createReturnFocus`). Null (the focus going
+// nowhere, as when the docs fold) does not count.
+docsColumn.addEventListener("focusout", (e) => {
+  const next = e.relatedTarget;
+  returnFocus.focusLeftDocs(next instanceof Node && !docsColumn.contains(next));
 });
 
 // A click anywhere else on the page also closes the floating docs, since they
 // cover the builder. Clicks inside the docs must not (that would break "+ Add"
-// and dragging), nor those on the rail or the Hide/Show buttons, which toggle
-// the docs themselves.
+// and dragging), nor those `KEEPS_FLOATING_DOCS_OPEN` lists (docsSidebar.ts
+// says why for each).
 document.addEventListener("click", (e) => {
   if (!window.matchMedia(NARROW_SCREEN).matches || store.getState().sidebarCollapsed) return;
   // composedPath() is fixed when the click starts, so it still says "inside the
   // docs" if a handler has already repainted the element that was clicked.
   const insideDocs = e.composedPath().includes(docsColumn);
-  const target = e.target as Element;
-  if (insideDocs || target.closest(".qb-docs-rail, [data-menu='toggle-sidebar']")) return;
+  if (insideDocs || (e.target as Element).closest(KEEPS_FLOATING_DOCS_OPEN)) return;
   store.setState({ sidebarCollapsed: true });
 });
 

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ContractError, ResponseValue } from "../../src/api/contract";
+import { ContractError, forgetWarnings, ResponseValue } from "../../src/api/contract";
 import {
   toCompliance,
   toDatabase,
+  countWithoutCoOccurrence,
+  pruneUnknownCoOccurrence,
   toDatabaseResult,
   toEvent,
   toFacet,
@@ -11,10 +13,13 @@ import {
   toUser,
 } from "../../src/api/response";
 import { toSavedQueryRequest } from "../../src/api/request";
-import { unfinishedDraft, unfinishedResponse, unfinishedTree } from "../savedQueryFixtures";
-import type { Group } from "../../src/query/types";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
-import { isEdited, type OpenSaved } from "../../src/query/saved";
+import {
+  unfinishedDraft,
+  unfinishedResponse,
+  unfinishedTree,
+  withoutNodeIds,
+} from "../savedQueryFixtures";
+import type { Group, QueryNode } from "../../src/query/types";
 import type {
   DatabasesResponse,
   EventResponse,
@@ -67,6 +72,7 @@ const wireDatabase = (over: Partial<DatabasesResponse> = {}): DatabasesResponse 
 });
 
 beforeEach(() => {
+  forgetWarnings();
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
@@ -404,14 +410,15 @@ describe("toSavedQuery", () => {
   });
 
   it("gives back the tree as the user left it, with database ids and no display state", () => {
-    expect(toSavedQuery(read(unfinishedResponse))).toEqual({
+    const saved = toSavedQuery(read(unfinishedResponse));
+    expect(saved).toMatchObject({
       id: "sq-1",
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedTree,
       updatedAt: "2026-10-08T09:30:00.000Z",
     });
+    expect(withoutNodeIds(saved.query)).toEqual(withoutNodeIds(unfinishedTree));
   });
 
   it("round-trips a draft: what is sent is what comes back", () => {
@@ -424,40 +431,39 @@ describe("toSavedQuery", () => {
     });
     // toEqual, not toMatchObject: a key added on the way (or one left in, like
     // the draft's `collapsed`) must fail the test.
-    expect(back.query).toEqual(unfinishedTree);
+    expect(withoutNodeIds(back.query)).toEqual(withoutNodeIds(unfinishedTree));
   });
 
-  it("opening what was just saved is not an edit (the real conversions, both ways)", () => {
-    // Built with the builder's own helpers, in the order the builder writes
-    // keys: isEdited compares trees with sameSemantics, which compares JSON
-    // text, so a conversion that wrote the keys in another order would make
-    // every opened query look edited.
-    const root = emptyQuery();
-    const facetLevel = { ...newCondition(), facetId: "thing", operatorId: "present" };
-    const between = { ...newCondition(), facetId: "thing", fieldId: "size", operatorId: "between" };
-    const folded = { ...newGroup(), operator: "OR" as const };
-    let query = addChild(root, root.id, facetLevel);
-    query = addChild(query, root.id, folded);
-    query = addChild(query, folded.id, between);
-    query = updateNode(query, between.id, { value: [3, 7] });
-    query = updateNode(query, folded.id, { collapsed: true });
-    const draft = { name: "Trips", note: "", databaseIds: ["alpha", "beta"], query };
+  /** Every node id in `node` (groups, blocks and their field conditions), depth first. */
+  const nodeIds = (node: QueryNode): string[] =>
+    node.kind === "group"
+      ? [node.id, ...node.children.flatMap(nodeIds)]
+      : [node.id, ...node.conditions.map((c) => c.id)];
 
-    const answer = {
-      ...toSavedQueryRequest(draft),
-      id: "sq-1",
-      updated_at: "2026-10-08T10:00:00Z",
+  it("gives every node a fresh id of its own, each time it is read", () => {
+    const first = nodeIds(toSavedQuery(read(unfinishedResponse)).query);
+    const second = nodeIds(toSavedQuery(read(unfinishedResponse)).query);
+    expect(first).toHaveLength(6);
+    expect(new Set([...first, ...second]).size).toBe(12);
+  });
+
+  it.each([
+    ["text ids (saved by an older build)", "g1", "c1"],
+    ["number ids", 1, 2],
+    ["the same id twice", "x", "x"],
+  ])("opens a query whose stored nodes carry %s, and ignores them", (_label, groupId, blockId) => {
+    const stored = {
+      ...unfinishedResponse,
+      query: {
+        ...unfinishedResponse.query,
+        id: groupId,
+        children: [{ ...unfinishedResponse.query.children[1], id: blockId }],
+      },
     };
-    // Through JSON text, as it travels.
-    const saved = toSavedQuery(read<SavedQueryResponse>(JSON.parse(JSON.stringify(answer))));
-    const open: OpenSaved = {
-      id: saved.id,
-      name: saved.name,
-      note: saved.note,
-      query: saved.query,
-      databaseIds: saved.databaseIds,
-    };
-    expect(isEdited(open, query, ["beta", "alpha"])).toBe(false);
+    const query = toSavedQuery(readBroken<SavedQueryResponse>(stored)).query;
+    expect(nodeIds(query)).not.toContain(groupId);
+    expect(nodeIds(query)).not.toContain(blockId);
+    expect(query.children[0]).toMatchObject({ facetId: "thing", negated: true });
   });
 
   it("ignores keys it does not know, on the saved query and on its nodes", () => {
@@ -475,10 +481,12 @@ describe("toSavedQuery", () => {
         })),
       },
     };
-    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras))).toEqual(
-      toSavedQuery(read(unfinishedResponse)),
-    );
-    expect(toSavedQuery(readBroken<SavedQueryResponse>(withExtras)).query).toEqual(unfinishedTree);
+    const saved = toSavedQuery(readBroken<SavedQueryResponse>(withExtras));
+    expect({ ...saved, query: null }).toEqual({
+      ...toSavedQuery(read(unfinishedResponse)),
+      query: null,
+    });
+    expect(withoutNodeIds(saved.query)).toEqual(withoutNodeIds(unfinishedTree));
   });
 
   it("trims a padded name", () => {
@@ -509,8 +517,8 @@ describe("toSavedQuery", () => {
 
   it.each([
     [
-      "a root that is a condition",
-      { query: { ...unfinishedResponse.query, kind: "condition" } },
+      "a root that is a facet block",
+      { query: { ...unfinishedResponse.query, kind: "facet" } },
       '"query.kind" should be "group"',
     ],
   ])("throws a ContractError for %s", (_label, patch, message) => {
@@ -522,7 +530,14 @@ describe("toSavedQuery", () => {
     [
       "a kind that is neither",
       { kind: "other" },
-      '"query.children[0].kind" should be "group" or "condition", but it is the text "other".',
+      '"query.children[0].kind" should be "group" or "facet", but it is the text "other".',
+    ],
+    [
+      // A query saved before facet blocks: a condition directly in a group.
+      // Old queries are not migrated (spec, decision 9).
+      "the old shape, a condition in a group",
+      { kind: "condition" },
+      '"query.children[0].kind" should be "group" or "facet", but it is the text "condition".',
     ],
     [
       "a facet_id that is a number",
@@ -530,19 +545,40 @@ describe("toSavedQuery", () => {
       '"query.children[0].facet_id" should be non-blank text, but',
     ],
     [
-      "a missing node id",
-      { id: undefined },
-      '"query.children[0].id" should be non-blank text, but it is missing.',
+      "negated that is not true or false",
+      { negated: "no" },
+      '"query.children[0].negated" should be',
     ],
+  ])("throws a ContractError for a node with %s", (_label, patch, message) => {
+    const broken = readBroken<SavedQueryResponse>(withFirstChild(patch));
+    expect(() => toSavedQuery(broken)).toThrow(ContractError);
+    expect(() => toSavedQuery(broken)).toThrow(message);
+  });
+
+  it.each([
     [
       "an operator_id that is a list",
       { operator_id: [] },
-      '"query.children[0].operator_id" should be non-blank text, but',
+      '"query.children[0].conditions[0].operator_id" should be non-blank text, but',
     ],
-    ["a value that is an object", { value: { from: 1 } }, '"query.children[0].value" should be'],
-    ["a value list holding an object", { value: [1, {}] }, '"query.children[0].value" should be'],
-  ])("throws a ContractError for a node with %s", (_label, patch, message) => {
-    const broken = readBroken<SavedQueryResponse>(withFirstChild(patch));
+    [
+      "a value that is an object",
+      { value: { from: 1 } },
+      '"query.children[0].conditions[0].value" should be',
+    ],
+    [
+      "a value list holding an object",
+      { value: [1, {}] },
+      '"query.children[0].conditions[0].value" should be',
+    ],
+  ])("throws a ContractError for a field condition with %s", (_label, patch, message) => {
+    const block = unfinishedResponse.query.children[1]!;
+    const broken = readBroken<SavedQueryResponse>(
+      withFirstChild({
+        ...block,
+        conditions: [{ ...(block.kind === "facet" ? block.conditions[0] : {}), ...patch }],
+      }),
+    );
     expect(() => toSavedQuery(broken)).toThrow(ContractError);
     expect(() => toSavedQuery(broken)).toThrow(message);
   });
@@ -590,19 +626,155 @@ describe("toSavedQuery", () => {
       ...unfinishedResponse,
       query: {
         kind: "group",
-        id: "g1",
         operator: "AND",
         children: [
           {
             kind: "group",
-            id: "g2",
             operator: "OR",
-            children: [{ ...unfinishedResponse.query.children[2], id: "c9" }],
+            children: [unfinishedResponse.query.children[1]],
           },
         ],
       },
     };
     const inner = toSavedQuery(readBroken<SavedQueryResponse>(deep)).query.children[0] as Group;
-    expect(inner.children[0]).toMatchObject({ id: "c9", value: [3, null] });
+    expect(inner).toMatchObject({ kind: "group", operator: "OR" });
+    expect(inner.children[0]).toMatchObject({
+      kind: "facet",
+      conditions: [{ fieldId: "size" }, { fieldId: "label", value: [3, null] }],
+    });
+  });
+});
+
+describe("toFacet: co-occurrence", () => {
+  const withCo = (co_occurrence: unknown) =>
+    toFacet(readBroken<IndividualResponse>({ ...wireFacet({ label: "a" }), co_occurrence }));
+
+  it("reads co-occurrence values as numbers, keeping the backend's text", () => {
+    const facet = withCo({ b: "12.5", c: "1.2e-20", a: "100" });
+    expect(facet.coOccurrence!.get("b")).toEqual({ text: "12.5", percent: 12.5, tooRare: false });
+    expect(facet.coOccurrence!.get("c")!.percent).toBeCloseTo(1.2e-20);
+    expect(facet.coOccurrence!.get("a")!.percent).toBe(100);
+  });
+
+  it("marks a value too small for a JavaScript number as too rare, with one warning for the facet", () => {
+    const facet = withCo({ b: "1e-400", d: "0.5e-999", z: "0", y: "0.0", x: "0e-400" });
+    expect(facet.coOccurrence!.get("b")).toEqual({ text: "1e-400", percent: 0, tooRare: true });
+    expect(facet.coOccurrence!.get("d")!.tooRare).toBe(true);
+    expect(facet.coOccurrence!.get("z")).toEqual({ text: "0", percent: 0, tooRare: false });
+    expect(facet.coOccurrence!.get("y")!.tooRare).toBe(false);
+    expect(facet.coOccurrence!.get("x")!.tooRare).toBe(false);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("too small"));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"b"'));
+  });
+
+  it("leaves out values that are not percentages, with one warning for the facet", () => {
+    const facet = withCo({ b: "abc", c: "101", d: "-1", e: 5, f: "", g: "0x10", h: "1e400" });
+    expect([...facet.coOccurrence!.keys()]).toEqual([]);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves out a negative value even when it is too small to tell from zero", () => {
+    const facet = withCo({ b: "-1e-400", c: "-0", d: "-0.0e5" });
+    expect([...facet.coOccurrence!.keys()]).toEqual(["c", "d"]);
+    expect(facet.coOccurrence!.get("c")).toEqual({ text: "-0", percent: 0, tooRare: false });
+  });
+
+  it("warns for each facet, even when their ids differ only in digits", () => {
+    const bad = (label: string) =>
+      toFacet(
+        readBroken<IndividualResponse>({ ...wireFacet({ label }), co_occurrence: { b: "x" } }),
+      );
+    bad("f1");
+    bad("f2");
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("trims padded text but keeps the trimmed text for display", () => {
+    expect(withCo({ b: " 7 " }).coOccurrence!.get("b")).toEqual({
+      text: "7",
+      percent: 7,
+      tooRare: false,
+    });
+  });
+
+  it("is null (no data), without a warning of its own, when the map is missing", () => {
+    expect(toFacet(read(wireFacet())).coOccurrence).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it("is null, with a warning, when the map is not an object", () => {
+    expect(withCo(["b"]).coOccurrence).toBeNull();
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("is an empty map, not null, for an empty object", () => {
+    expect(withCo({}).coOccurrence).toEqual(new Map());
+  });
+
+  it("is an empty map, not null, when every entry is unreadable", () => {
+    expect(withCo({ b: "abc" }).coOccurrence).toEqual(new Map());
+  });
+});
+
+describe("pruneUnknownCoOccurrence", () => {
+  const facetWith = (id: string, ids: string[]) =>
+    toFacet(
+      readBroken<IndividualResponse>({
+        ...wireFacet({ label: id }),
+        co_occurrence: Object.fromEntries(ids.map((other) => [other, "1"])),
+      }),
+    );
+
+  it("drops ids of facets that don't exist, one warning per facet", () => {
+    const facets = pruneUnknownCoOccurrence([
+      facetWith("a", ["b", "x", "y"]),
+      facetWith("b", ["a", "x"]),
+    ]);
+    expect([...facets[0]!.coOccurrence!.keys()]).toEqual(["b"]);
+    expect([...facets[1]!.coOccurrence!.keys()]).toEqual(["a"]);
+    expect(console.warn).toHaveBeenCalledTimes(2);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringMatching(/"a".*"x", "y"|"x", "y".*"a"/));
+  });
+
+  it("warns for each facet, even when their ids differ only in digits", () => {
+    const f = (id: string) =>
+      toFacet(
+        readBroken<IndividualResponse>({
+          ...wireFacet({ label: id }),
+          co_occurrence: { ghost: "1" },
+        }),
+      );
+    pruneUnknownCoOccurrence([f("f1"), f("f2")]);
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a facet without data as it is", () => {
+    const noData = toFacet(read(wireFacet({ label: "a" })));
+    expect(pruneUnknownCoOccurrence([noData])[0]!.coOccurrence).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it("does not warn when every id exists", () => {
+    pruneUnknownCoOccurrence([facetWith("a", ["b"]), facetWith("b", ["a"])]);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("countWithoutCoOccurrence", () => {
+  it("counts the facets that have no map, and warns once for the list", () => {
+    const items = [
+      read(wireFacet({ label: "a" })),
+      read({ ...wireFacet({ label: "b" }), co_occurrence: {} }),
+      read(wireFacet({ label: "c" })),
+    ];
+    expect(countWithoutCoOccurrence(items)).toBe(2);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("2 of 3"));
+  });
+
+  it("is silent when every facet has a map", () => {
+    expect(countWithoutCoOccurrence([read({ ...wireFacet(), co_occurrence: {} })])).toBe(0);
+    expect(console.warn).not.toHaveBeenCalled();
   });
 });

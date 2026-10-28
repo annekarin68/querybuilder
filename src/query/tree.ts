@@ -1,50 +1,57 @@
-import type { Condition, Group, LogicalOperator, QueryNode } from "./types";
+import type { FacetBlock, FieldCondition, Group, LogicalOperator, QueryNode } from "./types";
 
-export type NodePatch = Partial<Pick<Condition, "facetId" | "fieldId" | "operatorId" | "value">> &
-  Partial<Pick<Group, "operator" | "collapsed">>;
+// Pure, immutable edits of the query (docs/ARCHITECTURE.md, "The query model"):
+// every edit reads `state.query`, calls one function here and writes the new
+// tree back. Only new nodes get fresh ids. Field conditions live inside facet
+// blocks and are never moved on their own (spec, decision 8).
+
+/** What `updateNode` may change on a group or a block (both have these).
+ *  Has / Has no is a block's alone: `setNegated`. */
+export type NodePatch = Partial<Pick<Group, "operator" | "collapsed">>;
 
 let counter = 0;
-function id(prefix: string): string {
+/** A fresh id: "g-…" for a group, "f-…" for a facet block, "c-…" for a field condition. */
+function id(prefix: "g" | "f" | "c"): string {
   counter += 1;
   return `${prefix}-${Date.now().toString(36)}-${counter}`;
 }
 
+/** The starting query: an empty ALL group, the root. It is "not finished",
+ *  not invalid (validate.ts): the builder offers "+ Facet" in it. */
 export function emptyQuery(): Group {
   return { kind: "group", id: id("g"), operator: "AND", children: [] };
 }
 
-export function newCondition(): Condition {
-  return {
-    kind: "condition",
-    id: id("c"),
-    facetId: null,
-    fieldId: null,
-    operatorId: null,
-    value: null,
-  };
-}
-
-/** A new AND group, pre-populated with one empty condition so it is usable
- *  straight away (the "+ Group" button). A group can still become empty when
- *  its last condition is removed — validate.ts reports that case. */
+/** What "+ Group" adds: an empty ALL group with its own "+ Facet". */
 export function newGroup(): Group {
-  return { kind: "group", id: id("g"), operator: "AND", children: [newCondition()] };
+  return { kind: "group", id: id("g"), operator: "AND", children: [] };
 }
 
 /** A new, open group holding `children`: how a tag's facets arrive ("Add
- *  all"), so a misplaced or unwanted "Add all" is moved or removed in one go. */
+ *  all"), so a misplaced "Add all" is moved or removed in one go, and how a
+ *  saved group is read back (with a fresh id). */
 export function groupOf(children: QueryNode[], operator: LogicalOperator = "AND"): Group {
   return { kind: "group", id: id("g"), operator, children };
 }
 
-/** Return a copy of `node` with `fn` applied to every node in the tree (post-order). */
+/** A new block for a facet: "Has", ALL, nothing set yet. */
+export function newBlock(facetId: string): FacetBlock {
+  return { kind: "facet", id: id("f"), facetId, negated: false, operator: "AND", conditions: [] };
+}
+
+export function newFieldCondition(
+  fieldId: string,
+  operatorId: string | null,
+  value: unknown,
+): FieldCondition {
+  return { kind: "condition", id: id("c"), fieldId, operatorId, value };
+}
+
+/** A copy of `node` with `fn` applied to every group and block (post-order).
+ *  Blocks are leaves here: their conditions are edited through the block. */
 function mapTree(node: QueryNode, fn: (n: QueryNode) => QueryNode): QueryNode {
   if (node.kind === "group") {
-    const mapped: Group = {
-      ...node,
-      children: node.children.map((c) => mapTree(c, fn)),
-    };
-    return fn(mapped);
+    return fn({ ...node, children: node.children.map((c) => mapTree(c, fn)) });
   }
   return fn({ ...node });
 }
@@ -59,12 +66,22 @@ export function updateNode(tree: Group, nodeId: string, patch: NodePatch): Group
   return mapTree(tree, (n) => (n.id === nodeId ? ({ ...n, ...patch } as QueryNode) : n)) as Group;
 }
 
+/** Block `blockId` as "Has" (`negated` false) or "Has no" (true). Its own
+ *  function, not an `updateNode` patch: a group has no such setting. */
+export function setNegated(tree: Group, blockId: string, negated: boolean): Group {
+  return mapTree(tree, (n) =>
+    n.kind === "facet" && n.id === blockId ? { ...n, negated } : n,
+  ) as Group;
+}
+
 export function removeNode(tree: Group, nodeId: string): Group {
   return mapTree(tree, (n) =>
     n.kind === "group" ? { ...n, children: n.children.filter((c) => c.id !== nodeId) } : n,
   ) as Group;
 }
 
+/** The group or block with this id, or null. (Field conditions are found
+ *  through their block: `block.conditions`.) */
 export function findNode(tree: QueryNode, nodeId: string): QueryNode | null {
   if (tree.id === nodeId) return tree;
   if (tree.kind === "group") {
@@ -76,9 +93,53 @@ export function findNode(tree: QueryNode, nodeId: string): QueryNode | null {
   return null;
 }
 
-export function countConditions(tree: QueryNode): number {
-  if (tree.kind === "condition") return 1;
-  return tree.children.reduce((sum, c) => sum + countConditions(c), 0);
+/**
+ * Block `blockId` with `condition` for its field: replacing the condition the
+ * field had (a block holds at most one per field), otherwise added. Given
+ * `fieldOrder` (the facet's field ids, in the order its rows are drawn), a
+ * new condition goes in that order, so clearing a row and setting it again
+ * does not move it to the end of the block's summary. Without it, or for a
+ * field the order doesn't list, it goes at the end.
+ */
+export function setFieldCondition(
+  tree: Group,
+  blockId: string,
+  condition: FieldCondition,
+  fieldOrder: string[] = [],
+): Group {
+  /** Where a field stands in the order; fields it doesn't list come last. */
+  const rank = (fieldId: string): number => {
+    const at = fieldOrder.indexOf(fieldId);
+    return at === -1 ? Infinity : at;
+  };
+  return mapTree(tree, (n) => {
+    if (n.kind !== "facet" || n.id !== blockId) return n;
+    const at = n.conditions.findIndex((c) => c.fieldId === condition.fieldId);
+    const conditions = [...n.conditions];
+    if (at !== -1) {
+      conditions[at] = condition;
+    } else {
+      const firstLater = conditions.findIndex((c) => rank(c.fieldId) > rank(condition.fieldId));
+      conditions.splice(firstLater === -1 ? conditions.length : firstLater, 0, condition);
+    }
+    return { ...n, conditions };
+  }) as Group;
+}
+
+/** Block `blockId` without the condition `conditionId`: how a row's
+ *  "Not filtered" and a stray row (an unknown field, or a field set twice in
+ *  a saved query) are removed. It leaves another condition on the same field. */
+export function removeCondition(tree: Group, blockId: string, conditionId: string): Group {
+  return mapTree(tree, (n) =>
+    n.kind === "facet" && n.id === blockId
+      ? { ...n, conditions: n.conditions.filter((c) => c.id !== conditionId) }
+      : n,
+  ) as Group;
+}
+
+export function countBlocks(tree: QueryNode): number {
+  if (tree.kind === "facet") return 1;
+  return tree.children.reduce((sum, c) => sum + countBlocks(c), 0);
 }
 
 /**
@@ -92,20 +153,16 @@ export function sameSemantics(a: QueryNode, b: QueryNode): boolean {
   return JSON.stringify(a, withoutCollapsed) === JSON.stringify(b, withoutCollapsed);
 }
 
-/**
- * Whether two trees are identical, `collapsed` included: nothing on screen
- * would change. Unlike `sameSemantics`, folding a group counts as a change,
- * because the user sees it. Used to tell a move that did something from one
- * that put a node back where it was.
- */
+/** Whether two trees are identical, `collapsed` included: nothing on screen
+ *  would change. Tells a move that did something from one that didn't. */
 export function sameTree(a: QueryNode, b: QueryNode): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /**
  * Put `nodes` where a drop on `targetId` lands: at the end of the target if it
- * is a group, otherwise just before the target in its parent. An unknown
- * target changes nothing.
+ * is a group, otherwise just before the target block in its parent. An
+ * unknown target changes nothing.
  */
 export function insertNodes(tree: Group, targetId: string, nodes: QueryNode[]): Group {
   const target = findNode(tree, targetId);
@@ -125,85 +182,29 @@ export function insertNodes(tree: Group, targetId: string, nodes: QueryNode[]): 
   }) as Group;
 }
 
-/** A condition nobody has touched: nothing chosen yet (what "+ Condition" adds). */
-export function isBlankCondition(node: QueryNode): boolean {
-  return (
-    node.kind === "condition" &&
-    node.facetId === null &&
-    node.fieldId === null &&
-    node.operatorId === null &&
-    node.value === null
-  );
-}
-
 /**
- * A group that holds just one blank condition (the starting query, or what
- * "+ Group" adds) is waiting to be filled in: nobody wants to keep that blank
- * row once something is added. If the drop on `targetId` lands in such a group
- * (on the group, or on its blank row), return `tree` with `nodes` in that row's
- * place; otherwise null, so the caller inserts as usual. The group keeps its
- * ALL/ANY choice and fold state: only a blank row is replaced, never something
- * the user chose.
- */
-export function replaceLoneBlankCondition(
-  tree: Group,
-  targetId: string,
-  nodes: QueryNode[],
-): Group | null {
-  if (nodes.length === 0) return null;
-  let replaced = false;
-  const next = mapTree(tree, (n) => {
-    if (n.kind !== "group") return n;
-    const [only] = n.children;
-    // `insertNodes` reads a group target as "at the end" and a condition target
-    // as "just before it". Here both mean "replace the blank row", so a drop on
-    // the group or on its blank row finds this same group.
-    const targetsThisGroup = n.id === targetId || only?.id === targetId;
-    // (`!only` is implied by the length check; it is here so TypeScript knows.)
-    if (!targetsThisGroup || n.children.length !== 1 || !only || !isBlankCondition(only)) return n;
-    replaced = true;
-    return { ...n, children: [...nodes] };
-  }) as Group;
-  return replaced ? next : null;
-}
-
-/**
- * Where `nodes` land when dropped on `targetId`: in place of a lone blank row
- * (`replaceLoneBlankCondition`), otherwise as `insertNodes` puts them. Every
- * drop goes through here, so new items and moved nodes behave the same.
- */
-export function placeNodes(tree: Group, targetId: string, nodes: QueryNode[]): Group {
-  return replaceLoneBlankCondition(tree, targetId, nodes) ?? insertNodes(tree, targetId, nodes);
-}
-
-/**
- * Move `nodeId` to where a drop on `targetId` lands (see `placeNodes`).
+ * Move `nodeId` to where a drop on `targetId` lands (see `insertNodes`).
  * Returns null when the move is impossible: an unknown id, the root, or a
  * group moved into itself or something inside it.
  */
 export function moveNode(tree: Group, nodeId: string, targetId: string): Group | null {
   const node = findNode(tree, nodeId);
   if (!node || nodeId === tree.id || !findNode(tree, targetId)) return null;
-  if (findNode(node, targetId)) return null; // target is the node itself or inside it
-  // Judge the target after the node is out: taking it out can leave a lone blank row.
-  return placeNodes(removeNode(tree, nodeId), targetId, [node]);
+  if (findNode(node, targetId)) return null; // the target is the node itself or inside it
+  return insertNodes(removeNode(tree, nodeId), targetId, [node]);
 }
 
 /**
  * "Group contents": the group's children move into one new group, with the
  * same ALL/ANY, which becomes the group's only child. The query means the same
- * afterwards; the user can then add a sibling group and switch ALL/ANY.
- * An unknown id (or a condition's) changes nothing.
+ * afterwards. An unknown id (or a block's) changes nothing.
  */
 export function groupContents(tree: Group, groupId: string): Group {
   const target = findNode(tree, groupId);
   if (!target || target.kind !== "group") return tree;
   return mapTree(tree, (n) =>
     n.kind === "group" && n.id === groupId
-      ? {
-          ...n,
-          children: [{ kind: "group", id: id("g"), operator: n.operator, children: n.children }],
-        }
+      ? { ...n, children: [groupOf(n.children, n.operator)] }
       : n,
   ) as Group;
 }
@@ -225,8 +226,8 @@ function parentOf(tree: Group, nodeId: string): Group | null {
   return null;
 }
 
-/** Where `nodeId` stands among its siblings (`index` counts from 1), or null for
- *  the root and unknown ids. */
+/** Where `nodeId` stands among its siblings (`index` counts from 1), or null
+ *  for the root and unknown ids. */
 export function positionOf(tree: Group, nodeId: string): { index: number; count: number } | null {
   const parent = parentOf(tree, nodeId);
   if (!parent) return null;
@@ -237,11 +238,9 @@ export function positionOf(tree: Group, nodeId: string): { index: number; count:
 }
 
 /**
- * Swap `nodeId` with its previous ("up") or next ("down") sibling: the
- * keyboard's way to reorder (the Move up / Move down buttons). It never changes
- * which group a node is in; that is what dragging is for. Returns null when
- * there is nothing to swap with: the first node up, the last one down, the
- * root, an unknown id.
+ * Swap `nodeId` with its previous ("up") or next ("down") sibling: the Move
+ * up / Move down buttons. Never changes which group a node is in. Null when
+ * there is nothing to swap with, for the root and for unknown ids.
  */
 export function moveSibling(tree: Group, nodeId: string, direction: Direction): Group | null {
   const parent = parentOf(tree, nodeId);
@@ -260,14 +259,14 @@ export function moveSibling(tree: Group, nodeId: string, direction: Direction): 
 /**
  * Why `groupId` can't be ungrouped, or null if it can. Ungrouping must never
  * change what the query means: that holds when the group combines its items
- * the same way as its parent, or when it holds only one item (a one-item
- * group means the same under ALL and ANY).
+ * the same way as its parent, or when it holds only one item.
  */
 export function ungroupBlocker(tree: Group, groupId: string): string | null {
   if (groupId === tree.id) return "The whole query can't be ungrouped.";
   const node = findNode(tree, groupId);
+  if (node?.kind === "facet") return "Only a group can be ungrouped.";
   const parent = parentOf(tree, groupId);
-  if (!node || node.kind !== "group" || !parent) return "That group is no longer in the query.";
+  if (!node || !parent) return "That group is no longer in the query.";
   if (node.operator === parent.operator || node.children.length === 1) return null;
   return UNGROUP_BLOCKED_MESSAGE;
 }

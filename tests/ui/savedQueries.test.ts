@@ -107,7 +107,7 @@ const other: SavedQuery = { ...weekly, id: "sq-2", name: "Other", note: "", data
 const listDialog = (patch: Partial<AppState> = {}): AppState => ({
   ...initialState,
   savedDialog: "list",
-  savedList: { status: "ok", queries: [weekly, other] },
+  savedList: { status: "ok", queries: [weekly, other], unreadable: 0 },
   ...patch,
 });
 
@@ -124,8 +124,35 @@ describe("the saved queries list", () => {
   });
 
   it("says how to save one when there are none", () => {
-    const html = savedDialogHtml(listDialog({ savedList: { status: "ok", queries: [] } }));
+    const html = savedDialogHtml(
+      listDialog({ savedList: { status: "ok", queries: [], unreadable: 0 } }),
+    );
     expect(text(html)).toContain("No saved queries yet. Build a query and press Save…");
+  });
+
+  // A saved query in an older version's shape can't be read; the others
+  // still open, and the dialog says how many could not.
+  it("says how many saved queries can't be opened, above the list", () => {
+    const one = savedDialogHtml(
+      listDialog({ savedList: { status: "ok", queries: [weekly], unreadable: 1 } }),
+    );
+    expect(text(one)).toContain("1 saved query from an older version can't be opened.");
+    expect(one.indexOf("older version")).toBeLessThan(one.indexOf('class="qb-saved-list"'));
+    const three = savedDialogHtml(
+      listDialog({ savedList: { status: "ok", queries: [weekly], unreadable: 3 } }),
+    );
+    expect(text(three)).toContain("3 saved queries from an older version can't be opened.");
+    expect(text(savedDialogHtml(listDialog()))).not.toContain("older version");
+  });
+
+  // "No saved queries yet" would be untrue when there are some, unreadable.
+  it("when none can be opened, says so instead of No saved queries yet", () => {
+    const html = savedDialogHtml(
+      listDialog({ savedList: { status: "ok", queries: [], unreadable: 2 } }),
+    );
+    expect(text(html)).toContain("2 saved queries from an older version can't be opened.");
+    expect(text(html)).not.toContain("No saved queries yet");
+    expect(html.match(/data-initial-focus/g)).toHaveLength(1);
   });
 
   it("shows an error, escaped, with Try again", () => {
@@ -188,7 +215,9 @@ describe("the saved queries list", () => {
   // Decided by the maintainers (2026-10-08): queries can be sensitive.
   it("never shows the saved query itself", () => {
     const saved: SavedQuery = { ...unfinishedDraft, id: "sq-1", updatedAt: weekly.updatedAt };
-    const html = savedDialogHtml(listDialog({ savedList: { status: "ok", queries: [saved] } }));
+    const html = savedDialogHtml(
+      listDialog({ savedList: { status: "ok", queries: [saved], unreadable: 0 } }),
+    );
     expect(html).toContain("Slow trips");
     // The fixture's facet, field and operator ids, and the summary's words.
     for (const part of ["thing", "size", "between", "present", "Between", "alpha"]) {

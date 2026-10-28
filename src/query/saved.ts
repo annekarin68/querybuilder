@@ -1,5 +1,5 @@
-import { isBlankCondition, sameSemantics } from "./tree";
-import type { Group, QueryNode } from "./types";
+import { countBlocks, sameSemantics } from "./tree";
+import type { Group } from "./types";
 
 /** What the saved query on screen held when it was last opened or saved. */
 export interface OpenSaved {
@@ -30,23 +30,18 @@ export function isEdited(open: OpenSaved, query: Group, databaseIds: string[]): 
   return !sameSemantics(open.query, query) || !sameDatabases(open.databaseIds, databaseIds);
 }
 
-/** Whether any condition in `node` has something chosen: a blank row is nothing to lose. */
-function hasChosenCondition(node: QueryNode): boolean {
-  if (node.kind === "condition") return !isBlankCondition(node);
-  return node.children.some(hasChosenCondition);
-}
-
 /**
  * Whether opening another saved query would lose work: the query on screen is
- * edited (or was never saved) and holds a condition with anything chosen. The
- * starting query's blank row, or a query left as saved, can be replaced silently.
+ * edited (or was never saved) and holds a facet block. The starting query (no
+ * block yet), or a query left as saved, can be replaced silently.
  */
 export function hasUnsavedWork(
   open: OpenSaved | null,
   query: Group,
   databaseIds: string[],
 ): boolean {
-  if (!hasChosenCondition(query)) return false;
+  // An empty query is nothing to lose; any block is something the user chose.
+  if (countBlocks(query) === 0) return false;
   return open === null || isEdited(open, query, databaseIds);
 }
 

@@ -7,8 +7,8 @@
  * same control in the new markup (`restoreFocus`).
  *
  * "The same control" is found by what the control IS, not by where it is:
- * its node (the `data-node-id` of the condition row or group it sits in) and
- * one identifying attribute (`controlOf`). When that control is gone (a row
+ * its node (the `data-node-id` of the set field row, facet block or group it
+ * sits in) and one identifying attribute (`controlOf`). When that control is gone (a row
  * was removed, Run turned into a loader), focus goes to the nearest element
  * marked `data-focus-landing`: first in the control's own node, then in each
  * group around it, then one outside every node (a panel's card).
@@ -22,6 +22,14 @@ const IDENTIFYING_ATTRIBUTES = [
   // Every result's id button shares its `data-action`; its event id tells
   // them apart.
   "data-event-id",
+  // The same for a facet block's unset rows: each one's button edits a field
+  // (`data-action="edit-field"`), and its field id says which.
+  "data-field-id",
+  // A facet's cell in the co-occurrence row and its box in the Seen together
+  // chart: both carry the facet id (`data-facet-id`), so each kind has an
+  // attribute of its own and the focus comes back to the one it was on.
+  "data-co-cell",
+  "data-co-box",
   "data-action",
   "data-db-id",
   "data-db-all",
@@ -78,19 +86,21 @@ export function sameControl(a: Control | null, b: Control | null): boolean {
 /** What `rememberFocus` noted about the focused element. */
 export interface FocusMemory {
   control: Control | null;
-  /** The rows and groups the control sat in, innermost first; empty when it
-   *  sat outside the query tree. */
+  /** The rows, blocks and groups the control sat in, innermost first; empty
+   *  when it sat outside the query tree. */
   nodeIds: string[];
   /** Where the caret was in a text box, so typing carries on where it was. */
   selection: [number, number] | null;
 }
 
-/** The id of the condition row or group `el` sits in (or is), or null. */
+/** The id of the set field row, facet block or group `el` sits in (or is),
+ *  or null. (An unset field row has no node id: its controls belong to the
+ *  block.) */
 function nodeIdOf(el: Element): string | null {
   return el.closest("[data-node-id]")?.getAttribute("data-node-id") ?? null;
 }
 
-/** The ids of every row and group around `el`, innermost first. */
+/** The ids of every row, block and group around `el`, innermost first. */
 function nodeIdsAround(el: Element): string[] {
   const ids: string[] = [];
   let node = el.closest("[data-node-id]");
@@ -124,18 +134,41 @@ function tryFocus(el: HTMLElement | null | undefined): boolean {
   return document.activeElement === el;
 }
 
-/** The elements in `container` matching `selector` whose row or group is
- *  `nodeId` (null: outside every row and group). */
+/** The elements in `container` matching `selector` whose row, block or group is
+ *  `nodeId` (null: outside all of them). */
 function ownedBy(container: HTMLElement, selector: string, nodeId: string | null): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(
     (el) => nodeIdOf(el) === nodeId,
   );
 }
 
+/** Whether `restoreFocus` is moving the focus right now. */
+let restoring = false;
+
+/**
+ * True while a repaint puts the focus back (`restoreFocus`), so a `focusin`
+ * listener can tell that focus move from one the user made. The builder's
+ * listener that selects a row's field for the About panel ignores it: a
+ * repaint (say, of a value committed a moment after Escape cleared the
+ * selection) must not select the field again.
+ */
+export function isRestoringFocus(): boolean {
+  return restoring;
+}
+
 /** Put focus back on the remembered control in the new markup, or on the
  *  nearest landing spot (see the top of this file). */
 export function restoreFocus(container: HTMLElement, memory: FocusMemory | null): void {
   if (!memory) return;
+  restoring = true;
+  try {
+    moveFocusBack(container, memory);
+  } finally {
+    restoring = false;
+  }
+}
+
+function moveFocusBack(container: HTMLElement, memory: FocusMemory): void {
   const { control, nodeIds, selection } = memory;
   const ownNode = nodeIds[0] ?? null;
   const same = control

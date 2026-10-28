@@ -1,94 +1,53 @@
-import type { AppState } from "../state";
-import type { Condition, Group, Issue, QueryNode } from "../query/types";
-import type { Facet } from "../model";
-import {
-  FACET_OPERATOR_IDS,
-  FACET_OPERATORS,
-  fieldsOfFacet,
-  findField,
-  findOperator,
-  isFacetLevel,
-  isFacetTest,
-  operatorName,
-  OPERATORS,
-  type FieldCatalog,
-} from "../query/fieldCatalog";
+import type { AppState, PanelTab } from "../state";
+import type { FacetBlock, Group } from "../query/types";
 import {
   addChild,
-  countConditions,
   findNode,
   groupContents,
-  newCondition,
+  newBlock,
   newGroup,
+  removeCondition,
   removeNode,
+  setNegated,
   ungroup,
   ungroupBlocker,
   UNGROUP_BLOCKED_MESSAGE,
   updateNode,
   type Direction,
 } from "../query/tree";
-import { announcementAfterChange, cursorAfterChange, nextCondition } from "../query/conditionEdit";
+import { findField } from "../query/fieldCatalog";
+import { cursorAfterOperator, nextFieldCondition, queryAfterFieldEdit } from "../query/fieldEdit";
 import {
   ADDED_GROUP_MESSAGE,
-  addedMessage,
+  addedNodesMessage,
   DRAG_MIME,
+  dropLandsInBlock,
   groupedMessage,
   parseDragItem,
   UNGROUPED_MESSAGE,
   type DragItem,
+  type FieldRef,
 } from "../query/drop";
 import { placeIssues } from "../query/issues";
 import { isEdited } from "../query/saved";
-import { queryToText } from "../query/summary";
 import {
   createAfterPointer,
   shouldFlushBeforeClick,
   type ClickTargetDescription,
 } from "../util/afterPointer";
 import { RESTORED_MESSAGE } from "../util/keptQuery";
-import { escapeHtml, optionsHtml, paint } from "./panel";
+import { escapeHtml, paint } from "./panel";
+import { aboutCtxOf } from "./aboutPanel";
+import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
+import { coCtxOf } from "./coOccurrenceHtml";
+import { wireCoOccurrence } from "./coOccurrenceWiring";
+import { readCoTokens } from "./coTokens";
+import { pickedOperatorId } from "./fieldRows";
 import { onDropdownChange, openDropdown } from "./fomantic";
-import { countLabel, hoverTitle } from "./format";
-import { readValueControl, renderValueControl } from "./valueControl";
-
-/** What every part of the tree's HTML needs, passed down the recursion. */
-interface BuilderCtx {
-  catalog: FieldCatalog;
-  facets: Facet[] | null;
-  issues: Issue[];
-  /** The whole query: a group's Ungroup button needs its parent's ALL/ANY. */
-  query: Group;
-}
-
-/**
- * The issues under a row or group. The user's own unfinished parts are quiet
- * grey hints: they simply aren't done yet. Anything the databases found is
- * highlighted with an icon in the warning colour even when it is only
- * "incomplete" (such as "Group contains no valid conditions."): nothing else
- * on screen says it, and users missed it in grey (2026-10-13). Invalid is red.
- * Every kind blocks running (validate.ts). Issues come from validate.ts and
- * from the backend (src/query/issues.ts).
- */
-export function issuesHtml(nodeId: string, issues: Issue[]): string {
-  const mine = issues.filter((i) => i.nodeId === nodeId);
-  const text = (pick: (i: Issue) => boolean) =>
-    mine
-      .filter(pick)
-      .map((i) => escapeHtml(i.message))
-      .join(" ");
-  const hint = text((i) => i.kind === "incomplete" && !i.fromServer);
-  const warning = text((i) => i.kind === "incomplete" && i.fromServer === true);
-  const invalid = text((i) => i.kind === "invalid");
-  return (
-    (hint ? `<div class="qb-hint">${hint}</div>` : "") +
-    (warning
-      ? `<div class="qb-server-warning"><i class="exclamation triangle icon" aria-hidden="true"></i>${warning}</div>`
-      : "") +
-    (invalid
-      ? `<div class="qb-invalid"><i class="exclamation circle icon" aria-hidden="true"></i>${invalid}</div>`
-      : "")
-  );
-}
+import { forgetDrag, draggedItem } from "./dragMemory";
+import { isRestoringFocus } from "./focusMemory";
+import { hoverTitle } from "./format";
+import { readValueControl } from "./valueControl";
 
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
@@ -115,48 +74,6 @@ export function restoredNoticeHtml(restored: boolean): string {
     </div>`;
 }
 
-/** A node's drag handle: carries `{type: "node", nodeId}`. The id is kept in
- *  `data-node-item` and the drag payload is built from it in the dragstart
- *  handler, so no JSON lives in the DOM. A group's grip looks different from a
- *  condition's (`qb-grip-group`, drawn in the group's colour) and its tooltip
- *  says what it moves: the two sit at the same left edge, so otherwise a user
- *  cannot tell which one carries the whole group. */
-function nodeGrip(nodeId: string, kind: "group" | "condition"): string {
-  const cls = kind === "group" ? "qb-grip qb-grip-group" : "qb-grip";
-  return `<span class="${cls}" draggable="true" data-node-item="${escapeHtml(nodeId)}" aria-hidden="true" title="Drag to move this ${kind}"><i class="grip vertical icon"></i></span>`;
-}
-
-function iconButton(action: string, label: string, icon: string): string {
-  return `<button type="button" class="qb-icon-btn" data-action="${action}" aria-label="${label}" title="${label}"><i class="${icon} icon"></i></button>`;
-}
-
-/** Where a node stands among its siblings: `index` counts from 1. */
-interface Position {
-  index: number;
-  count: number;
-}
-
-/**
- * The Move up / Move down pair: the keyboard's way to reorder a node (dragging
- * needs a mouse). Two small buttons side by side next to the grip. The first
- * node's Up and the last node's Down are `aria-disabled` rather than `disabled`
- * or hidden: the pair keeps its shape, a screen reader says why nothing
- * happens, and, above all, the button keeps keyboard focus. A `disabled`
- * button loses focus, so pressing Enter repeatedly would move the focus to the
- * other button and then move the node back the way it came. The click handler
- * ignores clicks on such a button. `kind` ("condition" or "group") names what
- * moves, because a page has many pairs and "Move up" alone would not say which
- * node it is for.
- */
-export function moveButtons(kind: "condition" | "group", position: Position): string {
-  const button = (direction: Direction, unavailable: boolean) => {
-    const label = `Move ${kind} ${direction}`;
-    const title = `Move ${direction}`;
-    return `<button type="button" class="qb-icon-btn" data-action="move-${direction}" aria-label="${label}" title="${title}"${unavailable ? ' aria-disabled="true"' : ""}><i class="angle ${direction} icon"></i></button>`;
-  };
-  return `<span class="qb-move" role="group" aria-label="Move this ${kind}">${button("up", position.index <= 1)}${button("down", position.index >= position.count)}</span>`;
-}
-
 /** Describe the element a click landed on for `shouldFlushBeforeClick`. */
 function describeClickTarget(el: Element): ClickTargetDescription {
   return {
@@ -168,98 +85,19 @@ function describeClickTarget(el: Element): ClickTargetDescription {
   };
 }
 
-/** The condition row's plain dropdowns and their labels. The Field dropdown
- *  is not here: it holds two kinds of choice and has its own builder,
- *  `fieldDropdown`. */
-const ROW_DROPDOWNS = { facet: "Facet", operator: "Operator" };
-
-/**
- * One of a condition row's plain dropdowns: `part` is "facet" or "operator".
- * Both are search dropdowns — there can be many facets, so typing filters the
- * list — and the Operator is disabled until a field is chosen.
- */
-export function rowDropdown(
-  part: keyof typeof ROW_DROPDOWNS,
-  choices: { id: string; name: string }[],
-  selectedId: string | null,
-  enabled: boolean,
-): string {
-  const label = ROW_DROPDOWNS[part];
-  const opts = optionsHtml(
-    choices,
-    (c) => c.id,
-    (c) => c.name,
-    (c) => c.id === selectedId,
-  );
-  return `<select class="ui search selection dropdown" data-part="${part}" aria-label="${label}"${enabled ? "" : " disabled"}><option value="">${label}…</option>${opts}</select>`;
-}
-
-/** The Field dropdown holds two kinds of choice, told apart by a prefix so no
- *  field id can ever collide with a test: a whole-facet test is
- *  `FACET_TEST_PREFIX` + the operator ("op:present"), a field is `FIELD_PREFIX`
- *  + its id ("f:size"), and "" is nothing chosen yet. */
-export const FACET_TEST_PREFIX = "op:";
-export const FIELD_PREFIX = "f:";
-
-/**
- * The row's second dropdown: nothing chosen, then what to say about the whole
- * facet ("Is present" / "Is absent"), then the facet's fields. One list, so a
- * user who wants a field and one who wants the facet look in the same place.
- */
-export function fieldDropdown(
-  fields: { id: string; name: string }[],
-  selectedId: string | null,
-  facetOperatorId: string | null,
-  enabled: boolean,
-): string {
-  const testOpts = optionsHtml(
-    FACET_OPERATORS,
-    (o) => FACET_TEST_PREFIX + o.id,
-    (o) => operatorName(o, true),
-    (o) => o.id === facetOperatorId,
-  );
-  const fieldOpts = optionsHtml(
-    fields,
-    (f) => FIELD_PREFIX + f.id,
-    (f) => f.name,
-    (f) => f.id === selectedId,
-  );
-  // Fomantic turns an <optgroup> into a header in the menu. A facet without
-  // fields has nothing to put under the second header, so it gets none.
-  const fieldGroup = fields.length ? `<optgroup label="About a field">${fieldOpts}</optgroup>` : "";
-  // Fomantic copies the <select>'s classes onto the dropdown it builds, so
-  // `qb-field-select` lets styles.css restyle this dropdown's menu and its
-  // width on a whole-facet row without touching the other dropdowns.
-  return `<select class="ui search selection dropdown qb-field-select" data-part="field" aria-label="Field, or presence of the facet"${enabled ? "" : " disabled"}><option value="">Choose…</option><optgroup label="About the whole facet">${testOpts}</optgroup>${fieldGroup}</select>`;
-}
-
-/** Read the Field dropdown's value (see FACET_TEST_PREFIX / FIELD_PREFIX). The
- *  value comes from the page, so a test a whole facet can't take counts as
- *  nothing chosen. */
-export function decodeFieldValue(value: string | null): {
-  facetOperatorId: string | null;
-  fieldId: string | null;
-} {
-  if (value?.startsWith(FACET_TEST_PREFIX)) {
-    const operatorId = value.slice(FACET_TEST_PREFIX.length);
-    const known = FACET_OPERATOR_IDS.includes(operatorId);
-    return { facetOperatorId: known ? operatorId : null, fieldId: null };
-  }
-  const fieldId = value?.startsWith(FIELD_PREFIX) ? value.slice(FIELD_PREFIX.length) : "";
-  return { facetOperatorId: null, fieldId: fieldId || null };
-}
-
-/** The condition row or group of node `nodeId`, or null if it is not on screen.
- *  Ids are unique, so one lookup serves rows and groups alike. */
+/** The element of node `nodeId` (a group, a facet block or a set field's
+ *  row), or null if it is not on screen. Ids are unique, so one lookup serves
+ *  all three. */
 function nodeOf(container: HTMLElement, nodeId: string): HTMLElement | null {
   return container.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"]`);
 }
 
 /**
  * Scrolls node `nodeId` into view and moves focus to it (the "Show" button of
- * the statistics panel). A row or group is not focusable by itself, so it gets
- * `tabindex="-1"` first: focusable by script, not a stop for the Tab key. The
- * builder repaints on every edit, which drops the attribute with the element.
+ * the statistics panel). A row, block or group is not focusable by itself, so
+ * it gets `tabindex="-1"` first: focusable by script, not a stop for the Tab
+ * key. The builder repaints on every edit, which drops the attribute with the
+ * element.
  */
 export function revealNode(container: HTMLElement, nodeId: string): void {
   const node = nodeOf(container, nodeId);
@@ -269,196 +107,52 @@ export function revealNode(container: HTMLElement, nodeId: string): void {
   node.focus();
 }
 
-/** The `.ui.dropdown` Fomantic built from the row's `<select data-part=…>`. */
-function dropdownOf(row: HTMLElement | null, part: string): HTMLElement | null {
+/** The row of field `fieldId` in block `blockId`, or null if it is not on
+ *  screen. (A stray row for the same field, `.is-stray`, is not that row.) */
+function fieldRowOf(container: HTMLElement, blockId: string, fieldId: string): HTMLElement | null {
   return (
-    row?.querySelector(`select[data-part="${part}"]`)?.closest<HTMLElement>(".ui.dropdown") ?? null
+    nodeOf(container, blockId)?.querySelector<HTMLElement>(
+      `.qb-field-row:not(.is-stray)[data-field-id="${CSS.escape(fieldId)}"]`,
+    ) ?? null
+  );
+}
+
+/** The `.ui.dropdown` Fomantic built from the row's operator `<select>`. */
+function operatorDropdownOf(row: HTMLElement | null): HTMLElement | null {
+  return (
+    row?.querySelector('select[data-part="operator"]')?.closest<HTMLElement>(".ui.dropdown") ?? null
   );
 }
 
 /**
- * Put the cursor in `part` of condition `nodeId`'s row, opening it if it is a
- * dropdown. The value is a dropdown, one or two text boxes or a toggle: the
- * cursor goes to the first. Does nothing for a value the operator doesn't take.
+ * Put the cursor in the value of field `fieldId`'s row in block `blockId`,
+ * opening it if it is a dropdown. The value is a dropdown, one or two text
+ * boxes or a toggle: the cursor goes to the first.
  */
-function focusPart(container: HTMLElement, nodeId: string, part: string): void {
-  const row = nodeOf(container, nodeId);
-  const slot =
-    part === "value" ? row?.querySelector<HTMLElement>(".qb-value") : dropdownOf(row, part);
+function focusValue(container: HTMLElement, blockId: string, fieldId: string): void {
+  const slot = fieldRowOf(container, blockId, fieldId)?.querySelector<HTMLElement>(".qb-value");
   if (!slot) return;
-  const dropdown = slot.matches(".ui.dropdown")
-    ? slot
-    : slot.querySelector<HTMLElement>(".ui.dropdown");
+  const dropdown = slot.querySelector<HTMLElement>(".ui.dropdown");
   if (dropdown) openDropdown(dropdown);
   else slot.querySelector("input")?.focus();
 }
 
-/** Put the cursor in condition `nodeId`'s Field dropdown without opening it. */
-function focusFieldDropdown(container: HTMLElement, nodeId: string): void {
-  dropdownOf(nodeOf(container, nodeId), "field")
-    ?.querySelector<HTMLElement>("input.search")
-    ?.focus();
-}
-
-function conditionHtml(ctx: BuilderCtx, c: Condition, position: Position): string {
-  const field = findField(ctx.catalog, c.facetId, c.fieldId);
-  const operator = findOperator(c.operatorId);
-  const fields = fieldsOfFacet(ctx.catalog, c.facetId).map((f) => ({
-    id: f.fieldId,
-    name: f.fieldName,
-  }));
-  const facetLevel = isFacetLevel(c);
-  const operatorChoices = OPERATORS.filter((o) => field?.operatorIds.includes(o.id)).map((o) => ({
-    id: o.id,
-    name: o.name,
-  }));
-  // A whole-facet test ("Is present") is the whole sentence: it was picked in
-  // the Field dropdown and takes no value, so the row has no Operator or Value
-  // slot (`.is-facet-level` keeps the ✕ at the row's end). A malformed one
-  // (foreign operator, or a value) is drawn the same way but its Field dropdown
-  // shows "Choose…" (isFacetTest), where picking a test repairs it.
-  const operatorAndValue = facetLevel
-    ? ""
-    : `${rowDropdown("operator", operatorChoices, c.operatorId, field !== undefined)}
-        <div class="qb-value">${renderValueControl(field, operator, c.value)}</div>`;
-  return `<div class="qb-condition" data-node-id="${escapeHtml(c.id)}">
-    <div class="qb-cond-row">
-      ${nodeGrip(c.id, "condition")}
-      ${moveButtons("condition", position)}
-      <div class="qb-cond-grid${facetLevel ? " is-facet-level" : ""}">
-        ${rowDropdown("facet", ctx.facets ?? [], c.facetId, true)}
-        ${fieldDropdown(fields, c.fieldId, isFacetTest(c) ? c.operatorId : null, Boolean(c.facetId))}
-        ${operatorAndValue}
-        ${iconButton("remove-node", "Remove condition", "times")}
-      </div>
-    </div>
-    ${issuesHtml(c.id, ctx.issues)}
-  </div>`;
-}
-
 /**
- * The group's fold/unfold button: a bordered chevron (down while open, right
- * while folded — the same arrows the data dictionary uses), so it reads as
- * something to click.
+ * Put the keyboard focus in field `fieldId`'s row of block `blockId`: after a
+ * repaint that changed the row's shape (it was set or cleared, or an unset row
+ * was opened or closed), where focus memory cannot find the control again and
+ * would send the focus to the group's "+ Group", and after a mouse drop that
+ * opened the row. The operator dropdown's typing box gets it (its menu stays
+ * closed), or an unset row's button. Does nothing if the focus is in the row
+ * already.
  */
-export function collapseButton(collapsed: boolean): string {
-  const label = collapsed ? "Expand group" : "Collapse group";
-  const icon = collapsed ? "angle right" : "angle down";
-  return `<button type="button" class="qb-icon-btn qb-collapse-btn" data-action="toggle-collapse" aria-label="${label}" title="${label}" aria-expanded="${!collapsed}"><i class="${icon} icon"></i></button>`;
-}
-
-/**
- * A group is drawn as a coloured bracket with a faint tint (green = ALL/AND,
- * mustard = ANY/OR — see styles.css). Between its children sits a small AND/OR
- * "joiner" on the bracket line. A collapsed group folds to one line: its
- * plain-English summary and how many conditions it holds. That whole line is a
- * click target for unfolding it (buttons and the grip inside keep their own jobs).
- *
- * "+ Condition" is the group's `data-focus-landing`: when the control that had
- * the keyboard focus is removed (a row's or a sub-group's ✕), focus goes there,
- * in the same group, and not onto a neighbour's ✕ where a second Enter would
- * delete something else (see focusMemory.ts).
- */
-export function groupHtml(
-  ctx: BuilderCtx,
-  g: Group,
-  isRoot: boolean,
-  position: Position | null = null,
-): string {
-  const tone = g.operator === "OR" ? "or" : "and";
-  const matchWord = g.operator === "OR" ? "ANY" : "ALL";
-  const remove = isRoot ? "" : iconButton("remove-node", "Remove group", "times");
-  // The root has no siblings to pass, so it has no buttons.
-  const move = position ? moveButtons("group", position) : "";
-  if (g.collapsed) {
-    const text = queryToText(g, ctx.catalog);
-    return `<div class="qb-group qb-group-${tone} is-collapsed" data-node-id="${escapeHtml(g.id)}">
-      <div class="qb-group-head" data-action="toggle-collapse" title="Click to expand">
-        ${isRoot ? "" : nodeGrip(g.id, "group")}
-        ${move}
-        ${collapseButton(true)}
-        <span class="qb-op-badge">${matchWord}</span>
-        <span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>
-        <span class="qb-count">${countLabel(countConditions(g), "condition")}</span>
-        ${remove}
-      </div>
-      ${issuesHtml(g.id, ctx.issues)}
-    </div>`;
-  }
-  // With two or more items, "Group contents" is the way to put a sibling group
-  // next to them (e.g. to mix ALL and ANY). Ungroup is always drawn on a
-  // non-root group, but is aria-disabled with the reason when it would change
-  // what the query means: not `disabled`, so keyboard and screen-reader users
-  // can still reach the button and hear why.
-  const groupContentsButton =
-    g.children.length >= 2
-      ? `<button type="button" class="ui mini basic button" data-action="group-contents" title="Put this group's conditions and groups into a new group inside it"><i class="object group outline icon" aria-hidden="true"></i>Group contents</button>`
-      : "";
-  const blocked = isRoot ? null : ungroupBlocker(ctx.query, g.id);
-  const ungroupButton = isRoot
-    ? ""
-    : `<button type="button" class="ui mini basic button" data-action="ungroup"${blocked ? ` aria-disabled="true" title="${escapeHtml(blocked)}"` : ` title="Put this group's items into the group around it"`}><i class="object ungroup outline icon" aria-hidden="true"></i>Ungroup</button>`;
-  // The action buttons share one right-aligned box (`.qb-group-actions`): when
-  // the header is too narrow they wrap among themselves, so the ✕ stays last
-  // on the right and is never left alone at the start of a new line, where it
-  // could be mistaken for the first condition's remove button.
-  const joiner = `<span class="qb-joiner">${g.operator}</span>`;
-  const children = g.children
-    .map((child, i) => nodeHtml(ctx, child, false, { index: i + 1, count: g.children.length }))
-    .join(joiner);
-  return `<div class="qb-group qb-group-${tone}" data-node-id="${escapeHtml(g.id)}">
-    <div class="qb-group-head">
-      ${isRoot ? "" : nodeGrip(g.id, "group")}
-      ${move}
-      ${collapseButton(false)}
-      <span class="qb-group-label">Match</span>
-      <span class="qb-logic" role="group" aria-label="Combine conditions with">
-        <button type="button" class="qb-logic-btn${g.operator === "AND" ? " is-on" : ""}" data-action="set-and" aria-pressed="${g.operator === "AND"}">ALL</button>
-        <button type="button" class="qb-logic-btn${g.operator === "OR" ? " is-on" : ""}" data-action="set-or" aria-pressed="${g.operator === "OR"}">ANY</button>
-      </span>
-      <span class="qb-group-label">of the following</span>
-      <span class="qb-group-actions">
-        <button type="button" class="ui mini basic button" data-action="add-condition" data-focus-landing><i class="plus icon"></i>Condition</button>
-        <button type="button" class="ui mini basic button" data-action="add-group"><i class="plus icon"></i>Group</button>
-        ${groupContentsButton}
-        ${ungroupButton}
-        ${remove}
-      </span>
-    </div>
-    ${issuesHtml(g.id, ctx.issues)}
-    <div class="qb-children">${children}</div>
-  </div>`;
-}
-
-/** `position` is null only for the root, the one node with no siblings. */
-function nodeHtml(
-  ctx: BuilderCtx,
-  node: QueryNode,
-  isRoot: boolean,
-  position: Position | null,
-): string {
-  if (node.kind === "group") return groupHtml(ctx, node, isRoot, position);
-  // A condition is never the root, so it always has a position.
-  return conditionHtml(ctx, node, position!);
-}
-
-/** The query card's footer: the whole query in plain English once nothing
- *  needs attention, otherwise how many parts do. `issues` are placed
- *  (placeIssues), so the count matches what is on screen. */
-export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog): string {
-  if (countConditions(query) === 0) {
-    return `<span class="qb-muted">Add a condition to start building the query.</span>`;
-  }
-  const pending = new Set(issues.map((i) => i.nodeId)).size;
-  if (pending > 0) {
-    const what =
-      pending === 1
-        ? "1 part of the query still needs"
-        : `${pending} parts of the query still need`;
-    return `<span class="qb-muted">${what} attention.</span>`;
-  }
-  const text = queryToText(query, catalog);
-  return `<span class="qb-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+function keepFocusInRow(container: HTMLElement, blockId: string, fieldId: string): void {
+  const row = fieldRowOf(container, blockId, fieldId);
+  if (!row || row.contains(document.activeElement)) return;
+  const target =
+    operatorDropdownOf(row)?.querySelector<HTMLElement>("input.search") ??
+    row.querySelector<HTMLElement>('[data-action="edit-field"]');
+  target?.focus();
 }
 
 /**
@@ -467,7 +161,7 @@ export function footerHtml(query: Group, issues: Issue[], catalog: FieldCatalog)
  * last saved or opened, then **Save…** and **Saved queries** (docs/ARCHITECTURE.md,
  * "Saved queries — `savedQueries.ts`"). A logged-out user who presses either
  * button is asked to log in first, in the saved-queries dialog (`loginHtml`,
- * savedQueries.ts).
+ * src/ui/savedQueries.ts).
  *
  * The two buttons only exist once startup has loaded the databases and the
  * field catalog: start() sets the query and selection when it ends, so a saved
@@ -494,24 +188,54 @@ export function queryTitleHtml(state: AppState): string {
     </div>`;
 }
 
+/**
+ * The state keys the builder's painter listens to in main.ts. Not
+ * `selectedField`: the builder draws the About panels with it, but a change
+ * of it alone repaints only those (`paintAboutPanels`, `ABOUT_PANEL_KEYS`).
+ * Selecting happens on every focus move into a row, and a builder repaint
+ * would close the dropdown the focus just moved into.
+ */
+export const QUERY_BUILDER_KEYS: (keyof AppState)[] = [
+  "catalog",
+  "databases",
+  "query",
+  "expandedBlockIds",
+  "openField",
+  "panelTab",
+  "issues",
+  "serverIssues",
+  "facets",
+  "dropNotice",
+  "restoredNotice",
+  "openSaved",
+  "selectedDatabaseIds",
+];
+
 function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);
     return;
   }
-  // Local issues (validate.ts) and the backend's, each on a node that is drawn.
+  // Local issues (src/query/validate.ts) and the backend's, each on a node that is drawn.
   const issues = placeIssues(state.query, [...state.issues, ...state.serverIssues]);
-  const ctx: BuilderCtx = {
+  const ctx: BlockCtx = {
+    // The facets, the event total and the selected field, for About.
+    ...aboutCtxOf(state),
     catalog: state.catalog,
-    facets: state.facets,
     issues,
     query: state.query,
+    expandedBlockIds: state.expandedBlockIds,
+    openField: state.openField,
+    panelTab: state.panelTab,
+    // Worked out once per paint, not per block: every block's row shows the
+    // same facets on the same colour scale.
+    co: state.facets ? coCtxOf(state.facets, readCoTokens()) : null,
   };
   paint(
     el,
     `${restoredNoticeHtml(state.restoredNotice)}${noticeHtml(state.dropNotice)}<div class="qb-card qb-query" tabindex="-1" data-focus-landing>
        ${queryTitleHtml(state)}
-       ${nodeHtml(ctx, state.query, true, null)}
+       ${groupHtml(ctx, state.query, true)}
        <div class="qb-query-foot">${footerHtml(state.query, issues, state.catalog)}</div>
      </div>`,
   );
@@ -532,7 +256,9 @@ export function wireQueryBuilder(
   getState: () => AppState,
   onChange: (next: Group) => void,
   hooks: {
-    onDrop(item: DragItem | null, targetNodeId: string): void;
+    /** Returns the field row the drop opened (null: none), which then gets
+     *  the keyboard focus. */
+    onDrop(item: DragItem | null, targetNodeId: string): FieldRef | null;
     /** The Move up / Move down buttons: swap a node with its neighbour. */
     onMove(nodeId: string, direction: Direction): void;
     onDismissNotice(): void;
@@ -540,45 +266,109 @@ export function wireQueryBuilder(
     onNotice(message: string): void;
     /** Say something to screen-reader users (the shell's live region). */
     announce(message: string): void;
-    /** The title's **Save…** and **Saved queries** (savedQueries.ts shows the dialogs). */
+    /** The title's **Save…** and **Saved queries** (src/ui/savedQueries.ts shows the dialogs). */
     onOpenSaveDialog(): void;
     onOpenSavedList(): void;
     /** The Restored notice's **Start fresh** and ✕. */
     onStartFresh(): void;
     onDismissRestored(): void;
+    /** Open a field row for editing (`AppState.openField`), or close the
+     *  open one (null). Not a query edit. */
+    openFieldRow(ref: FieldRef | null): void;
+    /** "+ N more fields" / "Show fewer fields" on a block. Not a query edit. */
+    toggleFields(blockId: string): void;
+    /** A panel tab pressed (the open one again: hide the panel). */
+    setPanelTab(tab: PanelTab): void;
+    /** The field About describes (null: the block's facet). Repaints only
+     *  the About panels, never the rows. */
+    selectFieldForPanel(ref: FieldRef | null): void;
+    /** A co-occurrence cell or chart box was pressed: open the dictionary at
+     *  facet `facetId`. `returnFocusTo` finds that cell or box again (null
+     *  when it is gone), for when the user closes the dictionary. */
+    showFacetInDictionary(facetId: string, returnFocusTo: () => HTMLElement | null): void;
   },
 ): (state: AppState) => void {
-  /** `changedPart`: the dropdown just used ("facet", "field", …), if any. */
-  function handleRowChange(row: HTMLElement, changedPart?: string): void {
+  // "Seen together": the rows of cells, the charts and their popovers.
+  const coOccurrence = wireCoOccurrence(container, hooks.showFacetInDictionary);
+
+  /** The facet block a field row (or anything else inside a block) belongs
+   *  to, as it is in the query now; null if it is gone. */
+  function blockOf(el: HTMLElement): FacetBlock | null {
+    const blockId = el.closest<HTMLElement>(".qb-block[data-node-id]")?.dataset.nodeId;
+    const block = blockId ? findNode(getState().query, blockId) : null;
+    return block?.kind === "facet" ? block : null;
+  }
+
+  /**
+   * The user picked an operator in a field row, or "Not filtered", which
+   * clears the field. Everything is read from the row before `onChange`,
+   * which repaints at once and replaces the row.
+   */
+  function handleOperatorChange(row: HTMLElement): void {
     const { query, catalog } = getState();
-    const cond = findNode(query, row.dataset.nodeId!);
-    if (!catalog || !cond || cond.kind !== "condition") return;
-    const picked = (part: string) =>
-      row.querySelector<HTMLSelectElement>(`select[data-part="${part}"]`)?.value || null;
-    const { facetOperatorId, fieldId } = decodeFieldValue(picked("field"));
-    const patch = nextCondition(
-      cond,
-      {
-        facetId: picked("facet"),
-        fieldId,
-        operatorId: picked("operator"),
-        facetOperatorId,
-      },
+    const block = blockOf(row);
+    const fieldId = row.dataset.fieldId;
+    if (!catalog || !block || !fieldId) return;
+    const picked = row.querySelector<HTMLSelectElement>('select[data-part="operator"]')?.value;
+    // The condition this very row stands for (an unset row has none), never
+    // another one on the same field: a stray duplicate has a row of its own.
+    const existing = block.conditions.find((c) => c.id === row.dataset.nodeId);
+    const next = nextFieldCondition(
+      existing,
+      block.facetId,
+      fieldId,
+      pickedOperatorId(picked ?? ""),
       catalog,
       (arity, valueType) => readValueControl(row, arity, valueType),
     );
-    // Read the changed dropdown now: onChange repaints at once and replaces
-    // this row, so it must not be read afterwards.
-    const hasChoice = Boolean(changedPart && picked(changedPart));
-    onChange(updateNode(query, cond.id, patch));
-    // The repaint also lost the cursor: put it back where cursorAfterChange
-    // says, judging by the committed patch (the row's dropdowns may still show
-    // the previous facet's choice).
-    const target = cursorAfterChange(changedPart, hasChoice, patch);
-    if (target === "field-closed") focusFieldDropdown(container, cond.id);
-    else if (target) focusPart(container, cond.id, target);
-    const spoken = announcementAfterChange(changedPart, hasChoice, { ...cond, ...patch }, catalog);
-    if (spoken) hooks.announce(spoken);
+    // "Not filtered": the row goes back to a plain unset one, so it is no
+    // longer the open row.
+    if (!next) hooks.openFieldRow(null);
+    onChange(queryAfterFieldEdit(query, block, existing?.id, next, catalog));
+    // The repaint lost the cursor (the row changed shape): on to the value if
+    // the operator takes one, otherwise stay in the row.
+    if (cursorAfterOperator(next?.operatorId ?? null) === "value") {
+      focusValue(container, block.id, fieldId);
+    } else {
+      keepFocusInRow(container, block.id, fieldId);
+    }
+  }
+
+  /** Apply the value shown in field row `row` to its condition. Only a set
+   *  row with an operator has a value control. */
+  function commitValue(row: HTMLElement): void {
+    const { query, catalog } = getState();
+    const block = blockOf(row);
+    const fieldId = row.dataset.fieldId;
+    // The condition this very row was drawn for, found by the row's node id
+    // (as in handleOperatorChange). The row may have been repainted since (see
+    // afterPointer below): its boxes still hold what was typed, and if that
+    // condition is gone by now the typed value goes with it.
+    const existing = block?.conditions.find((c) => c.id === row.dataset.nodeId);
+    if (!catalog || !block || !fieldId || !existing?.operatorId) return;
+    // A field the catalog doesn't know has no value box to read.
+    if (!findField(catalog, block.facetId, fieldId)) return;
+    const next = nextFieldCondition(
+      existing,
+      block.facetId,
+      fieldId,
+      existing.operatorId,
+      catalog,
+      (arity, valueType) => readValueControl(row, arity, valueType),
+    );
+    if (next) onChange(queryAfterFieldEdit(query, block, existing.id, next, catalog));
+  }
+
+  /** "+ Facet": a new block for the picked facet at the end of the group.
+   *  paint() keeps the focus on the picker, so the user can add another. */
+  function handleAddFacet(picker: HTMLElement): void {
+    const facetId = picker.querySelector("select")?.value;
+    const groupId = picker.closest<HTMLElement>(".qb-group[data-node-id]")?.dataset.nodeId;
+    if (!facetId || !groupId) return;
+    const block = newBlock(facetId);
+    onChange(addChild(getState().query, groupId, block));
+    // The new block is not where the focus is: say what happened.
+    hooks.announce(addedNodesMessage([block]));
   }
 
   /**
@@ -589,7 +379,7 @@ export function wireQueryBuilder(
    */
   function commitTypedValue(row: HTMLElement): void {
     const menuWasOpen = Boolean(document.activeElement?.closest(".ui.dropdown.active"));
-    handleRowChange(row);
+    commitValue(row);
     const dropdown = document.activeElement?.closest<HTMLElement>(".ui.dropdown");
     if (menuWasOpen && dropdown && container.contains(dropdown)) openDropdown(dropdown);
   }
@@ -657,19 +447,32 @@ export function wireQueryBuilder(
     if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
       return dismissNotice();
     }
+    // A co-occurrence cell or box: open the dictionary at its facet.
+    if (coOccurrence.handleClick(e.target as HTMLElement)) return;
     // The grip is for dragging; a click on it must not also toggle a folded group.
     if ((e.target as HTMLElement).closest(".qb-grip")) return;
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
-    // A drag across a folded group's line to select its text ends in a click on
-    // that line: that is not a request to unfold it. (Only the header itself,
-    // not a button of its own, is a toggle by a click anywhere on its line.)
-    if (btn?.classList.contains("qb-group-head") && window.getSelection()?.toString()) return;
+    // A drag across a folded group's or block's line to select its text ends in
+    // a click on that line: that is not a request to unfold it. (Only the
+    // header itself, not a button of its own, is a toggle by a click anywhere
+    // on its line.)
+    const isFoldedHead = btn?.matches(".qb-group-head, .qb-block-head") ?? false;
+    if (isFoldedHead && window.getSelection()?.toString()) return;
     // The title's buttons and the Restored notice's sit outside every row and
     // group, so they are handled before the node lookup below.
     if (btn?.dataset.action === "open-save-dialog") return hooks.onOpenSaveDialog();
     if (btn?.dataset.action === "open-saved-list") return hooks.onOpenSavedList();
     if (btn?.dataset.action === "start-fresh") return hooks.onStartFresh();
     if (btn?.dataset.action === "dismiss-restored") return hooks.onDismissRestored();
+    // The panel's tabs switch the panel of every block, not one node.
+    if (btn?.dataset.action === "panel-seen") return hooks.setPanelTab("seen");
+    if (btn?.dataset.action === "panel-about") return hooks.setPanelTab("about");
+    if (btn?.dataset.action === "about-facet") return hooks.selectFieldForPanel(null);
+    // A field's name selects it for About. The name is plain text, not a
+    // control, so the focus does not move there and `focusin` below misses it.
+    const label = (e.target as HTMLElement).closest<HTMLElement>(".qb-field-label");
+    if (label) return selectRowForPanel(label);
+    // The group, block or set field row the button sits in.
     const nodeId = btn?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId;
     if (!btn || !nodeId) return;
     // An unavailable Move button (an end of the list) must do nothing, not even
@@ -680,12 +483,8 @@ export function wireQueryBuilder(
     if (isMove && btn.getAttribute("aria-disabled") === "true") return;
     const q = getState().query;
     switch (btn.dataset.action) {
-      // paint() keeps the keyboard focus on the "+" button, so pressing it
-      // again adds another; the new row itself is not visible to a screen
-      // reader user, so it is announced (like the dictionary's "+").
-      case "add-condition":
-        onChange(addChild(q, nodeId, newCondition()));
-        return hooks.announce(addedMessage(1));
+      // paint() keeps the keyboard focus on "+ Group", so pressing it again
+      // adds another; the new group is not where the focus is, so it is announced.
       case "add-group":
         onChange(addChild(q, nodeId, newGroup()));
         return hooks.announce(ADDED_GROUP_MESSAGE);
@@ -707,12 +506,19 @@ export function wireQueryBuilder(
         clearOldNotice();
         return hooks.announce(UNGROUPED_MESSAGE);
       }
+      // A group's or a block's ✕. The focus goes to the group's "+ Group"
+      // (its data-focus-landing), never to a neighbour's ✕.
       case "remove-node":
         return onChange(removeNode(q, nodeId));
+      // ALL / ANY: a group's, or a block's over its set fields.
       case "set-and":
         return onChange(updateNode(q, nodeId, { operator: "AND" }));
       case "set-or":
         return onChange(updateNode(q, nodeId, { operator: "OR" }));
+      case "set-has":
+        return onChange(setNegated(q, nodeId, false));
+      case "set-has-no":
+        return onChange(setNegated(q, nodeId, true));
       // paint() keeps the keyboard focus on the pressed button (the same node's
       // button for the same direction), so pressing it again keeps moving.
       case "move-up":
@@ -720,14 +526,90 @@ export function wireQueryBuilder(
       case "move-down":
         return hooks.onMove(nodeId, "down");
       case "toggle-collapse": {
-        // paint() puts the focus back on this group's (new) collapse button.
+        // paint() puts the focus back on this group's or block's (new) collapse button.
         const node = findNode(q, nodeId);
-        return onChange(
-          updateNode(q, nodeId, { collapsed: !(node?.kind === "group" && node.collapsed) }),
-        );
+        return onChange(updateNode(q, nodeId, { collapsed: !node?.collapsed }));
+      }
+      case "toggle-fields": {
+        const block = blockOf(btn);
+        return block ? hooks.toggleFields(block.id) : undefined;
+      }
+      // An unset row's empty slot: open the row (its dropdowns are drawn once
+      // it is the open field) with the operator list showing.
+      case "edit-field": {
+        const block = blockOf(btn);
+        const fieldId = btn.dataset.fieldId;
+        if (!block || !fieldId) return;
+        hooks.openFieldRow({ blockId: block.id, fieldId });
+        const dropdown = operatorDropdownOf(fieldRowOf(container, block.id, fieldId));
+        return dropdown ? openDropdown(dropdown) : undefined;
+      }
+      // A stray row's ✕ (a field the dictionary no longer has, or a field set
+      // twice): only that condition goes, `nodeId` is its row's.
+      case "remove-condition": {
+        const block = blockOf(btn);
+        return block ? onChange(removeCondition(q, block.id, nodeId)) : undefined;
       }
     }
   });
+
+  /** Select the field of the row `el` sits in for the About panel. A stray
+   *  row counts too: About then says the dictionary does not know it. */
+  function selectRowForPanel(el: HTMLElement): void {
+    const row = el.closest<HTMLElement>(".qb-field-row");
+    const block = blockOf(el);
+    const fieldId = row?.dataset.fieldId;
+    if (block && fieldId) hooks.selectFieldForPanel({ blockId: block.id, fieldId });
+  }
+
+  // The focus moving into a row (Tab, a click on its slot or dropdown)
+  // selects its field for About. This repaints only the About panels, so the
+  // dropdown being opened stays open.
+  // A repaint putting the focus back is not the user moving it: it would
+  // undo a selection just cleared (Escape, "← About").
+  container.addEventListener("focusin", (e) => {
+    if (isRestoringFocus()) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".qb-field-row")) selectRowForPanel(target);
+  });
+
+  // Escape inside a block closes the open field row (an open dropdown menu
+  // takes the first Escape itself: Fomantic stops it there). An open unset
+  // row goes back to a plain one then, so the focus is kept in that row.
+  // It also takes About back to the block's facet (spec, section 5).
+  container.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    // An open popover takes this Escape (the browser closes it); the field
+    // row and About stay as they are.
+    if (coOccurrence.openPopover()) return;
+    // Not a layer of its own: this Escape goes on to the block as well.
+    coOccurrence.dismissCaptions();
+    const target = e.target as HTMLElement;
+    const block = blockOf(target);
+    if (!block) return;
+    closeOpenRow(target);
+    // Last: closing the row puts the focus back into it (keepFocusInRow, a
+    // real focus move), and that row's `focusin` selects its field again.
+    // Cleared before that, it would not stay cleared.
+    if (getState().selectedField?.blockId === block.id) hooks.selectFieldForPanel(null);
+  });
+
+  /** Escape's first job in a block: close the open field row, if any,
+   *  keeping a value still being typed and the focus in that row. */
+  function closeOpenRow(target: HTMLElement): void {
+    const open = getState().openField;
+    if (!open) return;
+    const wasInRow = fieldRowOf(container, open.blockId, open.fieldId)?.contains(target) ?? false;
+    // A value still being typed is committed first, as a click elsewhere would
+    // have done (its `change` has not fired yet): the repaint below would
+    // throw the typed text away.
+    afterPointer.flush();
+    // (A stray row has no value box: its `.is-stray` is not a row to commit.)
+    const typedRow = target.closest<HTMLElement>(".qb-field-row:not(.is-stray)[data-node-id]");
+    if (typedRow) commitValue(typedRow);
+    hooks.openFieldRow(null);
+    if (wasInRow) keepFocusInRow(container, open.blockId, open.fieldId);
+  }
 
   // The warning's ✕ is an icon, not a <button>, so Enter/Space need wiring.
   container.addEventListener("keydown", (e) => {
@@ -744,14 +626,34 @@ export function wireQueryBuilder(
     marked?.classList.remove("is-drop-target", "is-drop-before");
     marked = null;
   };
-  /** Where a drop at `el` lands: the nearest group or condition. */
+  /**
+   * How to mark `target` while a drag is over it. A drop on a group lands at
+   * its end (outline). A drop on a block lands just before it (a bar), except
+   * a dictionary field or value of the block's own facet, which lands inside
+   * the block: that block is the target (outline), as a bar would promise a
+   * new block. The browser hides the drag's data until the drop, so the
+   * dictionary item comes from `draggedItem`; when it is unknown (a drag
+   * from elsewhere) the bar stays.
+   */
+  const dropMark = (target: HTMLElement): "is-drop-before" | "is-drop-target" => {
+    if (!target.classList.contains("qb-block")) return "is-drop-target";
+    const node = findNode(getState().query, target.dataset.nodeId!);
+    const inside = node?.kind === "facet" && dropLandsInBlock(draggedItem(), node);
+    return inside ? "is-drop-target" : "is-drop-before";
+  };
+  /** Where a drop at `el` lands: the nearest block or group. (A field row's
+   *  `data-node-id` is its condition's, which is never a drop target: a field
+   *  row never moves, and a dictionary item dropped on it is about its block.) */
   const targetOf = (el: EventTarget | null) =>
-    el instanceof Element ? el.closest<HTMLElement>("[data-node-id]") : null;
+    el instanceof Element
+      ? el.closest<HTMLElement>(".qb-block[data-node-id], .qb-group[data-node-id]")
+      : null;
 
   container.addEventListener("dragstart", (e) => {
     if (!(e.target instanceof Element)) return; // e.g. a Text node
     const grip = e.target.closest<HTMLElement>("[data-node-item]");
     if (!grip || !e.dataTransfer) return;
+    forgetDrag(); // a drag of our own, not a dictionary item
     const nodeId = grip.dataset.nodeItem!;
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type: "node", nodeId }));
     e.dataTransfer.effectAllowed = "move";
@@ -771,9 +673,7 @@ export function wireQueryBuilder(
     if (target !== marked) {
       unmark();
       marked = target;
-      target.classList.add(
-        target.classList.contains("qb-condition") ? "is-drop-before" : "is-drop-target",
-      );
+      target.classList.add(dropMark(target));
     }
   });
 
@@ -785,10 +685,19 @@ export function wireQueryBuilder(
     if (!isOurs(e)) return;
     e.preventDefault();
     unmark();
+    forgetDrag();
     const target = targetOf(e.target);
     if (!target) return;
     // An unreadable payload arrives as null; the app explains it to the user.
-    hooks.onDrop(parseDragItem(e.dataTransfer!.getData(DRAG_MIME)), target.dataset.nodeId!);
+    const opened = hooks.onDrop(
+      parseDragItem(e.dataTransfer!.getData(DRAG_MIME)),
+      target.dataset.nodeId!,
+    );
+    // A drop that opened a row (a field, or a value that filled a row) moves
+    // the keyboard focus into it, without opening its menu: the user goes on
+    // with the keyboard where the mouse left off. (The dictionary's "Add to
+    // query" does not come through here: its focus stays in the dictionary.)
+    if (opened) keepFocusInRow(container, opened.blockId, opened.fieldId);
   });
 
   container.addEventListener("dragend", unmark);
@@ -809,7 +718,7 @@ export function wireQueryBuilder(
     const target = e.target as HTMLElement;
     // Fomantic dispatches a native bubbling "change" on the <select> behind each
     // dropdown *before* calling its onChange. Handling both would run
-    // handleRowChange twice, the second time on a detached row, and write back
+    // the row's handler twice, the second time on a detached row, and write back
     // stale values. So every <select> is handled ONLY via onDropdownChange below.
     // A search dropdown's own typing box (input.search) fires "change" too, when
     // it loses focus on the mousedown before a menu click; repainting then would
@@ -817,7 +726,7 @@ export function wireQueryBuilder(
     // inside a .ui.dropdown is skipped, and this listener handles only the plain
     // <input>s (text/number, the range pair and the boolean toggle's checkbox).
     if (target instanceof HTMLSelectElement || target.closest(".ui.dropdown")) return;
-    const row = target.closest<HTMLElement>(".qb-condition[data-node-id]");
+    const row = target.closest<HTMLElement>(".qb-field-row[data-node-id]");
     // A box's "change" fires as it loses focus, before the user's next action
     // has finished, so the commit is held (see afterPointer above). The row may
     // be repainted by then; its boxes still hold what was typed, and the
@@ -827,10 +736,17 @@ export function wireQueryBuilder(
   });
 
   return (state) => {
+    // An open popover is opened again after the paint (coOccurrenceWiring.ts).
+    const openPopoverId = coOccurrence.beforePaint();
     paintQueryBuilder(container, state);
+    coOccurrence.afterPaint(openPopoverId);
     onDropdownChange(container, (el) => {
-      const row = el.closest<HTMLElement>(".qb-condition[data-node-id]");
-      if (row) handleRowChange(row, el.querySelector("select")?.dataset.part);
+      const part = el.querySelector("select")?.dataset.part;
+      if (part === "add-facet") return handleAddFacet(el);
+      const row = el.closest<HTMLElement>(".qb-field-row");
+      if (!row) return;
+      if (part === "operator") handleOperatorChange(row);
+      else commitValue(row); // a value chosen from a list
     });
   };
 }

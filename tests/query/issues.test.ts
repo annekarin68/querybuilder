@@ -1,32 +1,79 @@
 import { describe, it, expect } from "vitest";
 import { placeIssues, serverIssues } from "../../src/query/issues";
-import { emptyQuery, newCondition } from "../../src/query/tree";
-import type { Condition, Group, Issue, QueryNode } from "../../src/query/types";
+import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
+import type { FacetBlock, Group, Issue } from "../../src/query/types";
 import { dbError, failed, ok } from "../statsFixtures";
 
-const cond = (id: string): Condition => ({ ...newCondition(), id });
-const group = (id: string, children: QueryNode[], collapsed = false): Group => ({
-  ...emptyQuery(),
-  id,
-  children,
-  collapsed,
-});
-const issue = (nodeId: string, message = "Bad."): Issue => ({ nodeId, message, kind: "invalid" });
-const serverIssue = (nodeId: string, message = "Bad."): Issue => ({
+const issue = (nodeId: string, message = "m"): Issue => ({ nodeId, message, kind: "invalid" });
+
+const serverIssue = (nodeId: string, message = "m"): Issue => ({
   ...issue(nodeId, message),
   fromServer: true,
 });
 
+function sample() {
+  const c = newFieldCondition("size", "gt", null);
+  const block: FacetBlock = { ...newBlock("thing"), conditions: [c] };
+  const inner = groupOf([block]);
+  const root: Group = { ...emptyQuery(), children: [inner] };
+  return { c, block, inner, root };
+}
+
+describe("placeIssues", () => {
+  it("keeps an issue on its condition while everything is open", () => {
+    const { c, root } = sample();
+    expect(placeIssues(root, [issue(c.id)])).toEqual([issue(c.id)]);
+  });
+
+  it("moves a condition's issue to its folded block", () => {
+    const { c, block, inner, root } = sample();
+    const folded: Group = {
+      ...root,
+      children: [{ ...inner, children: [{ ...block, collapsed: true }] }],
+    };
+    expect(placeIssues(folded, [issue(c.id)])).toEqual([issue(block.id)]);
+  });
+
+  it("moves it to the outermost folded group around it", () => {
+    const { c, block, inner, root } = sample();
+    const folded: Group = { ...root, children: [{ ...inner, collapsed: true }] };
+    expect(placeIssues(folded, [issue(c.id), issue(block.id)])).toEqual([issue(inner.id)]);
+  });
+
+  it("puts an unknown id on the root", () => {
+    const { root } = sample();
+    expect(placeIssues(root, [issue("gone")])).toEqual([issue(root.id)]);
+  });
+});
+
+describe("placeIssues: a local and a server issue with the same text", () => {
+  // The server's flag changes how it is drawn (a warning, not a hint), so a
+  // local twin must not hide it, whichever comes first.
+  it("keeps one, as the server's, in either order", () => {
+    const { c, root } = sample();
+    expect(placeIssues(root, [issue(c.id), serverIssue(c.id)])).toEqual([serverIssue(c.id)]);
+    expect(placeIssues(root, [serverIssue(c.id), issue(c.id)])).toEqual([serverIssue(c.id)]);
+  });
+
+  it("keeps issues that fold onto the same node once, others apart", () => {
+    const { c, block, inner, root } = sample();
+    const folded: Group = { ...root, children: [{ ...inner, collapsed: true }] };
+    expect(placeIssues(folded, [issue(c.id), issue(block.id), issue(c.id, "Other.")])).toEqual([
+      issue(inner.id),
+      issue(inner.id, "Other."),
+    ]);
+  });
+});
+
 describe("serverIssues", () => {
+  const bad = (nodeId: string, message = "Bad.") => serverIssue(nodeId, message);
+
   it("turns every error that names a node into an issue, once", () => {
     const results = [
       failed("a", dbError("c1")),
       failed("b", dbError("c1"), dbError("c1", "Other.")),
     ];
-    expect(serverIssues({ status: "ok", results })).toEqual([
-      serverIssue("c1"),
-      serverIssue("c1", "Other."),
-    ]);
+    expect(serverIssues({ status: "ok", results })).toEqual([bad("c1"), bad("c1", "Other.")]);
   });
 
   it("keeps the same message with another kind or node apart", () => {
@@ -34,9 +81,9 @@ describe("serverIssues", () => {
       failed("a", dbError("c1"), dbError("c1", "Bad.", "incomplete"), dbError("c2")),
     ];
     expect(serverIssues({ status: "ok", results })).toEqual([
-      serverIssue("c1"),
+      bad("c1"),
       { nodeId: "c1", message: "Bad.", kind: "incomplete", fromServer: true },
-      serverIssue("c2"),
+      bad("c2"),
     ]);
   });
 
@@ -63,46 +110,8 @@ describe("serverIssues", () => {
 
   it("works while the stream is still loading, and is [] when stats failed", () => {
     expect(serverIssues({ status: "loading", results: [failed("a", dbError("c1"))] })).toEqual([
-      serverIssue("c1"),
+      bad("c1"),
     ]);
     expect(serverIssues({ status: "error", error: "down" })).toEqual([]);
-  });
-});
-
-describe("placeIssues", () => {
-  const query = group("root", [
-    cond("c1"),
-    group("g1", [cond("c2"), group("g2", [cond("c3")], true)]),
-    group("g3", [group("g4", [cond("c4")])], true),
-  ]);
-
-  it("leaves an issue on a node that is drawn where it is", () => {
-    expect(placeIssues(query, [issue("c1"), issue("c2"), issue("g2")])).toEqual([
-      issue("c1"),
-      issue("c2"),
-      issue("g2"),
-    ]);
-  });
-
-  it("moves an issue inside a collapsed group to that group", () => {
-    expect(placeIssues(query, [issue("c3")])).toEqual([issue("g2")]);
-  });
-
-  it("uses the outermost collapsed group, and keeps issues that end up the same once", () => {
-    expect(placeIssues(query, [issue("g4"), issue("c4"), issue("c4", "Other.")])).toEqual([
-      issue("g3"),
-      issue("g3", "Other."),
-    ]);
-  });
-
-  // The server's flag changes how it is drawn (a warning, not a hint), so a
-  // local twin that comes first must not hide it.
-  it("keeps one of a local and a server issue with the same text, as the server's", () => {
-    expect(placeIssues(query, [issue("c1"), serverIssue("c1")])).toEqual([serverIssue("c1")]);
-    expect(placeIssues(query, [serverIssue("c1"), issue("c1")])).toEqual([serverIssue("c1")]);
-  });
-
-  it("moves an issue with an unknown id to the root group", () => {
-    expect(placeIssues(query, [issue("gone")])).toEqual([issue("root")]);
   });
 });

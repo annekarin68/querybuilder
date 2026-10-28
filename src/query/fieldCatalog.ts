@@ -13,8 +13,8 @@ export interface CatalogField {
   fieldId: string;
   /** Display name, "Facet name: field name" — used in summaries. */
   name: string;
-  /** The field's own `Field.name` — used in the Field dropdown, where the
-   *  facet is already chosen. */
+  /** The field's own `Field.name` — used in a facet block's rows, where the
+   *  facet is already named by the block. */
   fieldName: string;
   valueType: ValueType;
   /** Known values to suggest, from the field's `values` (see `pickListFor`).
@@ -56,52 +56,10 @@ export const OPERATORS: CatalogOperator[] = [
   { id: "contains", name: "Contains", arity: "one" },
   { id: "between", name: "Between", arity: "two" },
   { id: "in", name: "Is any of", arity: "many" },
+  { id: "not_in", name: "Is none of", arity: "many" },
   { id: "present", name: "Has any value", arity: "none" },
   { id: "absent", name: "Has no value", arity: "none" },
 ];
-
-/** The only operators a condition about a whole facet (no field) offers. */
-export const FACET_OPERATOR_IDS = ["present", "absent"];
-
-/** Those operators themselves, in `OPERATORS` order: the Field dropdown's
- *  "About the whole facet" choices. Computed once, not on every paint. */
-export const FACET_OPERATORS = OPERATORS.filter((o) => FACET_OPERATOR_IDS.includes(o.id));
-
-const FACET_OPERATOR_NAMES: Record<string, string> = {
-  present: "Is present",
-  absent: "Is absent",
-};
-
-/** An operator's label. "present" / "absent" read differently for a whole
- *  facet ("Is present") than for a field ("Has any value"); the id is the same. */
-export function operatorName(op: CatalogOperator, facetLevel: boolean): string {
-  return (facetLevel && FACET_OPERATOR_NAMES[op.id]) || op.name;
-}
-
-/** Whether a condition is about the facet itself: a facet and an operator are
- *  chosen, but no field. (A facet with nothing else chosen is just unfinished.) */
-export function isFacetLevel(c: {
-  facetId: string | null;
-  fieldId: string | null;
-  operatorId: string | null;
-}): boolean {
-  return c.facetId !== null && c.fieldId === null && c.operatorId !== null;
-}
-
-/** Whether a condition is a well-formed whole-facet test: facet-level, one of
- *  the presence operators, and no value. Only such a condition may show
- *  "Is present" / "Is absent" as chosen in the Field dropdown. A malformed one
- *  (a hand-edited or odd restored query) shows "Choose…" instead, so picking a
- *  test is a real change and `nextCondition` repairs the row — its Operator
- *  and Value slots are not drawn, so this dropdown is the only way to fix it. */
-export function isFacetTest(c: {
-  facetId: string | null;
-  fieldId: string | null;
-  operatorId: string | null;
-  value: unknown;
-}): boolean {
-  return isFacetLevel(c) && FACET_OPERATOR_IDS.includes(c.operatorId as string) && c.value === null;
-}
 
 export function findFacet(catalog: FieldCatalog, facetId: string | null): CatalogFacet | undefined {
   return facetId ? catalog.facets.find((f) => f.id === facetId) : undefined;
@@ -117,8 +75,7 @@ export function findField(
     : undefined;
 }
 
-/** The fields of one facet, in catalog order — what the Field dropdown lists
- *  once a facet is chosen. */
+/** The fields of one facet, in catalog order — the rows of a facet block. */
 export function fieldsOfFacet(catalog: FieldCatalog, facetId: string | null): CatalogField[] {
   return facetId ? catalog.fields.filter((f) => f.facetId === facetId) : [];
 }
@@ -132,8 +89,8 @@ export function findOperator(id: string | null): CatalogOperator | undefined {
  * which specific field it is, nor by whether it has a pick-list.
  */
 const OPERATOR_PROFILE: Record<ValueType, string[]> = {
-  string: ["eq", "neq", "contains", "in", "present", "absent"],
-  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "present", "absent"],
+  string: ["eq", "neq", "contains", "in", "not_in", "present", "absent"],
+  number: ["eq", "neq", "gt", "gte", "lt", "lte", "between", "in", "not_in", "present", "absent"],
   boolean: ["eq", "neq"],
   date: ["eq", "neq", "before", "after", "between", "present", "absent"],
 };

@@ -158,9 +158,14 @@ export default tseslint.config(
     },
   },
 
-  // Plain-JS build script.
+  // Plain-JS scripts (the offline guard, the dev-server and doc helpers).
   {
     files: ["scripts/**/*.mjs", "eslint.config.js"],
     languageOptions: { globals: { ...globals.node } },
+  },
+  // The browser-check helpers also run callbacks inside the page.
+  {
+    files: ["scripts/browser.mjs"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 );

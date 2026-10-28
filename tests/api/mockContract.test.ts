@@ -3,10 +3,10 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import * as client from "../../src/api/client";
 import type { DatabaseResult } from "../../src/model";
-import type { Condition, Group } from "../../src/query/types";
+import type { FacetBlock, Group } from "../../src/query/types";
 import { createMockServer } from "../../mock-server/server";
 import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
-import { unfinishedDraft, unfinishedTree } from "../savedQueryFixtures";
+import { unfinishedDraft, unfinishedTree, withoutNodeIds } from "../savedQueryFixtures";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -50,7 +50,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  expect(console.warn).not.toHaveBeenCalled();
+  // The mock leaves co_occurrence out of one facet on purpose (vehicleData.ts),
+  // and the client says so once; any other warning is a disagreement.
+  const unexpected = vi
+    .mocked(console.warn)
+    .mock.calls.filter((call) => !/facets have no co_occurrence/.test(String(call[0])));
+  expect(unexpected).toEqual([]);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   cookie = "";
@@ -78,12 +83,20 @@ async function everyEventQuery(): Promise<Group> {
     operator: "AND",
     children: [
       {
-        kind: "condition",
-        id: "c1",
+        kind: "facet",
+        id: "f1",
         facetId: facet!.id,
-        fieldId: facet!.fields[0]!.id,
-        operatorId: "present",
-        value: null,
+        negated: false,
+        operator: "AND",
+        conditions: [
+          {
+            kind: "condition",
+            id: "c1",
+            fieldId: facet!.fields[0]!.id,
+            operatorId: "present",
+            value: null,
+          },
+        ],
       },
     ],
   };
@@ -95,6 +108,8 @@ describe("the client reads every mock response", () => {
     const facets = await client.getFacets();
     expect(facets.length).toBeGreaterThan(0);
     expect(facets.every((f) => f.fields.length > 0)).toBe(true);
+    // Exactly one facet has no co-occurrence data (null), the rest have a map.
+    expect(facets.filter((f) => f.coOccurrence === null)).toHaveLength(1);
   });
 
   it("login state and compliance, anonymous and logged in", async () => {
@@ -116,10 +131,17 @@ describe("the client reads every mock response", () => {
   it("statistics for a query every database rejects", async () => {
     const ids = (await client.getDatabases()).map((d) => d.id);
     const query = await everyEventQuery();
-    const condition = query.children[0] as Condition;
+    const block = query.children[0] as FacetBlock;
     const tooLong: Group = {
       ...query,
-      children: [{ ...condition, operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) }],
+      children: [
+        {
+          ...block,
+          conditions: [
+            { ...block.conditions[0]!, operatorId: "eq", value: "x".repeat(MAX_TEXT_LENGTH + 1) },
+          ],
+        },
+      ],
     };
     const results: DatabaseResult[] = [];
     await client.getStats(tooLong, ids, (r) => results.push(r));
@@ -127,8 +149,11 @@ describe("the client reads every mock response", () => {
     for (const r of results) {
       expect(r).toMatchObject({
         status: "failed",
+        // The field condition, then its block and its group, each of which
+        // has nothing valid left.
         errors: [
           { nodeId: "c1", kind: "invalid" },
+          { nodeId: "f1", kind: "incomplete" },
           { nodeId: "g1", kind: "incomplete" },
         ],
       });
@@ -156,18 +181,26 @@ describe("saved queries through the client", () => {
     await expect(client.listSavedQueries()).rejects.toMatchObject({ status: 401 });
   });
 
-  it("saves a half-built query and gets it back whole", async () => {
+  it("saves a half-built query of facet blocks and gets it back whole", async () => {
     logInWithCompliance();
-    expect(await client.listSavedQueries()).toEqual([]);
+    expect(await client.listSavedQueries()).toEqual({ queries: [], unreadable: 0 });
 
     const created = await client.createSavedQuery(unfinishedDraft);
     expect(created).toMatchObject({
       name: "Slow trips",
       note: "the ones to check",
       databaseIds: ["alpha"],
-      query: unfinishedTree,
     });
-    expect(await client.listSavedQueries()).toEqual([created]);
+    expect(withoutNodeIds(created.query)).toEqual(withoutNodeIds(unfinishedTree));
+    const { queries, unreadable } = await client.listSavedQueries();
+    expect(unreadable).toBe(0);
+    const [listed, ...others] = queries;
+    expect(others).toEqual([]);
+    // Each read gives the nodes fresh ids, so compare everything else.
+    expect({ ...listed, query: withoutNodeIds(listed!.query) }).toEqual({
+      ...created,
+      query: withoutNodeIds(created.query),
+    });
 
     const renamed = await client.updateSavedQuery(created.id, {
       ...unfinishedDraft,
@@ -176,7 +209,7 @@ describe("saved queries through the client", () => {
     expect(renamed).toMatchObject({ id: created.id, name: "Renamed" });
 
     await client.deleteSavedQuery(created.id);
-    expect(await client.listSavedQueries()).toEqual([]);
+    expect(await client.listSavedQueries()).toEqual({ queries: [], unreadable: 0 });
   });
 
   it("reports a taken name as a 409 with the server's message, and an unknown id as a 404", async () => {

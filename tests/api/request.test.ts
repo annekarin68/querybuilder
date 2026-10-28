@@ -1,68 +1,57 @@
 import { describe, it, expect } from "vitest";
-import { toQueryRequest, toSavedQueryRequest } from "../../src/api/request";
+import { toQueryRequest, toSavedQueryRequest, toSavedTree } from "../../src/api/request";
 import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
-import type { Group } from "../../src/query/types";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
-import type { NodePatch } from "../../src/query/tree";
-import type { RequestCondition } from "../../src/api/types";
+import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
+import type { FacetBlock, Group } from "../../src/query/types";
 
-/** Root AND of: size > 3, and a collapsed OR group holding color in [red, blue]. */
-function sample() {
-  const root = emptyQuery();
-  const c1 = newCondition();
-  const g = { ...newGroup(), children: [] };
-  const c2 = newCondition();
-  let t = addChild(root, root.id, c1);
-  t = updateNode(t, c1.id, { facetId: "thing", fieldId: "size", operatorId: "gt", value: 3 });
-  t = addChild(t, root.id, g);
-  t = updateNode(t, g.id, { operator: "OR", collapsed: true });
-  t = addChild(t, g.id, c2);
-  t = updateNode(t, c2.id, {
-    facetId: "thing",
-    fieldId: "color",
-    operatorId: "in",
-    value: ["red", "blue"],
-  });
-  return { tree: t, ids: { root: root.id, c1: c1.id, g: g.id, c2: c2.id } };
-}
-
-/** A query holding one condition with `patch` applied. */
-function oneCondition(patch: NodePatch) {
-  const root = emptyQuery();
-  const c = newCondition();
-  return updateNode(addChild(root, root.id, c), c.id, patch);
-}
+const cond = newFieldCondition("size", "between", [20, 80]);
+const block: FacetBlock = {
+  ...newBlock("thing"),
+  negated: true,
+  operator: "OR",
+  conditions: [cond],
+  collapsed: true,
+};
+const inner = groupOf([newBlock("other")], "OR");
+const query: Group = { ...emptyQuery(), children: [block, inner], collapsed: false };
 
 describe("toQueryRequest", () => {
-  it("builds the body: the databases, and the tree with its ids, operators and values", () => {
-    const { tree, ids } = sample();
-    expect(toQueryRequest(tree, ["alpha", "beta"])).toEqual({
-      databases: ["alpha", "beta"],
+  it("projects the tree as built, without display state", () => {
+    expect(toQueryRequest(query, ["alpha"])).toEqual({
+      databases: ["alpha"],
       query: {
         kind: "group",
-        id: ids.root,
+        id: query.id,
         operator: "AND",
         children: [
           {
-            kind: "condition",
-            id: ids.c1,
+            kind: "facet",
+            id: block.id,
             facet_id: "thing",
-            field_id: "size",
-            operator_id: "gt",
-            value: 3,
+            negated: true,
+            operator: "OR",
+            conditions: [
+              {
+                kind: "condition",
+                id: cond.id,
+                field_id: "size",
+                operator_id: "between",
+                value: [20, 80],
+              },
+            ],
           },
           {
             kind: "group",
-            id: ids.g,
+            id: inner.id,
             operator: "OR",
             children: [
               {
-                kind: "condition",
-                id: ids.c2,
-                facet_id: "thing",
-                field_id: "color",
-                operator_id: "in",
-                value: ["red", "blue"],
+                kind: "facet",
+                id: inner.children[0]!.id,
+                facet_id: "other",
+                negated: false,
+                operator: "AND",
+                conditions: [],
               },
             ],
           },
@@ -71,77 +60,40 @@ describe("toQueryRequest", () => {
     });
   });
 
-  it("leaves out display state: no `collapsed` anywhere", () => {
-    expect(JSON.stringify(toQueryRequest(sample().tree, ["alpha"]))).not.toContain("collapsed");
+  it("refuses an unfinished condition: Run must have been blocked", () => {
+    const unfinished: Group = {
+      ...emptyQuery(),
+      children: [{ ...newBlock("thing"), conditions: [newFieldCondition("size", null, null)] }],
+    };
+    expect(() => toQueryRequest(unfinished, ["alpha"])).toThrow(/unfinished/);
   });
+});
 
-  it("sends operators and values exactly as built", () => {
-    const root = emptyQuery();
-    const c1 = newCondition();
-    const c2 = newCondition();
-    const c3 = newCondition();
-    let t = addChild(addChild(addChild(root, root.id, c1), root.id, c2), root.id, c3);
-    t = updateNode(t, c1.id, {
-      facetId: "thing",
-      fieldId: "seenAt",
-      operatorId: "eq",
-      value: "2024-11",
+describe("toSavedTree", () => {
+  it("keeps unfinished parts and leaves out ids and display state", () => {
+    const unfinished: Group = {
+      ...emptyQuery(),
+      children: [
+        { ...newBlock("thing"), conditions: [newFieldCondition("size", null, [3, null])] },
+      ],
+    };
+    const saved = toSavedTree(unfinished);
+    expect(saved).toEqual({
+      kind: "group",
+      operator: "AND",
+      children: [
+        {
+          kind: "facet",
+          facet_id: "thing",
+          negated: false,
+          operator: "AND",
+          conditions: [
+            { kind: "condition", field_id: "size", operator_id: null, value: [3, null] },
+          ],
+        },
+      ],
     });
-    t = updateNode(t, c2.id, {
-      facetId: "thing",
-      fieldId: "note",
-      operatorId: "absent",
-      value: null,
-    });
-    t = updateNode(t, c3.id, {
-      facetId: "thing",
-      fieldId: "active",
-      operatorId: "eq",
-      value: false,
-    });
-    const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
-    expect(sent.map((c) => [c.operator_id, c.value])).toEqual([
-      ["eq", "2024-11"],
-      ["absent", null],
-      ["eq", false],
-    ]);
-  });
-
-  it.each([
-    ["no facet", { facetId: null, fieldId: "size", operatorId: "gt", value: 3 }],
-    ["no operator", { facetId: "thing", fieldId: "size", operatorId: null, value: 3 }],
-  ])("throws on an unfinished condition (%s)", (_label, patch) => {
-    expect(() => toQueryRequest(oneCondition(patch), ["alpha"])).toThrow(/unfinished/);
-  });
-
-  it.each([
-    ["an object", { from: 1 }],
-    ["a list holding an object", [1, {}]],
-    ["undefined", undefined],
-  ])("throws on a value that is %s", (_label, value) => {
-    const patch = { facetId: "thing", fieldId: "size", operatorId: "gt", value };
-    expect(() => toQueryRequest(oneCondition(patch), ["alpha"])).toThrow(/cannot be sent/);
-  });
-
-  it("sends a facet-level condition with field_id null", () => {
-    const t = oneCondition({
-      facetId: "thing",
-      fieldId: null,
-      operatorId: "present",
-      value: null,
-    });
-    const sent = toQueryRequest(t, ["alpha"]).query.children as RequestCondition[];
-    expect(sent[0]).toMatchObject({
-      facet_id: "thing",
-      field_id: null,
-      operator_id: "present",
-      value: null,
-    });
-  });
-
-  it("still rejects a condition with no facet", () => {
-    const t = oneCondition({ operatorId: "present", value: null });
-    expect(() => toQueryRequest(t, ["alpha"])).toThrow(/unfinished/);
+    expect(JSON.stringify(toSavedTree(query))).not.toMatch(/"id"|collapsed/);
   });
 });
 
@@ -149,6 +101,10 @@ describe("toSavedQueryRequest", () => {
   it("keeps every unfinished part, trims name and note, and leaves display state out", () => {
     expect(toSavedQueryRequest(unfinishedDraft)).toEqual(unfinishedRequest);
     expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft))).not.toContain("collapsed");
+  });
+
+  it("sends no node ids: they only live for one page load", () => {
+    expect(JSON.stringify(toSavedQueryRequest(unfinishedDraft).query)).not.toContain('"id"');
   });
 
   it("does not change the draft it is given", () => {
@@ -166,14 +122,12 @@ describe("toSavedQueryRequest", () => {
     ["a list holding an object", [1, {}]],
     ["undefined", undefined],
   ])("throws on a value that is %s", (_label, value) => {
-    const query: Group = {
-      kind: "group",
-      id: "g1",
-      operator: "AND",
-      children: [
-        { kind: "condition", id: "c1", facetId: null, fieldId: null, operatorId: null, value },
-      ],
+    const bad: Group = {
+      ...emptyQuery(),
+      children: [{ ...newBlock("thing"), conditions: [newFieldCondition("size", "eq", value)] }],
     };
-    expect(() => toSavedQueryRequest({ ...unfinishedDraft, query })).toThrow(/cannot be sent/);
+    expect(() => toSavedQueryRequest({ ...unfinishedDraft, query: bad })).toThrow(
+      /cannot be saved/,
+    );
   });
 });

@@ -145,12 +145,20 @@
         "driver_id": "DRV-2044",
         "route_id": "ROUTE-CHI-STL"
       },
-      "gps_position": {
-        "latitude": 41.8781,
-        "longitude": -87.6298,
-        "altitude_m": 181.0,
-        "heading_deg": 225.0
-      },
+      "gps_position": [
+        {
+          "latitude": 41.8781,
+          "longitude": -87.6298,
+          "altitude_m": 181.0,
+          "heading_deg": 225.0
+        },
+        {
+          "latitude": 40.7128,
+          "longitude": -74.006,
+          "altitude_m": 10,
+          "heading_deg": 90
+        }
+      ],
       "engine_rpm": {
         "value_rpm": 1450,
         "redline_rpm": 2600,
@@ -412,6 +420,15 @@
       "visibility_range": {
         "distance_m": 400.0,
         "is_fog_detected": false
+      },
+      "charging_session": {
+        "connector_type": "ccs2",
+        "start_soc_percent": 18.5,
+        "end_soc_percent": 80.0,
+        "energy_delivered_kwh": 46.2,
+        "duration_s": 1860,
+        "is_fast_charge": true,
+        "started_at": "2024-11-06T06:05:00Z"
       }
     }
   },
@@ -463,6 +480,15 @@
       },
       "ambient_temperature": {
         "value_celsius": 4.0
+      },
+      "charging_session": {
+        "connector_type": "type2",
+        "start_soc_percent": 42.0,
+        "end_soc_percent": 95.5,
+        "energy_delivered_kwh": 7.9,
+        "duration_s": 9000,
+        "is_fast_charge": false,
+        "started_at": "2024-11-05T22:40:00Z"
       }
     }
   },
@@ -1593,6 +1619,15 @@
       },
       "ambient_temperature": {
         "value_celsius": 11.0
+      },
+      "charging_session": {
+        "connector_type": "chademo",
+        "start_soc_percent": 9.0,
+        "end_soc_percent": 72.5,
+        "energy_delivered_kwh": 38.4,
+        "duration_s": 2520,
+        "is_fast_charge": true,
+        "started_at": "2024-11-06T12:15:00Z"
       }
     }
   },
@@ -2021,6 +2056,14 @@
       },
       "ambient_temperature": {
         "value_celsius": 18.0
+      },
+      "charging_session": {
+        "connector_type": "type2",
+        "start_soc_percent": 55.0,
+        "energy_delivered_kwh": 3.1,
+        "duration_s": 1200,
+        "is_fast_charge": false,
+        "started_at": "2024-11-06T07:50:00Z"
       }
     }
   },
@@ -2108,6 +2151,15 @@
       },
       "ambient_temperature": {
         "value_celsius": 27.0
+      },
+      "charging_session": {
+        "connector_type": "ccs2",
+        "start_soc_percent": 30.0,
+        "end_soc_percent": 64.0,
+        "energy_delivered_kwh": 21.7,
+        "duration_s": 1500,
+        "is_fast_charge": true,
+        "started_at": "2024-11-06T09:20:00Z"
       }
     }
   }

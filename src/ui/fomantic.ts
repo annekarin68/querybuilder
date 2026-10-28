@@ -14,13 +14,8 @@ import { hoverTitle } from "./format";
  * picks. Fomantic's default selects on every arrow press, which fires
  * onChange, and the repaint that follows replaces the open dropdown with a
  * closed one — so the first ↓ picked the next item and closed the menu.
- *
- * `hideDividers: "empty"`: the Field dropdown's <optgroup>s become a header and
- * a divider in the menu, and Fomantic leaves them showing while the search
- * filters. This hides each one that has no matching item under it, so typing
- * never leaves a heading over nothing.
  */
-const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false, hideDividers: "empty" };
+const DROPDOWN = { fullTextSearch: "exact", selectOnKeydown: false };
 
 /**
  * A free-entry dropdown (`data-free-entry`, set by valueControl.ts) also
@@ -82,12 +77,53 @@ function setTitle(el: HTMLElement | null, title: string | null): void {
   else el.removeAttribute("title");
 }
 
+/**
+ * Escape on an open menu closes it and keeps the keyboard focus in the
+ * dropdown. Fomantic's own Escape hides the menu and then blurs its typing
+ * box, which drops the focus to the page: a keyboard user loses their place,
+ * and a second Escape never reaches the block (which would close the row and
+ * take the About panel back to the facet). Listened to in the capture phase,
+ * so it runs before Fomantic's handler on the typing box, which it replaces
+ * for this key; `hide`'s second argument is Fomantic's "prevent blur".
+ *
+ * Escape also cancels what was typed: the typing box is emptied (the box shows
+ * the current choice again) and the highlight is taken off the menu. Kept,
+ * the typed text looked like a choice that was never made, and Enter on the
+ * closed menu then picked the highlighted item the user could no longer see
+ * (type "ab", Escape, Enter: "abc" was set). Fomantic's own blur used to
+ * empty the box; preventing the blur skipped that.
+ */
+function keepFocusOnEscape(node: HTMLElement): void {
+  // As in describeDropdown: `node` may be the <select> Fomantic wrapped, and
+  // the typing box sits in the wrapper, not in the <select>.
+  const dropdown = node.closest<HTMLElement>(".ui.dropdown") ?? node;
+  dropdown.addEventListener(
+    "keydown",
+    (e) => {
+      // The menu's own class, not `dropdown("is visible")`, whose answer is
+      // typed as a jQuery object (always truthy) although it is a boolean.
+      const menuOpen = dropdown.querySelector(":scope > .menu")?.classList.contains("visible");
+      if (e.key !== "Escape" || !menuOpen) return;
+      // The first Escape is the menu's (as before): the block does not see it.
+      e.stopPropagation();
+      const $dropdown = $(dropdown);
+      $dropdown.dropdown("remove searchTerm");
+      $dropdown.dropdown("remove selectedItem");
+      // Once closed, show every item again (Fomantic's hideAndClear does the
+      // same), so the next ↓ or typed letter starts from the whole list.
+      $dropdown.dropdown("hide", () => $dropdown.dropdown("remove filteredItem"), true);
+    },
+    true,
+  );
+}
+
 export function activate(container: HTMLElement): void {
   $(container)
     .find(".ui.dropdown")
     .each((_i, node) => {
       $(node).dropdown(node.hasAttribute("data-free-entry") ? FREE_ENTRY_DROPDOWN : DROPDOWN);
       describeDropdown(node);
+      keepFocusOnEscape(node);
     });
   $(container).find(".ui.checkbox").checkbox();
 }

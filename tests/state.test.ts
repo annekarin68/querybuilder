@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { createStore, initialState, runBlocker, type RunInputs } from "../src/state";
-import { addChild, emptyQuery, newCondition } from "../src/query/tree";
+import {
+  createStore,
+  displayStateFor,
+  initialState,
+  runBlocker,
+  type RunInputs,
+} from "../src/state";
+import { addChild, emptyQuery, groupOf, newBlock, removeNode } from "../src/query/tree";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
 
 describe("store", () => {
@@ -41,6 +47,11 @@ describe("store", () => {
     expect(initialState.dropNotice).toBeNull();
   });
 
+  it("initialState has no open field row and no folded field list opened", () => {
+    expect(initialState.openField).toBeNull();
+    expect(initialState.expandedBlockIds).toEqual([]);
+  });
+
   it("initialState has no saved query open and the saved-queries dialogs closed", () => {
     expect(initialState).toMatchObject({
       openSaved: null,
@@ -59,7 +70,7 @@ describe("runBlocker", () => {
     catalog,
     issues: [],
     serverIssues: [],
-    query: addChild(root, root.id, newCondition()),
+    query: addChild(root, root.id, newBlock("thing")),
     selectedDatabaseIds: ["alpha"],
   };
 
@@ -72,7 +83,11 @@ describe("runBlocker", () => {
     expect(runBlocker({ ...ready, selectedDatabaseIds: [], query: emptyQuery() })).toBe(
       "no-database",
     );
-    expect(runBlocker({ ...ready, query: emptyQuery() })).toBe("no-condition");
+    expect(runBlocker({ ...ready, query: emptyQuery() })).toBe("no-facet");
+    // Empty groups are not a facet either.
+    expect(runBlocker({ ...ready, query: { ...emptyQuery(), children: [groupOf([])] } })).toBe(
+      "no-facet",
+    );
     expect(
       runBlocker({
         ...ready,
@@ -85,5 +100,72 @@ describe("runBlocker", () => {
     const issue = { nodeId: "x", message: "m", kind: "invalid" as const };
     expect(runBlocker({ ...ready, serverIssues: [issue] })).toBe("rejected");
     expect(runBlocker({ ...ready, serverIssues: [issue], issues: [issue] })).toBe("unfinished");
+  });
+});
+
+describe("the panel's starting state", () => {
+  // The panel starts on Seen together, with no field selected for About.
+  it("opens Seen together, with nothing selected", () => {
+    expect(initialState.panelTab).toBe("seen");
+    expect(initialState.selectedField).toBeNull();
+  });
+});
+
+describe("displayStateFor", () => {
+  const a = newBlock("thing");
+  const b = newBlock("other");
+  const inner = groupOf([b]);
+  const query = { ...emptyQuery(), children: [a, inner] };
+  const display = {
+    openField: { blockId: b.id, fieldId: "size" },
+    expandedBlockIds: [a.id, b.id],
+    selectedField: { blockId: b.id, fieldId: "label" },
+  };
+
+  it("keeps display state whose blocks are all in the query, as the same object", () => {
+    expect(displayStateFor(query, display)).toBe(display);
+    const none = { openField: null, expandedBlockIds: [], selectedField: null };
+    expect(displayStateFor(query, none)).toBe(none);
+  });
+
+  it("drops the ids of a block that was removed, with the group around it", () => {
+    expect(displayStateFor(removeNode(query, b.id), display)).toEqual({
+      openField: null,
+      expandedBlockIds: [a.id],
+      selectedField: null,
+    });
+    expect(displayStateFor(removeNode(query, inner.id), display)).toEqual({
+      openField: null,
+      expandedBlockIds: [a.id],
+      selectedField: null,
+    });
+  });
+
+  // The panel's selected field is pruned like the open row, on its own: the
+  // two can point at different blocks.
+  it("drops the selected field of a removed block, keeping the open row", () => {
+    const own = { ...display, openField: { blockId: a.id, fieldId: "size" } };
+    expect(displayStateFor(removeNode(query, b.id), own)).toEqual({
+      openField: { blockId: a.id, fieldId: "size" },
+      expandedBlockIds: [a.id],
+      selectedField: null,
+    });
+  });
+
+  it("drops an id that is no block at all (a group's id, or a stranger's)", () => {
+    const odd = {
+      openField: null,
+      expandedBlockIds: [inner.id, "gone", a.id],
+      selectedField: null,
+    };
+    expect(displayStateFor(query, odd).expandedBlockIds).toEqual([a.id]);
+  });
+
+  it("drops everything when the query was replaced by one without those blocks", () => {
+    expect(displayStateFor(emptyQuery(), display)).toEqual({
+      openField: null,
+      expandedBlockIds: [],
+      selectedField: null,
+    });
   });
 });

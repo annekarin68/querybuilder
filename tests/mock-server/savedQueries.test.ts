@@ -136,23 +136,33 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
     return r.ok ? null : r.error;
   };
   const withQuery = (query: unknown) => ({ ...unfinishedRequest, query });
-  const group = (...children: unknown[]) => ({
-    kind: "group",
-    id: "g1",
-    operator: "AND",
-    children,
-  });
-  const condition = {
-    kind: "condition",
-    id: "c1",
+  const group = (...children: unknown[]) => ({ kind: "group", operator: "AND", children });
+  const condition = { kind: "condition", field_id: "size", operator_id: "gt", value: 3 };
+  const block = (...conditions: unknown[]) => ({
+    kind: "facet",
     facet_id: "thing",
-    field_id: "size",
-    operator_id: "gt",
-    value: 3,
-  };
+    negated: false,
+    operator: "AND",
+    conditions,
+  });
+  /** A query saved before facet blocks: a condition directly in a group. */
+  const oldCondition = { ...condition, facet_id: "thing" };
 
   it("accepts a half-built draft: nulls, a null inside a pair, an empty group", () => {
     expect(ok(unfinishedRequest)).toEqual({ ok: true, body: unfinishedRequest });
+  });
+
+  it("accepts nodes that still carry an id (sent by an older build), and does not check it", () => {
+    const withIds = {
+      ...group({ ...block({ ...condition, id: 1 }), id: 1 }, { ...block(), id: 1 }),
+      id: " ",
+    };
+    expect(ok(withQuery(withIds)).ok).toBe(true);
+  });
+
+  it("accepts a block with nothing set, and a field condition with no operator yet", () => {
+    const unfinished = block({ ...condition, operator_id: null, value: null });
+    expect(ok(withQuery(group(block(), unfinished))).ok).toBe(true);
   });
 
   it("accepts a draft with no databases and a root without children", () => {
@@ -211,38 +221,17 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
       "databases[1] must be a non-blank string.",
     ],
     ["no query", { ...unfinishedRequest, query: undefined }, "query must be an object."],
-    ["a root that is a condition", withQuery(condition), 'query.kind must be "group".'],
+    ["a root that is a facet block", withQuery(block()), 'query.kind must be "group".'],
+    [
+      // Old queries are not migrated (spec, decision 9): refused, saying where.
+      "a query in the shape before facet blocks",
+      withQuery(group(block(), oldCondition)),
+      'query.children[1].kind must be "group" or "facet".',
+    ],
     [
       "a child of unknown kind",
-      withQuery(group({ ...condition, kind: "other" })),
-      'query.children[0].kind must be "group" or "condition".',
-    ],
-    [
-      "a node id that is a number",
-      withQuery(group({ ...condition, id: 1 })),
-      "query.children[0].id must be a non-blank string.",
-    ],
-    [
-      "a blank node id",
-      withQuery(group({ ...condition, id: " " })),
-      "query.children[0].id must be a non-blank string.",
-    ],
-    [
-      "a blank group id at the root",
-      withQuery({ ...group(), id: "" }),
-      "query.id must be a non-blank string.",
-    ],
-    [
-      "two nodes with the same id",
-      withQuery(
-        group(condition, { ...group({ ...condition, id: "c2" }, { ...condition }), id: "g2" }),
-      ),
-      'query.children[1].children[1].id "c1" is already used by another node.',
-    ],
-    [
-      "a child with its group's id",
-      withQuery(group({ ...condition, id: "g1" })),
-      'query.children[0].id "g1" is already used by another node.',
+      withQuery(group({ ...block(), kind: "other" })),
+      'query.children[0].kind must be "group" or "facet".',
     ],
     [
       "a group operator that is neither",
@@ -255,29 +244,64 @@ describe("readSavedQueryBody: is this a well-formed SavedQueryRequest?", () => {
       "query.children must be a list.",
     ],
     [
+      "a block operator that is neither",
+      withQuery(group({ ...block(), operator: "all" })),
+      'query.children[0].operator must be "AND" or "OR".',
+    ],
+    [
       "a facet_id that is a number",
-      withQuery(group(condition, { ...condition, id: "c2", facet_id: 3 })),
-      "query.children[1].facet_id must be a non-blank string or null.",
+      withQuery(group(block(), { ...block(), facet_id: 3 })),
+      "query.children[1].facet_id must be a non-blank string.",
+    ],
+    [
+      "a block without a facet",
+      withQuery(group({ ...block(), facet_id: null })),
+      "query.children[0].facet_id must be a non-blank string.",
+    ],
+    [
+      "negated that is not true or false",
+      withQuery(group({ ...block(), negated: "no" })),
+      "query.children[0].negated must be true or false.",
+    ],
+    [
+      "conditions that is not a list",
+      withQuery(group({ ...block(), conditions: {} })),
+      "query.children[0].conditions must be a list.",
+    ],
+    [
+      "a block holding a group",
+      withQuery(group(block(group()))),
+      'query.children[0].conditions[0].kind must be "condition".',
+    ],
+    [
+      "a field condition that is not an object",
+      withQuery(group(block(3))),
+      "query.children[0].conditions[0] must be an object.",
     ],
     [
       "an operator_id that is an empty string",
-      withQuery(group({ ...condition, operator_id: "" })),
-      "query.children[0].operator_id must be a non-blank string or null.",
+      withQuery(group(block({ ...condition, operator_id: "" }))),
+      "query.children[0].conditions[0].operator_id must be a non-blank string or null.",
     ],
     [
       "a field_id of spaces",
-      withQuery(group({ ...condition, field_id: "  " })),
-      "query.children[0].field_id must be a non-blank string or null.",
+      withQuery(group(block({ ...condition, field_id: "  " }))),
+      "query.children[0].conditions[0].field_id must be a non-blank string.",
+    ],
+    [
+      "a field_id that is null (no more whole-facet conditions)",
+      withQuery(group(block({ ...condition, field_id: null }))),
+      "query.children[0].conditions[0].field_id must be a non-blank string.",
     ],
     [
       "a value that is an object",
-      withQuery(group({ ...group({ ...condition, value: { from: 1 } }), id: "g2" })),
-      "query.children[0].children[0].value must be null, a string, number or boolean, or a list of them (a list may hold nulls).",
+      withQuery(group(group(block({ ...condition, value: { from: 1 } })))),
+      "query.children[0].children[0].conditions[0].value must be null, a string, number or boolean, or a list of them (a list may hold nulls).",
     ],
     [
       "a value list holding a list",
-      withQuery(group({ ...condition, value: [[1]] })),
-      "query.children[0].value must be null, a string, number or boolean, or a list of them (a list may hold nulls).",
+      withQuery(group(block({ ...condition, value: [[1]] }))),
+      "query.children[0].conditions[0].value must be null, a string, number or boolean, or a list of them (a list may hold nulls).",
     ],
   ])("rejects %s, naming the first problem", (_label, body, message) => {
     expect(bad(body)).toBe(message);

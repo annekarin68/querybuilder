@@ -41,16 +41,20 @@ export function serverIssues(stats: StatsState): Issue[] {
 }
 
 /**
- * For every node in `query`, the id of the node that is drawn for it: itself,
- * or — inside a collapsed group — the outermost collapsed group around it.
+ * For every group, block and field condition in `query`, the id of the node
+ * that is drawn for it: itself, or — inside a folded group or block — the
+ * outermost folded node around it. (A set field's row is always drawn while
+ * its block is open: "+ N more fields" only hides unset rows.)
  */
 function drawnNodeIds(query: Group): Map<string, string> {
   const drawn = new Map<string, string>();
   const visit = (node: QueryNode, hiddenIn: string | null) => {
     drawn.set(node.id, hiddenIn ?? node.id);
+    const inside = hiddenIn ?? (node.collapsed ? node.id : null);
     if (node.kind === "group") {
-      const childrenHiddenIn = hiddenIn ?? (node.collapsed ? node.id : null);
-      for (const child of node.children) visit(child, childrenHiddenIn);
+      for (const child of node.children) visit(child, inside);
+    } else {
+      for (const c of node.conditions) drawn.set(c.id, inside ?? c.id);
     }
   };
   visit(query, null);
@@ -59,11 +63,9 @@ function drawnNodeIds(query: Group): Map<string, string> {
 
 /**
  * `issues`, each moved to a node that is on screen, so none is ever lost: an
- * issue inside a collapsed group goes to the outermost collapsed group around
- * it, and an issue whose node isn't in `query` goes to the root group. (Only a
- * backend bug sends an unknown id: results for an older query are dropped.)
- * Issues that end up the same on one node — say, two hidden conditions both
- * missing a field — are kept once.
+ * issue inside a folded group or block goes to the outermost folded node
+ * around it, and one whose node isn't in `query` goes to the root group.
+ * Issues that end up the same on one node are kept once.
  */
 export function placeIssues(query: Group, issues: Issue[]): Issue[] {
   const drawn = drawnNodeIds(query);

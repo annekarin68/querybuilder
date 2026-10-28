@@ -1,599 +1,235 @@
 import { describe, it, expect } from "vitest";
 import {
-  emptyQuery,
-  newCondition,
-  newGroup,
-  groupOf,
   addChild,
-  updateNode,
-  removeNode,
+  countBlocks,
+  emptyQuery,
   findNode,
-  countConditions,
-  sameSemantics,
-  sameTree,
+  groupContents,
+  groupOf,
   insertNodes,
-  replaceLoneBlankCondition,
   moveNode,
   moveSibling,
+  newBlock,
+  newFieldCondition,
+  newGroup,
   positionOf,
-  placeNodes,
-  groupContents,
-  ungroupBlocker,
+  removeCondition,
+  removeNode,
+  sameSemantics,
+  sameTree,
+  setFieldCondition,
+  setNegated,
   ungroup,
-  UNGROUP_BLOCKED_MESSAGE,
+  ungroupBlocker,
+  updateNode,
 } from "../../src/query/tree";
-import type { Condition, Group, QueryNode } from "../../src/query/types";
+import type { FacetBlock, Group } from "../../src/query/types";
 
-describe("tree", () => {
-  it("emptyQuery is an AND group with no children", () => {
-    const q = emptyQuery();
-    expect(q).toMatchObject({ kind: "group", operator: "AND", children: [] });
-    expect(typeof q.id).toBe("string");
-  });
-
-  it("new nodes get unique ids", () => {
-    expect(newCondition().id).not.toBe(newCondition().id);
-    expect(newGroup().id).not.toBe(newGroup().id);
-  });
-
-  it("newCondition starts with no facet, field, operator, or value", () => {
-    const c = newCondition();
-    expect(c.facetId).toBeNull();
-    expect(c.fieldId).toBeNull();
-    expect(c.operatorId).toBeNull();
-    expect(c.value).toBeNull();
-  });
-
-  it("newGroup starts as an AND group holding one empty condition", () => {
-    const g = newGroup();
-    expect(g).toMatchObject({ kind: "group", operator: "AND" });
-    expect(g.children).toHaveLength(1);
-    expect(g.children[0]).toMatchObject({
-      kind: "condition",
-      facetId: null,
-      fieldId: null,
-      operatorId: null,
-      value: null,
-    });
-  });
-
-  it("addChild returns a new tree with the node appended, original unchanged", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    const next = addChild(root, root.id, c);
-    expect(root.children).toHaveLength(0); // original untouched
-    expect(next.children).toHaveLength(1);
-    expect(next.children[0]).toBe(c);
-  });
-
-  it("addChild can target a nested group", () => {
-    const root = emptyQuery();
-    const g = newGroup();
-    const withGroup = addChild(root, root.id, g);
-    const c = newCondition();
-    const next = addChild(withGroup, g.id, c);
-    const found = findNode(next, g.id) as Group;
-    expect(found.children).toHaveLength(2);
-    expect(found.children[1]).toBe(c);
-  });
-
-  it("updateNode shallow-merges a patch into one node only", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    const t1 = addChild(root, root.id, c);
-    const t2 = updateNode(t1, c.id, { fieldId: "color", operatorId: "eq", value: "red" });
-    const updated = findNode(t2, c.id) as Condition;
-    expect(updated).toMatchObject({ fieldId: "color", operatorId: "eq", value: "red" });
-    // original still null
-    expect((findNode(t1, c.id) as Condition).fieldId).toBeNull();
-  });
-
-  it("removeNode deletes the node wherever it is", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    const t1 = addChild(root, root.id, c);
-    const t2 = removeNode(t1, c.id);
-    expect(t2.children).toHaveLength(0);
-    expect(findNode(t2, c.id)).toBeNull();
-  });
-
-  it("countConditions counts leaves at any depth", () => {
-    const root = emptyQuery();
-    const g = newGroup();
-    let t = addChild(root, root.id, newCondition());
-    t = addChild(t, root.id, g);
-    t = addChild(t, g.id, newCondition());
-    t = addChild(t, g.id, newCondition());
-    // 1 at the root + g's own starter condition + 2 added to g
-    expect(countConditions(t)).toBe(4);
-  });
-});
-
-describe("sameSemantics", () => {
-  it("ignores a collapse toggle but not a real edit", () => {
-    const root = emptyQuery();
-    const g = newGroup();
-    const tree = addChild(root, root.id, g);
-    const collapsed = updateNode(tree, g.id, { collapsed: true });
-    expect(sameSemantics(tree, collapsed)).toBe(true);
-    expect(sameSemantics(tree, updateNode(tree, g.id, { operator: "OR" }))).toBe(false);
-  });
-
-  it("ignores collapsed at any depth, set either way", () => {
-    const root = emptyQuery();
-    const g = newGroup();
-    const tree = addChild(root, root.id, g);
-    const folded = updateNode(updateNode(tree, root.id, { collapsed: true }), g.id, {
-      collapsed: false,
-    });
-    expect(sameSemantics(tree, folded)).toBe(true);
-  });
-
-  it("notices a changed value even when collapsed also changed", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    const tree = updateNode(addChild(root, root.id, c), c.id, { fieldId: "a.b", value: "x" });
-    const edited = updateNode(updateNode(tree, root.id, { collapsed: true }), c.id, { value: "y" });
-    expect(sameSemantics(tree, edited)).toBe(false);
-  });
-
-  it("does not modify the trees it compares", () => {
-    const root = emptyQuery();
-    const folded = { ...root, collapsed: true };
-    sameSemantics(root, folded);
-    expect(folded.collapsed).toBe(true);
-  });
-});
-
-describe("sameTree", () => {
-  it("is true for equal trees that are different objects", () => {
-    const root = emptyQuery();
-    const tree = addChild(root, root.id, newCondition());
-    expect(sameTree(tree, structuredClone(tree))).toBe(true);
-  });
-
-  it("counts a collapse toggle as a difference, unlike sameSemantics", () => {
-    // The user sees a group fold, so something visible changed.
-    const root = emptyQuery();
-    const g = newGroup();
-    const tree = addChild(root, root.id, g);
-    expect(sameTree(tree, updateNode(tree, g.id, { collapsed: true }))).toBe(false);
-  });
-
-  it("notices a reorder and an edit", () => {
-    const root = emptyQuery();
-    const a = newCondition();
-    const b = newCondition();
-    const ab = addChild(addChild(root, root.id, a), root.id, b);
-    const ba = addChild(addChild(root, root.id, b), root.id, a);
-    expect(sameTree(ab, ba)).toBe(false);
-    expect(sameTree(ab, updateNode(ab, a.id, { value: "x" }))).toBe(false);
-  });
-});
-
-describe("insertNodes", () => {
-  it("appends to a group", () => {
-    const root = emptyQuery();
-    const a = newCondition();
-    const b = newCondition();
-    const t = insertNodes(addChild(root, root.id, a), root.id, [b]);
-    expect((t.children as { id: string }[]).map((c) => c.id)).toEqual([a.id, b.id]);
-  });
-  it("inserts before a condition", () => {
-    const root = emptyQuery();
-    const a = newCondition();
-    const b = newCondition();
-    const c = newCondition();
-    const t = insertNodes(addChild(addChild(root, root.id, a), root.id, b), b.id, [c]);
-    expect(t.children.map((n) => n.id)).toEqual([a.id, c.id, b.id]);
-  });
-  it("does nothing for an unknown target", () => {
-    const root = emptyQuery();
-    expect(insertNodes(root, "nope", [newCondition()])).toEqual(root);
-  });
-});
-
-describe("replaceLoneBlankCondition", () => {
-  it("swaps a group's only, blank condition for the new nodes (drop on the group)", () => {
-    const root = emptyQuery();
-    const blank = newCondition();
-    const a = newCondition();
-    const b = newCondition();
-    const t = replaceLoneBlankCondition(addChild(root, root.id, blank), root.id, [a, b]);
-    expect(t?.id).toBe(root.id);
-    expect(t?.children.map((n) => n.id)).toEqual([a.id, b.id]);
-  });
-  it("does the same for a drop on the blank row itself", () => {
-    const root = emptyQuery();
-    const blank = newCondition();
-    const a = newCondition();
-    const t = replaceLoneBlankCondition(addChild(root, root.id, blank), blank.id, [a]);
-    expect(t?.children.map((n) => n.id)).toEqual([a.id]);
-  });
-  it("works in a nested group (what + Group adds) and leaves the rest alone", () => {
-    const root = emptyQuery();
-    const sibling = newCondition();
-    const group = newGroup();
-    const a = newCondition();
-    const q = addChild(addChild(root, root.id, sibling), root.id, group);
-    const t = replaceLoneBlankCondition(q, group.id, [a]);
-    expect(t?.children.map((n) => n.id)).toEqual([sibling.id, group.id]);
-    const inner = t?.children[1];
-    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([a.id]);
-  });
-  it("keeps the group's ALL/ANY choice and fold state", () => {
-    const root = emptyQuery();
-    const q = updateNode(addChild(root, root.id, newCondition()), root.id, {
-      operator: "OR",
-      collapsed: true,
-    });
-    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toMatchObject({
-      operator: "OR",
-      collapsed: true,
-    });
-  });
-  it("is null when the group has no children", () => {
-    const root = emptyQuery();
-    expect(replaceLoneBlankCondition(root, root.id, [newCondition()])).toBeNull();
-  });
-  it("is null when the only condition has anything chosen", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    const q = updateNode(addChild(root, root.id, c), c.id, { facetId: "x" });
-    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toBeNull();
-  });
-  it("is null when the group has more than one child", () => {
-    const root = emptyQuery();
-    const blank = newCondition();
-    const q = addChild(addChild(root, root.id, blank), root.id, newCondition());
-    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toBeNull();
-    expect(replaceLoneBlankCondition(q, blank.id, [newCondition()])).toBeNull();
-  });
-  it("is null when the only child is a group", () => {
-    const root = emptyQuery();
-    const q = addChild(root, root.id, newGroup());
-    expect(replaceLoneBlankCondition(q, root.id, [newCondition()])).toBeNull();
-  });
-  it("is null for an unknown target or nothing to put in", () => {
-    const root = emptyQuery();
-    const q = addChild(root, root.id, newCondition());
-    expect(replaceLoneBlankCondition(q, "nope", [newCondition()])).toBeNull();
-    expect(replaceLoneBlankCondition(q, root.id, [])).toBeNull();
-  });
-});
-
-describe("placeNodes", () => {
-  it("replaces a lone blank row", () => {
-    const root = emptyQuery();
-    const a = newCondition();
-    const t = placeNodes(addChild(root, root.id, newCondition()), root.id, [a]);
-    expect(t.children.map((n) => n.id)).toEqual([a.id]);
-  });
-  it("otherwise inserts, like insertNodes", () => {
-    const root = emptyQuery();
-    const first = { ...newCondition(), facetId: "x" };
-    const a = newCondition();
-    const t = placeNodes(addChild(root, root.id, first), root.id, [a]);
-    expect(t.children.map((n) => n.id)).toEqual([first.id, a.id]);
-  });
-});
-
-describe("moveNode", () => {
-  it("moves a condition into another group", () => {
-    const root = emptyQuery();
-    const g = { ...newGroup(), children: [] };
-    const c = newCondition();
-    let t = addChild(root, root.id, c);
-    t = addChild(t, root.id, g);
-    const moved = moveNode(t, c.id, g.id)!;
-    expect(moved.children.map((n) => n.id)).toEqual([g.id]);
-    const inner = findNode(moved, g.id);
-    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
-  });
-  it("replaces the blank row of a group it is moved into", () => {
-    const root = emptyQuery();
-    const g = newGroup(); // one blank condition
-    const c = { ...newCondition(), facetId: "x" };
-    const t = addChild(addChild(root, root.id, c), root.id, g);
-    const moved = moveNode(t, c.id, g.id)!;
-    const inner = findNode(moved, g.id);
-    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
-    expect(moved.children.map((n) => n.id)).toEqual([g.id]);
-  });
-  it("replaces a blank row it is dropped on, once it is the group's only child", () => {
-    const root = emptyQuery();
-    const blank = newCondition();
-    const c = { ...newCondition(), facetId: "x" };
-    const t = addChild(addChild(root, root.id, blank), root.id, c);
-    // Taking `c` out leaves just the blank row, which `c` then replaces.
-    expect(moveNode(t, c.id, blank.id)?.children.map((n) => n.id)).toEqual([c.id]);
-  });
-  it("reorders before a sibling and keeps the node's data", () => {
-    const root = emptyQuery();
-    const a = { ...newCondition(), facetId: "x" };
-    const b = newCondition();
-    const t = addChild(addChild(root, root.id, a), root.id, b);
-    const moved = moveNode(t, b.id, a.id)!;
-    expect(moved.children.map((n) => n.id)).toEqual([b.id, a.id]);
-    expect(findNode(moved, a.id)).toMatchObject({ facetId: "x" });
-  });
-  it("refuses to move a group into itself or a descendant", () => {
-    const root = emptyQuery();
-    const outer = { ...newGroup(), children: [] };
-    const inner = { ...newGroup(), children: [] };
-    let t = addChild(root, root.id, outer);
-    t = addChild(t, outer.id, inner);
-    expect(moveNode(t, outer.id, outer.id)).toBeNull();
-    expect(moveNode(t, outer.id, inner.id)).toBeNull();
-  });
-  it("refuses to move the root", () => {
-    const root = emptyQuery();
-    const g = { ...newGroup(), children: [] };
-    expect(moveNode(addChild(root, root.id, g), root.id, g.id)).toBeNull();
-  });
-  it("returns null for unknown ids", () => {
-    const root = emptyQuery();
-    expect(moveNode(root, "a", "b")).toBeNull();
-  });
-  it("returns null for an unknown target, even when the node exists", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    expect(moveNode(addChild(root, root.id, c), c.id, "nowhere")).toBeNull();
-  });
-  it("appends at the end of a group that already has children", () => {
-    const root = emptyQuery();
-    const moving = { ...newCondition(), facetId: "x" };
-    const first = { ...newCondition(), facetId: "y" };
-    const second = { ...newCondition(), facetId: "z" };
-    const g = { ...newGroup(), children: [first, second] };
-    const t = addChild(addChild(root, root.id, moving), root.id, g);
-    const inner = findNode(moveNode(t, moving.id, g.id)!, g.id);
-    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([
-      first.id,
-      second.id,
-      moving.id,
-    ]);
-  });
-  it("leaves the input tree unchanged", () => {
-    const root = emptyQuery();
-    const c = { ...newCondition(), facetId: "x" };
-    const g = { ...newGroup(), children: [] };
-    const t = addChild(addChild(root, root.id, c), root.id, g);
-    const before = structuredClone(t);
-    moveNode(t, c.id, g.id);
-    expect(t).toEqual(before);
-  });
-  it("refuses to move a group onto a condition inside it", () => {
-    const root = emptyQuery();
-    const c = newCondition();
-    const g = { ...newGroup(), children: [c] };
-    expect(moveNode(addChild(root, root.id, g), g.id, c.id)).toBeNull();
-  });
-});
-
-const cond = (id: string): Condition => ({
-  kind: "condition",
-  id,
-  facetId: "f",
-  fieldId: "x",
-  operatorId: "eq",
-  value: 1,
-});
-const group = (
-  id: string,
-  operator: "AND" | "OR",
-  children: Group["children"],
-  collapsed?: boolean,
-): Group => ({
-  kind: "group",
-  id,
-  operator,
-  children,
-  ...(collapsed === undefined ? {} : { collapsed }),
-});
-
-/**
- * Test-only evaluator: whether `node` holds when each condition's truth is
- * looked up by its id. AND = every child, OR = some child; an empty group
- * counts as true. Lets the tests prove that regrouping keeps the meaning,
- * which `sameSemantics` can't (it compares ids, and a new group has a new id).
- */
-function matches(node: QueryNode, truth: Record<string, boolean>): boolean {
-  if (node.kind === "condition") return truth[node.id] ?? false;
-  if (node.children.length === 0) return true;
-  return node.operator === "AND"
-    ? node.children.every((c) => matches(c, truth))
-    : node.children.some((c) => matches(c, truth));
+/** A root holding two blocks and a sub-group with a third. */
+function sample() {
+  const a = newBlock("thing");
+  const b = newBlock("other");
+  const c = newBlock("thing");
+  const inner = groupOf([c], "OR");
+  const root: Group = { ...emptyQuery(), children: [a, b, inner] };
+  return { root, a, b, c, inner };
 }
 
-/** Whether `a` and `b` give the same answer for every true/false choice of `ids`. */
-function sameForAllTruths(a: QueryNode, b: QueryNode, ids: string[]): boolean {
-  for (let bits = 0; bits < 2 ** ids.length; bits++) {
-    const truth = Object.fromEntries(ids.map((id, i) => [id, Boolean((bits >> i) & 1)]));
-    if (matches(a, truth) !== matches(b, truth)) return false;
-  }
-  return true;
-}
-
-describe("groupContents", () => {
-  it("moves every child into one new group with the same operator", () => {
-    const root = group("r", "OR", [cond("a"), cond("b")]);
-    const next = groupContents(root, "r");
-    expect(next.operator).toBe("OR");
-    expect(next.children).toHaveLength(1);
-    const inner = next.children[0] as Group;
-    expect(inner).toMatchObject({
-      kind: "group",
-      operator: "OR",
-      children: [cond("a"), cond("b")],
+describe("new nodes", () => {
+  it("starts with an empty ALL root and makes ids by kind", () => {
+    const root = emptyQuery();
+    expect(root).toMatchObject({ kind: "group", operator: "AND", children: [] });
+    expect(root.id).toMatch(/^g-/);
+    expect(newBlock("thing")).toMatchObject({
+      kind: "facet",
+      facetId: "thing",
+      negated: false,
+      operator: "AND",
+      conditions: [],
     });
-    expect(inner.id).not.toBe("r");
-    expect(inner.collapsed).toBeUndefined();
+    expect(newBlock("thing").id).toMatch(/^f-/);
+    expect(newFieldCondition("size", "gt", 3).id).toMatch(/^c-/);
   });
 
-  it("works on a nested group and leaves the rest alone", () => {
-    const root = group("r", "AND", [cond("a"), group("g", "OR", [cond("b"), cond("c")])]);
-    const next = groupContents(root, "g");
-    expect(next.children[0]).toEqual(cond("a"));
-    const g = next.children[1] as Group;
-    expect(g.id).toBe("g");
-    expect((g.children[0] as Group).children).toEqual([cond("b"), cond("c")]);
+  it("gives every node its own id", () => {
+    expect(newBlock("x").id).not.toBe(newBlock("x").id);
   });
 
-  it("returns the tree unchanged for an unknown id or a condition id", () => {
-    const root = group("r", "AND", [cond("a"), cond("b")]);
-    expect(groupContents(root, "nope")).toBe(root);
-    expect(groupContents(root, "a")).toBe(root);
+  it("makes an empty group for + Group", () => {
+    expect(newGroup()).toMatchObject({ kind: "group", operator: "AND", children: [] });
   });
 });
 
-describe("regrouping never changes what the query means", () => {
-  const ids = ["a", "b", "c", "d"];
-
-  it("groupContents, on the root and on a nested group, under ALL and ANY", () => {
-    for (const outer of ["AND", "OR"] as const) {
-      for (const inner of ["AND", "OR"] as const) {
-        const root = group("r", outer, [
-          cond("a"),
-          group("g", inner, [cond("b"), cond("c")]),
-          cond("d"),
-        ]);
-        expect(sameForAllTruths(groupContents(root, "r"), root, ids)).toBe(true);
-        expect(sameForAllTruths(groupContents(root, "g"), root, ids)).toBe(true);
-      }
-    }
+describe("editing", () => {
+  it("adds, updates and removes nodes without changing the old tree", () => {
+    const { root, a, inner } = sample();
+    const block = newBlock("third");
+    const added = addChild(root, inner.id, block);
+    expect((findNode(added, inner.id) as Group).children).toHaveLength(2);
+    expect(inner.children).toHaveLength(1);
+    const folded = updateNode(added, a.id, { collapsed: true });
+    expect(findNode(folded, a.id)).toMatchObject({ collapsed: true });
+    expect(findNode(removeNode(folded, a.id), a.id)).toBeNull();
   });
 
-  it("ungroup, whenever it is allowed (same operator, or one item)", () => {
-    for (const outer of ["AND", "OR"] as const) {
-      for (const inner of ["AND", "OR"] as const) {
-        const many = group("r", outer, [
-          cond("a"),
-          group("g", inner, [cond("b"), cond("c")]),
-          cond("d"),
-        ]);
-        const one = group("r", outer, [cond("a"), group("g", inner, [cond("b")]), cond("d")]);
-        for (const root of [many, one]) {
-          const next = ungroup(root, "g");
-          // Allowed exactly when the rule says so; then the meaning is kept.
-          expect(next === null).toBe(ungroupBlocker(root, "g") !== null);
-          if (next) expect(sameForAllTruths(next, root, ids)).toBe(true);
-        }
-      }
-    }
+  it("sets Has / Has no on a block, and only on a block", () => {
+    const { root, a, inner } = sample();
+    const negated = setNegated(root, a.id, true);
+    expect(findNode(negated, a.id)).toMatchObject({ negated: true });
+    expect(findNode(setNegated(negated, a.id, false), a.id)).toMatchObject({ negated: false });
+    expect(a.negated).toBe(false); // the old tree is unchanged
+    // A group has no Has / Has no: asking for it changes nothing.
+    expect(findNode(setNegated(root, inner.id, true), inner.id)).not.toHaveProperty("negated");
+    expect(setNegated(root, "nope", true)).toEqual(root);
   });
 
-  it("the evaluator can tell a changed query from a kept one (the refused ungroup would change it)", () => {
-    const root = group("r", "AND", [cond("a"), group("g", "OR", [cond("b"), cond("c")])]);
-    const naive = { ...root, children: [cond("a"), cond("b"), cond("c")] };
-    expect(sameForAllTruths(naive, root, ids)).toBe(false);
+  it("puts a new condition in the facet's field order when given it", () => {
+    const { root, a } = sample();
+    const order = ["size", "name", "colour"];
+    const size = newFieldCondition("size", "gt", 3);
+    const colour = newFieldCondition("colour", "eq", "red");
+    const name = newFieldCondition("name", "eq", "x");
+    let tree = setFieldCondition(root, a.id, size, order);
+    tree = setFieldCondition(tree, a.id, colour, order);
+    tree = setFieldCondition(tree, a.id, name, order); // between the two, not at the end
+    const fieldIds = () => (findNode(tree, a.id) as FacetBlock).conditions.map((c) => c.fieldId);
+    expect(fieldIds()).toEqual(["size", "name", "colour"]);
+    // Clear-then-set no longer moves a condition to the end.
+    tree = removeCondition(tree, a.id, size.id);
+    tree = setFieldCondition(tree, a.id, size, order);
+    expect(fieldIds()).toEqual(["size", "name", "colour"]);
   });
-});
 
-describe("ungroupBlocker / ungroup", () => {
-  it("allows ungrouping when the group matches its parent's operator", () => {
-    const root = group("r", "AND", [
-      cond("a"),
-      group("g", "AND", [cond("b"), cond("c")]),
-      cond("d"),
+  it("puts a field the order doesn't know at the end", () => {
+    const { root, a } = sample();
+    const first = setFieldCondition(root, a.id, newFieldCondition("size", "gt", 3), ["size"]);
+    const next = setFieldCondition(first, a.id, newFieldCondition("odd", "eq", 1), ["size"]);
+    expect((findNode(next, a.id) as FacetBlock).conditions.map((c) => c.fieldId)).toEqual([
+      "size",
+      "odd",
     ]);
-    expect(ungroupBlocker(root, "g")).toBeNull();
-    expect(ungroup(root, "g")!.children.map((n) => n.id)).toEqual(["a", "b", "c", "d"]);
   });
 
-  it("allows ungrouping a one-child group whatever its operator", () => {
-    const root = group("r", "AND", [group("g", "OR", [cond("b")])]);
-    expect(ungroupBlocker(root, "g")).toBeNull();
-    expect(ungroup(root, "g")!.children).toEqual([cond("b")]);
+  it("sets a field condition, replacing the same field's, and removes it", () => {
+    const { root, a } = sample();
+    const first = newFieldCondition("size", "gt", 3);
+    const once = setFieldCondition(root, a.id, first);
+    const again = setFieldCondition(once, a.id, { ...first, operatorId: "lt", value: 9 });
+    const block = findNode(again, a.id) as FacetBlock;
+    expect(block.conditions).toEqual([{ ...first, operatorId: "lt", value: 9 }]);
+    const other = setFieldCondition(again, a.id, newFieldCondition("name", "eq", "x"));
+    expect((findNode(other, a.id) as FacetBlock).conditions.map((c) => c.fieldId)).toEqual([
+      "size",
+      "name",
+    ]);
+    const sizeId = (findNode(other, a.id) as FacetBlock).conditions[0]!.id;
+    const cleared = removeCondition(other, a.id, sizeId);
+    expect((findNode(cleared, a.id) as FacetBlock).conditions.map((c) => c.fieldId)).toEqual([
+      "name",
+    ]);
   });
 
-  it("refuses when operators differ and the group holds more than one item", () => {
-    const root = group("r", "AND", [group("g", "OR", [cond("b"), cond("c")])]);
-    expect(ungroupBlocker(root, "g")).toBe(UNGROUP_BLOCKED_MESSAGE);
-    expect(ungroup(root, "g")).toBeNull();
+  it("counts blocks at any depth", () => {
+    expect(countBlocks(sample().root)).toBe(3);
+    expect(countBlocks(emptyQuery())).toBe(0);
   });
 
-  it("refuses the root and unknown ids", () => {
-    const root = group("r", "AND", [cond("a")]);
-    expect(ungroupBlocker(root, "r")).not.toBeNull();
-    expect(ungroup(root, "r")).toBeNull();
-    expect(ungroup(root, "nope")).toBeNull();
-    expect(ungroupBlocker(root, "a")).not.toBeNull();
-  });
-
-  it("ungrouping a collapsed group keeps its children's own state", () => {
-    const inner = group("h", "OR", [cond("x")], true);
-    const root = group("r", "AND", [group("g", "AND", [inner, cond("b")], true)]);
-    expect(ungroup(root, "g")!.children).toEqual([inner, cond("b")]);
+  it("tells a fold from a real edit", () => {
+    const { root, a } = sample();
+    const folded = updateNode(root, a.id, { collapsed: true });
+    expect(sameSemantics(root, folded)).toBe(true);
+    expect(sameTree(root, folded)).toBe(false);
+    expect(sameSemantics(root, setNegated(root, a.id, true))).toBe(false);
   });
 });
 
-describe("groupOf", () => {
-  it("makes a new open ALL group around the given nodes, with its own id", () => {
-    const a = newCondition();
-    const b = newCondition();
-    const g = groupOf([a, b]);
-    expect(g).toMatchObject({ kind: "group", operator: "AND", children: [a, b] });
-    expect(g.collapsed).toBeUndefined();
-    expect(groupOf([a]).id).not.toBe(g.id);
+describe("placing and moving", () => {
+  it("inserts at the end of a group, or just before a block", () => {
+    const { root, a, b } = sample();
+    const n = newBlock("new");
+    expect(insertNodes(root, root.id, [n]).children.at(-1)).toBe(n);
+    expect(insertNodes(root, b.id, [n]).children.map((c) => c.id)).toEqual([
+      a.id,
+      n.id,
+      b.id,
+      root.children[2]!.id,
+    ]);
+    expect(insertNodes(root, "nope", [n])).toBe(root);
   });
-});
 
-describe("moveSibling", () => {
-  /** A root holding three conditions, a, b and c (given distinct facets). */
-  function rootOfThree() {
-    const [a, b, c] = ["a", "b", "c"].map((facetId) => ({ ...newCondition(), facetId }));
-    const root = [a!, b!, c!].reduce((t, n) => addChild(t, t.id, n), emptyQuery());
-    return { root, a: a!, b: b!, c: c! };
-  }
-  const ids = (g: Group) => g.children.map((n) => n.id);
+  it("moves a block into a group and refuses impossible moves", () => {
+    const { root, a, inner } = sample();
+    const moved = moveNode(root, a.id, inner.id)!;
+    expect((findNode(moved, inner.id) as Group).children.at(-1)!.id).toBe(a.id);
+    expect(moveNode(root, root.id, a.id)).toBeNull();
+    expect(moveNode(root, inner.id, inner.children[0]!.id)).toBeNull();
+    expect(moveNode(root, "nope", a.id)).toBeNull();
+  });
 
-  it("moves a node up past its previous sibling", () => {
-    const { root, a, b, c } = rootOfThree();
-    expect(ids(moveSibling(root, b.id, "up")!)).toEqual([b.id, a.id, c.id]);
-  });
-  it("moves a node down past its next sibling", () => {
-    const { root, a, b, c } = rootOfThree();
-    expect(ids(moveSibling(root, b.id, "down")!)).toEqual([a.id, c.id, b.id]);
-  });
-  it("moves a node inside a nested group, leaving the rest alone", () => {
-    const { root, a } = rootOfThree();
-    const [x, y] = [newCondition(), newCondition()];
-    const g = { ...newGroup(), children: [x, y] };
-    const moved = moveSibling(addChild(root, root.id, g), y.id, "up")!;
-    const inner = findNode(moved, g.id);
-    expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([y.id, x.id]);
-    expect(moved.children[0]?.id).toBe(a.id);
-  });
-  it("keeps the node's data and its group's fold state", () => {
-    const { root, b } = rootOfThree();
-    const g = { ...newGroup(), collapsed: true };
-    const moved = moveSibling(addChild(root, root.id, g), g.id, "up")!;
-    expect(findNode(moved, g.id)).toMatchObject({ collapsed: true });
-    expect(findNode(moved, b.id)).toMatchObject({ facetId: "b" });
-  });
-  it("returns null at either end, where there is nothing to pass", () => {
-    const { root, a, c } = rootOfThree();
+  it("swaps siblings and says where a node stands", () => {
+    const { root, a, b } = sample();
+    const swapped = moveSibling(root, b.id, "up")!;
+    expect(swapped.children.slice(0, 2).map((c) => c.id)).toEqual([b.id, a.id]);
+    expect(positionOf(swapped, b.id)).toEqual({ index: 1, count: 3 });
     expect(moveSibling(root, a.id, "up")).toBeNull();
-    expect(moveSibling(root, c.id, "down")).toBeNull();
   });
-  it("returns null for the root and for unknown ids", () => {
-    const { root } = rootOfThree();
+
+  it("swaps down too, and stops at the end", () => {
+    const { root, a, b, inner } = sample();
+    const swapped = moveSibling(root, a.id, "down")!;
+    expect(swapped.children.map((c) => c.id)).toEqual([b.id, a.id, inner.id]);
+    expect(positionOf(swapped, a.id)).toEqual({ index: 2, count: 3 });
+    expect(moveSibling(root, inner.id, "down")).toBeNull();
     expect(moveSibling(root, root.id, "down")).toBeNull();
     expect(moveSibling(root, "gone", "up")).toBeNull();
   });
 });
 
-describe("positionOf", () => {
-  it("says where a node stands among its siblings, counting from 1", () => {
-    const [a, b] = [newCondition(), newCondition()];
-    const t = { ...emptyQuery(), children: [a, b] };
-    expect(positionOf(t, b.id)).toEqual({ index: 2, count: 2 });
-    expect(positionOf(t, a.id)).toEqual({ index: 1, count: 2 });
+describe("grouping", () => {
+  it("groups a group's contents and ungroups them again without changing the meaning", () => {
+    const { root } = sample();
+    const grouped = groupContents(root, root.id);
+    expect(grouped.children).toHaveLength(1);
+    const innerId = grouped.children[0]!.id;
+    expect(ungroupBlocker(grouped, innerId)).toBeNull();
+    expect(ungroup(grouped, innerId)!.children.map((c) => c.id)).toEqual(
+      root.children.map((c) => c.id),
+    );
   });
-  it("is null for the root and for unknown ids", () => {
-    const t = emptyQuery();
-    expect(positionOf(t, t.id)).toBeNull();
-    expect(positionOf(t, "gone")).toBeNull();
+
+  it("ungroups a one-item group whatever its ALL/ANY, in its place", () => {
+    const { root, a, c, inner } = sample(); // inner: OR of c only, root: AND
+    expect(ungroupBlocker(root, inner.id)).toBeNull();
+    expect(ungroup(root, inner.id)!.children.map((n) => n.id)).toEqual([
+      a.id,
+      root.children[1]!.id,
+      c.id,
+    ]);
+  });
+
+  it("refuses to ungroup when the meaning would change", () => {
+    const { root, inner } = sample();
+    const two = addChild(root, inner.id, newBlock("more")); // inner: OR of two, root: AND
+    expect(ungroupBlocker(two, inner.id)).toMatch(/both ALL or both ANY/);
+    expect(ungroup(two, inner.id)).toBeNull();
+    expect(ungroupBlocker(two, two.id)).toBe("The whole query can't be ungrouped.");
+  });
+
+  it("says a block is not a group, and an unknown id is gone", () => {
+    const { root, a } = sample();
+    expect(ungroupBlocker(root, a.id)).toBe("Only a group can be ungrouped.");
+    expect(ungroup(root, a.id)).toBeNull();
+    expect(ungroupBlocker(root, "nope")).toBe("That group is no longer in the query.");
+  });
+});
+
+describe("removeCondition", () => {
+  it("removes one condition by its id, even when another has the same field", () => {
+    const a = newFieldCondition("size", "gt", 1);
+    const b = newFieldCondition("size", "lt", 9);
+    const block: FacetBlock = { ...newBlock("thing"), conditions: [a, b] };
+    const root: Group = { ...emptyQuery(), children: [block] };
+    const next = removeCondition(root, block.id, b.id);
+    expect((findNode(next, block.id) as FacetBlock).conditions).toEqual([a]);
   });
 });

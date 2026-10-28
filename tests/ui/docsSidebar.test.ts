@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   DOCS_HINT,
+  createReturnFocus,
+  detailsToOpen,
   dragData,
   escapeClosesDocs,
+  facetDetailsHtml,
   facetHtml,
+  fieldDetailsHtml,
   groupHtml,
   sourceLogo,
   valuesHeadingId,
@@ -22,6 +26,7 @@ const facet: Facet = {
   comment: "backend note",
   description: "third party note",
   eventCount: 5,
+  coOccurrence: new Map(),
   fields: [
     {
       id: "size",
@@ -35,6 +40,28 @@ const facet: Facet = {
   ],
 };
 const html = facetHtml(facet, 100, buildFieldCatalog([facet]), "t");
+
+// The About panel beside a block (aboutPanel.ts) shows these same parts, so
+// the dictionary and About never tell a facet's or a field's story twice.
+describe("the detail parts shared with the About panel", () => {
+  it("a facet's details: tags, both notes and how many events have it, no fields", () => {
+    const details = facetDetailsHtml(facet, 100);
+    expect(details).toContain("backend note");
+    expect(details).toContain("third party note");
+    expect(details).toContain("In 5 events");
+    expect(details).toContain('class="qb-tag"');
+    expect(details).not.toContain("qb-doc-field");
+    expect(html).toContain(details);
+  });
+
+  it("a field's details: both notes, and nothing for a field without any", () => {
+    const details = fieldDetailsHtml(facet.fields[0]!);
+    expect(details).toContain("The size");
+    expect(details).toContain(">tp</p>");
+    expect(html).toContain(details);
+    expect(fieldDetailsHtml(facet.fields[1]!)).toBe("");
+  });
+});
 
 describe("data dictionary markup", () => {
   it("escapes names", () => {
@@ -322,6 +349,7 @@ describe("source logos", () => {
     comment: "",
     description: "",
     eventCount: 1,
+    coOccurrence: new Map(),
     fields: [
       {
         id: "size",
@@ -398,6 +426,7 @@ describe("field rows", () => {
     comment: "",
     description: "",
     eventCount: 1,
+    coOccurrence: new Map(),
     fields: [
       {
         id: "size",
@@ -447,5 +476,57 @@ describe("field rows", () => {
     const out = facetHtml(f, 10, buildFieldCatalog([f]), "t");
     expect(out).toContain('class="qb-doc-field-more">More: 2 previously seen values</span>');
     expect(out).toContain("Previously seen values (2)");
+  });
+});
+
+describe("detailsToOpen", () => {
+  // Plain objects in place of elements: only the tag and the parent are read.
+  type Node = { tagName: string; parentElement: Node | null };
+  const node = (tagName: string, parentElement: Node | null): Node => ({ tagName, parentElement });
+
+  it("opens a facet card and every section around it, outermost first", () => {
+    const panel = node("DIV", null);
+    const section = node("DETAILS", node("DIV", panel));
+    const card = node("DETAILS", node("DIV", section));
+    expect(detailsToOpen(card, panel)).toEqual([section, card]);
+  });
+
+  it("stops at the panel", () => {
+    const outside = node("DETAILS", null);
+    const panel = node("DIV", outside);
+    const card = node("DETAILS", panel);
+    expect(detailsToOpen(card, panel)).toEqual([card]);
+  });
+});
+
+describe("createReturnFocus", () => {
+  it("gives the remembered cell once", () => {
+    const memory = createReturnFocus<string>();
+    memory.remember(() => "cell");
+    expect(memory.take()).toBe("cell");
+    expect(memory.take()).toBeNull();
+  });
+
+  // Only a direct round trip (cell → dictionary → close) goes back to the
+  // cell: once the user has gone elsewhere, a later close goes to the rail.
+  it("forgets the cell once the focus leaves the dictionary for somewhere else", () => {
+    const memory = createReturnFocus<string>();
+    memory.remember(() => "cell");
+    memory.focusLeftDocs(true);
+    expect(memory.take()).toBeNull();
+  });
+
+  // The focus moving inside the dictionary, or to nowhere (null), keeps it.
+  it("keeps the cell while the focus stays in the dictionary", () => {
+    const memory = createReturnFocus<string>();
+    memory.remember(() => "cell");
+    memory.focusLeftDocs(false);
+    expect(memory.take()).toBe("cell");
+  });
+
+  it("gives null when the cell is gone", () => {
+    const memory = createReturnFocus<string>();
+    memory.remember(() => null);
+    expect(memory.take()).toBeNull();
   });
 });

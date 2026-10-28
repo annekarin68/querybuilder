@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { emptyQuery, newCondition } from "../../src/query/tree";
+import { emptyQuery, newBlock } from "../../src/query/tree";
 import { initialState, runBlocker, type AppState } from "../../src/state";
 import { EVENT_TITLE_ID, eventDialogHtml, openEventOf } from "../../src/ui/eventDialog";
 
 const event = { id: "6f1c2a9e-0b7d-4c55-9a43-2f0e8d1b7c10", values: { a: [{ x: "<b>" }] } };
-// Results on screen and Run not blocked: a catalog, a database, one condition
-// and no issues (`runBlocker` is null).
+// Results on screen and Run not blocked: a catalog, a database, one facet
+// block and no issues (`runBlocker` is null).
 const shown: AppState = {
   ...initialState,
   preview: { status: "ok", events: [event], page: 0 },
   catalog: buildFieldCatalog([]),
   selectedDatabaseIds: ["db"],
-  query: { ...emptyQuery(), children: [newCondition()] },
+  query: { ...emptyQuery(), children: [newBlock("thing")] },
 };
 
 describe("openEventOf", () => {

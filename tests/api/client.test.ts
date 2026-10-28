@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
   ApiError,
   COMPLIANCE_START_URL,
@@ -19,9 +19,8 @@ import {
   TimeoutError,
   updateSavedQuery,
 } from "../../src/api/client";
-import { ContractError } from "../../src/api/contract";
-import { toQueryRequest } from "../../src/api/request";
-import { toSavedQueryRequest } from "../../src/api/request";
+import { ContractError, forgetWarnings } from "../../src/api/contract";
+import { toQueryRequest, toSavedQueryRequest } from "../../src/api/request";
 import type { Group } from "../../src/query/types";
 import { unfinishedDraft, unfinishedResponse } from "../savedQueryFixtures";
 
@@ -31,12 +30,12 @@ const query: Group = {
   operator: "AND",
   children: [
     {
-      kind: "condition",
-      id: "c1",
+      kind: "facet",
+      id: "f1",
       facetId: "thing",
-      fieldId: "size",
-      operatorId: "gt",
-      value: 3,
+      negated: false,
+      operator: "AND",
+      conditions: [{ kind: "condition", id: "c1", fieldId: "size", operatorId: "gt", value: 3 }],
     },
   ],
 };
@@ -99,7 +98,11 @@ function feedableStreamFetch() {
 
 const alphaLine = JSON.stringify({ label: "alpha", success: true, match_count: 1 });
 
+// A warning is logged once per page load; each test starts as a new page.
+beforeEach(forgetWarnings);
+
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -150,6 +153,36 @@ describe("api client", () => {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
+  });
+
+  it("getFacets keeps co-occurrence, drops unknown ids, and warns once when maps are missing", async () => {
+    const wire = (label: string, extra: object) => ({
+      label,
+      group: "",
+      tags: [],
+      id_number: 1,
+      name: label,
+      description: "",
+      comment: "",
+      total_count: 1,
+      fields: [],
+      ...extra,
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(200, [
+        wire("a", { co_occurrence: { b: "5", ghost: "1" } }),
+        wire("b", {}),
+        wire("c", {}),
+      ]),
+    );
+    const out = await getFacets();
+    expect([...out[0]!.coOccurrence!.keys()]).toEqual(["b"]);
+    expect(out[1]!.coOccurrence).toBeNull();
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages.filter((m) => m.includes("ghost"))).toHaveLength(1);
+    expect(messages.filter((m) => m.includes("2 of 3"))).toHaveLength(1);
   });
 
   it("getStats POSTs the request body as JSON", async () => {
@@ -218,12 +251,15 @@ describe("api client", () => {
       ...query,
       children: [
         {
-          kind: "condition",
-          id: "c1",
-          facetId: null,
-          fieldId: null,
-          operatorId: null,
-          value: null,
+          kind: "facet",
+          id: "f1",
+          facetId: "thing",
+          negated: false,
+          operator: "AND",
+          // No operator yet: only a saved query read back holds one.
+          conditions: [
+            { kind: "condition", id: "c1", fieldId: "size", operatorId: null, value: null },
+          ],
         },
       ],
     };
@@ -570,8 +606,9 @@ describe("saved queries", () => {
     const f = mockFetchOnce(200, [unfinishedResponse]);
     vi.stubGlobal("fetch", f);
     const out = await listSavedQueries();
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
+    expect(out.queries).toHaveLength(1);
+    expect(out.queries[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
+    expect(out.unreadable).toBe(0);
     expect(f).toHaveBeenCalledWith("/api/v1/filter/saved", {
       method: "GET",
       signal: expect.any(AbortSignal),
@@ -623,9 +660,45 @@ describe("saved queries", () => {
   });
 
   it("an answer that breaks the contract is a ContractError naming the field", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce(200, [{ ...unfinishedResponse, id: undefined }]));
-    await expect(listSavedQueries()).rejects.toThrow(
-      'GET /api/v1/filter/saved: "[0].id" should be non-blank text, but it is missing.',
+    vi.stubGlobal("fetch", mockFetchOnce(201, { ...unfinishedResponse, id: undefined }));
+    await expect(createSavedQuery(unfinishedDraft)).rejects.toThrow(
+      'POST /api/v1/filter/saved: "id" should be non-blank text, but it is missing.',
     );
+  });
+
+  describe("a list with entries that can't be read", () => {
+    // An entry saved by an older version (a condition straight in a group)
+    // must not make the whole list unreadable: the others still open.
+    const oldShape = {
+      ...unfinishedResponse,
+      id: "sq-old",
+      name: "Old trips",
+      query: { kind: "group", operator: "AND", children: [{ kind: "condition" }] },
+    };
+
+    it("skips each entry that can't be read, and counts it", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const nameless = { ...oldShape, name: 7 };
+      vi.stubGlobal("fetch", mockFetchOnce(200, [oldShape, unfinishedResponse, nameless, 42]));
+      const out = await listSavedQueries();
+      expect(out.queries.map((q) => q.id)).toEqual(["sq-1"]);
+      expect(out.unreadable).toBe(3);
+      // One warning per skipped entry, naming it when its name can be read.
+      expect(warn).toHaveBeenCalledTimes(3);
+      expect(warn.mock.calls[0]![0]).toContain("“Old trips”");
+      expect(warn.mock.calls[0]![0]).toContain('"[0].query.children[0].kind"');
+      expect(warn.mock.calls[1]![0]).not.toContain("“");
+      warn.mockRestore();
+    });
+
+    it("still fails as a whole when the body is not a list", async () => {
+      vi.stubGlobal("fetch", mockFetchOnce(200, { queries: [] }));
+      await expect(listSavedQueries()).rejects.toBeInstanceOf(ContractError);
+    });
+
+    it("still fails as a whole on an HTTP error", async () => {
+      vi.stubGlobal("fetch", mockFetchOnce(500, { error: "Down." }));
+      await expect(listSavedQueries()).rejects.toBeInstanceOf(ApiError);
+    });
   });
 });

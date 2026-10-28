@@ -5,7 +5,8 @@ import type {
   EventResponse,
   IndividualFieldResponse,
   IndividualResponse,
-  SavedCondition,
+  SavedFacet,
+  SavedFieldCondition,
   SavedGroup,
   SavedNode,
   SavedQueryResponse,
@@ -13,8 +14,9 @@ import type {
   StatsResponse,
   UserResponse,
 } from "./types";
-import { setOwnKey, type ResponseObject, type ResponseValue } from "./contract";
+import { setOwnKey, warnOnce, type ResponseObject, type ResponseValue } from "./contract";
 import type {
+  CoValue,
   Compliance,
   Database,
   DatabaseError,
@@ -26,7 +28,8 @@ import type {
   Scalar,
   User,
 } from "../model";
-import type { Condition, Group, QueryNode } from "../query/types";
+import { groupOf, newBlock, newFieldCondition } from "../query/tree";
+import type { FacetBlock, FieldCondition, Group, QueryNode } from "../query/types";
 
 /**
  * Backend response → the frontend's own model (src/model.ts). client.ts runs
@@ -90,8 +93,122 @@ export function toFacet(i: ResponseObject<IndividualResponse>): Facet {
     comment: i.text("comment"),
     description: i.text("description"),
     eventCount: i.number("total_count"),
+    coOccurrence: readCoOccurrence(i, id),
     fields: i.list<IndividualFieldResponse>("fields").map(toField),
   };
+}
+
+/** A plain decimal, with an optional exponent. Stricter than `Number()`, which
+ *  also accepts "", " ", "0x10" and "Infinity". */
+const DECIMAL_TEXT = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
+/**
+ * One co-occurrence text as a CoValue, or `null` when it is not a percentage
+ * (not text, not a plain number, or outside 0 to 100). Pure, so tests reach it.
+ *
+ * "Too rare": a JavaScript number cannot hold "1e-400" and gives 0, which
+ * would turn "seen together, very rarely" into "never seen together". A text
+ * whose digits before the `e` are not all zero but which still gives 0 is
+ * flagged instead ("Values too small for a JavaScript number", spec section 6).
+ */
+export function toCoValue(raw: unknown): CoValue | null {
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  if (!DECIMAL_TEXT.test(text)) return null;
+  const percent = Number(text);
+  // "-1e-400" parses to -0, which passes `>= 0`: a negative is never a percentage.
+  if (text.startsWith("-") && !/^-[0.]*([eE]|$)/.test(text)) return null;
+  if (!(percent >= 0 && percent <= 100)) return null;
+  const mantissa = text.split(/e/i)[0]!;
+  const tooRare = percent === 0 && /[1-9]/.test(mantissa);
+  // `+ 0` turns a "-0" into 0.
+  return { text, percent: percent + 0, tooRare };
+}
+
+/** At most this many ids in a warning; a backend with thousands of bad ids would flood the console. */
+const NAMES_IN_WARNING = 5;
+
+function namesForWarning(ids: string[]): string {
+  const shown = ids.slice(0, NAMES_IN_WARNING).map((id) => JSON.stringify(id));
+  const more = ids.length - shown.length;
+  return shown.join(", ") + (more > 0 ? ` and ${more} more` : "");
+}
+
+/**
+ * A facet's `co_occurrence` as a map by the other facet's id. Display data,
+ * so nothing here throws: a value that is not a percentage is left out and a
+ * too-rare one is flagged, each with one warning per facet listing them. A
+ * missing map (or one that is not an object) is null, "no data", which is not
+ * the same as an empty map ("never seen together"); it is silent here:
+ * `countWithoutCoOccurrence` reports the missing ones once for the whole list.
+ */
+export function readCoOccurrence(
+  i: ResponseObject<IndividualResponse>,
+  facetId: string,
+): Map<string, CoValue> | null {
+  const entries = i.optionalEntries("co_occurrence");
+  if (entries === undefined) return null;
+  const map = new Map<string, CoValue>();
+  const notPercentages: string[] = [];
+  const tooRare: string[] = [];
+  for (const [otherId, raw] of entries) {
+    const value = toCoValue(raw);
+    if (value === null) notPercentages.push(otherId);
+    else {
+      map.set(otherId, value);
+      if (value.tooRare) tooRare.push(otherId);
+    }
+  }
+  const where = `Unexpected response from ${i.requestName()}, facet ${JSON.stringify(facetId)}`;
+  if (notPercentages.length > 0) {
+    warnOnce(
+      `${where}: co_occurrence for ${namesForWarning(notPercentages)} should be a percentage from 0 to 100 as text. Leaving it out.`,
+      `notPercentage ${facetId}`,
+    );
+  }
+  if (tooRare.length > 0) {
+    warnOnce(
+      `${where}: co_occurrence for ${namesForWarning(tooRare)} is too small for a JavaScript number. Showing it as seen together, too rare to colour.`,
+      `tooRare ${facetId}`,
+    );
+  }
+  return map;
+}
+
+/**
+ * How many facets of the list sent no `co_occurrence`, with one warning for
+ * the whole list (a backend that does not send it yet would otherwise log
+ * one line per facet).
+ */
+export function countWithoutCoOccurrence(items: ResponseObject<IndividualResponse>[]): number {
+  const missing = items.filter((i) => !i.hasKey("co_occurrence")).length;
+  if (missing > 0) {
+    warnOnce(
+      `Unexpected response from ${items[0]!.requestName()}: ${missing} of ${items.length} facets have no co_occurrence. Showing them as having no data.`,
+    );
+  }
+  return missing;
+}
+
+/**
+ * Drops co-occurrence ids that name no facet of the list, with one warning per
+ * facet listing them. It needs the whole list, so it runs after `toFacet`.
+ */
+export function pruneUnknownCoOccurrence(facets: Facet[]): Facet[] {
+  const known = new Set(facets.map((f) => f.id));
+  return facets.map((facet) => {
+    if (facet.coOccurrence === null) return facet;
+    const unknown = [...facet.coOccurrence.keys()].filter((id) => !known.has(id));
+    if (unknown.length === 0) return facet;
+    warnOnce(
+      `Unexpected facet list: co_occurrence of facet ${JSON.stringify(facet.id)} names facets that do not exist: ${namesForWarning(unknown)}. Leaving them out.`,
+      `unknownId ${facet.id}`,
+    );
+    return {
+      ...facet,
+      coOccurrence: new Map([...facet.coOccurrence].filter(([id]) => known.has(id))),
+    };
+  });
 }
 
 export function toEvent(e: ResponseObject<EventResponse>): EventRecord {
@@ -166,44 +283,52 @@ export function toCompliance(body: ResponseValue): Compliance {
  * A saved query. The tree is required data (a malformed one throws a
  * ContractError naming the node, e.g. "query.children[0].kind"): loading half
  * of a user's query would be worse than saying it cannot be read. The note is
- * only shown, so a missing one becomes ""; the database ids are required like every id. The tree comes back exactly as it
- * was saved, unfinished parts included; the backend never rewrites it.
+ * only shown, so a missing one becomes ""; the database ids are required like
+ * every id.
  */
 export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery {
-  const root = q.object<SavedGroup>("query");
-  root.oneOf("kind", ["group"]); // a saved query's root is always a group
   return {
     id: q.id("id"),
     name: q.id("name").trim(),
     note: q.text("note"),
     databaseIds: q.ids("databases"),
-    query: toSavedGroup(root),
+    query: fromSavedTree(q.object<SavedGroup>("query")),
     updatedAt: q.id("updated_at"),
   };
 }
 
-function toSavedNode(n: ResponseObject<SavedNode>): QueryNode {
-  return n.oneOf("kind", ["group", "condition"]) === "group"
-    ? toSavedGroup(n)
-    : toSavedCondition(n);
+/**
+ * A saved query's tree, read strictly (a malformed node is a ContractError
+ * naming its path: half of a user's query would be worse than saying it can't
+ * be read). Every node gets a fresh id, as any new node does: a saved tree
+ * has none. The tree comes back as it was saved, unfinished parts included.
+ */
+export function fromSavedTree(root: ResponseObject<SavedGroup>): Group {
+  root.oneOf("kind", ["group"]); // a saved query's root is always a group
+  return savedGroupOf(root);
 }
 
-function toSavedGroup(g: ResponseObject<SavedGroup>): Group {
+function savedNodeOf(n: ResponseObject<SavedNode>): QueryNode {
+  return n.oneOf("kind", ["group", "facet"]) === "group"
+    ? savedGroupOf(n as ResponseObject<SavedGroup>)
+    : savedFacetOf(n as ResponseObject<SavedFacet>);
+}
+
+function savedGroupOf(g: ResponseObject<SavedGroup>): Group {
+  const operator = g.oneOf("operator", ["AND", "OR"]);
+  return groupOf(g.list<SavedNode>("children").map(savedNodeOf), operator);
+}
+
+function savedFacetOf(f: ResponseObject<SavedFacet>): FacetBlock {
   return {
-    kind: "group",
-    id: g.id("id"),
-    operator: g.oneOf("operator", ["AND", "OR"]),
-    children: g.list<SavedNode>("children").map(toSavedNode),
+    ...newBlock(f.id("facet_id")),
+    negated: f.boolean("negated"),
+    operator: f.oneOf("operator", ["AND", "OR"]),
+    conditions: f.list<SavedFieldCondition>("conditions").map(savedConditionOf),
   };
 }
 
-function toSavedCondition(c: ResponseObject<SavedCondition>): Condition {
-  return {
-    kind: "condition",
-    id: c.id("id"),
-    facetId: c.nullableId("facet_id"),
-    fieldId: c.nullableId("field_id"),
-    operatorId: c.nullableId("operator_id"),
-    value: c.savedValue("value"),
-  };
+function savedConditionOf(c: ResponseObject<SavedFieldCondition>): FieldCondition {
+  c.oneOf("kind", ["condition"]);
+  return newFieldCondition(c.id("field_id"), c.nullableId("operator_id"), c.savedValue("value"));
 }

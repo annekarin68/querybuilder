@@ -46,6 +46,19 @@ export interface Field {
   values: string[];
 }
 
+/** How often events holding one facet also hold another (the backend's
+ *  `co_occurrence`, "Seen together" in docs/ARCHITECTURE.md). */
+export interface CoValue {
+  /** The backend's text, trimmed, for display ("1.2e-20"): never re-formatted. */
+  text: string;
+  /** 0 to 100: the share of this facet's events that also hold the other.
+   *  0 for a value `tooRare` to be told from zero. */
+  percent: number;
+  /** The text is not zero, but is too small for a JavaScript number, which
+   *  would round it to 0 and so say "never seen together". */
+  tooRare: boolean;
+}
+
 /** One described aspect of an event: a signal, a reading, a piece of context. */
 export interface Facet {
   id: string;
@@ -63,6 +76,11 @@ export interface Facet {
   description: string;
   /** How many events, across all databases, hold a value for this facet. */
   eventCount: number;
+  /** By the other facet's id (this facet's own id too, at 100). Null when
+   *  the backend left `co_occurrence` out: "no data" is not "never seen
+   *  together", which is an empty map or one without a seen value. Display
+   *  data only: nothing depends on it. */
+  coOccurrence: ReadonlyMap<string, CoValue> | null;
   fields: Field[];
 }
 
@@ -83,8 +101,8 @@ export interface DatabaseError {
   message: string;
   /** "incomplete": something is missing. "invalid": something can't work. */
   kind: "incomplete" | "invalid";
-  /** The `id` of the query node (group or condition) it is in, or null when
-   *  it is not in one place. */
+  /** The `id` of the query node (a group, a facet block or a field
+   *  condition) it is in, or null when it is not in one place. */
   nodeId: string | null;
 }
 
@@ -137,6 +155,14 @@ export interface SavedQuery {
   query: Group;
   /** ISO 8601 UTC. */
   updatedAt: string;
+}
+
+/** The user's saved queries as the list endpoint gives them: the ones that
+ *  could be read, newest first, and how many could not (saved by an older
+ *  version, in a shape this one does not read). */
+export interface SavedQueryList {
+  queries: SavedQuery[];
+  unreadable: number;
 }
 
 /** What is sent to save a query. */

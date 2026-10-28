@@ -1,22 +1,24 @@
-import { ENTRYSETS, type Entryset } from "./vehicleData";
+import { ENTRYSETS, occurrencesOf, type Entryset, type Occurrence } from "./vehicleData";
 import { databaseIdForEntrysetId } from "./databases";
-import { rowKey, type Row } from "./evaluate";
 
-/**
- * Flattens one entryset's nested `items[individualLabel][fieldLabel]` shape
- * into flat `rowKey(individualLabel, fieldLabel)` keys, so a condition's
- * (facet_id, field_id) pair finds its value — plus a synthetic `__db` key (see
- * mock-server/databases.ts) used only for database scoping.
- */
-export function flattenEntryset(entryset: Entryset): Row {
-  const row: Row = { id: entryset.id, __db: databaseIdForEntrysetId(entryset.id) };
-  for (const [individualLabel, fields] of Object.entries(entryset.items)) {
-    for (const [fieldLabel, value] of Object.entries(fields)) {
-      row[rowKey(individualLabel, fieldLabel)] = value;
-    }
-  }
-  return row;
+/** One event as the mock's matcher sees it (evaluate.ts, `eventMatches`). */
+export interface MockEvent {
+  id: number;
+  /** The database it belongs to (databases.ts, by its numeric id only). */
+  db: string;
+  /** Every occurrence of every facet the event holds. */
+  occurrences: Record<string, Occurrence[]>;
 }
 
-/** Every entryset the mock server has, flattened once at startup. */
-export const ROWS: Row[] = Object.values(ENTRYSETS).map(flattenEntryset);
+export function toMockEvent(e: Entryset): MockEvent {
+  const occurrences: Record<string, Occurrence[]> = {};
+  for (const facet of Object.keys(e.items)) occurrences[facet] = occurrencesOf(e, facet);
+  return {
+    id: e.id,
+    db: String(databaseIdForEntrysetId(e.id)),
+    occurrences,
+  };
+}
+
+/** Every event the mock server has, prepared once at startup. */
+export const EVENTS: MockEvent[] = Object.values(ENTRYSETS).map(toMockEvent);

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { coOccurrenceOf } from "./coOccurrence";
 
 const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 
@@ -11,12 +12,23 @@ const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 export type { IndividualResponse as Individual } from "../src/api/types";
 import type { IndividualResponse as Individual } from "../src/api/types";
 
-/** One event as stored in data/entrysets.json: the mock's own format, kept as
- *  it was. The API answers with `EventResponse` (src/api/types.ts), built by
- *  `toEventResponse` (events.ts). */
+/** One occurrence of a facet in an event: its fields' values. */
+export type Occurrence = Record<string, string | number | boolean>;
+
+/** One event as stored in data/entrysets.json: the mock's own format. A facet
+ *  that occurs more than once in the event is stored as a list. The API
+ *  answers with `EventResponse` (src/api/types.ts), built by `toEventResponse`
+ *  (events.ts). */
 export interface Entryset {
   id: number;
-  items: Record<string, Record<string, string | number | boolean>>;
+  items: Record<string, Occurrence | Occurrence[]>;
+}
+
+/** A facet's occurrences in an event: none, one, or several. */
+export function occurrencesOf(e: Entryset, facetLabel: string): Occurrence[] {
+  const stored = e.items[facetLabel];
+  if (stored === undefined) return [];
+  return Array.isArray(stored) ? stored : [stored];
 }
 
 function loadIndividuals(): Individual[] {
@@ -34,5 +46,23 @@ function loadEntrysets(): Record<string, Entryset> {
   >;
 }
 
-export const INDIVIDUALS: Individual[] = loadIndividuals();
 export const ENTRYSETS: Record<string, Entryset> = loadEntrysets();
+
+/** The one facet that answers without `co_occurrence`, so the frontend's
+ *  "no data" case (not the same as "never seen together") shows in the browser.
+ *  The others still name it in their own maps. */
+export const FACET_WITHOUT_CO_OCCURRENCE = "road_surface_condition";
+
+/** The individuals, each answering with the co-occurrence worked out from the
+ *  sample events (except `FACET_WITHOUT_CO_OCCURRENCE`). */
+function withCoOccurrence(individuals: Individual[]): Individual[] {
+  const table = coOccurrenceOf(
+    Object.values(ENTRYSETS),
+    individuals.map((i) => i.label),
+  );
+  return individuals.map((i) =>
+    i.label === FACET_WITHOUT_CO_OCCURRENCE ? i : { ...i, co_occurrence: table[i.label]! },
+  );
+}
+
+export const INDIVIDUALS: Individual[] = withCoOccurrence(loadIndividuals());

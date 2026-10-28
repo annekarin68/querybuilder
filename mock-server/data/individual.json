@@ -1967,6 +1967,83 @@
     }
   },
   {
+    "charging_session": {
+      "label": "charging_session",
+      "group": "battery_ev",
+      "tags": ["electric", "hybrid"],
+      "id_number": 158,
+      "name": "Charging session",
+      "description": "One plug-in charging session of the traction battery, from connecting the cable to unplugging it.",
+      "comment": "Has more than five fields, so the builder folds it",
+      "total_count": 48211907,
+      "fields": [
+        {
+          "label": "connector_type",
+          "type": "VARCHAR",
+          "description": "",
+          "comment": "",
+          "cardinality": 3,
+          "values": ["ccs2", "chademo", "type2"],
+          "format": ""
+        },
+        {
+          "label": "start_soc_percent",
+          "type": "DOUBLE",
+          "description": "",
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
+        },
+        {
+          "label": "end_soc_percent",
+          "type": "DOUBLE",
+          "description": "",
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
+        },
+        {
+          "label": "energy_delivered_kwh",
+          "type": "DOUBLE",
+          "description": "",
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
+        },
+        {
+          "label": "duration_s",
+          "type": "BIGINT",
+          "description": "",
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
+        },
+        {
+          "label": "is_fast_charge",
+          "type": "BOOLEAN",
+          "description": "",
+          "comment": "",
+          "cardinality": 2,
+          "values": [],
+          "format": ""
+        },
+        {
+          "label": "started_at",
+          "type": "TIMESTAMP",
+          "description": "",
+          "comment": "",
+          "cardinality": 50000000,
+          "values": [],
+          "format": ""
+        }
+      ]
+    }
+  },
+  {
     "tire_pressure_front_left": {
       "label": "tire_pressure_front_left",
       "group": "tires_wheels",

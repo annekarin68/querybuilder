@@ -82,8 +82,9 @@ export interface Shell {
    *  repainted, so repeating a message is heard again). While a dialog is
    *  open, its own region speaks: a modal dialog makes the page's one inert. */
   announce(message: string): void;
-  /** Fold the data dictionary into its rail, or open it. */
-  setSidebarCollapsed(collapsed: boolean): void;
+  /** Fold the data dictionary into its rail, or open it. Folding it while
+   *  it has the focus moves the focus to `focusOnFold`, or to the rail. */
+  setSidebarCollapsed(collapsed: boolean, focusOnFold?: HTMLElement | null): void;
   /** Listen for clicks on the workflow steps and the docs toggles. Call once. */
   onMenu(handler: { view(v: ActiveView): void; toggleSidebar(): void }): void;
 }
@@ -244,7 +245,7 @@ export function renderShell(root: HTMLElement): Shell {
       waiting.push(message);
     },
 
-    setSidebarCollapsed(collapsed) {
+    setSidebarCollapsed(collapsed, focusOnFold = null) {
       // Asked before the docs are hidden: the browser drops focus from hidden elements.
       const focusInDocs = docsColumn.contains(document.activeElement);
       body.classList.toggle("qb-docs-collapsed", collapsed);
@@ -255,8 +256,9 @@ export function renderShell(root: HTMLElement): Shell {
       railIcon.setAttribute("aria-hidden", "true");
       railLabel.textContent = toggle.label;
       // Folding the docs hides the control that had focus; keep the keyboard
-      // user in the page by moving focus to the rail that brings them back.
-      if (collapsed && focusInDocs) rail.focus();
+      // user in the page by moving focus to the rail that brings them back,
+      // or to where they came from (a co-occurrence cell, main.ts).
+      if (collapsed && focusInDocs) (focusOnFold ?? rail).focus();
     },
 
     /**

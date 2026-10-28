@@ -19,6 +19,7 @@ function facet(
     comment: "",
     description: "",
     eventCount: 0,
+    coOccurrence: new Map(),
     fields: fields.map((f) => ({
       id: f,
       name: f,
@@ -157,6 +158,7 @@ describe("filterStatus", () => {
     comment: "",
     description: "",
     eventCount: 1,
+    coOccurrence: new Map(),
     fields: [],
   });
   const all = [facetNamed("a", "Alpha"), facetNamed("b", "Alphabet"), facetNamed("c", "Gamma")];

@@ -7,12 +7,22 @@ import type {
   EventRecord,
   Facet,
   SavedQuery,
+  SavedQueryList,
   SavedQueryDraft,
 } from "../src/model";
 import { buildFieldCatalog } from "../src/query/fieldCatalog";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../src/query/tree";
-import type { Group } from "../src/query/types";
-import type { OpenSaved } from "../src/query/saved";
+import {
+  addChild,
+  emptyQuery,
+  newBlock,
+  newFieldCondition,
+  newGroup,
+  removeNode,
+  setNegated,
+  updateNode,
+} from "../src/query/tree";
+import type { FacetBlock, Group } from "../src/query/types";
+import { isEdited, type OpenSaved } from "../src/query/saved";
 import { validateQuery } from "../src/query/validate";
 import { createStore, initialState, type AppState } from "../src/state";
 import {
@@ -35,6 +45,7 @@ const facets: Facet[] = [
     comment: "",
     description: "",
     eventCount: 10,
+    coOccurrence: new Map(),
     fields: [
       { id: "size", name: "size", typeName: "BIGINT", comment: "", description: "", values: [] },
     ],
@@ -51,16 +62,21 @@ const db = (id: string): Database => ({
 const databases = [db("alpha"), db("beta")];
 const catalog = buildFieldCatalog(facets);
 
-/** A query that can run: one finished condition, "Thing: size > n". */
+/** A block of the facet "thing" with `conditions` set. */
+function thingBlock(...conditions: FacetBlock["conditions"]): FacetBlock {
+  return { ...newBlock("thing"), conditions };
+}
+
+/** A query that can run: one block with one finished field, "Thing has size > n". */
 function runnableQuery(n = 3): Group {
   const root = emptyQuery();
-  const c = newCondition();
-  return updateNode(addChild(root, root.id, c), c.id, {
-    facetId: "thing",
-    fieldId: "size",
-    operatorId: "gt",
-    value: n,
-  });
+  return addChild(root, root.id, thingBlock(newFieldCondition("size", "gt", n)));
+}
+
+/** A query that cannot run yet: its one set field has no value ("Enter a value."). */
+function unfinishedQuery(): Group {
+  const root = emptyQuery();
+  return addChild(root, root.id, thingBlock(newFieldCondition("size", "gt", null)));
 }
 
 /** The state after a successful start, with a finished query on screen. */
@@ -83,6 +99,11 @@ function savedFrom(draft: SavedQueryDraft, id: string): SavedQuery {
 }
 
 /** A saved query as the list holds it. */
+/** A saved-queries list in which every entry could be read. */
+function listOf(...queries: SavedQuery[]): SavedQueryList {
+  return { queries, unreadable: 0 };
+}
+
 function savedQuery(id: string, name: string, overrides: Partial<SavedQuery> = {}): SavedQuery {
   return savedFrom(
     { name, note: "", databaseIds: ["alpha"], query: runnableQuery(7), ...overrides },
@@ -109,7 +130,7 @@ function fakeApi(overrides: Partial<AppApi> = {}): AppApi {
     runQuery: vi.fn(async () => events),
     logout: vi.fn(async () => {}),
     invalidateCompliance: vi.fn(async () => {}),
-    listSavedQueries: vi.fn(async () => []),
+    listSavedQueries: vi.fn(async () => listOf()),
     createSavedQuery: vi.fn(async (draft: SavedQueryDraft) => savedFrom(draft, "new")),
     updateSavedQuery: vi.fn(async (id: string, draft: SavedQueryDraft) => savedFrom(draft, id)),
     deleteSavedQuery: vi.fn(async () => {}),
@@ -466,8 +487,7 @@ describe("statistics", () => {
   it("fetches nothing for an unfinished query", async () => {
     vi.useFakeTimers();
     const { app, api } = setup(ready());
-    const root = emptyQuery();
-    app.onQueryChange(addChild(root, root.id, newCondition()));
+    app.onQueryChange(unfinishedQuery());
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).not.toHaveBeenCalled();
   });
@@ -557,8 +577,7 @@ describe("query and database changes", () => {
 
   it("an edit clears the preview at once and revalidates", () => {
     const { app, store } = setup({ ...ready(), ...shown });
-    const root = emptyQuery();
-    const unfinished = addChild(root, root.id, newCondition());
+    const unfinished = unfinishedQuery();
     app.onQueryChange(unfinished);
     expect(store.getState().query).toBe(unfinished);
     expect(store.getState().preview).toEqual({ status: "idle" });
@@ -670,7 +689,7 @@ describe("logging out and invalidating compliance", () => {
 // ---- startup --------------------------------------------------------------
 
 describe("start", () => {
-  it("loads everything, selects every database and seeds one empty condition", async () => {
+  it("loads everything, selects every database and starts with an empty query", async () => {
     const { app, store } = setup();
     await app.start(false);
     const s = store.getState();
@@ -678,8 +697,10 @@ describe("start", () => {
     expect(s.databases).toBe(databases);
     expect(s.facets).toBe(facets);
     expect(s.selectedDatabaseIds).toEqual(["alpha", "beta"]);
-    expect(s.query.children).toHaveLength(1);
-    expect(s.issues).toEqual([expect.objectContaining({ kind: "incomplete" })]);
+    // No seed row any more: the footer says "Add a facet to start…", and the
+    // empty query is "not finished", not invalid (no issue, a normal mascot).
+    expect(s.query).toMatchObject({ kind: "group", operator: "AND", children: [] });
+    expect(s.issues).toEqual([]);
     expect(s.auth).toMatchObject({ status: "authenticated", user: { name: "pat" } });
     expect(s.compliance).toMatchObject({
       status: "acknowledged",
@@ -740,23 +761,56 @@ describe("start", () => {
   });
 
   it("a normal load does not bring back a query in which nothing was chosen", async () => {
-    const blank = addChild(emptyQuery(), emptyQuery().id, newCondition());
+    // Only an ALL/ANY switch and an empty group: no facet.
+    const blank: Group = { ...emptyQuery(), operator: "OR", children: [newGroup()] };
     keepQuery(blank, ["beta"]);
     const { app, store, announce } = setup();
     await app.start(false);
     expect(store.getState().selectedDatabaseIds).toEqual(["alpha", "beta"]);
-    expect(store.getState().query).not.toEqual(blank); // a fresh seed
+    expect(store.getState().query).not.toEqual(blank); // a fresh start
     expect(store.getState().restoredNotice).toBe(false);
     expect(announce).not.toHaveBeenCalled();
   });
 
   it("on the return hop, restores even a copy in which nothing was chosen", async () => {
-    const blank = addChild(emptyQuery(), emptyQuery().id, newCondition());
+    const blank: Group = { ...emptyQuery(), operator: "OR", children: [newGroup()] };
     keepQuery(blank, ["beta"]);
     const { app, store } = setup();
     await app.start(true);
     expect(store.getState().query).toEqual(blank);
     expect(store.getState().selectedDatabaseIds).toEqual(["beta"]);
+  });
+
+  // Old queries are not migrated (spec, decision 9): a copy kept by the build
+  // before facet blocks fails the structural check, and the app starts fresh.
+  it("drops a kept query in the shape before facet blocks, without a word", async () => {
+    const oldShape = {
+      kind: "group",
+      id: "g1",
+      operator: "AND",
+      children: [
+        {
+          kind: "condition",
+          id: "c1",
+          facetId: "thing",
+          fieldId: "size",
+          operatorId: "gt",
+          value: 3,
+        },
+      ],
+    };
+    sessionStorage.setItem(
+      "qb:kept-query",
+      JSON.stringify({ query: oldShape, selectedDatabaseIds: ["beta"] }),
+    );
+    const { app, store, announce } = setup();
+    await app.start(true);
+    expect(store.getState().query.children).toEqual([]);
+    expect(store.getState().selectedDatabaseIds).toEqual(["alpha", "beta"]);
+    expect(store.getState().restoredNotice).toBe(false);
+    expect(announce).not.toHaveBeenCalled();
+    // The first state replaces the old copy, so it is dropped only once.
+    expect(readKeptQuery()?.query).toEqual(store.getState().query);
   });
 
   it("says which databases from before no longer exist", async () => {
@@ -823,8 +877,8 @@ describe("the Restored notice", () => {
     const s = store.getState();
     expect(s.restoredNotice).toBe(false);
     expect(s.selectedDatabaseIds).toEqual(["alpha", "beta"]);
-    expect(s.query.children).toHaveLength(1);
-    expect(s.query.children[0]).toMatchObject({ kind: "condition", facetId: null });
+    expect(s.query).toMatchObject({ kind: "group", children: [] });
+    expect(s.issues).toEqual([]);
     expect(s.stats).toEqual({ status: "idle", results: [] });
     // What is kept now is the blank start, which a reload won't bring back.
     expect(readKeptQuery()?.query).toEqual(s.query);
@@ -863,29 +917,37 @@ describe("the Restored notice", () => {
 });
 
 describe("dropping docs items", () => {
-  it("a facet drop adds a facet-level 'present' condition and validates it", () => {
+  it("a facet drop adds a block with nothing set ('Thing present') and validates it", () => {
     const { store, app } = setup({ ...ready(emptyQuery()) });
     app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
     const q = store.getState().query;
     expect(q.children).toHaveLength(1);
-    expect(q.children[0]).toMatchObject({ facetId: "thing", fieldId: null, operatorId: "present" });
+    expect(q.children[0]).toMatchObject({
+      kind: "facet",
+      facetId: "thing",
+      negated: false,
+      conditions: [],
+    });
     expect(store.getState().issues).toEqual([]);
     expect(store.getState().dropNotice).toBeNull();
+    expect(store.getState().openField).toBeNull();
   });
 
   it("announces what was added, for screen readers", () => {
     const { store, app, announce } = setup({ ...ready(emptyQuery()) });
     app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
-    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 condition to the query.");
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 facet to the query.");
   });
 
   it("announces a move", () => {
     const root = emptyQuery();
-    const c = newCondition();
+    const block = newBlock("thing");
     const g = newGroup();
-    const { app, announce } = setup({ ...ready(addChild(addChild(root, root.id, c), root.id, g)) });
-    app.onDropItem({ type: "node", nodeId: c.id }, g.id);
-    expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition.");
+    const { app, announce } = setup({
+      ...ready(addChild(addChild(root, root.id, block), root.id, g)),
+    });
+    app.onDropItem({ type: "node", nodeId: block.id }, g.id);
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the facet.");
   });
 
   it("announces no 'Added' or 'Moved' when nothing was added or moved", () => {
@@ -920,22 +982,15 @@ describe("dropping docs items", () => {
   it("a drop that fully succeeds speaks no warning", () => {
     const { store, app, announce } = setup({ ...ready(emptyQuery()), dropNotice: "old" });
     app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
-    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 condition to the query.");
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 facet to the query.");
   });
 
   it("moving a node onto the spot it already holds changes and announces nothing", () => {
     // The last child dropped on its own parent goes "to the end of the group":
     // where it already is.
-    // (Finished conditions: a lone blank row would be replaced by the moved one.)
-    const done = { facetId: "thing", fieldId: "size", operatorId: "gt", value: 1 };
     const root = emptyQuery();
-    const first = newCondition();
-    const last = newCondition();
-    const q = updateNode(
-      updateNode(addChild(addChild(root, root.id, first), root.id, last), first.id, done),
-      last.id,
-      done,
-    );
+    const last = newBlock("thing");
+    const q = addChild(addChild(root, root.id, newBlock("thing")), root.id, last);
     const { store, app, announce } = setup({ ...ready(q) });
     app.onDropItem({ type: "node", nodeId: last.id }, root.id);
     expect(announce).not.toHaveBeenCalled();
@@ -1009,11 +1064,104 @@ describe("dropping docs items", () => {
 
   it("dropping a node on itself does nothing quietly", () => {
     const q = runnableQuery();
-    const c = q.children[0]!;
+    const block = q.children[0]!;
     const { store, app } = setup({ ...ready(q) });
-    app.onDropItem({ type: "node", nodeId: c.id }, c.id);
+    app.onDropItem({ type: "node", nodeId: block.id }, block.id);
     expect(store.getState().query).toBe(q);
     expect(store.getState().dropNotice).toBeNull();
+  });
+
+  it("a block dropped on another block lands just before it", () => {
+    const root = emptyQuery();
+    const [first, second] = [newBlock("thing"), newBlock("thing")];
+    const q = addChild(addChild(root, root.id, first), root.id, second);
+    const { store, app } = setup({ ...ready(q) });
+    app.onDropItem({ type: "node", nodeId: second.id }, first.id);
+    expect(store.getState().query.children.map((n) => n.id)).toEqual([second.id, first.id]);
+  });
+
+  describe("a field or a value, which is about one row of a block", () => {
+    // "size" with known values, so a value can be dragged from the dictionary.
+    const valued: Facet[] = [
+      {
+        ...facets[0]!,
+        fields: [{ ...facets[0]!.fields[0]!, values: ["3", "4"] }],
+      },
+    ];
+    const withBlock = (block: FacetBlock) => {
+      const root = emptyQuery();
+      return setup({
+        ...ready(addChild(root, root.id, block)),
+        facets: valued,
+        catalog: buildFieldCatalog(valued),
+      });
+    };
+
+    it("a field dropped on a block of its facet opens its row and adds nothing", () => {
+      const block = newBlock("thing");
+      const { store, app, announce } = withBlock(block);
+      const before = store.getState().query;
+      app.onDropItem({ type: "field", facetId: "thing", fieldId: "size" }, block.id);
+      expect(store.getState().query).toBe(before);
+      expect(store.getState().openField).toEqual({ blockId: block.id, fieldId: "size" });
+      expect(announce).toHaveBeenCalledExactlyOnceWith("Showing size in Thing.");
+    });
+
+    // The builder moves the keyboard focus into that row after a mouse drop,
+    // so onDropItem says which row it opened.
+    it("onDropItem returns the row it opened, and null when it opened none", () => {
+      const block = newBlock("thing");
+      const { app } = withBlock(block);
+      const field = { type: "field", facetId: "thing", fieldId: "size" } as const;
+      expect(app.onDropItem(field, block.id)).toEqual({ blockId: block.id, fieldId: "size" });
+      expect(app.onDropItem({ type: "facet", facetId: "thing" }, block.id)).toBeNull();
+      expect(app.onDropItem(null, block.id)).toBeNull();
+    });
+
+    it("unfolds a folded block to show the row a field drop opened", () => {
+      const block = { ...newBlock("thing"), collapsed: true };
+      const { store, app } = withBlock(block);
+      app.onDropItem({ type: "field", facetId: "thing", fieldId: "size" }, block.id);
+      expect(store.getState().query.children[0]).toMatchObject({ collapsed: false });
+    });
+
+    it("a field dropped anywhere else adds a block and opens its row", () => {
+      const { store, app, announce } = setup({ ...ready(emptyQuery()) });
+      app.onDropItem(
+        { type: "field", facetId: "thing", fieldId: "size" },
+        store.getState().query.id,
+      );
+      const added = store.getState().query.children[0] as FacetBlock;
+      expect(added).toMatchObject({ kind: "facet", facetId: "thing", conditions: [] });
+      expect(store.getState().openField).toEqual({ blockId: added.id, fieldId: "size" });
+      expect(announce).toHaveBeenCalledExactlyOnceWith("Added 1 facet to the query.");
+    });
+
+    it("a value dropped on an unset row fills it, and says so", () => {
+      const block = newBlock("thing");
+      const { store, app, announce } = withBlock(block);
+      app.onDropItem({ type: "value", facetId: "thing", fieldId: "size", value: "3" }, block.id);
+      expect(store.getState().query.children[0]).toMatchObject({
+        id: block.id,
+        conditions: [{ fieldId: "size", operatorId: "eq", value: 3 }],
+      });
+      expect(store.getState().issues).toEqual([]);
+      expect(store.getState().openField).toEqual({ blockId: block.id, fieldId: "size" });
+      expect(announce).toHaveBeenCalledExactlyOnceWith("Set size to 3.");
+    });
+
+    it("a value dropped on a set row becomes a block of its own, beside it, and says why", () => {
+      const block = thingBlock(newFieldCondition("size", "gt", 1));
+      const { store, app, announce } = withBlock(block);
+      app.onDropItem({ type: "value", facetId: "thing", fieldId: "size", value: "4" }, block.id);
+      const [added, kept] = store.getState().query.children as FacetBlock[];
+      expect(kept).toEqual(block); // nothing the user chose is overwritten
+      expect(added).toMatchObject({ conditions: [{ fieldId: "size", value: 4 }] });
+      expect(store.getState().openField).toEqual({ blockId: added!.id, fieldId: "size" });
+      expect(announce).toHaveBeenCalledExactlyOnceWith(
+        "Added 1 facet to the query, beside the one that already sets size.",
+      );
+    });
   });
 
   describe("a collapsed target group", () => {
@@ -1032,7 +1180,6 @@ describe("dropping docs items", () => {
       app.onDropItem({ type: "facet", facetId: "thing" }, groupId);
       const g = groupOf(store.getState().query, groupId);
       expect(g).toMatchObject({ collapsed: false });
-      // (A new group starts with one blank condition; the drop replaces it.)
       expect(g?.kind === "group" && g.children).toHaveLength(1);
       expect(g?.kind === "group" && g.children[0]).toMatchObject({ facetId: "thing" });
     });
@@ -1046,13 +1193,13 @@ describe("dropping docs items", () => {
 
     it("opens to show a node moved into it", () => {
       const { query, groupId } = withCollapsedGroup();
-      const c = newCondition();
-      const withCond = addChild(query, query.id, c);
-      const { store, app } = setup({ ...ready(withCond) });
-      app.onDropItem({ type: "node", nodeId: c.id }, groupId);
+      const block = newBlock("thing");
+      const withBlock = addChild(query, query.id, block);
+      const { store, app } = setup({ ...ready(withBlock) });
+      app.onDropItem({ type: "node", nodeId: block.id }, groupId);
       const g = groupOf(store.getState().query, groupId);
       expect(g).toMatchObject({ collapsed: false });
-      expect(g?.kind === "group" && g.children.at(-1)?.id).toBe(c.id);
+      expect(g?.kind === "group" && g.children.at(-1)?.id).toBe(block.id);
     });
 
     it("stays collapsed when a move is refused", () => {
@@ -1063,132 +1210,17 @@ describe("dropping docs items", () => {
     });
   });
 
-  describe("a lone blank condition (the starting query)", () => {
-    const blank = newCondition();
-    function startingQuery(): Group {
-      const root = emptyQuery();
-      return addChild(root, root.id, blank);
-    }
-
-    it("is replaced by a dropped facet", () => {
-      const { store, app } = setup({ ...ready(startingQuery()) });
-      app.onDropItem({ type: "facet", facetId: "thing" }, store.getState().query.id);
-      const q = store.getState().query;
-      expect(q.children).toHaveLength(1);
-      expect(q.children[0]).toMatchObject({ facetId: "thing", operatorId: "present" });
-      expect(store.getState().issues).toEqual([]);
-    });
-
-    it("is replaced when the drop lands on the blank row itself", () => {
-      const { store, app } = setup({ ...ready(startingQuery()) });
-      app.onDropItem({ type: "facet", facetId: "thing" }, blank.id);
-      const q = store.getState().query;
-      expect(q.children).toHaveLength(1);
-      expect(q.children[0]).toMatchObject({ facetId: "thing" });
-    });
-
-    it("is replaced by the + button too", () => {
-      const { store, app } = setup({ ...ready(startingQuery()) });
-      app.onAddItem({ type: "field", facetId: "thing", fieldId: "size" });
-      const q = store.getState().query;
-      expect(q.children).toHaveLength(1);
-      expect(q.children[0]).toMatchObject({ facetId: "thing", fieldId: "size" });
-    });
-
-    it("is replaced even after the user switched the root to ANY, which stays", () => {
-      const anyRoot = { ...startingQuery(), operator: "OR" as const };
-      const { store, app } = setup({ ...ready(anyRoot) });
-      app.onAddItem({ type: "facet", facetId: "thing" });
-      expect(store.getState().query).toMatchObject({ operator: "OR" });
-      expect(store.getState().query.children).toHaveLength(1);
-    });
-
-    describe("in a group added with + Group", () => {
-      // The root holds two children, so only the new group's row is lone and blank.
-      function withNewGroup() {
-        const root = emptyQuery();
-        const g = newGroup();
-        const query = addChild(addChild(root, root.id, newCondition()), root.id, g);
-        return { query, groupId: g.id, blankId: g.children[0]?.id ?? "" };
-      }
-      function expectReplaced(q: Group, groupId: string) {
-        const g = q.children.find((n) => n.id === groupId);
-        expect(q.children).toHaveLength(2);
-        expect(g?.kind === "group" && g.children).toHaveLength(1);
-        expect(g?.kind === "group" && g.children[0]).toMatchObject({ facetId: "thing" });
-      }
-
-      it("is replaced by a drop on the group", () => {
-        const { query, groupId } = withNewGroup();
-        const { store, app } = setup({ ...ready(query) });
-        app.onDropItem({ type: "facet", facetId: "thing" }, groupId);
-        expectReplaced(store.getState().query, groupId);
-      });
-
-      it("is replaced by a drop on its blank row", () => {
-        const { query, groupId, blankId } = withNewGroup();
-        const { store, app } = setup({ ...ready(query) });
-        app.onDropItem({ type: "facet", facetId: "thing" }, blankId);
-        expectReplaced(store.getState().query, groupId);
-      });
-    });
-
-    it("is replaced by an existing node moved into a group, which then holds only that node", () => {
-      const root = emptyQuery();
-      const g = newGroup();
-      const c = { ...newCondition(), facetId: "thing", operatorId: "present" };
-      const { store, app } = setup({ ...ready(addChild(addChild(root, root.id, c), root.id, g)) });
-      app.onDropItem({ type: "node", nodeId: c.id }, g.id);
-      const q = store.getState().query;
-      expect(q.children.map((n) => n.id)).toEqual([g.id]);
-      const inner = q.children[0];
-      expect(inner?.kind === "group" && inner.children.map((n) => n.id)).toEqual([c.id]);
-    });
-
-    it("is replaced by Add all on a tag: one group of the tag's facets, each present", () => {
-      const tagged: Facet[] = [
-        { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
-        { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
-      ];
-      const { store, app } = setup({
-        ...ready(startingQuery()),
-        facets: tagged,
-        catalog: buildFieldCatalog(tagged),
-      });
-      app.onAddItem({ type: "tag", tag: "t" });
-      const q = store.getState().query;
-      expect(q.children).toHaveLength(1);
-      const group = q.children[0];
-      expect(group).toMatchObject({ kind: "group", operator: "AND" });
-      expect(group?.kind === "group" && group.children).toEqual([
-        expect.objectContaining({ facetId: "one", fieldId: null, operatorId: "present" }),
-        expect.objectContaining({ facetId: "two", fieldId: null, operatorId: "present" }),
-      ]);
-    });
-
-    it("stays when the drop fails", () => {
-      const { store, app } = setup({ ...ready(startingQuery()) });
-      app.onAddItem({ type: "facet", facetId: "ghost" });
-      expect(store.getState().query.children).toHaveLength(1);
-      expect(store.getState().query.children[0]).toMatchObject({ facetId: null });
-      expect(store.getState().dropNotice).toMatch(/ghost/);
-    });
-
-    it("stays when the user has already chosen something in it", () => {
-      const edited = updateNode(startingQuery(), blank.id, { facetId: "thing" });
-      const { store, app } = setup({ ...ready(edited) });
-      app.onAddItem({ type: "facet", facetId: "thing" });
-      expect(store.getState().query.children).toHaveLength(2);
-    });
-  });
-
-  it("onAddItem puts the item in the root group", () => {
-    const { store, app } = setup({ ...ready(emptyQuery()) });
+  it("onAddItem puts the item at the end of the root group, which keeps its ALL/ANY", () => {
+    const anyRoot: Group = { ...runnableQuery(), operator: "OR" };
+    const { store, app } = setup({ ...ready(anyRoot) });
     app.onAddItem({ type: "field", facetId: "thing", fieldId: "size" });
-    expect(store.getState().query.children[0]).toMatchObject({ facetId: "thing", fieldId: "size" });
+    const q = store.getState().query;
+    expect(q.operator).toBe("OR");
+    expect(q.children).toHaveLength(2);
+    expect(q.children[1]).toMatchObject({ kind: "facet", facetId: "thing" });
   });
 
-  it("Add all on a tag puts one ALL group at the end of the root and says so", () => {
+  it("Add all on a tag puts one ALL group of blocks at the end of the root and says so", () => {
     const tagged: Facet[] = [
       { ...facets[0]!, id: "one", name: "One", tags: ["t"] },
       { ...facets[0]!, id: "two", name: "Two", tags: ["t"] },
@@ -1202,8 +1234,13 @@ describe("dropping docs items", () => {
     app.onAddItem({ type: "tag", tag: "t" });
     const { children } = store.getState().query;
     expect(children).toHaveLength(before + 1);
-    expect(children.at(-1)).toMatchObject({ kind: "group", operator: "AND" });
-    expect(announce).toHaveBeenCalledWith("Added a group of 2 conditions to the query.");
+    const group = children.at(-1);
+    expect(group).toMatchObject({ kind: "group", operator: "AND" });
+    expect(group?.kind === "group" && group.children).toEqual([
+      expect.objectContaining({ kind: "facet", facetId: "one", conditions: [] }),
+      expect.objectContaining({ kind: "facet", facetId: "two", conditions: [] }),
+    ]);
+    expect(announce).toHaveBeenCalledWith("Added a group of 2 facets to the query.");
   });
 
   it("with no docs loaded yet, says so instead of ignoring the drop", () => {
@@ -1212,6 +1249,174 @@ describe("dropping docs items", () => {
     expect(store.getState().dropNotice).toBe(
       "The data dictionary is still loading; try again in a moment.",
     );
+  });
+});
+
+describe("the field row being worked on, and folded field lists", () => {
+  // Neither is a query edit: the statistics, the results and the Restored
+  // notice stay, and nothing is fetched again.
+  const shown: Partial<AppState> = {
+    ...ready(),
+    preview: { status: "ok", events, page: 0 },
+    restoredNotice: true,
+  };
+
+  it("openFieldRow opens a row, and null closes it", async () => {
+    vi.useFakeTimers();
+    const { app, api, store } = setup(shown);
+    const ref = { blockId: "f-1", fieldId: "size" };
+    app.openFieldRow(ref);
+    expect(store.getState().openField).toEqual(ref);
+    app.openFieldRow(null);
+    expect(store.getState().openField).toBeNull();
+    expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    expect(api.getStats).not.toHaveBeenCalled();
+  });
+
+  it("opening the row that is already open repaints nothing", () => {
+    const { app, store } = setup(shown);
+    app.openFieldRow({ blockId: "f-1", fieldId: "size" });
+    const seen = vi.fn();
+    store.subscribe(seen);
+    app.openFieldRow({ blockId: "f-1", fieldId: "size" });
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("toggleFields opens a block's folded fields, and closes them again", async () => {
+    vi.useFakeTimers();
+    const { app, api, store } = setup({ ...shown, expandedBlockIds: ["other"] });
+    app.toggleFields("f-1");
+    expect(store.getState().expandedBlockIds).toEqual(["other", "f-1"]);
+    app.toggleFields("f-1");
+    expect(store.getState().expandedBlockIds).toEqual(["other"]);
+    expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    expect(api.getStats).not.toHaveBeenCalled();
+  });
+});
+
+describe("the panel beside each block", () => {
+  // Display state: switching tabs or selecting a field is no query edit, so
+  // the statistics and results stay and nothing is fetched again.
+  const shown: Partial<AppState> = {
+    ...ready(),
+    preview: { status: "ok", events, page: 0 },
+    restoredNotice: true,
+  };
+
+  it("setPanelTab switches the tab, and pressing the open one hides the panel", async () => {
+    vi.useFakeTimers();
+    const { app, api, store } = setup(shown);
+    app.setPanelTab("about");
+    expect(store.getState().panelTab).toBe("about");
+    app.setPanelTab("about");
+    expect(store.getState().panelTab).toBeNull();
+    app.setPanelTab("seen");
+    expect(store.getState().panelTab).toBe("seen");
+    expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
+    await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
+    expect(api.getStats).not.toHaveBeenCalled();
+  });
+
+  // A cell or box of the co-occurrence row opens the dictionary at its facet
+  // (main.ts then opens and focuses the facet's card).
+  it("showFacetInDictionary unfolds a folded dictionary for a facet it knows", () => {
+    const { app, store } = setup({ ...shown, sidebarCollapsed: true });
+    expect(app.showFacetInDictionary("thing")).toBe(true);
+    expect(store.getState().sidebarCollapsed).toBe(false);
+    expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
+  });
+
+  it("showFacetInDictionary leaves the dictionary alone for a facet it does not know", () => {
+    const { app, store } = setup({ ...shown, sidebarCollapsed: true });
+    expect(app.showFacetInDictionary("gone")).toBe(false);
+    expect(store.getState().sidebarCollapsed).toBe(true);
+  });
+
+  it("selectFieldForPanel selects a field for About, and null goes back to the facet", () => {
+    const { app, store } = setup(shown);
+    const ref = { blockId: "f-1", fieldId: "size" };
+    app.selectFieldForPanel(ref);
+    expect(store.getState().selectedField).toEqual(ref);
+    expect(store.getState().openField).toBeNull();
+    app.selectFieldForPanel(null);
+    expect(store.getState().selectedField).toBeNull();
+  });
+
+  // Every focus move inside a row asks again: only a change may repaint.
+  it("selecting the field that is already selected changes nothing", () => {
+    const { app, store } = setup(shown);
+    app.selectFieldForPanel({ blockId: "f-1", fieldId: "size" });
+    const seen = vi.fn();
+    store.subscribe(seen);
+    app.selectFieldForPanel({ blockId: "f-1", fieldId: "size" });
+    expect(seen).not.toHaveBeenCalled();
+  });
+});
+
+describe("display state follows the query", () => {
+  // `openField` and `expandedBlockIds` point at blocks of the query; they
+  // must not outlive the block or the query they were made for.
+  const block = thingBlock(newFieldCondition("size", "gt", 3));
+  const kept = addChild(emptyQuery(), emptyQuery().id, block);
+  const query = { ...emptyQuery(), children: [block] };
+  const shownBlock: Partial<AppState> = {
+    ...ready(query),
+    openField: { blockId: block.id, fieldId: "size" },
+    expandedBlockIds: [block.id],
+    selectedField: { blockId: block.id, fieldId: "label" },
+  };
+
+  it("removing the block drops its open row, its open fields and its selected field", () => {
+    const { app, store } = setup(shownBlock);
+    app.onQueryChange(removeNode(store.getState().query, block.id));
+    expect(store.getState().openField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
+    expect(store.getState().selectedField).toBeNull();
+  });
+
+  it("an edit that keeps the block keeps them", () => {
+    const { app, store } = setup(shownBlock);
+    app.onQueryChange(setNegated(store.getState().query, block.id, true));
+    expect(store.getState().openField).toEqual({ blockId: block.id, fieldId: "size" });
+    expect(store.getState().expandedBlockIds).toEqual([block.id]);
+  });
+
+  it("Start fresh drops them with the old query", () => {
+    const { app, store } = setup({ ...shownBlock, restoredNotice: true });
+    app.startFresh();
+    expect(store.getState().openField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
+    expect(store.getState().selectedField).toBeNull();
+  });
+
+  it("opening a saved query drops them with the old query", () => {
+    const target = savedQuery("t", "Weekly");
+    const { app, store } = setup({
+      ...shownBlock,
+      auth: { status: "authenticated", user: { name: "pat" } },
+      savedDialog: "list",
+      savedList: { status: "ok", queries: [target], unreadable: 0 },
+    });
+    app.askOpenSaved("t");
+    // The query on screen is unsaved work: the app asks first.
+    app.confirmSavedAction();
+    expect(store.getState().query).toBe(target.query);
+    expect(store.getState().openField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
+    expect(store.getState().selectedField).toBeNull();
+  });
+
+  it("a restored query starts with none", async () => {
+    keepQuery(kept, ["beta"]);
+    const { app, store } = setup({
+      openField: { blockId: block.id, fieldId: "size" },
+      expandedBlockIds: [block.id],
+    });
+    await app.start(true);
+    expect(store.getState().openField).toBeNull();
+    expect(store.getState().expandedBlockIds).toEqual([]);
   });
 });
 
@@ -1272,20 +1477,31 @@ describe("saved queries: opening the dialogs", () => {
     const queries = [savedQuery("a", "Weekly")];
     const { app, store } = setup(
       ready(),
-      fakeApi({ listSavedQueries: vi.fn(async () => queries) }),
+      fakeApi({ listSavedQueries: vi.fn(async () => listOf(...queries)) }),
     );
     app.openSavedList();
     expect(store.getState().savedDialog).toBe("list");
     expect(store.getState().savedList).toEqual({ status: "loading" });
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries, unreadable: 0 });
+  });
+
+  it("keeps how many saved queries could not be read, for the dialog to say", async () => {
+    const queries = [savedQuery("a", "Weekly")];
+    const { app, store } = setup(
+      ready(),
+      fakeApi({ listSavedQueries: vi.fn(async () => ({ queries, unreadable: 2 })) }),
+    );
+    app.openSavedList();
+    await flushPromises();
+    expect(store.getState().savedList).toEqual({ status: "ok", queries, unreadable: 2 });
   });
 
   it("shows a failed list load and loads again on retry", async () => {
     const list = vi
       .fn<AppApi["listSavedQueries"]>()
       .mockRejectedValueOnce(new ApiError(500, "down"))
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce(listOf());
     const { app, store } = setup(ready(), fakeApi({ listSavedQueries: list }));
     app.openSavedList();
     await flushPromises();
@@ -1297,7 +1513,7 @@ describe("saved queries: opening the dialogs", () => {
     app.retrySavedList();
     expect(store.getState().savedList).toEqual({ status: "loading" });
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [] });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [], unreadable: 0 });
   });
 
   it("a 401 on the list redirects to log in", async () => {
@@ -1312,26 +1528,26 @@ describe("saved queries: opening the dialogs", () => {
   });
 
   it("ignores a slow list answer once a newer load started", async () => {
-    const slow = deferred<SavedQuery[]>();
+    const slow = deferred<SavedQueryList>();
     const list = vi
       .fn<AppApi["listSavedQueries"]>()
       .mockReturnValueOnce(slow.promise)
-      .mockResolvedValueOnce([savedQuery("b", "Newer")]);
+      .mockResolvedValueOnce(listOf(savedQuery("b", "Newer")));
     const { app, store } = setup(ready(), fakeApi({ listSavedQueries: list }));
     app.openSavedList();
     app.retrySavedList();
     await flushPromises();
-    slow.resolve([savedQuery("a", "Older")]);
+    slow.resolve(listOf(savedQuery("a", "Older")));
     await flushPromises();
     expect(store.getState().savedList).toMatchObject({ status: "ok", queries: [{ id: "b" }] });
   });
 
   it("closing the dialog resets it and drops a pending load", async () => {
-    const slow = deferred<SavedQuery[]>();
+    const slow = deferred<SavedQueryList>();
     const { app, store } = setup(ready(), fakeApi({ listSavedQueries: vi.fn(() => slow.promise) }));
     app.openSavedList();
     app.closeSavedDialog();
-    slow.resolve([savedQuery("a", "Weekly")]);
+    slow.resolve(listOf(savedQuery("a", "Weekly")));
     await flushPromises();
     expect(store.getState()).toMatchObject({
       savedDialog: null,
@@ -1363,6 +1579,23 @@ describe("saved queries: saving", () => {
       openSaved: { id: "new", name: "Weekly", note: "note", query, databaseIds: ["alpha", "beta"] },
     });
     expect(announce).toHaveBeenCalledWith("Saved “Weekly”.");
+  });
+
+  it("shows the query just saved as not edited, though the answer's nodes have other ids", async () => {
+    // A saved query is read back with fresh node ids ("Saved queries"), so the
+    // open query must remember the tree that was sent, not the one answered.
+    const api = fakeApi({
+      createSavedQuery: vi.fn(async (draft: SavedQueryDraft) => ({
+        ...savedFrom(draft, "new"),
+        query: { ...draft.query, id: "g-read-back" },
+      })),
+    });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    await flushPromises();
+    const { openSaved, query, selectedDatabaseIds } = store.getState();
+    expect(openSaved).toMatchObject({ id: "new", name: "Weekly" });
+    expect(isEdited(openSaved!, query, selectedDatabaseIds)).toBe(false);
   });
 
   it("updates the open query when the name is its own", async () => {
@@ -1453,7 +1686,7 @@ describe("saved queries: saving", () => {
     const clash = savedQuery("other", "weekly ");
     const api = fakeApi({
       createSavedQuery: vi.fn(async () => Promise.reject(new ApiError(409, "exists"))),
-      listSavedQueries: vi.fn(async () => [savedQuery("x", "Monthly"), clash]),
+      listSavedQueries: vi.fn(async () => listOf(savedQuery("x", "Monthly"), clash)),
     });
     const { app, store, announce } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
     app.saveQuery("Weekly", "note");
@@ -1479,7 +1712,7 @@ describe("saved queries: saving", () => {
         .fn<AppApi["createSavedQuery"]>()
         .mockRejectedValueOnce(new ApiError(409, "exists"))
         .mockImplementation(async (draft) => savedFrom(draft, "fresh")),
-      listSavedQueries: vi.fn(async () => []),
+      listSavedQueries: vi.fn(async () => listOf()),
     });
     const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
     app.saveQuery("Weekly", "");
@@ -1564,7 +1797,7 @@ describe("saved queries: saving", () => {
     const { app, store } = setup({ ...ready(emptyQuery()), ...loggedIn, savedDialog: "save" }, api);
     app.saveQuery("Weekly", "");
     app.closeSavedDialog();
-    store.setState({ savedList: { status: "ok", queries: [other] } });
+    store.setState({ savedList: { status: "ok", queries: [other], unreadable: 0 } });
     app.askOpenSaved("b");
     slow.resolve(savedQuery("a", "Weekly"));
     await flushPromises();
@@ -1588,7 +1821,7 @@ describe("saved queries: opening one from the list", () => {
   const target = savedQuery("t", "Weekly", { databaseIds: ["alpha", "gone"] });
   const inList: Partial<AppState> = {
     savedDialog: "list",
-    savedList: { status: "ok", queries: [target] },
+    savedList: { status: "ok", queries: [target], unreadable: 0 },
   };
 
   it("opens at once when nothing would be lost, dropping databases that no longer exist", async () => {
@@ -1614,6 +1847,15 @@ describe("saved queries: opening one from the list", () => {
     );
   });
 
+  it("shows the opened query as not edited: the tree on screen is the one it remembers", () => {
+    // Node ids are made fresh on every read of a saved query, so the
+    // comparison must be with this very tree, never with another read of it.
+    const { app, store } = setup({ ...loggedIn, ...inList, ...ready(emptyQuery()) });
+    app.askOpenSaved("t");
+    const { openSaved, query, selectedDatabaseIds } = store.getState();
+    expect(isEdited(openSaved!, query, selectedDatabaseIds)).toBe(false);
+  });
+
   it("resets the statistics and preview of the query it replaces", () => {
     const { app, store } = setup({
       ...loggedIn,
@@ -1633,7 +1875,7 @@ describe("saved queries: opening one from the list", () => {
       ...loggedIn,
       ...ready(emptyQuery()),
       savedDialog: "list",
-      savedList: { status: "ok", queries: [many] },
+      savedList: { status: "ok", queries: [many], unreadable: 0 },
     });
     app.askOpenSaved("t");
     expect(store.getState().dropNotice).toBe(
@@ -1648,7 +1890,7 @@ describe("saved queries: opening one from the list", () => {
       ...ready(emptyQuery()),
       dropNotice: "old",
       savedDialog: "list",
-      savedList: { status: "ok", queries: [whole] },
+      savedList: { status: "ok", queries: [whole], unreadable: 0 },
     });
     app.askOpenSaved("t");
     expect(store.getState().dropNotice).toBeNull();
@@ -1706,13 +1948,13 @@ describe("saved queries: deleting", () => {
   const b = savedQuery("b", "Monthly");
 
   it("asks first, then deletes and reloads the list", async () => {
-    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue([b]);
+    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue(listOf(b));
     const { app, api, store, announce } = setup(
       {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a, b] },
+        savedList: { status: "ok", queries: [a, b], unreadable: 0 },
       },
       fakeApi({ listSavedQueries: list }),
     );
@@ -1723,27 +1965,27 @@ describe("saved queries: deleting", () => {
     expect(store.getState().savedConfirm).toBeNull();
     await flushPromises();
     expect(api.deleteSavedQuery).toHaveBeenCalledWith("a");
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b] });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b], unreadable: 0 });
     expect(announce).toHaveBeenCalledWith("Deleted “Weekly”.");
   });
 
   // Sighted users otherwise only see the item vanish. The reload after the
   // delete must not clear it.
   it("shows the delete inside the dialog too, after the list reloads", async () => {
-    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue([b]);
+    const list = vi.fn<AppApi["listSavedQueries"]>().mockResolvedValue(listOf(b));
     const { app, store } = setup(
       {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a, b] },
+        savedList: { status: "ok", queries: [a, b], unreadable: 0 },
       },
       fakeApi({ listSavedQueries: list }),
     );
     app.askDeleteSaved("a");
     app.confirmSavedAction();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b] });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b], unreadable: 0 });
     expect(store.getState().savedListNotice).toEqual({ tone: "done", text: "Deleted “Weekly”." });
   });
 
@@ -1751,7 +1993,12 @@ describe("saved queries: deleting", () => {
     const answer = deferred<void>();
     const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
     const { app, store } = setup(
-      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a], unreadable: 0 },
+      },
       api,
     );
     app.askDeleteSaved("a");
@@ -1768,7 +2015,7 @@ describe("saved queries: deleting", () => {
       ...ready(a.query),
       openSaved: openFrom(a),
       savedDialog: "list",
-      savedList: { status: "ok", queries: [a] },
+      savedList: { status: "ok", queries: [a], unreadable: 0 },
     });
     app.askDeleteSaved("a");
     app.confirmSavedAction();
@@ -1782,7 +2029,7 @@ describe("saved queries: deleting", () => {
       ...ready(a.query),
       openSaved: openFrom(a),
       savedDialog: "list",
-      savedList: { status: "ok", queries: [a, b] },
+      savedList: { status: "ok", queries: [a, b], unreadable: 0 },
     });
     app.askDeleteSaved("b");
     app.confirmSavedAction();
@@ -1793,17 +2040,22 @@ describe("saved queries: deleting", () => {
   it("a delete whose query is already gone counts as deleted", async () => {
     const api = fakeApi({
       deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(404, "gone"))),
-      listSavedQueries: vi.fn(async () => []),
+      listSavedQueries: vi.fn(async () => listOf()),
     });
     const { app, store, showError } = setup(
-      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a], unreadable: 0 },
+      },
       api,
     );
     app.askDeleteSaved("a");
     app.confirmSavedAction();
     await flushPromises();
     expect(showError).not.toHaveBeenCalled();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [] });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [], unreadable: 0 });
   });
 
   // The toast is drawn under the modal dialog's backdrop and the page's live
@@ -1813,13 +2065,18 @@ describe("saved queries: deleting", () => {
       deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
     });
     const { app, store, showError } = setup(
-      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a], unreadable: 0 },
+      },
       api,
     );
     app.askDeleteSaved("a");
     app.confirmSavedAction();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [a] });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [a], unreadable: 0 });
     expect(store.getState().savedListNotice).toEqual({
       tone: "error",
       text: `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
@@ -1831,11 +2088,16 @@ describe("saved queries: deleting", () => {
     const failing = () =>
       fakeApi({
         deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(503, "down"))),
-        listSavedQueries: vi.fn(async () => [a]),
+        listSavedQueries: vi.fn(async () => listOf(a)),
       });
     const failedDelete = async () => {
       const made = setup(
-        { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+        {
+          ...loggedIn,
+          ...ready(),
+          savedDialog: "list",
+          savedList: { status: "ok", queries: [a], unreadable: 0 },
+        },
         failing(),
       );
       made.app.askDeleteSaved("a");
@@ -1866,7 +2128,12 @@ describe("saved queries: deleting", () => {
     const answer = deferred<void>();
     const api = fakeApi({ deleteSavedQuery: vi.fn(() => answer.promise) });
     const { app, store } = setup(
-      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a], unreadable: 0 },
+      },
       api,
     );
     app.askDeleteSaved("a");
@@ -1882,7 +2149,12 @@ describe("saved queries: deleting", () => {
       deleteSavedQuery: vi.fn(async () => Promise.reject(new ApiError(401, "no"))),
     });
     const { app, navigate } = setup(
-      { ...loggedIn, ...ready(), savedDialog: "list", savedList: { status: "ok", queries: [a] } },
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a], unreadable: 0 },
+      },
       api,
     );
     app.askDeleteSaved("a");
@@ -1899,9 +2171,9 @@ describe("saved queries: deleting", () => {
 });
 
 describe("moving a node up or down", () => {
-  /** A root with conditions a, b, c in that order. */
+  /** A root with blocks of the facets a, b, c in that order. */
   function threeRows() {
-    const [a, b, c] = ["a", "b", "c"].map((facetId) => ({ ...newCondition(), facetId }));
+    const [a, b, c] = ["a", "b", "c"].map((facetId) => newBlock(facetId));
     const root = [a!, b!, c!].reduce((t, n) => addChild(t, t.id, n), emptyQuery());
     return { root, a: a!, b: b!, c: c! };
   }
@@ -1913,7 +2185,7 @@ describe("moving a node up or down", () => {
     const { store, app, announce } = setup({ ...ready(root) });
     app.onMoveNode(c.id, "up");
     expect(order(store)).toEqual([a.id, c.id, b.id]);
-    expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the condition up, to position 2 of 3.");
+    expect(announce).toHaveBeenCalledExactlyOnceWith("Moved the facet up, to position 2 of 3.");
   });
 
   it("is an edit like any other: the statistics and the preview are reset", () => {

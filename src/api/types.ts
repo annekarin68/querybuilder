@@ -152,6 +152,11 @@ export interface IndividualResponse {
    *  percentage is supplied — the frontend derives one from
    *  DatabasesResponse[].total_entrysets. */
   total_count: number;
+  /** For each facet label (this one included): the percentage of THIS
+   *  facet's events that also hold that facet, as text so that scientific
+   *  notation works ("0.000123", "1.2e-20", "100"). Display data: the app
+   *  works without it. */
+  co_occurrence?: Record<string, string>;
   fields: IndividualFieldResponse[];
 }
 
@@ -182,51 +187,84 @@ export interface EventsResponse {
   events: EventResponse[];
 }
 
-// ---- the body of POST …/filter/validate and POST …/filter/execute ---------------------
+export type RequestScalar = string | number | boolean;
+export type RequestValue = null | RequestScalar | RequestScalar[];
 
-/**
- * The query and where to run it — the body of POST {prefix}/filter/validate and POST
- * {prefix}/filter/execute (docs/ARCHITECTURE.md, "Wire format of the query"). Built by
- * `toQueryRequest` (src/api/request.ts) from the query on screen.
- */
+/** Like `RequestValue`, but a list may hold nulls (an unfinished from–to pair). */
+export type SavedValue = null | RequestScalar | (RequestScalar | null)[];
+
+// ---- the query tree with facet blocks (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 4)
+
+/** The body of POST {prefix}/filter/validate and /filter/execute. */
 export interface QueryRequest {
   /** `DatabasesResponse.label` of each database to run against. Never empty. */
   databases: string[];
-  /** The query. Its root is always a group. */
   query: RequestGroup;
 }
 
-export type RequestNode = RequestGroup | RequestCondition;
+export type RequestNode = RequestGroup | RequestFacet;
 
 export interface RequestGroup {
   kind: "group";
   /** The frontend's id for this node: opaque, unique within the request.
-   *  Quoted back as `StatsErrorMessage.node_id` when a database finds a problem
-   *  in this node. */
+   *  Quoted back as `StatsErrorMessage.node_id`. */
   id: string;
   operator: "AND" | "OR";
   /** Never empty. */
   children: RequestNode[];
 }
 
-export interface RequestCondition {
-  kind: "condition";
+/**
+ * The event has (when `negated`: has no) occurrence of `facet_id` in which
+ * ALL ("AND") / ANY ("OR") of `conditions` hold. No conditions: the facet is
+ * present (absent). The backend interprets it.
+ */
+export interface RequestFacet {
+  kind: "facet";
   id: string;
   /** `IndividualResponse.label`. */
   facet_id: string;
-  /** `IndividualFieldResponse.label`, within that individual — or `null` for a
-   *  condition about the individual (facet) itself, e.g. "is present". What a
-   *  null field means is the backend's to interpret. */
-  field_id: string | null;
+  negated: boolean;
+  operator: "AND" | "OR";
+  /** At most one per field; may be empty. */
+  conditions: RequestFieldCondition[];
+}
+
+export interface RequestFieldCondition {
+  kind: "condition";
+  id: string;
+  /** `IndividualFieldResponse.label`, within the facet of the block. */
+  field_id: string;
   /** An operator label, e.g. "gt". */
   operator_id: string;
-  /** Shaped by the operator's arity: `null` (none), one value (one),
-   *  `[from, to]` (two) or a non-empty list (many). */
   value: RequestValue;
 }
 
-export type RequestScalar = string | number | boolean;
-export type RequestValue = null | RequestScalar | RequestScalar[];
+/** A saved query's tree: the request's shape without node ids (they only
+ *  live for one page load) and with unfinished parts allowed. */
+export type SavedNode = SavedGroup | SavedFacet;
+
+export interface SavedGroup {
+  kind: "group";
+  operator: "AND" | "OR";
+  /** May be empty. */
+  children: SavedNode[];
+}
+
+export interface SavedFacet {
+  kind: "facet";
+  facet_id: string;
+  negated: boolean;
+  operator: "AND" | "OR";
+  conditions: SavedFieldCondition[];
+}
+
+export interface SavedFieldCondition {
+  kind: "condition";
+  field_id: string;
+  operator_id: string | null;
+  value: SavedValue;
+}
 
 // ---- saved queries (GET/POST …/filter/saved, PUT/DELETE …/filter/saved/{id}) --
 
@@ -253,26 +291,3 @@ export interface SavedQueryResponse extends SavedQueryRequest {
   /** ISO 8601 UTC. */
   updated_at: string;
 }
-
-export type SavedNode = SavedGroup | SavedCondition;
-
-/** Like `RequestGroup`, but `children` may be empty. */
-export interface SavedGroup {
-  kind: "group";
-  id: string;
-  operator: "AND" | "OR";
-  children: SavedNode[];
-}
-
-/** Like `RequestCondition`, but unfinished: each of the four may be `null`. */
-export interface SavedCondition {
-  kind: "condition";
-  id: string;
-  facet_id: string | null;
-  field_id: string | null;
-  operator_id: string | null;
-  value: SavedValue;
-}
-
-/** Like `RequestValue`, but a list may hold nulls (an unfinished from–to pair). */
-export type SavedValue = null | RequestScalar | (RequestScalar | null)[];

@@ -3,6 +3,8 @@ import type { Database, DatabaseResult } from "../../src/model";
 import {
   failureRowHtml,
   notRunRowHtml,
+  pendingRowHtml,
+  pendingHeadlineHtml,
   headlineHtml,
   showProblemButton,
   splitLabel,
@@ -11,7 +13,15 @@ import {
   type Failed,
 } from "../../src/ui/statsPanel";
 import { initialState, type AppState } from "../../src/state";
-import { addChild, emptyQuery, newCondition, newGroup, updateNode } from "../../src/query/tree";
+import {
+  addChild,
+  emptyQuery,
+  newBlock,
+  newFieldCondition,
+  newGroup,
+  updateNode,
+} from "../../src/query/tree";
+import type { FacetBlock } from "../../src/query/types";
 import { placeIssues } from "../../src/query/issues";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { dbError, failed, ok } from "../statsFixtures";
@@ -30,6 +40,27 @@ const selectedIds = ["a", "b"];
 
 const headline = (status: "loading" | "ok", results: DatabaseResult[]) =>
   headlineHtml({ status, results }, databases, selectedIds);
+
+describe("pendingRowHtml", () => {
+  it("shows the database's name and a quiet ellipsis, escaped", () => {
+    const html = pendingRowHtml(db("a", 1), "a");
+    expect(html).toContain('class="qb-db-row is-pending"');
+    expect(html).toContain("…");
+    expect(html).toContain('<span class="qb-sr-only">still counting</span>');
+    expect(html).not.toContain("title=");
+    expect(pendingRowHtml({ ...db("a", 1), name: "<b>" }, "a")).not.toContain("<b>");
+    expect(pendingRowHtml(undefined, "zz")).toContain("zz");
+  });
+});
+
+describe("pendingHeadlineHtml", () => {
+  it("has the headline's parts, so the first answer keeps the height", () => {
+    const html = pendingHeadlineHtml();
+    for (const part of ["qb-stat-big", "qb-stat-label", "qb-stat-sub", "qb-bar"]) {
+      expect(html).toContain(part);
+    }
+  });
+});
 
 describe("splitResults", () => {
   it("counts matches, sets failed databases apart, and sizes the whole selection", () => {
@@ -124,13 +155,15 @@ describe("headlineHtml", () => {
 
 describe("statsPanelHtml", () => {
   const root = emptyQuery();
-  const condition = newCondition();
+  // The node a database's error points at: a set field of a block.
+  const condition = newFieldCondition("size", "gt", 3);
+  const block: FacetBlock = { ...newBlock("thing"), conditions: [condition] };
   const ready: AppState = {
     ...initialState,
     catalog: buildFieldCatalog([]),
     databases,
     selectedDatabaseIds: ["a", "b"],
-    query: addChild(root, root.id, condition),
+    query: addChild(root, root.id, block),
   };
 
   it("keeps showing the results, and where the problem is, while it blocks Run", () => {
@@ -150,6 +183,9 @@ describe("statsPanelHtml", () => {
   it("explains every other blocker instead of showing results", () => {
     expect(statsPanelHtml({ ...ready, selectedDatabaseIds: [] })).toContain(
       "Select at least one database to see statistics.",
+    );
+    expect(statsPanelHtml({ ...ready, query: emptyQuery() })).toContain(
+      "Add a facet to see statistics.",
     );
   });
 
@@ -191,6 +227,27 @@ describe("statsPanelHtml", () => {
       expect(html).toContain('aria-label="Show problem (the first of 2 in the query)"');
     });
 
+    it("draws one row per selected database while loading, answered or not", () => {
+      const loading = (results: DatabaseResult[]) =>
+        statsPanelHtml({ ...ready, stats: { status: "loading", results } });
+      const rowCount = (html: string) => html.match(/class="qb-db-row/g)?.length ?? 0;
+      expect(rowCount(loading([]))).toBe(2);
+      const half = loading([ok("a", 5)]);
+      expect(rowCount(half)).toBe(2);
+      expect(half.match(/is-pending/g)).toHaveLength(1);
+      // The wait before the fetch starts holds the same layout.
+      const idle = statsPanelHtml({ ...ready, stats: { status: "idle", results: [] } });
+      expect(rowCount(idle)).toBe(2);
+      expect(idle).toContain("Counting matches…");
+      // The headline's place is held too, and the card says it is busy.
+      expect(loading([])).toContain("qb-stat-headline is-pending");
+      expect(half).toContain('aria-busy="true"');
+      // Done: the placeholders are gone.
+      const done = statsPanelHtml({ ...ready, stats: { status: "ok", results: [ok("a", 5)] } });
+      expect(done).not.toContain("is-pending");
+      expect(done).toContain('aria-busy="false"');
+    });
+
     it("explains a database's own failure in one line under its red bar", () => {
       const html = statsPanelHtml({
         ...ready,
@@ -230,7 +287,7 @@ describe("statsPanelHtml", () => {
 
     it("points Show problem at the collapsed group that hides the problem", () => {
       const inner = newGroup();
-      const query = addChild(addChild(root, root.id, inner), inner.id, condition);
+      const query = addChild(addChild(root, root.id, inner), inner.id, block);
       const collapsed = updateNode(query, inner.id, { collapsed: true }) as typeof query;
       const html = statsPanelHtml(withNodeError({ query: collapsed }));
       const placed = placeIssues(collapsed, [issue])[0]!.nodeId;

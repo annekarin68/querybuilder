@@ -1,285 +1,165 @@
 import { describe, it, expect } from "vitest";
 import { validateQuery } from "../../src/query/validate";
-import type { CatalogField, FieldCatalog } from "../../src/query/fieldCatalog";
-import {
-  emptyQuery,
-  newCondition,
-  newGroup,
-  addChild,
-  updateNode,
-  type NodePatch,
-} from "../../src/query/tree";
-import type { Issue } from "../../src/query/types";
+import { buildFieldCatalog } from "../../src/query/fieldCatalog";
+import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
+import type { FacetBlock, FieldCondition, Group } from "../../src/query/types";
+import type { Facet } from "../../src/model";
 
-const field = (
-  fieldId: string,
-  valueType: CatalogField["valueType"],
-  operatorIds: string[],
-  options?: string[],
-): CatalogField => ({
-  facetId: "thing",
-  fieldId,
-  name: fieldId,
-  fieldName: fieldId,
-  valueType,
-  options,
-  operatorIds,
+const facet = (id: string, fields: [string, string][]): Facet =>
+  ({
+    id,
+    name: id,
+    tags: [],
+    fields: fields.map(([fid, typeName]) => ({ id: fid, name: fid, typeName, values: [] })),
+  }) as unknown as Facet;
+const catalog = buildFieldCatalog([
+  facet("thing", [
+    ["size", "BIGINT"],
+    ["label", "VARCHAR"],
+    ["active", "BOOLEAN"],
+    ["seenAt", "TIMESTAMP"],
+  ]),
+]);
+
+const block = (...conditions: FieldCondition[]): FacetBlock => ({
+  ...newBlock("thing"),
+  conditions,
 });
-const catalog: FieldCatalog = {
-  facets: [{ id: "thing", name: "Thing" }],
-  fields: [
-    field("color", "string", ["eq", "in", "absent"], ["red", "blue"]),
-    field("count", "number", ["eq", "between", "in", "absent"]),
-    field("seenAt", "date", ["eq", "between"]),
-    field("active", "boolean", ["eq"]),
-  ],
-};
+const query = (...children: Group["children"]): Group => ({ ...emptyQuery(), children });
+const issues = (q: Group) => validateQuery(q, catalog).map((i) => [i.kind, i.message]);
 
-/** Validate a query holding one condition with `patch` applied. */
-function validateOne(patch: NodePatch = {}): { issues: Issue[]; id: string } {
-  const root = emptyQuery();
-  const c = newCondition();
-  const tree = updateNode(addChild(root, root.id, c), c.id, { facetId: "thing", ...patch });
-  return { issues: validateQuery(tree, catalog), id: c.id };
-}
-
-/** Expect the single condition built from `patch` to have exactly this issue. */
-function expectIssue(patch: NodePatch, message: string, kind: Issue["kind"]): void {
-  const { issues, id } = validateOne(patch);
-  expect(issues).toEqual([{ nodeId: id, message, kind }]);
-}
-
-describe("validateQuery", () => {
-  it("empty root query has no issues", () => {
-    expect(validateQuery(emptyQuery(), catalog)).toEqual([]);
+describe("validateQuery with facet blocks", () => {
+  it("accepts an empty root: not finished, but nothing to fix", () => {
+    expect(issues(emptyQuery())).toEqual([]);
   });
 
-  it("condition without a field is incomplete", () => {
-    expectIssue({}, "Choose a field, or whether the facet is present.", "incomplete");
+  it("asks for a facet in an empty group below the root", () => {
+    expect(issues(query(groupOf([])))).toEqual([["incomplete", "Add a facet to this group."]]);
   });
 
-  it("condition with a field but no operator is incomplete", () => {
-    expectIssue({ fieldId: "color" }, "Choose an operator.", "incomplete");
+  it("accepts a block with nothing set (the facet is present / absent)", () => {
+    expect(issues(query(block()))).toEqual([]);
   });
 
-  it("arity 'one' with an empty value is incomplete", () => {
-    expectIssue({ fieldId: "color", operatorId: "eq", value: "" }, "Enter a value.", "incomplete");
+  it("rejects a block for an unknown facet", () => {
+    expect(issues(query({ ...newBlock("nope") }))).toEqual([["invalid", "Unknown facet."]]);
   });
 
-  it("arity 'two' needs exactly two non-empty values", () => {
-    const patch = { fieldId: "count", operatorId: "between", value: [1] };
-    expectIssue(patch, "Enter both values.", "incomplete");
-  });
-
-  it("arity 'many' needs at least one value", () => {
-    const patch = { fieldId: "color", operatorId: "in", value: [] };
-    expectIssue(patch, "Choose at least one value.", "incomplete");
-  });
-
-  it("arity 'many' rejects a blank item (a tampered or restored saved query)", () => {
-    for (const value of [[""], ["a", ""], [null]]) {
-      const patch = { fieldId: "color", operatorId: "in", value };
-      expectIssue(patch, "Remove the empty value.", "incomplete");
-    }
-  });
-
-  it("arity 'none' takes a null value", () => {
-    expect(validateOne({ fieldId: "color", operatorId: "absent", value: null }).issues).toEqual([]);
-  });
-
-  it("arity 'none' with any other value (a tampered saved query) is invalid", () => {
-    for (const value of [{}, "", "red", 0, false, [], undefined]) {
-      const patch = { fieldId: "color", operatorId: "absent", value };
-      expectIssue(patch, "This operator takes no value.", "invalid");
-    }
-  });
-
-  it("a field that is not in the catalog is invalid", () => {
-    expectIssue({ fieldId: "nope", operatorId: "eq", value: "x" }, "Unknown field.", "invalid");
-  });
-
-  it("a field of another facet is unknown", () => {
-    expectIssue(
-      { facetId: "other", fieldId: "color", operatorId: "eq", value: "x" },
-      "Unknown field.",
-      "invalid",
-    );
-  });
-
-  it("a condition without a facet is incomplete", () => {
-    expectIssue({ facetId: null, fieldId: "color" }, "Choose a facet.", "incomplete");
-  });
-
-  it("an operator the field does not offer is invalid", () => {
-    // "between" exists globally but is not in color.operatorIds.
-    const patch = { fieldId: "color", operatorId: "between", value: [1, 2] };
-    expectIssue(patch, "That operator isn't available for this field.", "invalid");
-  });
-
-  it("an operator that is not in the catalog is invalid", () => {
-    expectIssue(
-      { fieldId: "color", operatorId: "nope", value: "x" },
-      "Unknown operator.",
-      "invalid",
-    );
-  });
-
-  it("a non-root empty group is incomplete", () => {
-    const root = emptyQuery();
-    const g = { ...newGroup(), children: [] };
-    const tree = addChild(root, root.id, g);
-    expect(validateQuery(tree, catalog)).toEqual([
-      { nodeId: g.id, message: "Add a condition to this group.", kind: "incomplete" },
+  it("checks every set field", () => {
+    expect(issues(query(block(newFieldCondition("size", "gt", 3))))).toEqual([]);
+    expect(issues(query(block(newFieldCondition("size", "gt", null))))).toEqual([
+      ["incomplete", "Enter a value."],
+    ]);
+    expect(issues(query(block(newFieldCondition("size", "gt", "big"))))).toEqual([
+      ["invalid", "Enter a number."],
+    ]);
+    expect(issues(query(block(newFieldCondition("nope", "eq", 1))))).toEqual([
+      [
+        "invalid",
+        "Unknown field “nope”. The data dictionary may have changed; remove this condition.",
+      ],
+    ]);
+    expect(issues(query(block(newFieldCondition("size", null, null))))).toEqual([
+      ["incomplete", "Choose an operator."],
+    ]);
+    expect(issues(query(block(newFieldCondition("size", "contains", "x"))))).toEqual([
+      ["invalid", "That operator isn't available for this field."],
+    ]);
+    expect(issues(query(block(newFieldCondition("size", "between", [9, 2]))))).toEqual([
+      ["invalid", "From must not be greater than To."],
     ]);
   });
 
-  describe("date values", () => {
-    const badDate = "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.";
-
-    it("accepts a full or partial UTC timestamp", () => {
-      expect(validateOne({ fieldId: "seenAt", operatorId: "eq", value: "2024-11" }).issues).toEqual(
-        [],
-      );
-      const range = {
-        fieldId: "seenAt",
-        operatorId: "between",
-        value: ["2024", "2024-11-06T14:30Z"],
-      };
-      expect(validateOne(range).issues).toEqual([]);
-    });
-
-    it("rejects anything else", () => {
-      expectIssue({ fieldId: "seenAt", operatorId: "eq", value: "06/11/2024" }, badDate, "invalid");
-      const range = {
-        fieldId: "seenAt",
-        operatorId: "between",
-        value: ["2024", "2024-11-06 14:30"],
-      };
-      expectIssue(range, badDate, "invalid");
-    });
-
-    it("an empty value is still just incomplete", () => {
-      expectIssue(
-        { fieldId: "seenAt", operatorId: "eq", value: "" },
-        "Enter a value.",
-        "incomplete",
-      );
-    });
+  it("checks not_in like in", () => {
+    expect(issues(query(block(newFieldCondition("label", "not_in", ["a", "b"]))))).toEqual([]);
+    expect(issues(query(block(newFieldCondition("label", "not_in", []))))).toEqual([
+      ["incomplete", "Choose at least one value."],
+    ]);
   });
 
-  describe("value types", () => {
-    it.each([
-      [
-        "a number field holding text",
-        { fieldId: "count", operatorId: "eq", value: "12abc" },
-        "Enter a number.",
-      ],
-      [
-        "a number field holding a list",
-        { fieldId: "count", operatorId: "eq", value: [3] },
-        "Enter a number.",
-      ],
-      [
-        "a number range holding text",
-        { fieldId: "count", operatorId: "between", value: [1, "x"] },
-        "Enter a number.",
-      ],
-      [
-        "a number list holding text",
-        { fieldId: "count", operatorId: "in", value: [1, "x"] },
-        "Enter a number.",
-      ],
-      [
-        "a boolean field holding text",
-        { fieldId: "active", operatorId: "eq", value: "true" },
-        "Choose true or false.",
-      ],
-      [
-        "a string field holding a number",
-        { fieldId: "color", operatorId: "eq", value: 3 },
-        "Enter text.",
-      ],
-      [
-        "a string list holding a number",
-        { fieldId: "color", operatorId: "in", value: ["red", 3] },
-        "Enter text.",
-      ],
-    ])("%s is invalid", (_label, patch, message) => {
-      expectIssue(patch, message, "invalid");
-    });
-
-    it("accepts values of the field's type", () => {
-      for (const patch of [
-        { fieldId: "count", operatorId: "eq", value: 12 },
-        { fieldId: "count", operatorId: "in", value: [1, 2] },
-        { fieldId: "active", operatorId: "eq", value: false },
-        { fieldId: "color", operatorId: "eq", value: "red" },
-      ]) {
-        expect(validateOne(patch).issues).toEqual([]);
-      }
-    });
-
-    it("accepts a value that isn't on the pick-list — the list may be out of date", () => {
-      expect(validateOne({ fieldId: "color", operatorId: "eq", value: "violet" }).issues).toEqual(
-        [],
-      );
-      const list = { fieldId: "color", operatorId: "in", value: ["red", "violet"] };
-      expect(validateOne(list).issues).toEqual([]);
-    });
+  it("rejects a field set twice in one block (only a tampered saved query can do that)", () => {
+    const twice = block(newFieldCondition("size", "gt", 1), newFieldCondition("size", "lt", 9));
+    expect(issues(query(twice))).toEqual([
+      ["invalid", "The field “size” is set twice in this facet."],
+    ]);
   });
 
-  describe("ranges", () => {
-    it("a number range may not run backwards", () => {
-      const patch = { fieldId: "count", operatorId: "between", value: [10, 5] };
-      expectIssue(patch, "From must not be greater than To.", "invalid");
-    });
+  it("points each issue at the condition, the block or the group", () => {
+    const c = newFieldCondition("size", "gt", null);
+    const b = block(c);
+    const unknown = newBlock("nope");
+    const g = groupOf([]);
+    const ids = validateQuery(query(b, unknown, g), catalog).map((i) => i.nodeId);
+    expect(ids).toEqual([c.id, unknown.id, g.id]);
+  });
 
-    it("a number range may start and end on the same value", () => {
-      expect(
-        validateOne({ fieldId: "count", operatorId: "between", value: [5, 5] }).issues,
-      ).toEqual([]);
-    });
-
-    it("a date range's order is left to the backend", () => {
-      const patch = { fieldId: "seenAt", operatorId: "between", value: ["2025", "2024"] };
-      expect(validateOne(patch).issues).toEqual([]);
-    });
+  it("puts the issues of a stray condition on that condition, which gets a removable row", () => {
+    // An unknown field and a second condition for one field have no ordinary
+    // row; the builder draws each as a row of its own, so the issue sits there.
+    const gone = newFieldCondition("nope", "eq", 1);
+    const first = newFieldCondition("size", "gt", 1);
+    const second = newFieldCondition("size", "lt", 9);
+    const ids = validateQuery(query(block(gone), block(first, second)), catalog).map(
+      (i) => i.nodeId,
+    );
+    expect(ids).toEqual([gone.id, second.id]);
   });
 });
 
-describe("facet-level conditions (no field)", () => {
-  it("present with no value is complete", () => {
-    expect(validateOne({ fieldId: null, operatorId: "present", value: null }).issues).toEqual([]);
+// Ported from the old model's tests before it was deleted: branches of
+// checkCondition that its tests were the only ones to pin down.
+describe("validateQuery: the messages for a tampered or odd value", () => {
+  const one = (c: FieldCondition) => issues(query(block(c)));
+
+  it("rejects an operator that is not in the catalog", () => {
+    expect(one(newFieldCondition("label", "nope", "x"))).toEqual([
+      ["invalid", "Unknown operator."],
+    ]);
   });
-  it("absent is complete too", () => {
-    expect(validateOne({ fieldId: null, operatorId: "absent", value: null }).issues).toEqual([]);
+
+  it("takes no value for a no-value operator, whatever else is stored", () => {
+    expect(one(newFieldCondition("label", "absent", null))).toEqual([]);
+    for (const value of [{}, "", "red", 0, false, [], undefined]) {
+      expect(one(newFieldCondition("label", "absent", value))).toEqual([
+        ["invalid", "This operator takes no value."],
+      ]);
+    }
   });
-  it("a facet alone, with no operator, still asks for a field or a whole-facet test.", () => {
-    expectIssue(
-      { fieldId: null, operatorId: null },
-      "Choose a field, or whether the facet is present.",
-      "incomplete",
-    );
+
+  it("asks to remove a blank item inside a list", () => {
+    for (const value of [[""], ["a", ""], [null]]) {
+      expect(one(newFieldCondition("label", "in", value))).toEqual([
+        ["incomplete", "Remove the empty value."],
+      ]);
+    }
   });
-  it("an unknown facet is invalid", () => {
-    expectIssue(
-      { facetId: "nope", fieldId: null, operatorId: "present", value: null },
-      "Unknown facet.",
-      "invalid",
-    );
+
+  it("asks for true or false on a boolean field", () => {
+    expect(one(newFieldCondition("active", "eq", "true"))).toEqual([
+      ["invalid", "Choose true or false."],
+    ]);
+    expect(one(newFieldCondition("active", "eq", false))).toEqual([]);
   });
-  it("an operator that needs a field is invalid", () => {
-    expectIssue(
-      { fieldId: null, operatorId: "eq", value: "x" },
-      "That operator isn't available for a whole facet. Pick Is present or Is absent.",
-      "invalid",
-    );
-  });
-  it("a value on a facet-level condition is invalid", () => {
-    expectIssue(
-      { fieldId: null, operatorId: "present", value: "x" },
-      "This operator takes no value. Pick Is present or Is absent again.",
-      "invalid",
-    );
+
+  describe("dates", () => {
+    const badDate = "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.";
+
+    it("accepts a full or partial UTC timestamp, also as a range", () => {
+      expect(one(newFieldCondition("seenAt", "eq", "2024-11"))).toEqual([]);
+      expect(one(newFieldCondition("seenAt", "between", ["2024", "2024-11-06T14:30Z"]))).toEqual(
+        [],
+      );
+    });
+
+    it("rejects anything else, in either end of a range", () => {
+      expect(one(newFieldCondition("seenAt", "eq", "06/11/2024"))).toEqual([["invalid", badDate]]);
+      expect(one(newFieldCondition("seenAt", "between", ["2024", "2024-11-06 14:30"]))).toEqual([
+        ["invalid", badDate],
+      ]);
+    });
+
+    it("leaves a date range's order to the backend", () => {
+      expect(one(newFieldCondition("seenAt", "between", ["2025", "2024"]))).toEqual([]);
+    });
   });
 });

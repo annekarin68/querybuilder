@@ -5,33 +5,34 @@ import type { Compliance, DatabaseResult, SavedQuery, SavedQueryDraft } from "./
 import { buildFieldCatalog } from "./query/fieldCatalog";
 import { serverIssues } from "./query/issues";
 import {
-  addedNodesMessage,
+  dropItem,
+  dropMessage,
   dropNotice,
   movedMessage,
-  nodesForItem,
   reorderedMessage,
+  sameFieldRef,
   type DragItem,
+  type FieldRef,
 } from "./query/drop";
 import {
-  addChild,
   emptyQuery,
   findNode,
   moveNode,
   moveSibling,
-  newCondition,
-  placeNodes,
   positionOf,
   sameSemantics,
   sameTree,
   updateNode,
   type Direction,
 } from "./query/tree";
-import { hasUnsavedWork, sameName, saveTarget } from "./query/saved";
+import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/saved";
 import type { Group } from "./query/types";
 import { validateQuery } from "./query/validate";
 import {
+  displayStateFor,
   runBlocker,
   type AppState,
+  type PanelTab,
   type PreviewState,
   type SavedListNotice,
   type StatsState,
@@ -93,11 +94,11 @@ export interface AppDeps {
 /** How long the query must stay unchanged before statistics are fetched. */
 export const STATS_DEBOUNCE_MS = 400;
 
-/** The query a first visit starts with, and Start fresh puts back: one
- *  blank row, so the user can begin by choosing a facet. */
+/** The query a first visit starts with, and Start fresh puts back: an empty
+ *  group. It is "not finished", not invalid: the footer says "Add a facet to
+ *  start…" and "+ Facet" is right there (spec, section 3). */
 function startingQuery(): Group {
-  const root = emptyQuery();
-  return addChild(root, root.id, newCondition());
+  return emptyQuery();
 }
 
 /** The warning for databases a saved or kept selection named that no longer
@@ -343,7 +344,13 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       return;
     }
     const issues = catalog ? validateQuery(nextQuery, catalog) : [];
-    changeScope({ query: nextQuery, issues });
+    // A removed block takes its display state with it (see displayStateFor).
+    const { openField, expandedBlockIds, selectedField } = store.getState();
+    changeScope({
+      query: nextQuery,
+      issues,
+      ...displayStateFor(nextQuery, { openField, expandedBlockIds, selectedField }),
+    });
   }
 
   /** Show a drop's problems, or clear an old warning when there are none. */
@@ -363,65 +370,134 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     setNotice([message]);
   }
 
-  /** `tree` with the group `nodeId` expanded, if it is a collapsed group: so
-   *  the user sees what was just dropped into it. */
-  function openGroup(tree: Group, nodeId: string): Group {
-    const node = findNode(tree, nodeId);
-    return node?.kind === "group" && node.collapsed
+  /** `tree` with `nodeId` unfolded, if it is a folded group or block. */
+  function unfold(tree: Group, nodeId: string): Group {
+    return findNode(tree, nodeId)?.collapsed
       ? updateNode(tree, nodeId, { collapsed: false })
       : tree;
   }
 
+  /** `tree` with the group `nodeId` unfolded, if it is a folded group: so the
+   *  user sees what was just dropped into it. (A drop on a block lands before
+   *  it, so the block itself stays as it is.) */
+  function openGroup(tree: Group, nodeId: string): Group {
+    return findNode(tree, nodeId)?.kind === "group" ? unfold(tree, nodeId) : tree;
+  }
+
   /**
    * A docs item or a query node was dropped on `targetNodeId` (a group: it goes
-   * at the end; a condition: just before it). Nothing is dropped silently: what
-   * can't be done is explained in `dropNotice`.
+   * at the end; a facet block: just before it, or into it — see `dropItem`).
+   * Nothing is dropped silently: what can't be done is explained in
+   * `dropNotice`. Returns the field row the drop opened, or null: after a
+   * mouse drop the builder moves the keyboard focus into that row.
    */
-  function onDropItem(item: DragItem | null, targetNodeId: string): void {
+  function onDropItem(item: DragItem | null, targetNodeId: string): FieldRef | null {
     const { query, facets, catalog } = store.getState();
     if (!item) {
       setNotice(["That item can't be added to a query."]);
-      return;
+      return null;
     }
     if (item.type === "node") {
-      if (item.nodeId === targetNodeId) return;
+      if (item.nodeId === targetNodeId) return null;
       // A node that is gone (a stale drag) or the root can't be moved.
       const node = findNode(query, item.nodeId);
       if (item.nodeId === query.id || !node) {
         setNotice(["That item is no longer in the query."]);
-        return;
+        return null;
       }
       const moved = moveNode(query, item.nodeId, targetNodeId);
       if (!moved) {
         // The node exists, so the only refusal left is a group dropped on
         // something inside itself (or a target that is gone).
         setNotice(["A group can't be moved into itself."]);
-        return;
+        return null;
       }
       setNotice([]);
       const next = openGroup(moved, targetNodeId);
-      // Dropped where it already was (say, the last row onto its own group):
+      // Dropped where it already was (say, the last block onto its own group):
       // nothing changed, so there is nothing to announce either.
-      if (sameTree(next, query)) return;
+      if (sameTree(next, query)) return null;
       onQueryChange(next);
       announce(movedMessage(node.kind));
-      return;
+      return null;
     }
     if (!facets || !catalog) {
       setNotice(["The data dictionary is still loading; try again in a moment."]);
-      return;
+      return null;
     }
-    const { nodes, problems } = nodesForItem(item, facets, catalog);
-    setNotice(problems);
-    if (nodes.length === 0) return;
-    // `placeNodes` puts the new nodes in place of a lone blank row (the starting
-    // query, or a new "+ Group"), else at the target like any drop.
-    onQueryChange(openGroup(placeNodes(query, targetNodeId, nodes), targetNodeId));
-    announce(addedNodesMessage(nodes));
+    const outcome = dropItem(query, item, targetNodeId, facets, catalog);
+    setNotice(outcome.problems);
+    // Refused: the query stays exactly as it was, folds included.
+    if (outcome.query === query && !outcome.select) return null;
+    let next = openGroup(outcome.query, targetNodeId);
+    // The row the drop is about must be on screen: its block is unfolded, and
+    // the row is opened, which draws it with its dropdowns so the user can go
+    // on with it. (The open row is drawn even in a folded field list:
+    // see visibleFieldIds in ui/fieldRows.ts, so the list needs no unfolding.)
+    if (outcome.select) next = unfold(next, outcome.select.blockId);
+    if (next !== query) onQueryChange(next);
+    if (outcome.select) openFieldRow(outcome.select);
+    const spoken = dropMessage(query, item, targetNodeId, outcome, catalog);
+    if (spoken) announce(spoken);
+    return outcome.select;
   }
 
-  /** The keyboard path: "Add to query" puts the item in the root group (or, if
-   *  that holds just a blank row, in its place); a tag's facets arrive as one group. */
+  /**
+   * Open field row `ref` for editing (`AppState.openField`), or close the
+   * open one (null). Not a query edit: the statistics stay, nothing is
+   * refetched.
+   */
+  function openFieldRow(ref: FieldRef | null): void {
+    if (!sameFieldRef(store.getState().openField, ref)) store.setState({ openField: ref });
+  }
+
+  /**
+   * A tab of the panel beside every block. Pressing the tab that is open
+   * hides the panel for every block (`panelTab: null`), so the rows get the
+   * whole width (spec, decision 10). Display state: nothing is refetched.
+   */
+  function setPanelTab(tab: PanelTab): void {
+    store.setState({ panelTab: store.getState().panelTab === tab ? null : tab });
+  }
+
+  /**
+   * The field the About panel describes (`AppState.selectedField`), or null
+   * for the block's facet. Called on every focus move into a row, so the same
+   * field again writes nothing: only a change repaints the About panels.
+   */
+  function selectFieldForPanel(ref: FieldRef | null): void {
+    if (!sameFieldRef(store.getState().selectedField, ref)) store.setState({ selectedField: ref });
+  }
+
+  /**
+   * A cell of the co-occurrence row, or a box of the square pie chart, was
+   * pressed: unfold the dictionary if it is folded, so main.ts can open
+   * facet `facetId`'s card there. False (and nothing changes) for a facet
+   * the dictionary does not have: there is no card to open. Display state,
+   * like folding: nothing is refetched.
+   */
+  function showFacetInDictionary(facetId: string): boolean {
+    const { facets, sidebarCollapsed } = store.getState();
+    if (!facets?.some((f) => f.id === facetId)) return false;
+    if (sidebarCollapsed) store.setState({ sidebarCollapsed: false });
+    return true;
+  }
+
+  /** "+ N more fields" / "Show fewer fields" on block `blockId`. Display
+   *  state, like folding: not a query edit, never saved or sent. */
+  function toggleFields(blockId: string): void {
+    const { expandedBlockIds } = store.getState();
+    store.setState({
+      expandedBlockIds: expandedBlockIds.includes(blockId)
+        ? expandedBlockIds.filter((id) => id !== blockId)
+        : [...expandedBlockIds, blockId],
+    });
+  }
+
+  /** The keyboard path: "Add to query" puts the item at the end of the root
+   *  group; a tag's facets arrive as one group. The focus stays on the
+   *  dictionary's button, so the user can add several in a row; the
+   *  announcement says what happened. */
   function onAddItem(item: DragItem): void {
     onDropItem(item, store.getState().query.id);
   }
@@ -464,6 +540,10 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       issues: catalog ? validateQuery(query, catalog) : [],
       openSaved: null,
       dropNotice: null,
+      // The blocks they pointed at are gone with the old query.
+      openField: null,
+      expandedBlockIds: [],
+      selectedField: null,
     });
     announce(STARTED_FRESH_MESSAGE);
   }
@@ -507,7 +587,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     ]);
 
     const catalog = buildFieldCatalog(facets);
-    // A restored query replaces the normal seed (one empty condition).
+    // A restored query replaces the starting one (an empty group).
     const query = pending ? pending.query : startingQuery();
     // A restored selection may name databases that no longer exist (it can
     // outlive a backend change): keep only the ones this load knows, and say
@@ -522,8 +602,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       facets,
       selectedDatabaseIds,
       query,
-      // The seed bypasses onQueryChange, so validate here — otherwise Run
-      // would be enabled on the empty seeded condition.
+      openField: null,
+      expandedBlockIds: [],
+      selectedField: null,
+      // The first query bypasses onQueryChange, so validate here: a restored
+      // query may be unfinished, and Run must stay blocked then.
       issues: validateQuery(query, catalog),
       auth: user ? { status: "authenticated", user } : { status: "anonymous" },
       compliance,
@@ -532,7 +615,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (showRestored) announce(RESTORED_MESSAGE);
     setNotice(goneDatabasesMessage(gone, "selected"));
     // Fetch a restored query's statistics now, as any in-app edit would (an
-    // unfinished one fetches nothing). The empty seed has nothing runnable yet.
+    // unfinished one fetches nothing). The empty start has nothing to run yet.
     if (pending) refreshStats();
   }
 
@@ -580,8 +663,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     store.setState({ savedList: { status: "loading" }, savedListNotice: notice });
     api
       .listSavedQueries()
-      .then((queries) => {
-        if (!req.isStale()) store.setState({ savedList: { status: "ok", queries } });
+      .then(({ queries, unreadable }) => {
+        if (!req.isStale()) store.setState({ savedList: { status: "ok", queries, unreadable } });
       })
       .catch((err) => {
         if (req.isStale()) return;
@@ -609,23 +692,31 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     });
   }
 
-  /** Send one save and show how it went. A save that succeeds is remembered
+  /** Send `draft` and show how it went. A save that succeeds is remembered
    *  even if the dialog was closed meanwhile: it did happen on the server. */
-  function sendSave(name: string, note: string, send: () => Promise<SavedQuery>): void {
+  function sendSave(draft: SavedQueryDraft, send: () => Promise<SavedQuery>): void {
+    const { name, note } = draft;
     const openWhenStarted = store.getState().openSaved;
     const req = saveSlot.start();
     store.setState({ save: { status: "saving" } });
     send()
       .then((saved) => {
-        const { id, query, databaseIds } = saved;
+        // The open query remembers the tree that was sent, which is the tree
+        // on screen: the answer's tree has fresh node ids ("Saved queries"),
+        // so comparing with it would show the query as edited at once.
+        const openNow: OpenSaved = {
+          id: saved.id,
+          name: saved.name,
+          note: saved.note,
+          query: draft.query,
+          databaseIds: draft.databaseIds,
+        };
         // The saved query becomes the open one only if nothing else was opened
         // since the save started (a slow answer after the user opened another
         // query would otherwise make the next Save overwrite this one with
         // that other query).
         const patch: Partial<AppState> =
-          store.getState().openSaved === openWhenStarted
-            ? { openSaved: { id, name: saved.name, note: saved.note, query, databaseIds } }
-            : {};
+          store.getState().openSaved === openWhenStarted ? { openSaved: openNow } : {};
         // Leave the dialog alone when it was closed, or closed and reopened.
         store.setState(
           req.isStale() ? patch : { ...patch, savedDialog: null, save: { status: "idle" } },
@@ -675,7 +766,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       return;
     }
     const target = saveTarget(draft.name, store.getState().openSaved);
-    sendSave(draft.name, draft.note, () =>
+    sendSave(draft, () =>
       target.kind === "update" ? updateOrCreate(target.id, draft) : api.createSavedQuery(draft),
     );
   }
@@ -687,8 +778,9 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     const { save } = store.getState();
     if (save.status !== "conflict") return;
     const draft = draftOf(save.name, save.note);
-    sendSave(draft.name, draft.note, async () => {
-      const clash = (await api.listSavedQueries()).find((q) => sameName(q.name, draft.name));
+    sendSave(draft, async () => {
+      const { queries } = await api.listSavedQueries();
+      const clash = queries.find((q) => sameName(q.name, draft.name));
       // Deleted in the meantime (another tab): there is nothing left to replace.
       return clash ? updateOrCreate(clash.id, draft) : api.createSavedQuery(draft);
     });
@@ -721,6 +813,10 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       query: saved.query,
       selectedDatabaseIds: known,
       issues: catalog ? validateQuery(saved.query, catalog) : [],
+      // The blocks they pointed at are gone with the old query.
+      openField: null,
+      expandedBlockIds: [],
+      selectedField: null,
       // The selection kept, not the saved one: the user did not edit the
       // dropped ids away, so opening must not count as an edit.
       openSaved: {
@@ -835,6 +931,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onQueryChange,
     onDropItem,
     onAddItem,
+    openFieldRow,
+    toggleFields,
+    setPanelTab,
+    selectFieldForPanel,
+    showFacetInDictionary,
     onMoveNode,
     dismissDropNotice,
     showNotice,

@@ -6,7 +6,9 @@ import { fieldPreview } from "./docsField";
 import { filterStatus, groupByTag, matchDocs, UNTAGGED } from "./docsFilter";
 import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { TEXT_SOURCES, type TextSource } from "../config";
+import { forgetDrag, rememberDrag } from "./dragMemory";
 import { findField, type FieldCatalog } from "../query/fieldCatalog";
+import { POPOVER_CLASS } from "./popover";
 
 /**
  * The small logo in front of a text, saying who wrote it (`TEXT_SOURCES` in
@@ -25,8 +27,8 @@ export function sourceLogo(
 
 /** Total events across every loaded database — the denominator for a
  * facet's percentage. The backend sends no percentage: a Facet only carries
- * `eventCount`, an absolute figure. */
-function totalEvents(databases: Database[] | null): number {
+ * `eventCount`, an absolute figure. (The About panel uses it too.) */
+export function totalEvents(databases: Database[] | null): number {
   return databases?.reduce((s, d) => s + d.eventCount, 0) ?? 0;
 }
 
@@ -57,7 +59,7 @@ export const DOCS_HINT =
 
 /**
  * The "Add to query" button. With `text` it is a labelled button, like the
- * builder's "+ Condition", so a "+" is never mistaken for "expand"; without it
+ * builder's "+ Group", so a "+" is never mistaken for "expand"; without it
  * (the small value rows) it is icon-only. Either way `label` names it for
  * screen readers.
  */
@@ -115,6 +117,16 @@ function valuesHtml(
     </div>`;
 }
 
+/**
+ * What the dictionary says about a field when it is opened: our comment and
+ * the third party's description, each behind the logo of who wrote it. Empty
+ * when the field has neither. Shared with the About panel beside a block
+ * (aboutPanel.ts), so both always tell the same story.
+ */
+export function fieldDetailsHtml(f: Facet["fields"][number]): string {
+  return `${f.comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(f.comment)}</p>` : ""}${f.description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(f.description)}</p>` : ""}`;
+}
+
 function fieldHtml(
   facet: Facet,
   f: Facet["fields"][number],
@@ -149,11 +161,28 @@ function fieldHtml(
         <span class="qb-doc-field-more">More: ${escapeHtml(more.join(" · "))}</span>
       </summary>
       <div class="qb-doc-field-body">
-        ${f.comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(f.comment)}</p>` : ""}
-        ${f.description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(f.description)}</p>` : ""}
+        ${fieldDetailsHtml(f)}
         ${valuesHtml(facet, f, options, section)}
       </div>
     </details>`;
+}
+
+/**
+ * A facet's details, as its opened dictionary card shows them above its
+ * fields: tags, the third party's group, both notes, and in how many of the
+ * `total` events it occurs. Shared with the About panel beside a block
+ * (aboutPanel.ts).
+ */
+export function facetDetailsHtml(facet: Facet, total: number): string {
+  const tags = facet.tags.length
+    ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
+    : "";
+  const { group, description, comment } = facet;
+  return `${tags}
+        ${group ? `<p class="qb-doc-source">${sourceLogo("thirdParty")}Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
+        ${comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(comment)}</p>` : ""}
+        ${description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(description)}</p>` : ""}
+        <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>`;
 }
 
 /** One facet card: a draggable header, then (when opened) its details and
@@ -165,10 +194,6 @@ export function facetHtml(
   catalog: FieldCatalog | null,
   section: string,
 ): string {
-  const tags = facet.tags.length
-    ? `<div class="qb-doc-tags">${facet.tags.map((t) => `<span class="qb-tag">${escapeHtml(displayLabel(t))}</span>`).join("")}</div>`
-    : "";
-  const { group, description, comment } = facet;
   return `<details class="qb-doc-facet" data-facet-id="${escapeHtml(facet.id)}" data-item="${dragData({ type: "facet", facetId: facet.id })}">
       <summary>
         ${chevron}
@@ -178,11 +203,7 @@ export function facetHtml(
         ${addButton(facet.name, "Add")}
       </summary>
       <div class="qb-doc-facet-body">
-        ${tags}
-        ${group ? `<p class="qb-doc-source">${sourceLogo("thirdParty")}Group: ${escapeHtml(displayLabel(group))}</p>` : ""}
-        ${comment ? `<p class="qb-doc-comment">${sourceLogo("ours")}${escapeHtml(comment)}</p>` : ""}
-        ${description ? `<p class="qb-doc-desc">${sourceLogo("thirdParty")}${escapeHtml(description)}</p>` : ""}
-        <p class="qb-doc-count" title="${escapeHtml(exact(facet.eventCount))} of ${escapeHtml(exact(total))} events">In ${compact(facet.eventCount)} events (${matchRatio(facet.eventCount, total)})</p>
+        ${facetDetailsHtml(facet, total)}
         <div class="qb-doc-fields">${facet.fields.map((f) => fieldHtml(facet, f, catalog, section)).join("")}</div>
       </div>
     </details>`;
@@ -286,6 +307,73 @@ export function escapeClosesDocs(c: EscapeContext): boolean {
   return c.key === "Escape" && !c.defaultPrevented && c.floating && !c.collapsed && c.focusInDocs;
 }
 
+/**
+ * What a click may land on without folding the floating dictionary (main.ts
+ * folds it on a click anywhere else, since it covers the builder):
+ * - the rail and the Hide/Show buttons, which toggle it themselves;
+ * - a co-occurrence cell or box (`data-opens-docs`), which has just opened it
+ *   at its facet;
+ * - a popover's button (`popovertarget`: the legends' "?" and the chart's
+ *   "+ N less often" box) and anything inside an open popover (`.qb-popover`,
+ *   which sits outside the dictionary): opening or reading a popover is a
+ *   peek, not leaving the dictionary.
+ * Clicks inside the dictionary itself are checked apart (by `composedPath`).
+ */
+export const KEEPS_FLOATING_DOCS_OPEN = `.qb-docs-rail, [data-menu='toggle-sidebar'], [data-opens-docs], [popovertarget], .${POPOVER_CLASS}`;
+
+/** The part of an element `detailsToOpen` reads: an HTMLElement in the
+ *  browser, a plain object in the tests. */
+export interface ParentChain<T> {
+  tagName: string;
+  parentElement: T | null;
+}
+
+/**
+ * The `<details>` to open so that `el` (a facet card) shows: the card
+ * itself and the tag section around it, outermost first, up to the panel
+ * (`panel`). A closed section hides everything in it, so opening only the
+ * card would show nothing.
+ */
+export function detailsToOpen<T extends ParentChain<T>>(el: T, panel: T): T[] {
+  const chain: T[] = [];
+  for (let node: T | null = el; node && node !== panel; node = node.parentElement) {
+    if (node.tagName === "DETAILS") chain.unshift(node);
+  }
+  return chain;
+}
+
+/**
+ * Where the focus goes back to when the dictionary folds: the co-occurrence
+ * cell or box that opened it at a facet (main.ts). `remember` keeps a finder,
+ * not the element, as a repaint may replace the cell meanwhile. Only a
+ * direct round trip goes back (cell, dictionary, close): once the focus
+ * leaves the dictionary for somewhere else, the cell is forgotten, and a
+ * later close goes to the rail as usual. `take` gives it once.
+ */
+export function createReturnFocus<T>() {
+  let finder: (() => T | null) | null = null;
+  return {
+    remember(find: () => T | null): void {
+      finder = find;
+    },
+    /** The focus left a dictionary element: `elsewhere` is true when it went
+     *  to something outside the dictionary (not within it, not to nothing). */
+    focusLeftDocs(elsewhere: boolean): void {
+      if (elsewhere) finder = null;
+    },
+    take(): T | null {
+      const find = finder;
+      finder = null;
+      return find?.() ?? null;
+    },
+  };
+}
+
+/** How long a card shown from the builder keeps its highlight. */
+const HIGHLIGHT_MS = 2000;
+/** The room left above a card scrolled to the panel's top, in px. */
+const SCROLL_MARGIN_PX = 8;
+
 export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
   if (!state.facets) {
     paint(
@@ -323,12 +411,15 @@ export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
  * (Escape or ✕ clears), grips start a drag, and "+" buttons call `onAdd`.
  * Call once at startup. `getFacets` reads the current facets when an event
  * fires, so the listeners never go stale across repaints.
+ *
+ * Returns `showFacet`, which opens a facet's card for the builder's
+ * co-occurrence cells (see below).
  */
 export function wireDocsSidebar(
   container: HTMLElement,
   getFacets: () => Facet[] | null,
   onAdd: (item: DragItem) => void,
-): void {
+): { showFacet(facetId: string): boolean } {
   const isSearch = (t: EventTarget | null): t is HTMLInputElement =>
     t instanceof HTMLInputElement && t.id === "qb-docs-filter";
   const filter = (text: string) => {
@@ -364,9 +455,35 @@ export function wireDocsSidebar(
       return;
     }
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(grabbed.item));
+    rememberDrag(grabbed.item);
     e.dataTransfer.effectAllowed = "copy";
     e.dataTransfer.setDragImage(grabbed.node, 12, 12);
+    // Slide the floating dictionary away after the browser has taken its drag
+    // image: changing layout inside `dragstart` can cancel the drag in some
+    // browsers. A transform keeps the dragged element in the DOM, so `dragend`
+    // still fires; `display: none` would not.
+    setTimeout(() => stepAside(true), 0);
   });
+
+  // The class is on the page frame (it moves the whole docs column). The
+  // dictionary is repainted by the app, so `dragend` is also listened for on
+  // the document: it reaches there even if the grip was replaced mid-drag.
+  const stepAside = (on: boolean) =>
+    container.closest(".qb-body")?.classList.toggle("is-dragging-from-docs", on);
+  container.addEventListener("dragend", () => {
+    forgetDrag();
+    stepAside(false);
+  });
+  document.addEventListener("dragend", () => stepAside(false));
+
+  /** Empty the search box and show everything again; false without a box. */
+  const clearSearch = (): boolean => {
+    const input = container.querySelector<HTMLInputElement>("#qb-docs-filter");
+    if (!input) return false;
+    input.value = "";
+    filter("");
+    return true;
+  };
 
   container.addEventListener("click", (e) => {
     if (!(e.target instanceof Element)) return;
@@ -380,10 +497,46 @@ export function wireDocsSidebar(
       return;
     }
     if (!e.target.closest("[data-action='clear-filter']")) return;
-    const input = container.querySelector<HTMLInputElement>("#qb-docs-filter");
-    if (!input) return;
-    input.value = "";
-    filter("");
-    input.focus();
+    if (clearSearch()) container.querySelector<HTMLInputElement>("#qb-docs-filter")?.focus();
   });
+
+  // The card highlighted last, and the timer that takes the highlight off.
+  let highlight: { card: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
+
+  /**
+   * Opens facet `facetId`'s card (its first one: a facet is listed under each
+   * of its tags) and the section around it, scrolls it to the top of the
+   * panel, highlights it for a moment and puts the focus on its header, so
+   * the user lands on it with the keyboard too. The panel must be shown
+   * already (app.showFacetInDictionary). False when no card has that facet.
+   */
+  function showFacet(facetId: string): boolean {
+    const cards = container.querySelectorAll<HTMLDetailsElement>(".qb-doc-facet[data-facet-id]");
+    const card = Array.from(cards).find((c) => c.dataset.facetId === facetId);
+    const summary = card?.querySelector<HTMLElement>(":scope > summary");
+    if (!card || !summary) return false;
+    // A search can have hidden it: clear the search, as its ✕ would.
+    if (card.closest("[hidden]")) clearSearch();
+    for (const details of detailsToOpen<HTMLElement>(card, container)) {
+      (details as HTMLDetailsElement).open = true;
+    }
+    // The panel scrolls, not the page (styles.css): scrolling the panel by
+    // hand keeps the page where it is. `scrollIntoView` would also scroll the
+    // page, to line the card up with the window's top.
+    const offset = summary.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollTop += offset - SCROLL_MARGIN_PX;
+    summary.focus({ preventScroll: true });
+    // The highlight is a colour, faded in only where motion is welcome
+    // (styles.css, `.is-highlighted`).
+    if (highlight) {
+      clearTimeout(highlight.timer);
+      highlight.card.classList.remove("is-highlighted");
+    }
+    card.classList.add("is-highlighted");
+    const timer = setTimeout(() => card.classList.remove("is-highlighted"), HIGHLIGHT_MS);
+    highlight = { card, timer };
+    return true;
+  }
+
+  return { showFacet };
 }

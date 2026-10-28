@@ -113,8 +113,17 @@ function notJson(text: string): string {
  */
 const warned = new Set<string>();
 
-function warnOnce(message: string): void {
-  const key = message.replace(/\d+/g, "#");
+/** Forget what was warned about, so each test starts with a clean console. */
+export function forgetWarnings(): void {
+  warned.clear();
+}
+
+/**
+ * Log a display-only problem, once per page load (see `warned`). By default
+ * messages that differ only in digits count as one problem; pass `key` when
+ * they must not (one warning per facet, whose ids may differ in digits only).
+ */
+export function warnOnce(message: string, key = message.replace(/\d+/g, "#")): void {
   if (warned.has(key)) return;
   warned.add(key);
   console.warn(message);
@@ -150,10 +159,23 @@ export class ResponseValue {
   /** This value as a list of `T` objects. Throws if it isn't a list, or an
    *  item isn't an object. */
   list<T>(): ResponseObject<T>[] {
+    return this.items().map((item) => item.object<T>());
+  }
+
+  /** This value as a list of values, none of them checked yet: for a list
+   *  whose items are read one at a time, so that one that can't be read can
+   *  be skipped (`listSavedQueries`). Throws if it isn't a list. */
+  items(): ResponseValue[] {
     if (!Array.isArray(this.value)) throw this.error("a list");
-    return this.value.map((item, i) =>
-      new ResponseValue(item, this.source, `${this.path}[${i}]`).object<T>(),
-    );
+    return this.value.map((item, i) => new ResponseValue(item, this.source, `${this.path}[${i}]`));
+  }
+
+  /** The text under `key` if this value is an object with text there, else
+   *  null. Checks nothing and warns about nothing: it only names the value
+   *  in a message about it. */
+  textForMessage(key: string): string | null {
+    const v = isObject(this.value) ? this.value[key] : undefined;
+    return typeof v === "string" ? v : null;
   }
 
   /** This whole value as indented JSON, for showing a message whose fields
@@ -286,6 +308,27 @@ export class ResponseObject<T> {
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (!isAbsent(v)) this.warn(join(this.path, key), "a number", v, "Treating it as missing.");
     return undefined;
+  }
+
+  /** Whether the backend sent this key at all (`null` counts as not sent). */
+  hasKey(key: Key<T>): boolean {
+    return !isAbsent(this.fields[key]);
+  }
+
+  /** The key/value pairs of an object the backend may leave out (marked `?`
+   *  in src/api/types.ts), values unchecked, for the caller to read. `undefined`
+   *  when it is missing, or (with a warning) when it isn't an object. */
+  optionalEntries(key: Key<T>): [string, unknown][] | undefined {
+    const v = this.fields[key];
+    if (isAbsent(v)) return undefined;
+    if (isObject(v)) return Object.entries(v);
+    this.warn(join(this.path, key), "an object", v, "Treating it as missing.");
+    return undefined;
+  }
+
+  /** The request this object came from ("GET /api/v1/…"), for the caller's own warnings. */
+  requestName(): string {
+    return this.source;
   }
 
   // ---- for objects keyed by the backend's own ids (an event's values) -----

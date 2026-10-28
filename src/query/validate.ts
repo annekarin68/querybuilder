@@ -1,6 +1,4 @@
-import type { Condition, Issue, QueryNode } from "./types";
 import {
-  FACET_OPERATOR_IDS,
   findFacet,
   findField,
   findOperator,
@@ -9,6 +7,7 @@ import {
   type ValueType,
 } from "./fieldCatalog";
 import { isUtcTimestamp } from "./dates";
+import type { FacetBlock, FieldCondition, Group, Issue, QueryNode } from "./types";
 
 /** Whether a single value is still unset: nothing chosen or typed yet. */
 export function isBlankValue(v: unknown): boolean {
@@ -35,19 +34,15 @@ function shapeProblem(arity: Arity, v: unknown): string | null {
         ? null
         : "Enter both values.";
     case "many":
-      // Two causes, two messages: an empty list is the normal "nothing chosen
-      // yet"; a blank item inside a list only comes from a restored or
-      // tampered saved query, and "choose a value" would not tell the user
-      // what to fix.
+      // An empty list is the normal "nothing chosen yet"; a blank item inside
+      // a list only comes from a tampered saved query.
       if (!Array.isArray(v) || v.length === 0) return "Choose at least one value.";
       return v.some(isBlankValue) ? "Remove the empty value." : null;
   }
 }
 
-/**
- * Why a single value isn't of the field's type, or null. Values off a field's
- * pick-list are fine: the list can be out of date.
- */
+/** Why a single value isn't of the field's type, or null. Values off a
+ *  field's pick-list are fine: the list can be out of date. */
 function typeProblem(valueType: ValueType, v: unknown): string | null {
   switch (valueType) {
     case "number":
@@ -63,51 +58,24 @@ function typeProblem(valueType: ValueType, v: unknown): string | null {
   }
 }
 
-/** A condition about a whole facet: no field, so only presence operators. */
-function checkFacetCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
-  if (!findFacet(catalog, c.facetId)) {
-    out.push(invalid(c.id, "Unknown facet."));
-    return;
-  }
-  const op = findOperator(c.operatorId);
-  if (!op) {
-    out.push(invalid(c.id, "Unknown operator."));
-    return;
-  }
-  if (!FACET_OPERATOR_IDS.includes(op.id)) {
+/** Issues about a condition sit on its row (`c.id`). The builder draws a
+ *  condition for an unknown field, or a second one for the same field, as a
+ *  removable row of its own (spec section 5), so the issue sits on the
+ *  condition, next to its ✕. */
+function checkCondition(
+  block: FacetBlock,
+  c: FieldCondition,
+  catalog: FieldCatalog,
+  out: Issue[],
+): void {
+  const fieldDef = findField(catalog, block.facetId, c.fieldId);
+  if (!fieldDef) {
     out.push(
       invalid(
         c.id,
-        "That operator isn't available for a whole facet. Pick Is present or Is absent.",
+        `Unknown field “${c.fieldId}”. The data dictionary may have changed; remove this condition.`,
       ),
     );
-    return;
-  }
-  if (c.value !== null) {
-    // The row has no Value slot to clear; picking the test again rewrites the row.
-    out.push(invalid(c.id, "This operator takes no value. Pick Is present or Is absent again."));
-  }
-}
-
-function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void {
-  if (!c.facetId) {
-    // The Field dropdown is disabled until a facet is chosen, so point at the
-    // Facet dropdown, the one the user can actually use.
-    out.push(incomplete(c.id, "Choose a facet."));
-    return;
-  }
-  if (c.fieldId === null) {
-    // No field: either nothing chosen yet, or a deliberate facet-only condition.
-    // A facet with no fields still offers "Is present" / "Is absent", so
-    // "Choose a field." alone would be wrong.
-    if (c.operatorId === null) {
-      out.push(incomplete(c.id, "Choose a field, or whether the facet is present."));
-    } else checkFacetCondition(c, catalog, out);
-    return;
-  }
-  const fieldDef = findField(catalog, c.facetId, c.fieldId);
-  if (!fieldDef) {
-    out.push(invalid(c.id, "Unknown field."));
     return;
   }
   if (!c.operatorId) {
@@ -123,9 +91,8 @@ function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void
     out.push(invalid(c.id, "That operator isn't available for this field."));
     return;
   }
-  // A no-value operator's value goes out as `null`, see
-  // docs/ARCHITECTURE.md, "Wire format of the query". The UI always sets
-  // that; anything else came from a tampered saved query and can't be sent.
+  // A no-value operator's value goes out as `null` (docs/ARCHITECTURE.md,
+  // "Wire format of the query"); anything else came from a tampered saved query.
   if (op.arity === "none") {
     if (c.value !== null) out.push(invalid(c.id, "This operator takes no value."));
     return;
@@ -150,18 +117,41 @@ function checkCondition(c: Condition, catalog: FieldCatalog, out: Issue[]): void
   }
 }
 
-function walk(node: QueryNode, isRoot: boolean, catalog: FieldCatalog, out: Issue[]): void {
-  if (node.kind === "condition") {
-    checkCondition(node, catalog, out);
+/** A block with nothing set is fine: it asks whether the facet is present
+ *  (or absent). Unset fields are simply not in `conditions`. */
+function checkBlock(block: FacetBlock, catalog: FieldCatalog, out: Issue[]): void {
+  if (!findFacet(catalog, block.facetId)) {
+    out.push(invalid(block.id, "Unknown facet."));
     return;
   }
+  const seen = new Set<string>();
+  for (const c of block.conditions) {
+    // The builder keeps one condition per field; two only come from a
+    // tampered saved query, and the ordinary row can show only one of them.
+    // The extra one gets its own removable row (see checkCondition).
+    if (seen.has(c.fieldId)) {
+      out.push(invalid(c.id, `The field “${c.fieldId}” is set twice in this facet.`));
+      continue;
+    }
+    seen.add(c.fieldId);
+    checkCondition(block, c, catalog, out);
+  }
+}
+
+function walk(node: QueryNode, isRoot: boolean, catalog: FieldCatalog, out: Issue[]): void {
+  if (node.kind === "facet") {
+    checkBlock(node, catalog, out);
+    return;
+  }
+  // An empty root is the starting query: "not finished" without a message
+  // (runBlocker in state.ts keeps Run off; the footer says what to do).
   if (!isRoot && node.children.length === 0) {
-    out.push(incomplete(node.id, "Add a condition to this group."));
+    out.push(incomplete(node.id, "Add a facet to this group."));
   }
   for (const child of node.children) walk(child, false, catalog, out);
 }
 
-export function validateQuery(tree: QueryNode, catalog: FieldCatalog): Issue[] {
+export function validateQuery(tree: Group, catalog: FieldCatalog): Issue[] {
   const out: Issue[] = [];
   walk(tree, true, catalog, out);
   return out;

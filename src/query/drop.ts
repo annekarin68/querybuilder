@@ -1,7 +1,22 @@
 import type { Facet } from "../model";
-import { findField, type FieldCatalog } from "./fieldCatalog";
-import { countConditions, groupOf, newCondition, type Direction } from "./tree";
-import type { Condition, QueryNode } from "./types";
+import {
+  fieldsOfFacet,
+  findFacet,
+  findField,
+  isNumberText,
+  type FieldCatalog,
+} from "./fieldCatalog";
+import {
+  countBlocks,
+  findNode,
+  groupOf,
+  insertNodes,
+  newBlock,
+  newFieldCondition,
+  setFieldCondition,
+  type Direction,
+} from "./tree";
+import type { FacetBlock, Group, QueryNode } from "./types";
 
 /** The drag-and-drop data type our own drags carry. Drags from elsewhere
  *  (files, text) lack it, so the query builder doesn't offer itself as a target. */
@@ -49,83 +64,155 @@ export function parseDragItem(text: string): DragItem | null {
   }
 }
 
-/** What a drop creates, and what couldn't be created (and why, in words for the user). */
-export interface DropResult {
-  nodes: QueryNode[];
+/** A field row of one block: the row a drop opens, or the field the About
+ *  panel describes. */
+export interface FieldRef {
+  blockId: string;
+  fieldId: string;
+}
+
+/** Whether two refs name the same row (null names none, and matches null). */
+export function sameFieldRef(a: FieldRef | null, b: FieldRef | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.blockId === b.blockId && a.fieldId === b.fieldId;
+}
+
+/** What a dropped dictionary item did to the query. */
+export interface DropOutcome {
+  /** The new query; the same object when nothing changed. */
+  query: Group;
+  /** New blocks or a new group, for the announcement. Empty when the drop
+   *  only opened or filled a row of an existing block. */
+  added: QueryNode[];
+  /**
+   * The field row the drop is about, or null: the app opens it
+   * (`AppState.openField`). After a mouse drop the builder also moves the
+   * keyboard focus into it (its operator dropdown, menu closed). The
+   * keyboard's "Add to query" keeps the focus in the dictionary, so several
+   * items can be added in a row; the announcement says what happened.
+   */
+  select: FieldRef | null;
+  /** What couldn't be added, in words for the user. */
   problems: string[];
 }
 
 const NOT_LOADED =
   "it is not in the loaded data dictionary. The dictionary may be out of date; reload the page.";
 
-function condition(over: Partial<Condition>): Condition {
-  return { ...newCondition(), ...over };
-}
-
-/** A condition meaning "this facet is present, whatever its values". */
-function facetPresent(facetId: string): Condition {
-  return condition({ facetId, operatorId: "present" });
-}
-
 /**
- * The nodes a dragged docs item creates. Never throws and never ignores
- * anything silently: whatever can't be created is explained in `problems`.
+ * What dropping a dictionary item on `targetId` (a group or a block) does.
+ * Never throws and never ignores anything silently: whatever can't be added
+ * is explained in `problems`. Never overwrites a field the user has set.
  */
-export function nodesForItem(
+export function dropItem(
+  query: Group,
   item: Exclude<DragItem, { type: "node" }>,
+  targetId: string,
   facets: Facet[],
   catalog: FieldCatalog,
-): DropResult {
+): DropOutcome {
+  const target = findNode(query, targetId);
+  // A stale drop (the target was removed meanwhile) adds at the root.
+  const at = target ? targetId : query.id;
+  const targetBlock = target?.kind === "facet" ? target : null;
+  const refused = (problem: string): DropOutcome => ({
+    query,
+    added: [],
+    select: null,
+    problems: [problem],
+  });
+  const inserted = (nodes: QueryNode[], select: FieldRef | null): DropOutcome => ({
+    query: insertNodes(query, at, nodes),
+    added: nodes,
+    select,
+    problems: [],
+  });
+
   switch (item.type) {
     case "facet": {
       if (!facets.some((f) => f.id === item.facetId)) {
-        return { nodes: [], problems: [`Couldn't add “${item.facetId}”: ${NOT_LOADED}`] };
+        return refused(`Couldn't add “${item.facetId}”: ${NOT_LOADED}`);
       }
-      return { nodes: [facetPresent(item.facetId)], problems: [] };
+      return inserted([newBlock(item.facetId)], null);
     }
     case "field": {
       if (!findField(catalog, item.facetId, item.fieldId)) {
-        return { nodes: [], problems: [`Couldn't add “${item.fieldId}”: ${NOT_LOADED}`] };
+        return refused(`Couldn't add “${item.fieldId}”: ${NOT_LOADED}`);
       }
-      return {
-        nodes: [condition({ facetId: item.facetId, fieldId: item.fieldId })],
-        problems: [],
-      };
+      // The block already has a row for every field of its facet: open it.
+      if (targetBlock?.facetId === item.facetId) {
+        return {
+          query,
+          added: [],
+          select: { blockId: targetBlock.id, fieldId: item.fieldId },
+          problems: [],
+        };
+      }
+      const block = newBlock(item.facetId);
+      return inserted([block], { blockId: block.id, fieldId: item.fieldId });
     }
     case "value": {
       const field = findField(catalog, item.facetId, item.fieldId);
-      if (!field) {
-        return { nodes: [], problems: [`Couldn't add “${item.value}”: ${NOT_LOADED}`] };
-      }
+      if (!field) return refused(`Couldn't add “${item.value}”: ${NOT_LOADED}`);
       if (!field.options?.includes(item.value)) {
-        return {
-          nodes: [],
-          problems: [
-            `Couldn't add “${item.value}”: it is not one of ${field.fieldName}'s known values.`,
-          ],
-        };
+        return refused(
+          `Couldn't add “${item.value}”: it is not one of ${field.fieldName}'s known values.`,
+        );
       }
       // The pick-list holds text; a number field's value goes out as a number.
+      // Number("") is 0 and Number("x") is NaN, which would go out as null: so
+      // text that isn't a number is refused rather than converted.
+      if (field.valueType === "number" && !isNumberText(item.value)) {
+        return refused(`Couldn't add “${item.value}”: it isn't a number.`);
+      }
       const value = field.valueType === "number" ? Number(item.value) : item.value;
-      return {
-        nodes: [
-          condition({ facetId: item.facetId, fieldId: item.fieldId, operatorId: "eq", value }),
-        ],
-        problems: [],
-      };
+      const condition = newFieldCondition(item.fieldId, "eq", value);
+      const rowIsUnset =
+        targetBlock?.facetId === item.facetId &&
+        !targetBlock.conditions.some((c) => c.fieldId === item.fieldId);
+      if (targetBlock && rowIsUnset) {
+        // In the facet's field order, as the builder does when a row is set
+        // by hand, so the summary does not depend on the order of setting.
+        const fieldOrder = fieldsOfFacet(catalog, item.facetId).map((f) => f.fieldId);
+        return {
+          query: setFieldCondition(query, targetBlock.id, condition, fieldOrder),
+          added: [],
+          select: { blockId: targetBlock.id, fieldId: item.fieldId },
+          problems: [],
+        };
+      }
+      // The row is set already (or the drop is elsewhere): a new block, so
+      // nothing the user chose is overwritten.
+      const block: FacetBlock = { ...newBlock(item.facetId), conditions: [condition] };
+      return inserted([block], { blockId: block.id, fieldId: item.fieldId });
     }
     case "tag": {
       const tagged = facets.filter((f) => f.tags.includes(item.tag));
-      if (tagged.length === 0) {
-        return { nodes: [], problems: [`The tag “${item.tag}” has no facets.`] };
-      }
-      const conditions = tagged.map((f) => facetPresent(f.id));
-      // Two or more facets arrive as one ALL group, so a misplaced "Add all"
-      // is dragged or removed in one go instead of row by row (users' request,
-      // 2026-10-13; ALL kept by the maintainers). One facet needs no group.
-      return { nodes: conditions.length > 1 ? [groupOf(conditions)] : conditions, problems: [] };
+      if (tagged.length === 0) return refused(`The tag “${item.tag}” has no facets.`);
+      const blocks = tagged.map((f) => newBlock(f.id));
+      // Two or more facets arrive as one ALL group (2026-10-13), so a
+      // misplaced "Add all" is moved or removed in one go.
+      return inserted(blocks.length > 1 ? [groupOf(blocks)] : blocks, null);
     }
   }
+}
+
+/**
+ * Whether dropping `item` on `block` changes that block itself (a field row
+ * is opened, an unset row is filled) instead of adding a new block next to
+ * it. The builder uses it to show the right drop mark while the drag is over
+ * the block: a bar "before" the block would promise a new block there.
+ * `null` is a drag we know nothing about, which is never "inside".
+ */
+export function dropLandsInBlock(item: DragItem | null, block: FacetBlock): boolean {
+  if (item?.type === "field") return item.facetId === block.facetId;
+  if (item?.type === "value") {
+    // A value on a row that is set already arrives as a block of its own.
+    return (
+      item.facetId === block.facetId && !block.conditions.some((c) => c.fieldId === item.fieldId)
+    );
+  }
+  return false;
 }
 
 /** The warning to show for a drop's problems, or null when there were none. */
@@ -133,34 +220,80 @@ export function dropNotice(problems: string[]): string | null {
   return problems.length > 0 ? problems.join(" ") : null;
 }
 
-/** What a screen reader hears after new conditions were added. The query card
- *  repaints on every change, so nothing there says that something happened. */
-export function addedMessage(count: number): string {
-  return `Added ${conditionCount(count)} to the query.`;
+/** "1 facet", "3 facets". (Not ui/format's countLabel: the query layer does
+ *  not import from the UI.) */
+function facetCount(count: number): string {
+  return `${count} ${count === 1 ? "facet" : "facets"}`;
 }
 
-/** "1 condition", "3 conditions". (Not ui/format's countLabel: the query
- *  layer does not import from the UI.) */
-function conditionCount(count: number): string {
-  return `${count} ${count === 1 ? "condition" : "conditions"}`;
-}
-
-/** What a screen reader hears after a drop or "+" added `nodes`: a tag's group
- *  says what it holds, anything else counts its conditions. */
+/** What a screen reader hears after a drop or "+ Facet" added `nodes`: the
+ *  builder repaints, so nothing on screen says that something happened. */
 export function addedNodesMessage(nodes: QueryNode[]): string {
   const [only] = nodes;
   if (nodes.length === 1 && only?.kind === "group") {
-    return `Added a group of ${conditionCount(countConditions(only))} to the query.`;
+    return `Added a group of ${facetCount(countBlocks(only))} to the query.`;
   }
-  return addedMessage(nodes.length);
+  return `Added ${facetCount(nodes.length)} to the query.`;
 }
 
-/** What a screen reader hears after the query builder's own "+ Group" button
- *  (its "+ Condition" says `addedMessage(1)`, like the dictionary's "+"). */
+/** What a screen reader hears after a value filled an unset row. */
+export function filledRowMessage(fieldName: string, value: string): string {
+  return `Set ${fieldName} to ${value}.`;
+}
+
+/** What a screen reader hears after a field was dropped on a block of its
+ *  facet (a mouse drop): nothing was added; its row was opened and has the
+ *  keyboard focus. */
+export function focusedRowMessage(fieldName: string, facetName: string): string {
+  return `Showing ${fieldName} in ${facetName}.`;
+}
+
+/** What a screen reader hears after a value was dropped on a row that is set
+ *  already: it arrived as a block of its own, because nothing the user chose
+ *  is overwritten. Says so, or the user would look for it in the row. */
+export function addedBesideMessage(fieldName: string): string {
+  return `Added 1 facet to the query, beside the one that already sets ${fieldName}.`;
+}
+
+/**
+ * What a screen reader hears after `item` was dropped on `targetId` of `query`
+ * (the query before the drop) and `dropItem` gave `outcome`. Null for a drop
+ * that did nothing: its problems are shown and spoken on their own.
+ */
+export function dropMessage(
+  query: Group,
+  item: Exclude<DragItem, { type: "node" }>,
+  targetId: string,
+  outcome: DropOutcome,
+  catalog: FieldCatalog,
+): string | null {
+  const fieldName = (facetId: string, fieldId: string) =>
+    findField(catalog, facetId, fieldId)?.fieldName ?? fieldId;
+  if (outcome.added.length > 0) {
+    const target = findNode(query, targetId);
+    const hitSetRow =
+      item.type === "value" &&
+      target?.kind === "facet" &&
+      target.facetId === item.facetId &&
+      target.conditions.some((c) => c.fieldId === item.fieldId);
+    return hitSetRow
+      ? addedBesideMessage(fieldName(item.facetId, item.fieldId))
+      : addedNodesMessage(outcome.added);
+  }
+  if (item.type === "value" && outcome.query !== query) {
+    return filledRowMessage(fieldName(item.facetId, item.fieldId), item.value);
+  }
+  if (item.type === "field" && outcome.select) {
+    const facetName = findFacet(catalog, item.facetId)?.name ?? item.facetId;
+    return focusedRowMessage(fieldName(item.facetId, item.fieldId), facetName);
+  }
+  return null;
+}
+
+/** What a screen reader hears after the builder's own "+ Group". */
 export const ADDED_GROUP_MESSAGE = "Added a group to the query.";
 
-/** What a screen reader hears after "Group contents": how many items moved
- *  into the new inner group (the query card repaints, so nothing else says so). */
+/** What a screen reader hears after "Group contents". */
 export function groupedMessage(count: number): string {
   return count === 1 ? "Grouped 1 item." : `Grouped ${count} items.`;
 }
@@ -168,13 +301,12 @@ export function groupedMessage(count: number): string {
 /** What a screen reader hears after "Ungroup". */
 export const UNGROUPED_MESSAGE = "Ungrouped.";
 
-/** What a screen reader hears after an existing node was moved. */
+/** What a screen reader hears after a group or block was moved. */
 export function movedMessage(kind: QueryNode["kind"]): string {
   return `Moved the ${kind}.`;
 }
 
-/** What a screen reader hears after Move up / Move down. The query card
- *  repaints, so nothing there says that the row moved or where it is now. */
+/** What a screen reader hears after Move up / Move down. */
 export function reorderedMessage(
   kind: QueryNode["kind"],
   direction: Direction,

@@ -1,231 +1,326 @@
 import { describe, it, expect } from "vitest";
 import {
-  ADDED_GROUP_MESSAGE,
-  addedMessage,
+  addedBesideMessage,
   addedNodesMessage,
-  dropNotice,
-  groupedMessage,
+  dropItem,
+  dropLandsInBlock,
+  dropMessage,
+  filledRowMessage,
+  focusedRowMessage,
   movedMessage,
-  reorderedMessage,
-  nodesForItem,
   parseDragItem,
-  UNGROUPED_MESSAGE,
+  sameFieldRef,
+  reorderedMessage,
 } from "../../src/query/drop";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
-import { newCondition, newGroup } from "../../src/query/tree";
-import type { Condition } from "../../src/query/types";
+import { emptyQuery, findNode, newBlock, newFieldCondition } from "../../src/query/tree";
+import type { FacetBlock, Group } from "../../src/query/types";
 import type { Facet } from "../../src/model";
 
-const facet = (id: string, tags: string[], fields: Facet["fields"] = [], number = 1): Facet => ({
-  id,
-  name: id.toUpperCase(),
-  number,
-  tags,
-  group: "",
-  comment: "",
-  description: "",
-  eventCount: 1,
-  fields,
-});
-const fld = (id: string, typeName: string, values: string[] = []) => ({
-  id,
-  name: id,
-  typeName,
-  comment: "",
-  description: "",
-  values,
-});
 const facets = [
-  facet(
-    "a",
-    ["t1"],
-    [
-      fld("size", "BIGINT", ["3.0", "7"]),
-      fld("color", "VARCHAR(9)", ["red"]),
-      fld("on", "BOOLEAN"),
+  {
+    id: "thing",
+    name: "Thing",
+    tags: ["t"],
+    fields: [
+      { id: "size", name: "size", typeName: "BIGINT", values: ["3", "4"] },
+      { id: "label", name: "label", typeName: "VARCHAR", values: ["a"] },
     ],
-  ),
-  facet("b", ["t1", "t2"]),
-  facet("c", []),
-];
+  },
+  { id: "other", name: "Other", tags: ["t"], fields: [] },
+] as unknown as Facet[];
 const catalog = buildFieldCatalog(facets);
-const conds = (r: { nodes: unknown[] }) => r.nodes as Condition[];
+const withBlock = () => {
+  const block = newBlock("thing");
+  const query: Group = { ...emptyQuery(), children: [block] };
+  return { query, block };
+};
+
+describe("sameFieldRef", () => {
+  it("matches refs to the same row, and null only with null", () => {
+    expect(sameFieldRef({ blockId: "b", fieldId: "f" }, { blockId: "b", fieldId: "f" })).toBe(true);
+    expect(sameFieldRef({ blockId: "b", fieldId: "f" }, { blockId: "b", fieldId: "g" })).toBe(
+      false,
+    );
+    expect(sameFieldRef({ blockId: "b", fieldId: "f" }, { blockId: "c", fieldId: "f" })).toBe(
+      false,
+    );
+    expect(sameFieldRef(null, { blockId: "b", fieldId: "f" })).toBe(false);
+    expect(sameFieldRef(null, null)).toBe(true);
+  });
+});
 
 describe("parseDragItem", () => {
-  it("reads each kind", () => {
-    expect(parseDragItem('{"type":"facet","facetId":"a"}')).toEqual({
+  it("reads our own payloads and nothing else", () => {
+    expect(parseDragItem('{"type":"facet","facetId":"thing"}')).toEqual({
       type: "facet",
-      facetId: "a",
+      facetId: "thing",
     });
-    expect(parseDragItem('{"type":"field","facetId":"a","fieldId":"size"}')).toEqual({
-      type: "field",
-      facetId: "a",
-      fieldId: "size",
-    });
-    expect(parseDragItem('{"type":"value","facetId":"a","fieldId":"size","value":"7"}')).toEqual({
-      type: "value",
-      facetId: "a",
-      fieldId: "size",
-      value: "7",
-    });
-    expect(parseDragItem('{"type":"tag","tag":"t1"}')).toEqual({ type: "tag", tag: "t1" });
-    expect(parseDragItem('{"type":"node","nodeId":"c-1"}')).toEqual({
-      type: "node",
-      nodeId: "c-1",
-    });
-  });
-  it("rejects anything else", () => {
-    for (const bad of [
-      "",
-      "nope",
-      "[]",
-      "null",
-      '{"type":"facet"}',
-      '{"type":"zzz"}',
-      '{"type":"field","facetId":"a"}',
-      '{"type":"value","facetId":"a","fieldId":"b","value":3}',
-    ]) {
-      expect(parseDragItem(bad)).toBeNull();
-    }
+    expect(parseDragItem('{"type":"facet"}')).toBeNull();
+    expect(parseDragItem("not json")).toBeNull();
   });
 });
 
-describe("nodesForItem", () => {
-  it("a facet becomes a facet-level 'present' condition", () => {
-    const r = nodesForItem({ type: "facet", facetId: "a" }, facets, catalog);
-    expect(r.problems).toEqual([]);
-    expect(conds(r)).toHaveLength(1);
-    expect(conds(r)[0]).toMatchObject({
-      kind: "condition",
-      facetId: "a",
-      fieldId: null,
-      operatorId: "present",
-      value: null,
-    });
+describe("dropItem", () => {
+  it("adds a facet as a new block at the end of the group", () => {
+    const q = emptyQuery();
+    const out = dropItem(q, { type: "facet", facetId: "thing" }, q.id, facets, catalog);
+    expect(out.problems).toEqual([]);
+    expect(out.query.children).toHaveLength(1);
+    expect(out.query.children[0]).toMatchObject({ kind: "facet", facetId: "thing" });
+    expect(out.added).toEqual(out.query.children);
+    expect(out.select).toBeNull();
   });
-  it("a field becomes a condition with no operator yet", () => {
-    const r = nodesForItem({ type: "field", facetId: "a", fieldId: "size" }, facets, catalog);
-    expect(conds(r)[0]).toMatchObject({
-      facetId: "a",
-      fieldId: "size",
-      operatorId: null,
-      value: null,
-    });
+
+  it("puts a drop on a block just before it", () => {
+    const { query, block } = withBlock();
+    const out = dropItem(query, { type: "facet", facetId: "other" }, block.id, facets, catalog);
+    expect(out.query.children.map((c) => (c as FacetBlock).facetId)).toEqual(["other", "thing"]);
   });
-  it("a string value becomes 'eq'", () => {
-    const r = nodesForItem(
-      { type: "value", facetId: "a", fieldId: "color", value: "red" },
+
+  it("focuses the row when a field is dropped on a block of its facet", () => {
+    const { query, block } = withBlock();
+    const out = dropItem(
+      query,
+      { type: "field", facetId: "thing", fieldId: "size" },
+      block.id,
       facets,
       catalog,
     );
-    expect(conds(r)[0]).toMatchObject({ fieldId: "color", operatorId: "eq", value: "red" });
+    expect(out.query).toBe(query);
+    expect(out.added).toEqual([]);
+    expect(out.select).toEqual({ blockId: block.id, fieldId: "size" });
   });
-  it("a number field's value is sent as a number, matching the pick-list", () => {
-    const r = nodesForItem(
-      { type: "value", facetId: "a", fieldId: "size", value: "3" },
+
+  it("adds a new block for a field dropped anywhere else, and focuses its row", () => {
+    const q = emptyQuery();
+    const out = dropItem(
+      q,
+      { type: "field", facetId: "thing", fieldId: "size" },
+      q.id,
       facets,
       catalog,
     );
-    expect(conds(r)[0]).toMatchObject({ operatorId: "eq", value: 3 });
+    const added = out.query.children[0] as FacetBlock;
+    expect(added.conditions).toEqual([]);
+    expect(out.select).toEqual({ blockId: added.id, fieldId: "size" });
   });
-  it("a tag with several facets becomes one ALL group of 'present' conditions", () => {
-    const r = nodesForItem({ type: "tag", tag: "t1" }, facets, catalog);
-    expect(r.problems).toEqual([]);
-    expect(r.nodes).toHaveLength(1);
-    const group = r.nodes[0]!;
-    if (group.kind !== "group") throw new Error("expected a group");
-    expect(group.operator).toBe("AND");
-    expect(conds({ nodes: group.children }).map((c) => [c.facetId, c.operatorId])).toEqual([
-      ["a", "present"],
-      ["b", "present"],
-    ]);
-    expect(new Set(group.children.map((c) => c.id)).size).toBe(2);
-  });
-  it("a tag with one facet adds just that condition", () => {
-    const withSolo = [...facets, facet("solo", ["only"])];
-    const r = nodesForItem({ type: "tag", tag: "only" }, withSolo, buildFieldCatalog(withSolo));
-    expect(conds(r).map((c) => c.facetId)).toEqual(["solo"]);
-  });
-  it("says a group was added, and how many conditions it holds", () => {
-    const r = nodesForItem({ type: "tag", tag: "t1" }, facets, catalog);
-    expect(addedNodesMessage(r.nodes)).toBe("Added a group of 2 conditions to the query.");
-    expect(addedNodesMessage([newCondition(), newCondition()])).toBe(
-      "Added 2 conditions to the query.",
+
+  it("fills an unset row with equals value (a number field gets a number)", () => {
+    const { query, block } = withBlock();
+    const out = dropItem(
+      query,
+      { type: "value", facetId: "thing", fieldId: "size", value: "3" },
+      block.id,
+      facets,
+      catalog,
     );
+    const filled = findNode(out.query, block.id) as FacetBlock;
+    expect(filled.conditions).toMatchObject([{ fieldId: "size", operatorId: "eq", value: 3 }]);
+    expect(out.added).toEqual([]);
+    expect(out.select).toEqual({ blockId: block.id, fieldId: "size" });
   });
-  // Unreachable today (a tag group always holds two or more), but the
-  // sentence must stay right if that changes.
-  it("says 'condition', not 'conditions', for a group of one", () => {
-    const one = { ...newGroup(), children: [newCondition()] };
-    expect(addedNodesMessage([one])).toBe("Added a group of 1 condition to the query.");
+
+  // As when the row is set by hand: the block's conditions (and so its
+  // summary) follow the facet's field order, not the order they were set in.
+  it("puts the condition a value fills in at its place in the facet's field order", () => {
+    const block: FacetBlock = {
+      ...newBlock("thing"),
+      conditions: [newFieldCondition("label", "eq", "a")],
+    };
+    const query: Group = { ...emptyQuery(), children: [block] };
+    const out = dropItem(
+      query,
+      { type: "value", facetId: "thing", fieldId: "size", value: "3" },
+      block.id,
+      facets,
+      catalog,
+    );
+    const filled = findNode(out.query, block.id) as FacetBlock;
+    expect(filled.conditions.map((c) => c.fieldId)).toEqual(["size", "label"]);
   });
-  it("reports an unknown facet", () => {
-    const r = nodesForItem({ type: "facet", facetId: "zzz" }, facets, catalog);
-    expect(r.nodes).toEqual([]);
-    expect(r.problems[0]).toMatch(/“zzz”.*not in the loaded data dictionary/);
-    expect(r.problems[0]).toMatch(/dictionary may be out of date/);
+
+  it("never overwrites a set row: a value for it becomes a new block", () => {
+    const block: FacetBlock = {
+      ...newBlock("thing"),
+      conditions: [newFieldCondition("size", "gt", 1)],
+    };
+    const query: Group = { ...emptyQuery(), children: [block] };
+    const out = dropItem(
+      query,
+      { type: "value", facetId: "thing", fieldId: "size", value: "4" },
+      block.id,
+      facets,
+      catalog,
+    );
+    expect((findNode(out.query, block.id) as FacetBlock).conditions[0]!.value).toBe(1);
+    expect(out.query.children).toHaveLength(2);
+    expect(out.query.children[0]).toMatchObject({
+      conditions: [{ fieldId: "size", operatorId: "eq", value: 4 }],
+    });
   });
-  it("reports an unknown field", () => {
-    const r = nodesForItem({ type: "field", facetId: "a", fieldId: "nope" }, facets, catalog);
-    expect(r.nodes).toEqual([]);
-    expect(r.problems).toHaveLength(1);
+
+  it("adds a tag's facets as one ALL group of blocks", () => {
+    const q = emptyQuery();
+    const out = dropItem(q, { type: "tag", tag: "t" }, q.id, facets, catalog);
+    expect(out.query.children).toHaveLength(1);
+    expect(out.query.children[0]).toMatchObject({ kind: "group", operator: "AND" });
+    expect(addedNodesMessage(out.added)).toBe("Added a group of 2 facets to the query.");
   });
-  it("reports a value that is not in the field's list, and a field with no list", () => {
-    expect(
-      nodesForItem(
-        { type: "value", facetId: "a", fieldId: "color", value: "green" },
+
+  it("explains what it can't add, and changes nothing", () => {
+    const q = emptyQuery();
+    const out = dropItem(q, { type: "facet", facetId: "nope" }, q.id, facets, catalog);
+    expect(out.query).toBe(q);
+    expect(out.problems[0]).toMatch(/Couldn't add “nope”/);
+    const value = dropItem(
+      q,
+      { type: "value", facetId: "thing", fieldId: "size", value: "9" },
+      q.id,
+      facets,
+      catalog,
+    );
+    expect(value.problems).toEqual(["Couldn't add “9”: it is not one of size's known values."]);
+  });
+
+  it("refuses a value that isn't a number for a number field, instead of sending 0 or NaN", () => {
+    // The pick-list only holds numbers (pickListFor), so this is a catalog
+    // that was built some other way: Number("") is 0 and Number("x") is NaN.
+    const odd = {
+      ...catalog,
+      fields: catalog.fields.map((f) =>
+        f.fieldId === "size" ? { ...f, options: ["", "x", "3"] } : f,
+      ),
+    };
+    const { query, block } = withBlock();
+    for (const value of ["", "x"]) {
+      const out = dropItem(
+        query,
+        { type: "value", facetId: "thing", fieldId: "size", value },
+        block.id,
         facets,
-        catalog,
-      ).problems,
-    ).toHaveLength(1);
-    expect(
-      nodesForItem({ type: "value", facetId: "a", fieldId: "on", value: "true" }, facets, catalog)
-        .problems,
-    ).toHaveLength(1);
-  });
-  it("reports a tag nobody carries", () => {
-    const r = nodesForItem({ type: "tag", tag: "ghost" }, facets, catalog);
-    expect(r.nodes).toEqual([]);
-    expect(r.problems).toEqual(["The tag “ghost” has no facets."]);
-  });
-});
-
-describe("dropNotice", () => {
-  it("is null without problems", () => expect(dropNotice([])).toBeNull());
-  it("joins problems", () => expect(dropNotice(["One.", "Two."])).toBe("One. Two."));
-});
-
-describe("addedMessage / movedMessage (read out to screen readers)", () => {
-  it("says how many conditions were added", () => {
-    expect(addedMessage(1)).toBe("Added 1 condition to the query.");
-    expect(addedMessage(3)).toBe("Added 3 conditions to the query.");
-  });
-  it("says a group was added (the query builder's own + Group)", () => {
-    expect(ADDED_GROUP_MESSAGE).toBe("Added a group to the query.");
-  });
-  it("says what was moved", () => {
-    expect(movedMessage("condition")).toBe("Moved the condition.");
-    expect(movedMessage("group")).toBe("Moved the group.");
-  });
-});
-
-describe("groupedMessage / UNGROUPED_MESSAGE (read out to screen readers)", () => {
-  it("says how many items were grouped", () => {
-    expect(groupedMessage(1)).toBe("Grouped 1 item.");
-    expect(groupedMessage(3)).toBe("Grouped 3 items.");
-  });
-  it("says a group was dissolved", () => {
-    expect(UNGROUPED_MESSAGE).toBe("Ungrouped.");
-  });
-});
-
-describe("reorderedMessage (read out after Move up / Move down)", () => {
-  it("says what moved, which way, and where it stands now", () => {
-    expect(reorderedMessage("condition", "up", { index: 1, count: 3 })).toBe(
-      "Moved the condition up, to position 1 of 3.",
+        odd,
+      );
+      expect(out.query).toBe(query);
+      expect(out.problems).toEqual([`Couldn't add “${value}”: it isn't a number.`]);
+    }
+    const ok = dropItem(
+      query,
+      { type: "value", facetId: "thing", fieldId: "size", value: "3" },
+      block.id,
+      facets,
+      odd,
     );
-    expect(reorderedMessage("group", "down", { index: 3, count: 3 })).toBe(
-      "Moved the group down, to position 3 of 3.",
+    expect(ok.problems).toEqual([]);
+  });
+
+  it("adds at the root when the target is gone (a stale drop)", () => {
+    const q = emptyQuery();
+    const out = dropItem(q, { type: "facet", facetId: "thing" }, "gone", facets, catalog);
+    expect(out.query.children).toHaveLength(1);
+  });
+});
+
+describe("dropLandsInBlock", () => {
+  const { query, block } = withBlock();
+  const set = { ...block, conditions: [newFieldCondition("size", "eq", 3)] };
+
+  it("is true for a field of the block's own facet", () => {
+    expect(dropLandsInBlock({ type: "field", facetId: "thing", fieldId: "size" }, block)).toBe(
+      true,
     );
+    expect(dropLandsInBlock({ type: "field", facetId: "other", fieldId: "size" }, block)).toBe(
+      false,
+    );
+  });
+
+  it("is true for a value of the own facet only while its row is unset", () => {
+    const value = { type: "value", facetId: "thing", fieldId: "size", value: "3" } as const;
+    expect(dropLandsInBlock(value, block)).toBe(true);
+    // A set row: the value arrives as a block of its own, before this one.
+    expect(dropLandsInBlock(value, set)).toBe(false);
+    expect(dropLandsInBlock({ ...value, fieldId: "label", value: "a" }, set)).toBe(true);
+    expect(dropLandsInBlock({ ...value, facetId: "other" }, block)).toBe(false);
+  });
+
+  it("is false for a facet, a tag, a node and an unknown drag", () => {
+    expect(dropLandsInBlock({ type: "facet", facetId: "thing" }, block)).toBe(false);
+    expect(dropLandsInBlock({ type: "tag", tag: "t" }, block)).toBe(false);
+    expect(dropLandsInBlock({ type: "node", nodeId: block.id }, block)).toBe(false);
+    expect(dropLandsInBlock(null, block)).toBe(false);
+  });
+
+  it("agrees with dropItem: inside means the target block is the one that changes", () => {
+    const field = { type: "field", facetId: "thing", fieldId: "size" } as const;
+    const outcome = dropItem(query, field, block.id, facets, catalog);
+    expect(outcome.added).toEqual([]);
+    expect(outcome.select?.blockId).toBe(block.id);
+    expect(dropLandsInBlock(field, block)).toBe(true);
+  });
+});
+
+describe("messages", () => {
+  it("counts facets and names what moved", () => {
+    expect(addedNodesMessage([newBlock("thing")])).toBe("Added 1 facet to the query.");
+    expect(movedMessage("facet")).toBe("Moved the facet.");
+    expect(reorderedMessage("facet", "up", { index: 1, count: 3 })).toBe(
+      "Moved the facet up, to position 1 of 3.",
+    );
+  });
+});
+
+describe("what a drop that adds no block says", () => {
+  it("says which row a value filled", () => {
+    expect(filledRowMessage("size", "3")).toBe("Set size to 3.");
+  });
+
+  it("says which row a field dropped on its block put the cursor in", () => {
+    expect(focusedRowMessage("size", "Thing")).toBe("Showing size in Thing.");
+  });
+
+  it("explains why a value for a set row arrived as a new block", () => {
+    expect(addedBesideMessage("size")).toBe(
+      "Added 1 facet to the query, beside the one that already sets size.",
+    );
+  });
+});
+
+describe("dropMessage", () => {
+  const say = (query: Group, item: Parameters<typeof dropItem>[1], targetId: string) =>
+    dropMessage(query, item, targetId, dropItem(query, item, targetId, facets, catalog), catalog);
+
+  it("counts what was added", () => {
+    const q = emptyQuery();
+    expect(say(q, { type: "facet", facetId: "thing" }, q.id)).toBe("Added 1 facet to the query.");
+  });
+
+  it("names the row a value filled", () => {
+    const { query, block } = withBlock();
+    const item = { type: "value", facetId: "thing", fieldId: "size", value: "3" } as const;
+    expect(say(query, item, block.id)).toBe("Set size to 3.");
+  });
+
+  it("names the row and facet a field drop focused", () => {
+    const { query, block } = withBlock();
+    expect(say(query, { type: "field", facetId: "thing", fieldId: "size" }, block.id)).toBe(
+      "Showing size in Thing.",
+    );
+  });
+
+  it("says why a value for a set row is a block of its own", () => {
+    const block: FacetBlock = {
+      ...newBlock("thing"),
+      conditions: [newFieldCondition("size", "gt", 1)],
+    };
+    const query: Group = { ...emptyQuery(), children: [block] };
+    const item = { type: "value", facetId: "thing", fieldId: "size", value: "4" } as const;
+    expect(say(query, item, block.id)).toBe(
+      "Added 1 facet to the query, beside the one that already sets size.",
+    );
+  });
+
+  it("says nothing for a refused drop (its problem is shown and spoken instead)", () => {
+    const q = emptyQuery();
+    expect(say(q, { type: "facet", facetId: "nope" }, q.id)).toBeNull();
   });
 });
