@@ -64,3 +64,6 @@ export const EASTER_EGG_MASCOT = {
   disappointed: "/pickle/egg-disappointed.svg",
   loading: "/pickle/egg-loading.svg",
 } as const;
+
+/** A short toast shown together with the rain when the easter-egg set turns on. */
+export const EASTER_EGG_TOAST = "I'm Pickle Rick!";

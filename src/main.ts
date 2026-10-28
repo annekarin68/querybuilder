@@ -12,7 +12,7 @@ import "fomantic-ui-css/semantic.min.js";
 import "./styles.css";
 
 import * as api from "./api/client";
-import { EASTER_EGG_MASCOT, MASCOT } from "./config";
+import { EASTER_EGG_MASCOT, EASTER_EGG_TOAST, MASCOT } from "./config";
 import { createApp } from "./app";
 import { startupFailure } from "./api/errorText";
 import { store, type AppState } from "./state";
@@ -62,7 +62,8 @@ const app = createApp({
 });
 
 // Hidden: five quick clicks on the logo switch the mascot to the easter-egg set
-// (five more switch back) and make it rain with the new set. It rains even for
+// (five more switch back) and make it rain with the new set; switching on also
+// shows a toast (switching off needs none: the face changes back). It rains even for
 // people who prefer reduced motion: five quick clicks are a deliberate choice
 // (maintainers' decision, 2026-10-28; "Pickle theme and mascot").
 const logoClicked = createClickCounter();
@@ -71,6 +72,7 @@ shell.logo.addEventListener("click", () => {
   const easterEgg = !store.getState().easterEgg;
   store.setState({ easterEgg });
   startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
+  if (easterEgg) showToast(EASTER_EGG_TOAST);
 });
 
 // Wire every panel once. The listeners are delegated to the panel containers
