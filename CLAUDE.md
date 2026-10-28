@@ -9,12 +9,25 @@ later turn of the session pays for it again.
 
 ## Subagents
 
-Where a superpowers skill says to dispatch a `general-purpose` subagent, use
-our own agents in `.claude/agents/` instead: `sdd-implementer` for anything
-that changes code (implementers, fixers), `sdd-reviewer` for every review,
-including the final whole-branch one. Still pass the model the skill asks for.
-Name the `docs/ARCHITECTURE.md` sections a subagent needs (by heading) in its
-dispatch, so it reads those instead of searching the whole document.
+Subagents use most of our tokens. A subagent's cost is roughly its number of
+turns times the size of what it has read, so keep its work narrow and its
+starting context small.
+
+- Where a superpowers skill says to dispatch a `general-purpose` subagent,
+  use our own agents in `.claude/agents/` instead: `sdd-implementer` for
+  anything that changes code (implementers, fixers), `sdd-reviewer` for every
+  review. They load when a session starts: a session that was already running
+  when they changed must be restarted to get the new versions.
+- Models: Sonnet (the agents' default) for implementers, fixers and task
+  reviews. Opus only for the final whole-branch review, or for a task the
+  plan marks as hard.
+- Keep dispatch prompts short. Point at the brief file instead of pasting
+  it, and name the `docs/ARCHITECTURE.md` sections the subagent needs by
+  heading (it reads them with `npm run doc -- "<heading>"`).
+- Send a fix round to the same implementer (it already knows the code), with
+  the review file's path, not a retelling of the findings.
+- One browser check per change is usually enough: the implementer's, plus a
+  reviewer's check aimed only at what the diff makes risky.
 
 ## Challenge the maintainers
 
@@ -60,12 +73,13 @@ steps as CI (the build also runs `check:offline`). Then read your whole diff:
   archive and is not updated any more.
 
 Say in your report what you checked. The tests run in Node without a DOM, so
-check UI changes in a real browser too (Playwright with Chromium). To run a
-second dev server beside someone else's, give it its own ports:
-`DEV_BACKEND_URL=http://localhost:3091 npx tsx mock-server/index.ts` and
-`DEV_BACKEND_URL=http://localhost:3091 npx vite --port 5191 --strictPort`. Stop
-only processes you started, found by port and working directory. Never `pkill`
-by name: it can kill your own shell or somebody else's server.
+check UI changes in a real browser too (Playwright with Chromium; install the
+browser once with `npx playwright install chromium`).
+`npm run servers -- start` runs a second pair of dev servers beside someone
+else's, on their own ports (5191 for the app, 3091 for the mock), and
+`npm run servers -- stop` stops exactly those processes. `scripts/browser.mjs` opens the app logged in
+and does realistic clicks. Never `pkill` by name: it can kill your own shell or
+somebody else's server.
 
 ## Rules the code relies on
 

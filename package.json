@@ -17,6 +17,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check:offline": "node scripts/check-offline.mjs",
+    "doc": "node scripts/doc-section.mjs",
+    "servers": "node scripts/dev-servers.mjs",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write ."
   },
@@ -31,6 +33,7 @@
     "concurrently": "^9.0.0",
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
+    "playwright": "1.56.1",
     "prettier": "^3.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
