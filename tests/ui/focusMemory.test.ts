@@ -64,6 +64,17 @@ describe("controlOf (which control an element is, in words that survive a repain
     expect(sameControl(a, b)).toBe(false);
   });
 
+  // A facet's cell in the row and its box in the chart share the facet id
+  // (data-facet-id), so each has an attribute of its own.
+  it("tells a co-occurrence cell from the chart's box of the same facet", () => {
+    const cell = controlOf(el("BUTTON", { "data-co-cell": "x", "data-facet-id": "x" }));
+    const box = controlOf(el("BUTTON", { "data-co-box": "x", "data-facet-id": "x" }));
+    expect(cell?.attribute).toBe("data-co-cell");
+    expect(box?.attribute).toBe("data-co-box");
+    expect(sameControl(cell, box)).toBe(false);
+    expect(sameControl(cell, controlOf(el("BUTTON", { "data-co-cell": "y" })))).toBe(false);
+  });
+
   it("tells the results' id buttons apart by their event id", () => {
     expect(controlOf(el("BUTTON", { "data-action": "open-event", "data-event-id": "e7" }))).toEqual(
       {

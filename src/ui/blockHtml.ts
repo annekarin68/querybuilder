@@ -14,6 +14,7 @@ import {
   type Position,
 } from "./builderParts";
 import { aboutPanelHtml, aboutTitle, type AboutCtx } from "./aboutPanel";
+import { coRowHtml, seenTogetherHtml, type CoCtx } from "./coOccurrenceHtml";
 import { fieldRowsHtml } from "./fieldRows";
 import { countLabel } from "./format";
 import { escapeHtml } from "./panel";
@@ -37,6 +38,9 @@ export interface BlockCtx extends AboutCtx {
   openField: FieldRef | null;
   /** The tab open in every block's panel; null: no panel. */
   panelTab: PanelTab | null;
+  /** The co-occurrence row and chart; null while the dictionary loads or
+   *  without colours (`coCtxOf`). */
+  co: CoCtx | null;
 }
 
 /** How many set fields a block needs before its ALL / ANY is drawn: with
@@ -99,15 +103,15 @@ function matchLineHtml(block: FacetBlock): string {
 }
 
 /** The panel beside (or under) a block's rows: the tab that is open, or
- *  nothing when the panel is hidden. Seen together is filled in by plan B,
- *  task 6; About is `aboutPanelHtml`, also repainted on its own
+ *  nothing when the panel is hidden. Seen together is the square pie chart
+ *  (`seenTogetherHtml`); About is `aboutPanelHtml`, also repainted on its own
  *  (`paintAboutPanels`). `tabindex="-1"`: About takes the focus by script when
  *  the button the focus was on goes ("← About"); its `aria-label` names it
  *  for screen readers and for focus memory across a builder repaint. */
 function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
   const id = escapeHtml(block.id);
   if (ctx.panelTab === "seen") {
-    return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}"></div></div>`;
+    return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}">${seenTogetherHtml(ctx.co, block)}</div></div>`;
   }
   if (ctx.panelTab === "about") {
     return `<div class="qb-panel"><div class="qb-about" data-block-id="${id}" tabindex="-1" role="group" aria-label="${escapeHtml(aboutTitle(ctx, block))}">${aboutPanelHtml(ctx, block)}</div></div>`;
@@ -116,7 +120,8 @@ function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
 }
 
 /**
- * A facet block (spec, section 5): a head of two lines, its issues, then its
+ * A facet block (spec, section 5): the co-occurrence row (`coRowHtml`, also
+ * on a folded block), a head of two lines, its issues, then its
  * field rows with the panel beside them. Line 1: grip, Move, fold, the
  * facet's name, Has / Has no, then on the right the panel's tabs, the
  * legend's "?" and ✕. Line 2 (`matchLineHtml`): which occurrence it means.
@@ -128,13 +133,14 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
   const id = escapeHtml(block.id);
   const start = `${nodeGrip(block.id, "facet")}${moveButtons(name, position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>`;
   const remove = iconButton("remove-node", `Remove ${name}`, "times");
+  const coRow = ctx.co ? coRowHtml(ctx.co, block) : "";
   if (block.collapsed) {
     // A folded block's whole head is a click target for unfolding it, as a
     // folded group's line is (its buttons and grip keep their own jobs). It
     // has no rows and no panel, so no tabs either: they would switch nothing.
     const text = blockText(block, ctx.catalog);
     const summary = `<span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
-    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}"><div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${LEGEND_BUTTON}${remove}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
+    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}">${coRow}<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${LEGEND_BUTTON}${remove}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
   }
   const has = `<span class="qb-logic" role="group" aria-label="Has or has no ${escapeHtml(name)}">${logicButton(!block.negated, "set-has", "Has")}${logicButton(block.negated, "set-has-no", "Has no")}</span>`;
   // The tabs, "?" and ✕ share one right-aligned box (as a group's actions
@@ -158,7 +164,7 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
   if (panel) bodyClasses.push("has-panel");
   if (ctx.panelTab === "about") bodyClasses.push("shows-about");
   const body = `<div class="${bodyClasses.join(" ")}"><div class="qb-field-rows">${rows}</div>${panel}</div>`;
-  return `<div class="qb-block ${tone}" data-node-id="${id}"><div class="qb-block-head">${line1}${matchLineHtml(block)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
+  return `<div class="qb-block ${tone}" data-node-id="${id}">${coRow}<div class="qb-block-head">${line1}${matchLineHtml(block)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
 }
 
 /** The "+ Facet" picker: one choice per facet. Choosing one adds a block to

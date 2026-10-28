@@ -981,6 +981,98 @@ body {
   border-radius: 50%;
   font-weight: 700;
 }
+/* ---- Seen together (spec, section 6; coOccurrenceHtml.ts) ----------------
+   The co-occurrence row above a block's head: one 11 px cell per facet,
+   wrapping onto more lines in a narrow block. The colours are the
+   --qb-cooc-* tokens; a seen cell's heat colour and dot colour are inline
+   (worked out per value), every other kind takes its colours from here. */
+.qb-co-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0 0 0.3rem;
+}
+.qb-co-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  /* The outline carries the cell's shape: the light stops alone do not
+     reach 3:1 against the card (docs/ARCHITECTURE.md, "Pickle theme and mascot"). */
+  border: 1px solid var(--qb-cooc-cell-border);
+  border-radius: 2px;
+  background: var(--qb-surface);
+  color: var(--qb-cooc-dot-dark); /* the dot is drawn in currentColor */
+  cursor: pointer;
+}
+/* The dot: seen together (and too rare to colour, on an empty box). */
+.qb-co-cell.is-seen::after,
+.qb-co-cell.is-too-rare::after {
+  content: "";
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.qb-co-cell.is-never {
+  background: var(--qb-cooc-never);
+}
+/* The block's own facet: a round mustard mark, no ring. */
+.qb-co-cell.is-own {
+  border: 0;
+  border-radius: 50%;
+  background: var(--qb-cooc-own);
+}
+.qb-co-cell:focus-visible,
+.qb-seen-box:focus-visible {
+  outline: 2px solid var(--qb-and);
+  outline-offset: 1px;
+}
+.qb-seen-title {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+}
+/* The square pie chart: 100 x 60 like seenLayout's units, so the boxes'
+   percentages keep their shapes at any width. */
+.qb-seen-chart {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 3;
+}
+.qb-seen-box {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 0;
+  overflow: hidden;
+  /* A thin card-coloured line between neighbouring boxes. */
+  border: 1px solid var(--qb-surface);
+  background: var(--qb-cooc-never);
+  color: var(--qb-cooc-dot-dark);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+/* "+ N less often": not a value, so no heat colour; an outline like a cell. */
+.qb-seen-box.is-merged {
+  border-color: var(--qb-cooc-cell-border);
+  background: var(--qb-surface);
+  cursor: default;
+}
+.qb-seen-label {
+  position: absolute;
+  inset: 2px 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 16px;
+  text-align: left;
+}
+/* A label that would be cut in this panel is hidden, never cut
+   (hideCutLabels in queryBuilder.ts). */
+.qb-seen-label.is-cut {
+  visibility: hidden;
+}
 /* The rows and the panel side by side once the block is wide enough, the
    panel under the rows when it is narrower (a 512 px window, the open
    dictionary, deep nesting). Without a panel the rows take the whole width. */

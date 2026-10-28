@@ -10,6 +10,16 @@ import {
 } from "../../src/query/tree";
 import type { FacetBlock, Group, Issue } from "../../src/query/types";
 import type { Facet } from "../../src/model";
+import { coCtxOf } from "../../src/ui/coOccurrenceHtml";
+import { coTokensFrom } from "../../src/ui/coTokens";
+
+/** Two colour stops are all the row needs to be drawn. */
+const TOKENS: Record<string, string> = {
+  "--qb-cooc-stop-1": "#eeeeee",
+  "--qb-cooc-stop-2": "#111111",
+  "--qb-cooc-dot-dark": "#000000",
+  "--qb-cooc-dot-light": "#ffffff",
+};
 
 const facets = [
   {
@@ -33,6 +43,7 @@ const ctxFor = (query: Group): BlockCtx => ({
   panelTab: "seen",
   selectedField: null,
   totalEvents: 10,
+  co: null,
 });
 const pos = { index: 1, count: 1 };
 
@@ -165,11 +176,35 @@ describe("blockHtml", () => {
       expect(line1.indexOf("Explain the colours")).toBeLessThan(line1.indexOf("remove-node"));
     });
 
-    it("shows the Seen together placeholder beside the rows", () => {
+    it("shows Seen together beside the rows", () => {
       const html = draw("seen");
       expect(html).toContain('<div class="qb-block-body has-panel">');
-      expect(html).toContain(`<div class="qb-seen" data-block-id="${b.id}"></div>`);
+      expect(html).toContain(`<div class="qb-seen" data-block-id="${b.id}">`);
+      // Without co-occurrence data the tab says so (coOccurrenceHtml.ts).
+      expect(html).toContain("No co-occurrence data for this facet.");
       expect(html).not.toContain("qb-about");
+    });
+
+    // The row comes from coOccurrenceHtml.ts; here only where it goes.
+    it("draws the co-occurrence row above the head, folded or not", () => {
+      const other = { ...facets[0]!, id: "other", name: "Other", fields: [] } as Facet;
+      const withCo = (f: Facet, values: [string, string][]) =>
+        ({
+          ...f,
+          coOccurrence: new Map(
+            values.map(([id, text]) => [id, { text, percent: Number(text), tooRare: false }]),
+          ),
+        }) as Facet;
+      const dict = [withCo(facets[0]!, [["other", "5"]]), withCo(other, [])];
+      const co = coCtxOf(
+        dict,
+        coTokensFrom((name) => TOKENS[name] ?? ""),
+      );
+      for (const block of [b, { ...b, collapsed: true }]) {
+        const html = blockHtml({ ...ctxFor(q), co }, block, pos);
+        expect(html.indexOf('class="qb-co-row"')).toBeGreaterThan(-1);
+        expect(html.indexOf('class="qb-co-row"')).toBeLessThan(html.indexOf("qb-block-head"));
+      }
     });
 
     it("shows About with the facet's details", () => {

@@ -39,6 +39,8 @@ import { RESTORED_MESSAGE } from "../util/keptQuery";
 import { escapeHtml, paint } from "./panel";
 import { aboutCtxOf } from "./aboutPanel";
 import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
+import { coCtxOf, rovingIndex } from "./coOccurrenceHtml";
+import { readCoTokens } from "./coTokens";
 import { pickedOperatorId } from "./fieldRows";
 import { onDropdownChange, openDropdown } from "./fomantic";
 import { forgetDrag, draggedItem } from "./dragMemory";
@@ -102,6 +104,38 @@ export function revealNode(container: HTMLElement, nodeId: string): void {
   if (!node.hasAttribute("tabindex")) node.setAttribute("tabindex", "-1");
   node.scrollIntoView({ block: "center" });
   node.focus();
+}
+
+/** The buttons of a row of co-occurrence cells or of a Seen together chart
+ *  (`data-roving`): one Tab stop, the arrow keys move between them. */
+function rovingItems(group: Element): HTMLElement[] {
+  return Array.from(group.querySelectorAll<HTMLElement>(":scope > button"));
+}
+
+/**
+ * Make `item` its row's (or chart's) one Tab stop. Called on every focus move
+ * into one, so it also holds after a repaint: the markup makes the first item
+ * the stop, and focus memory putting the focus back on another item
+ * (`data-co-cell` / `data-co-box`) fires `focusin`, which moves the stop there.
+ */
+function makeTabStop(item: HTMLElement): void {
+  const group = item.parentElement;
+  if (!group?.hasAttribute("data-roving")) return;
+  for (const other of rovingItems(group)) other.tabIndex = other === item ? 0 : -1;
+}
+
+/**
+ * The safety net for the chart's labels: a label is only drawn where the
+ * whole name fits at the reference size (`seenLayout`), but the real panel
+ * can be narrower. A label that would be cut is hidden instead (a cut name
+ * is never shown; the name is still the box's title and accessible name).
+ * Hiding it changes no size, so this cannot loop.
+ */
+function hideCutLabels(chart: Element): void {
+  for (const label of chart.querySelectorAll<HTMLElement>(".qb-seen-label")) {
+    const cut = label.scrollWidth > label.clientWidth || label.scrollHeight > label.clientHeight;
+    label.classList.toggle("is-cut", cut);
+  }
 }
 
 /** The row of field `fieldId` in block `blockId`, or null if it is not on
@@ -224,6 +258,9 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
     expandedBlockIds: state.expandedBlockIds,
     openField: state.openField,
     panelTab: state.panelTab,
+    // Worked out once per paint, not per block: every block's row shows the
+    // same facets on the same colour scale.
+    co: state.facets ? coCtxOf(state.facets, readCoTokens()) : null,
   };
   paint(
     el,
@@ -591,6 +628,26 @@ export function wireQueryBuilder(
     if (wasInRow) keepFocusInRow(container, open.blockId, open.fieldId);
   }
 
+  // The co-occurrence row and the Seen together chart: Left / Right / Home /
+  // End move the focus between their buttons (`rovingIndex`).
+  container.addEventListener("keydown", (e) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>("[data-roving] > button");
+    if (!item?.parentElement) return;
+    const items = rovingItems(item.parentElement);
+    const next = rovingIndex(e.key, items.indexOf(item), items.length);
+    if (next === null) return;
+    e.preventDefault(); // Home / End would scroll the page
+    items[next]?.focus();
+  });
+  container.addEventListener("focusin", (e) => makeTabStop(e.target as HTMLElement));
+
+  // Re-checks the chart's labels whenever a chart changes size, and once
+  // when it is first observed (after each paint, below).
+  const chartSizes =
+    typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver((entries) => entries.forEach((entry) => hideCutLabels(entry.target)));
+
   // The warning's ✕ is an icon, not a <button>, so Enter/Space need wiring.
   container.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -717,6 +774,9 @@ export function wireQueryBuilder(
 
   return (state) => {
     paintQueryBuilder(container, state);
+    // The old charts are gone with the repaint: watch the new ones.
+    chartSizes?.disconnect();
+    container.querySelectorAll(".qb-seen-chart").forEach((chart) => chartSizes?.observe(chart));
     onDropdownChange(container, (el) => {
       const part = el.querySelector("select")?.dataset.part;
       if (part === "add-facet") return handleAddFacet(el);

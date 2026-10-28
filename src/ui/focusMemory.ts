@@ -25,6 +25,11 @@ const IDENTIFYING_ATTRIBUTES = [
   // The same for a facet block's unset rows: each one's button edits a field
   // (`data-action="edit-field"`), and its field id says which.
   "data-field-id",
+  // A facet's cell in the co-occurrence row and its box in the Seen together
+  // chart: both carry the facet id (`data-facet-id`), so each kind has an
+  // attribute of its own and the focus comes back to the one it was on.
+  "data-co-cell",
+  "data-co-box",
   "data-action",
   "data-db-id",
   "data-db-all",

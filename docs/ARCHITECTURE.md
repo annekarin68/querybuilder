@@ -544,6 +544,10 @@ src/
                        queryBuilder.ts; its styles are the "Facet blocks" section of styles.css.
     aboutPanel.ts      The About tab of a block's panel: aboutPanelHtml (pure), paintAboutPanels (repaints
                        only the About panels when `selectedField` changes), ABOUT_PANEL_KEYS.
+    coOccurrenceHtml.ts "Seen together" on screen (pure): coCtxOf (once per paint), coRowHtml (the row of
+                       cells above each block), seenLayout / seenTogetherHtml (the square pie chart),
+                       rovingIndex (the arrow keys of both).
+    coTokens.ts        The --qb-cooc-* colour tokens: coTokensFrom (pure), readCoTokens (the DOM read).
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
     queryBuilder.ts    The query builder: paints blockHtml.ts's tree and wires it (field rows, "+ Facet",
@@ -734,7 +738,8 @@ control had focus before it repaints and focuses the same control afterwards.
   group it sits in (`data-node-id`), its tag, and the first of these attributes
   it has: `data-event-id` (every result's id button shares its `data-action`),
   `data-field-id` (every unset row's button shares `data-action="edit-field"`),
-  `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
+  `data-co-cell` and `data-co-box` (a facet's co-occurrence cell and its box in
+  the Seen together chart share its `data-facet-id`), `data-action`, `data-db-id`, `data-db-all`, `data-db-none`,
   `data-db-deselect-failing`, `data-range`, `data-part`, `id`, `aria-label`
   (`controlOf`). The label comes last because it can change with the state
   ("Collapse group" / "Expand group"), but it is the only name a Fomantic
@@ -1913,6 +1918,37 @@ and no panel for them to switch), and, like a folded group, the whole header
 unfolds it. Its **?** has a `data-action` of its own, so a click on it does
 not unfold the block.
 
+**The co-occurrence row** (spec, section 6, decisions 11 to 14;
+`coRowHtml`, `coOccurrenceHtml.ts`) sits above every block's head, folded or
+not: one 11 px cell per facet that is seen with at least one other facet
+(`connectedFacets`), in dictionary order, the same cells in every block,
+wrapping onto more lines in a narrow block. Each cell says how often that
+facet is seen in the events of *this block's* facet: a seen cell has the heat
+colour (`coOccurrenceColour` on the matrix-wide range, so blocks compare) and
+a dot (`betterOn`); never seen is plain `--qb-cooc-never` with no dot; the
+block's own facet is a round mustard mark; a value too small for a
+JavaScript number is an empty box with a dot. A block whose facet is seen
+with no other (or that the dictionary does not know) gets a row of
+never-seen cells, with the group's title "Never seen together with another
+facet."; with no data at all (nothing seen with anything), no row is drawn.
+The connected facets and the range are worked out once per paint
+(`coCtxOf`, cached per dictionary array), and without two colour stops
+(`readCoTokens` found none) there is no row and no chart: co-occurrence is
+display data and never blocks the builder. The row is a `role="group"`
+named "Seen together with <facet>"; each cell is a button whose accessible
+name and title say the facet and the backend's text ("<other>: 5 % of
+<facet>'s events", "<other>: never seen together", "<facet> (this facet)",
+"<other>: seen together, too rare to colour"), with `data-facet-id` for
+plan B task 7, which makes a click or Enter open the dictionary there.
+**Keyboard:** the row (and the chart) is one Tab stop: the markup makes the
+first cell `tabindex="0"`, the others `-1`; Left / Right / Home / End move
+the focus (`rovingIndex`, no wrapping round), and a `focusin` listener makes
+the focused cell the Tab stop (`makeTabStop`). Focus memory finds a cell
+again after a repaint by `data-co-cell` (a box by `data-co-box`), and the
+`focusin` of that restore moves the Tab stop to it too. **The 11 px cells are
+under the 24 px target size** (WCAG 2.5.8); they are accepted under its
+"equivalent" exception, as every facet is also reachable in the dictionary.
+
 **The panel** beside a block's rows (spec, section 5, decisions 10 and 17)
 shows the tab that is open in `AppState.panelTab`, the same tab in every
 block. The tabs are toggle buttons (`aria-pressed`), not ARIA tabs: pressing
@@ -1924,8 +1960,26 @@ is at least 640 px wide, and the panel goes under the rows when it is
 narrower (a container query on `.qb-block`, since the open dictionary and
 nesting take width too, not the window's width).
 
-- **Seen together** (`.qb-seen`) is an empty placeholder until plan B task 6
-  draws the co-occurrence chart in it.
+- **Seen together** (`.qb-seen`, `seenTogetherHtml`) is the block's facet's
+  square pie chart: one box per facet it is seen with, area proportional to
+  the value (`squarify` over a 100 × 60 box, placed in percentages so it
+  stretches with the panel), largest first, coloured like the row; never-seen
+  facets are absent (`seenLayout`). Values too rare to have a size, and boxes
+  thinner than 12 px at a 300 × 180 px reference (the panel's typical
+  width), go into one **+ N less often** box whose title and accessible name
+  list them. Merging goes by value, not by shape: a thin box goes together
+  with every rarer one, so "less often" is true of every facet in it (squarify
+  can leave a box thin while a rarer one is thick). Merging gives the rest
+  more room, so it repeats until no box is too thin. That box stands for a list, not a value, so it is not to scale:
+  it gets at least 2 % of the chart, growing until it is 12 px thick too. A
+  box shows its facet's name only where the whole name fits at the
+  reference size (`labelFits`); as a safety net, `hideCutLabels`
+  (`queryBuilder.ts`, through a `ResizeObserver` on every chart, so also when
+  the window is resized) hides a label whose text overflows its box in the
+  real panel: a name is never cut. Boxes are buttons with the same names as
+  the cells, `data-facet-id` and a roving tabindex like the row's. An
+  isolated facet, one the dictionary does not know, and a page without any
+  co-occurrence data each get one sentence instead.
 - **About** (`aboutPanelHtml`, `aboutPanel.ts`) shows the dictionary's details
   of the block's facet (`facetDetailsHtml`, the same markup as the opened
   dictionary card, without its fields) and a hint that a field can be
