@@ -206,3 +206,26 @@ Contrast test (extend `tests/themeContrast.test.ts`, reading the tokens from the
 ### Task 8: Browser check
 
 Start your own servers (CLAUDE.md ports 3091 / 5191), Playwright with Chromium (installed at `/tmp/claude-1000/-home-annek-repos-query-builder--claude-worktrees-query-builder-facet-ops-1d4ae7/f8d04979-ff14-4e8e-914e-9e5ee6f6bd88/scratchpad/pw/node_modules`; write scripts in that folder), log in via `/api/v1/auth/login` → "Log in as demo.user", realistic clicks. At 1280 × 900 and 512 × 900, screenshot and check: the top row (cells, dot vs never vs own, too-rare if the data has one, wrapping at 512, Left/Right/Home/End, hover and focus names), the square pie chart (labels never cut, "+ N less often"), the tabs (switch, hide all, show again), About (facet; click a label and focus a row → field docs, rows not repainted: an open operator dropdown stays open while About changes; "← About …"), the legend popover (open with click and Enter, Escape closes, focus back on "?"), a cell click opening the dictionary at that facet (and at 512, floating; closing returns focus), the A2 follow-ups (slot tooltip, the dictionary stepping aside during a drag at 512, Run query not moving while statistics stream at 512), no console errors. Fix what fails (with a Node test where reachable), run the four checks, stop your servers, commit ("Co-occurrence: fixes from the browser check"), and report every check with its result and screenshot path.
+
+---
+
+## How it was built, and what carries over (2026-10-28)
+
+Built as planned, with these changes made during review (docs/ARCHITECTURE.md, "Centre", has the final behaviour and the reasons):
+
+- The "?" sits at the end of the top row, not in the block head. A block with no row (no co-occurrence data, or no colour tokens) has no top line and no "?".
+- Cells and boxes have no `title`. A one-line caption under the head's first line shows the hovered or focused item's name and value; Escape hides it. Too-rare items keep the backend's text in their name.
+- Every chart box gets a label and the browser hides cut ones; the merged "+N" box picks its label at its real size and opens a popover listing its facets.
+- Clicks on popover buttons and inside open popovers leave the floating dictionary open (`KEEPS_FLOATING_DOCS_OPEN`).
+- Escape in a builder search dropdown now clears the typed text and the highlight (it used to leave them, so Enter picked the stale item).
+- The co-occurrence wiring lives in `src/ui/coOccurrenceWiring.ts`; shared popover parts in `src/ui/popover.ts`.
+
+Open, for the maintainers:
+
+- `Facet.coOccurrence` cannot tell "the backend sent no data" from "never seen together"; both draw as never seen. Making it `ReadonlyMap | null` is a model change.
+- Captions show the backend's raw text ("76.19047619047619 %"); rounding them in the caption (full text kept in the accessible name) would also make them shorter at 512 px.
+- About leaves out the facet's field list (the rows already show every field).
+- With the mock data the merged "+N" box is the largest box in the chart.
+- The lightest colour stop is close to the card colour (a designer question).
+- "10¹⁴" in the legend may be read oddly by screen readers.
+- The "+ Facet" placeholder's contrast (about 1.7:1) predates this plan.
