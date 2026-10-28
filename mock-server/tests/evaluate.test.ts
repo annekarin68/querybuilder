@@ -8,7 +8,7 @@ import {
   queryErrors,
   scaleCount,
   utcSpan,
-} from "../../mock-server/evaluate";
+} from "../evaluate";
 import type {
   RequestFacet,
   RequestFieldCondition,
@@ -16,9 +16,9 @@ import type {
   RequestNode,
   RequestValue,
 } from "../../src/api/types";
-import { MALFORMED, WELL_FORMED } from "../dateCases";
-import { EVENTS, toMockEvent, type MockEvent } from "../../mock-server/rows";
-import { ENTRYSETS, type Occurrence } from "../../mock-server/vehicleData";
+import { MALFORMED, WELL_FORMED } from "../../tests/dateCases";
+import { EVENTS, toMockEvent, type MockEvent } from "../rows";
+import { ENTRYSETS, type Occurrence } from "../vehicleData";
 import { toQueryRequest } from "../../src/api/request";
 import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
 

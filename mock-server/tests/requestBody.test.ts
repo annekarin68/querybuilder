@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { queryProblem } from "../../mock-server/requestBody";
+import { queryProblem } from "../requestBody";
 import { toQueryRequest } from "../../src/api/request";
 import { groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
 

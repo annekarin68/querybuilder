@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 // `npm run dev:app` and `npm run build:app` must work whatever state the mock
@@ -9,6 +9,13 @@ import path from "node:path";
 const root = path.join(__dirname, "..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 const scripts = (JSON.parse(read("package.json")) as { scripts: Record<string, string> }).scripts;
+
+function files(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const p = path.join(dir, name);
+    return statSync(p).isDirectory() ? files(p) : [p];
+  });
+}
 
 describe("dev:app and build:app don't depend on the mock server", () => {
   it("dev:app runs Vite alone: no type-check, no mock", () => {
@@ -26,6 +33,29 @@ describe("dev:app and build:app don't depend on the mock server", () => {
     expect(appConfig.include).not.toContain("mock-server");
     expect(appConfig.include).not.toContain("tests");
   });
+});
+
+// The checks CI runs must pass even with mock-server/ deleted: the mock's own
+// tests and type-check are the separate `test:mock` and `typecheck:mock`.
+describe("typecheck, test and build work without the mock server", () => {
+  it.each(["typecheck", "test", "test:watch", "build", "build:app"])("%s names no mock", (name) => {
+    expect(scripts[name]).not.toMatch(/mock/);
+  });
+
+  it("tsconfig.json leaves mock-server/ to tsconfig.mock.json", () => {
+    expect(read("tsconfig.json")).toMatch(/"include": \[[^\]]*"tests"/);
+    expect(read("tsconfig.json")).not.toMatch(/"include": \[[^\]]*mock-server/);
+    expect(read("tsconfig.mock.json")).toMatch(/"include": \["mock-server"\]/);
+  });
+
+  // tsc follows imports, so one test in tests/ importing the mock would pull
+  // mock-server/ back into `typecheck`. Such a test belongs in mock-server/tests/.
+  it.each(files(path.join(root, "tests")).map((f) => path.relative(root, f)))(
+    "%s doesn't import the mock server",
+    (file) => {
+      expect(read(file)).not.toMatch(/^import\s[^;]*?from\s+["'][^"']*mock-server/m);
+    },
+  );
 });
 
 describe("src/ is checked as browser code", () => {

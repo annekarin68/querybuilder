@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { eventGuid, sampleOf, toEventResponse } from "../../mock-server/events";
-import { ENTRYSETS } from "../../mock-server/vehicleData";
+import { eventGuid, sampleOf, toEventResponse } from "../events";
+import { ENTRYSETS } from "../vehicleData";
 
 describe("eventGuid", () => {
   it("is a GUID made from the numeric id, the same every time", () => {

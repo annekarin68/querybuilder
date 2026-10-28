@@ -52,10 +52,12 @@ Other scripts:
 |---|---|
 | `npm run dev:app` | The app alone, without the mock (for a real backend at `DEV_BACKEND_URL`). |
 | `npm run build` | Type-check, bundle to `dist/`, then fail if any off-origin URL leaked in. |
-| `npm run build:app` | The same build, but type-checking only the app (`src/`, `tsconfig.app.json`), so a mock server or tests that have drifted from `src/api/types.ts` can't stop it. `build` is `typecheck` + `build:app`; CI uses `build`. |
+| `npm run build:app` | The same build, but type-checking only the app (`src/`, `tsconfig.app.json`), so tests that have drifted from `src/api/types.ts` can't stop it. `build` is `typecheck` + `build:app`; CI uses `build`. |
 | `npm run preview` | Serve the built `dist/`. |
-| `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client and its contract checks (also against the mock server), the store, utilities, the pure view helpers, the mock server (over real HTTP), the lint airlocks and the `noBackendDataInSrc` guard. |
-| `npm run typecheck` | `tsc --noEmit`. |
+| `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client and its contract checks, the store, utilities, the pure view helpers and the lint airlocks. Never touches the mock server. |
+| `npm run typecheck` | `tsc --noEmit`: the app, the tests and the configs, not the mock server. |
+| `npm run test:mock` | The mock server's own tests (`mock-server/tests/`): every route over real HTTP, the real client against the mock, and the `noBackendDataInSrc` guard. Not run in CI. |
+| `npm run typecheck:mock` | Type-check the mock server (`tsconfig.mock.json`). Not run in CI. |
 | `npm run lint` | ESLint + Prettier check. |
 | `npm run format` | Rewrite files with Prettier. Run it when `npm run lint` fails on formatting. |
 | `npm run check:offline` | Scan the text files in `dist/` for off-origin URLs (`http(s)`, `ws(s)`, protocol-relative `//host`). |
@@ -109,7 +111,8 @@ has checklists for the most common changes (a new operator, a new API
 endpoint, a new panel, …).
 
 CI (`.github/workflows/ci.yml`) runs typecheck, tests, lint and build on every
-pull request and push to `main`.
+pull request and push to `main`. It leaves the mock server out, so they pass
+with `mock-server/` deleted; run `typecheck:mock` and `test:mock` yourself.
 
 ## Deploying `dist/`
 

@@ -4,9 +4,9 @@ import {
   readSavedQueryBody,
   savedQueryIdFrom,
   savedQueryOwner,
-} from "../../mock-server/savedQueries";
+} from "../savedQueries";
 import type { SavedQueryRequest, SavedQueryResponse } from "../../src/api/types";
-import { unfinishedRequest } from "../savedQueryFixtures";
+import { unfinishedRequest } from "../../tests/savedQueryFixtures";
 
 /** A store whose clock and ids the test controls. `tick` moves the clock on. */
 function testStore() {

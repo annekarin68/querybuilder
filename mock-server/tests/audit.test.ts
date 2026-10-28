@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { logQueryAudit, auditLogSnapshot } from "../../mock-server/audit";
+import { logQueryAudit, auditLogSnapshot } from "../audit";
 
 describe("audit log", () => {
   it("appends an entry with the given name and reason, and a timestamp", () => {

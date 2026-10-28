@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { httpErrorFor, parseHttpErrors } from "../../mock-server/httpErrors";
+import { httpErrorFor, parseHttpErrors } from "../httpErrors";
 
 describe("parseHttpErrors", () => {
   it("is empty when the variable is unset or blank", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { dbIndexForEntrysetId } from "../../mock-server/databases";
-import { ENTRYSETS, INDIVIDUALS, occurrencesOf } from "../../mock-server/vehicleData";
+import { dbIndexForEntrysetId } from "../databases";
+import { ENTRYSETS, INDIVIDUALS, occurrencesOf } from "../vehicleData";
 import type { IndividualFieldResponse } from "../../src/api/types";
 
 // The mock's sample data files (mock-server/data/*.json), as loaded by

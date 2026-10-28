@@ -52,7 +52,7 @@ import { logQueryAudit } from "./audit";
  * dev server treats the mock like any backend: it forwards the prefix and
  * nothing else. Plain Node `http`: one table maps "METHOD /path" to a
  * handler function (`routes` at the bottom). index.ts starts it; tests call
- * createMockServer directly (tests/mock-server/server.test.ts).
+ * createMockServer directly (mock-server/tests/server.test.ts).
  */
 
 /** Behaviour that index.ts reads from the environment and tests pin down. */

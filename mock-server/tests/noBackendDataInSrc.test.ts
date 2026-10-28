@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { INDIVIDUALS } from "../mock-server/vehicleData";
-import { DATABASES } from "../mock-server/databases";
+import { INDIVIDUALS } from "../vehicleData";
+import { DATABASES } from "../databases";
 
 /**
  * The mock dataset is fictional, and the real backend's names differ, so the
@@ -12,7 +12,7 @@ import { DATABASES } from "../mock-server/databases";
  * field, tag and group name. Short single words ("front", "count") are left
  * out: they are ordinary English and would match unrelated code.
  */
-const root = path.join(__dirname, "..");
+const root = path.join(__dirname, "../..");
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {

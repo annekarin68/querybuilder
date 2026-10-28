@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
-import { createMockServer, QUERY_RESULT_CAP } from "../../mock-server/server";
+import { createMockServer, QUERY_RESULT_CAP } from "../server";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -9,11 +9,11 @@ import {
   issueFakeComplianceToken,
   startCompliance,
   startLogin,
-} from "../../mock-server/auth";
-import { auditLogSnapshot } from "../../mock-server/audit";
-import { parseHttpErrors } from "../../mock-server/httpErrors";
-import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
-import { unfinishedRequest } from "../savedQueryFixtures";
+} from "../auth";
+import { auditLogSnapshot } from "../audit";
+import { parseHttpErrors } from "../httpErrors";
+import { MAX_TEXT_LENGTH } from "../evaluate";
+import { unfinishedRequest } from "../../tests/savedQueryFixtures";
 
 // The mock server over real HTTP, on a free port. Deterministic: no simulated
 // failures and no streaming delay.

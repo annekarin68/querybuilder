@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  DATABASES,
-  dbIndexForEntrysetId,
-  databaseIdForEntrysetId,
-} from "../../mock-server/databases";
+import { DATABASES, dbIndexForEntrysetId, databaseIdForEntrysetId } from "../databases";
 
 describe("DATABASES", () => {
   it("has exactly 7 entries named ALPHA..ETA", () => {
