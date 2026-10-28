@@ -291,17 +291,20 @@ disappointed and loading files, which fall from the top of the screen for a few
 seconds, as a CSS animation (`.qb-rain-drop`) on an overlay that ignores the
 mouse and is hidden from screen readers. Only files that actually load are used
 (each gets 2 seconds), so a replaced or removed file cannot leave broken-image
-icons falling; if none loads, nothing falls. For people who prefer reduced
-motion, nothing falls: turning the set on shows a short toast instead
-(`EASTER_EGG_TOAST` in `src/config.ts`, shown by `showToast` in `fomantic.ts`);
-turning it off needs no toast because the face visibly changes back
-(`easterEggReaction(turnedOn, reduceMotion)` in `pickleRain.ts`: `"rain"`,
-`"toast"` or `"none"`, pure and tested).
+icons falling; if none loads, nothing falls.
+
+**Decided 2026-10-28: it rains even for people who prefer reduced motion.**
+Until then they got a short "I'm Pickle Rick!" toast instead, which made the
+rain look broken on machines where the operating system asks for less motion
+(often set by policy on company machines and in remote-desktop sessions, so
+every browser on them did it). The maintainers' reasoning: five quick clicks on
+the logo are a deliberate action, and the effect is hidden, so nobody meets it
+by accident; someone who is bothered by moving images can simply not trigger
+it. The toast and its setting (`EASTER_EGG_TOAST`) are gone.
 
 **Decided 2026-10-08:** the setting is named `EASTER_EGG_MASCOT`, not after one
 character (`RICK_MASCOT`, `PICKLE_MASCOT`): the normal mascot is a pickle too,
-and the name pairs with `EASTER_EGG_TOAST` without tying the code to a
-character.
+and the name does not tie the code to a character.
 
 The logo is `draggable="false"` (`BRAND_HTML` in `src/ui/layout.ts`), so a
 click whose pointer moves a few pixels is not swallowed as an image drag; that
@@ -473,9 +476,8 @@ src/
                        User, Compliance, SavedQuery / SavedQueryDraft / SavedQueryList ("Data model").
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data. Empty by
                        default: FIRST_COLUMNS (the facets the Matching events table shows first). Also MASCOT (the pickle files),
-                       EASTER_EGG_MASCOT (the easter-egg faces), EASTER_EGG_TOAST (the
-                       reduced-motion toast text) and TEXT_SOURCES (the logos in front of the
-                       dictionary's texts).
+                       EASTER_EGG_MASCOT (the easter-egg faces) and TEXT_SOURCES (the logos in
+                       front of the dictionary's texts).
   setup-jquery.ts      Publishes window.jQuery before Fomantic's JS evaluates ("The bootstrap wrinkle").
   styles.css           Theme and layout on top of Fomantic; colours and sizes are tokens at the top
                        ("Pickle theme and mascot").
@@ -539,8 +541,7 @@ src/
                        the sidebar's resize handle, onMenu. Also BRAND_HTML (the logo, not draggable)
                        and mascotFile (which face file to show, with its fallbacks; pure).
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
-    pickleRain.ts      The hidden five-click pickle rain: createClickCounter, easterEggReaction (rain,
-                       toast or nothing after a toggle), planRain, startRain.
+    pickleRain.ts      The hidden five-click pickle rain: createClickCounter, planRain, startRain.
     docsResize.ts      wireDocsResize — drag/keyboard resizing of the data dictionary, width kept in localStorage.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
                        displayLabel, databaseTitle, countLabel, formatWhen, formatDate, hoverTitle.
@@ -751,7 +752,7 @@ binding its Fomantic dropdowns must always happen together.
 | User presses **Try again** in the statistics column | `app.retryStats` → the debounced stats fetch for the same query and scope; it replaces the failed request in the stats slot. Nothing else is reset. |
 | User opens a saved query (**Open**, after "Replace the current query?" if asked) | `openSavedQuery` → `changeScope` with the saved `query`, the databases that still exist, fresh `issues` and `openSaved`, and the dialog closed, in one `setState`: like any edit, so the old statistics and preview go and new ones are fetched. Databases left out are said in `dropNotice`. |
 | User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `savedListNotice`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
-| Five clicks on the logo | `easterEgg` flips → only the mascot repaints (`setMascot`); the rain or toast is started by `main.ts` (`easterEggReaction`). |
+| Five clicks on the logo | `easterEgg` flips → only the mascot repaints (`setMascot`); `main.ts` starts the rain (`startRain`). |
 | User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (`dropItem`: a new facet block, a value in an unset row of the target block, or a group of blocks for a tag) and goes through `onQueryChange` like any edit; the row a drop is about becomes `openField` (`onDropItem` returns it, and after a mouse drop the builder moves the keyboard focus into it; "Add to query" keeps the focus in the dictionary); what can't is explained in `dropNotice`. |
 | Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
 
