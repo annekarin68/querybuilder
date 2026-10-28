@@ -410,7 +410,11 @@ state. The hazard is contained in one file and one helper:
   on an open menu closes it **without** blurring the typing box
   (`keepFocusOnEscape`): Fomantic's own Escape hides the menu and then blurs
   the box, so the keyboard focus dropped to the page and the next Escape
-  never reached the block.
+  never reached the block. That Escape also **cancels the typed text**: the
+  box is emptied and the menu loses its highlight. Kept, the text looked like
+  a choice nobody had made, and Enter on the closed menu picked the
+  highlighted item the user could no longer see (Fomantic's blur used to
+  empty the box; preventing the blur skipped that).
 - **`src/ui/panel.ts`** — `paint(container, html)`: `destroy`, swap
   `innerHTML`, `activate`. The only way a panel updates its DOM.
 
@@ -2006,10 +2010,15 @@ is drawn over it). An item's `data-caption`, when it has one, replaces the
 name in the caption: only the merged box has one ("30 facets, each less
 often than the boxes shown"), as its name lists every facet in it. Cells
 and boxes have **no `title`**: the browser's tooltip would repeat the
-caption a second later, over the neighbouring cells. The row group's title
-for an isolated row stays (there is no cell to caption). **The legend**
-(`legendHtml.ts`, spec section 6, decision 22) is the browser's own popover
-(`<div popover>` opened by `<button popovertarget>`, ids `legend-<block id>`
+caption a second later, over the neighbouring cells. Escape in the builder
+empties every caption until the user points at an item or moves the focus
+again (content shown on hover or focus must be dismissible, and the caption
+covers the head); a repaint putting the focus back does not bring it back
+(`isRestoringFocus`). It does not use up that Escape, which goes on to the
+block, since for a screen reader, which never sees the caption, it would do
+nothing. The row group's title for an isolated row stays (there is no cell
+to caption). **The legend** (`legendHtml.ts`, spec section 6, decision 22)
+is the browser's own popover (`<div popover>` opened by `<button popovertarget>`, ids `legend-<block id>`
 and `legend-<block id>-seen`), not a Fomantic popup as the spec first said
 (controller ruling): Escape, a click outside and the focus staying on the
 **?** come from the browser, with no jQuery, and the top layer means no
@@ -2218,11 +2227,11 @@ to drag, and each has an equivalent:
   operator list opens. Arrows move and Enter picks (see below); the cursor then
   goes to the value.
 - *Moving:* **Move up / Move down** on every block and group but the root.
-- *Escape in a block:* it closes an open dropdown menu first (the dropdown
-  takes that Escape itself and keeps the focus: `keepFocusOnEscape`,
-  `fomantic.ts`). Then, with a field row open, it **commits a value still
-  being typed** (like leaving the box, so the repaint does not throw the text
-  away), and **closes the open row** (`openField`): an unset row closes again, and
+- *Escape in a block:* it closes an open dropdown menu first and drops the
+  text typed into it (the dropdown takes that Escape itself and keeps the
+  focus: `keepFocusOnEscape`, `fomantic.ts`). Then, with a field row open, it
+  **commits a value still being typed** (like leaving the box, so the
+  repaint does not throw the text away), and **closes the open row** (`openField`): an unset row closes again, and
   the focus stays in that row. A stray row has no value box, so it has nothing
   to commit. Last, it takes the About panel back to the block's facet
   (`selectedField: null`). One handler does all three in this order.

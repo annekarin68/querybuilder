@@ -85,6 +85,13 @@ function setTitle(el: HTMLElement | null, title: string | null): void {
  * take the About panel back to the facet). Listened to in the capture phase,
  * so it runs before Fomantic's handler on the typing box, which it replaces
  * for this key; `hide`'s second argument is Fomantic's "prevent blur".
+ *
+ * Escape also cancels what was typed: the typing box is emptied (the box shows
+ * the current choice again) and the highlight is taken off the menu. Kept,
+ * the typed text looked like a choice that was never made, and Enter on the
+ * closed menu then picked the highlighted item the user could no longer see
+ * (type "ab", Escape, Enter: "abc" was set). Fomantic's own blur used to
+ * empty the box; preventing the blur skipped that.
  */
 function keepFocusOnEscape(node: HTMLElement): void {
   // As in describeDropdown: `node` may be the <select> Fomantic wrapped, and
@@ -99,7 +106,12 @@ function keepFocusOnEscape(node: HTMLElement): void {
       if (e.key !== "Escape" || !menuOpen) return;
       // The first Escape is the menu's (as before): the block does not see it.
       e.stopPropagation();
-      $(dropdown).dropdown("hide", undefined, true);
+      const $dropdown = $(dropdown);
+      $dropdown.dropdown("remove searchTerm");
+      $dropdown.dropdown("remove selectedItem");
+      // Once closed, show every item again (Fomantic's hideAndClear does the
+      // same), so the next ↓ or typed letter starts from the whole list.
+      $dropdown.dropdown("hide", () => $dropdown.dropdown("remove filteredItem"), true);
     },
     true,
   );

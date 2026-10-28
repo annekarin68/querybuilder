@@ -193,10 +193,10 @@ function setTabStop(group: Element, index: number): void {
 }
 
 /**
- * The safety net for the chart's labels: a label is only drawn where the
- * whole name fits at the reference size (`seenLayout`), but the real panel
- * can be narrower. A label that would be cut is hidden instead (a cut name
- * is never shown; the name is still the box's title and accessible name).
+ * Hides the chart's labels that do not fit: every box gets its facet's
+ * label (`seenTogetherHtml`), and only the browser knows the real size. A
+ * label that would be cut is hidden instead (a cut name is never shown; the
+ * name is still the box's accessible name and its caption).
  * Hiding it changes no size, so this cannot loop.
  */
 function hideCutLabels(chart: Element): void {
@@ -693,6 +693,8 @@ export function wireQueryBuilder(
     // An open legend takes this Escape (the browser closes it); the field
     // row and About stay as they are.
     if (openLegendOf(container)) return;
+    // Not a layer of its own: this Escape goes on to the block as well.
+    dismissCaptions();
     const target = e.target as HTMLElement;
     const block = blockOf(target);
     if (!block) return;
@@ -759,6 +761,20 @@ export function wireQueryBuilder(
   // (`showCaption`). The item under the pointer is kept here: a `mouseout`
   // must know whether the pointer left the item or moved within it.
   let hovered: Element | null = null;
+  // A caption lies over the block's head, so Escape puts it away (content
+  // shown on hover or focus must be dismissible: `dismissCaptions`) until the
+  // user points at or moves the focus to an item again. A repaint putting
+  // the focus back (`isRestoringFocus`) is not such a move: the Escape itself
+  // often repaints. Escape is not used up by this: the caption is hidden
+  // from screen readers, so for them that Escape would do nothing.
+  let captionsDismissed = false;
+  function dismissCaptions(): void {
+    captionsDismissed = true;
+    for (const line of container.querySelectorAll(".qb-co-caption")) line.textContent = "";
+  }
+  const caption = (group: Element, hoveredItem: Element | null, focused: Element | null) => {
+    if (!captionsDismissed) showCaption(group, hoveredItem, focused);
+  };
   const rovingItemAt = (target: EventTarget | null) =>
     target instanceof Element ? target.closest("[data-roving] > button") : null;
   const focusedItem = () => rovingItemAt(document.activeElement);
@@ -766,23 +782,25 @@ export function wireQueryBuilder(
     const item = rovingItemAt(e.target);
     if (!item?.parentElement || item === hovered) return;
     hovered = item;
-    showCaption(item.parentElement, item, focusedItem());
+    captionsDismissed = false;
+    caption(item.parentElement, item, focusedItem());
   });
   container.addEventListener("mouseout", (e) => {
     const item = rovingItemAt(e.target);
     if (!item?.parentElement || item.contains(e.relatedTarget as Node | null)) return;
     hovered = null;
-    showCaption(item.parentElement, null, focusedItem());
+    caption(item.parentElement, null, focusedItem());
   });
   container.addEventListener("focusin", (e) => {
     const item = rovingItemAt(e.target);
-    if (item?.parentElement) showCaption(item.parentElement, hovered, item);
+    if (!item?.parentElement) return;
+    if (!isRestoringFocus()) captionsDismissed = false;
+    caption(item.parentElement, hovered, item);
   });
   container.addEventListener("focusout", (e) => {
     const item = rovingItemAt(e.target);
     // `relatedTarget`: where the focus goes (the next cell, or outside).
-    if (item?.parentElement)
-      showCaption(item.parentElement, hovered, rovingItemAt(e.relatedTarget));
+    if (item?.parentElement) caption(item.parentElement, hovered, rovingItemAt(e.relatedTarget));
   });
 
   // A legend opening is placed by its "?" (`placeLegend`), and placed again
