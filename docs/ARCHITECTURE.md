@@ -612,6 +612,8 @@ tsconfig.app.json      Just src/, with Vite's browser types and not Node's, used
 vitest.config.ts       Vitest: tests/**/*.test.ts, Node environment (no DOM).
 .prettierrc.json       Prettier options (100 columns, double quotes, trailing commas).
 .prettierignore        What Prettier skips (docs/, README.md, build output, lock file).
+.claude/agents/        The subagents Claude Code dispatches for planned work: sdd-implementer and
+                       sdd-reviewer (narrow tool lists, Sonnet by default; CLAUDE.md says when).
 docs/
   ARCHITECTURE.md      This file.
   CHANGELOG.md         The archived design history (not updated any more).

@@ -4,6 +4,17 @@ A query-builder frontend (TypeScript, Vite, Vitest, Fomantic UI) with a mock
 backend for development. `docs/ARCHITECTURE.md` is the living design document:
 start with "What we are building", and read the section for whatever you are
 about to change (a panel, the API contract, the state) before changing it.
+Read only that section, never the whole file: it is over 160 KB, and every
+later turn of the session pays for it again.
+
+## Subagents
+
+Where a superpowers skill says to dispatch a `general-purpose` subagent, use
+our own agents in `.claude/agents/` instead: `sdd-implementer` for anything
+that changes code (implementers, fixers), `sdd-reviewer` for every review,
+including the final whole-branch one. Still pass the model the skill asks for.
+Name the `docs/ARCHITECTURE.md` sections a subagent needs (by heading) in its
+dispatch, so it reads those instead of searching the whole document.
 
 ## Challenge the maintainers
 
