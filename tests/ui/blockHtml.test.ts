@@ -47,6 +47,19 @@ const ctxFor = (query: Group): BlockCtx => ({
 });
 const pos = { index: 1, count: 1 };
 
+/** A dictionary where "thing" is seen with "other": enough for a row. */
+function withCoDict(): Facet[] {
+  const withCo = (f: Facet, values: [string, string][]) =>
+    ({
+      ...f,
+      coOccurrence: new Map(
+        values.map(([id, text]) => [id, { text, percent: Number(text), tooRare: false }]),
+      ),
+    }) as Facet;
+  const other = { ...facets[0]!, id: "other", name: "Other", fields: [] } as Facet;
+  return [withCo(facets[0]!, [["other", "5"]]), withCo(other, [])];
+}
+
 describe("blockHtml", () => {
   it("draws a block: name, Has on, no ALL/ANY while fewer than two fields are set", () => {
     const b = newBlock("thing");
@@ -168,12 +181,38 @@ describe("blockHtml", () => {
       );
     });
 
-    it("draws the legend's ? button and keeps ✕ last on the first line", () => {
+    // Spec decision 22: the "?" sits at the end of the row, outside the
+    // row's group, so the arrow keys never land on it; not in the head.
+    it("puts the legend's ? at the end of the top row, not in the head", () => {
+      const co = coCtxOf(
+        withCoDict(),
+        coTokensFrom((name) => TOKENS[name] ?? ""),
+      );
+      for (const block of [b, { ...b, collapsed: true }]) {
+        const html = blockHtml({ ...ctxFor(q), co, panelTab: null }, block, pos);
+        const top = html.slice(html.indexOf('class="qb-co-top"'), html.indexOf("qb-block-head"));
+        const rowEnd = top.indexOf("</div>", top.indexOf('class="qb-co-row"'));
+        expect(top.indexOf(`popovertarget="legend-${b.id}"`)).toBeGreaterThan(rowEnd);
+        const head = html.slice(html.indexOf("qb-block-head"));
+        expect(head).not.toContain("Explain the colours");
+        // The caption of the focused or hovered cell, for sighted users only.
+        expect(top).toContain('<p class="qb-co-caption" aria-hidden="true"></p>');
+      }
+    });
+
+    // Every block has the "?", even before there is anything to colour with.
+    it("draws the ? without a co-occurrence context, saying why nothing is shown", () => {
+      const html = draw(null);
+      expect(html).toContain(`popovertarget="legend-${b.id}"`);
+      expect(html).toContain("The colours cannot be shown right now.");
+      expect(html).not.toContain("qb-co-caption");
+    });
+
+    it("gives the Seen together tab a ? of its own", () => {
       const html = draw("seen");
-      expect(html).toContain('aria-label="Explain the colours"');
-      const line1 = html.slice(0, html.indexOf("qb-block-body"));
-      expect(line1.indexOf("panel-about")).toBeLessThan(line1.indexOf("Explain the colours"));
-      expect(line1.indexOf("Explain the colours")).toBeLessThan(line1.indexOf("remove-node"));
+      const panel = html.slice(html.indexOf('class="qb-seen"'));
+      expect(panel).toContain(`popovertarget="legend-${b.id}-seen"`);
+      expect(panel).toContain('data-action="legend-seen"');
     });
 
     it("shows Seen together beside the rows", () => {
@@ -244,8 +283,10 @@ describe("blockHtml", () => {
       const html = blockHtml(ctxFor(q), { ...b, collapsed: true }, pos);
       expect(html).not.toContain("panel-seen");
       expect(html).not.toContain(`class="qb-panel"`);
-      // The legend explains the co-occurrence row above every block, folded too.
+      // The legend explains the co-occurrence row above every block, folded
+      // too, and sits outside the head, which unfolds the block on a click.
       expect(html).toContain('aria-label="Explain the colours"');
+      expect(html.slice(html.indexOf("qb-block-head"))).not.toContain("Explain the colours");
     });
   });
 

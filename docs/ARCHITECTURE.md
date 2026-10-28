@@ -524,7 +524,8 @@ src/
     focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries and event <dialog>s
-                       (`savedDialog`, `eventDialog`), setActiveView, setSidebarCollapsed, announce, setMascot,
+                       (`savedDialog`, `eventDialog`), setActiveView, setSidebarCollapsed (and where the
+                       focus goes when the docs fold), announce, setMascot,
                        the sidebar's resize handle, onMenu. Also BRAND_HTML (the logo, not draggable)
                        and mascotFile (which face file to show, with its fallbacks; pure).
     mascot.ts          mascotFor(state) — which pickle face the top bar shows (pure).
@@ -546,7 +547,10 @@ src/
                        only the About panels when `selectedField` changes), ABOUT_PANEL_KEYS.
     coOccurrenceHtml.ts "Seen together" on screen (pure): coCtxOf (once per paint), coRowHtml (the row of
                        cells above each block), seenLayout / seenTogetherHtml (the square pie chart),
-                       rovingIndex (the arrow keys of both).
+                       rovingIndex (the arrow keys of both), CAPTION / captionText (the line naming the
+                       cell or box under the pointer or the focus).
+    legendHtml.ts      The colour legend, a native popover from a "?" (pure): legendHtml (its content),
+                       legendToggleHtml / legendId (the "?" and the popover), legendPlacement (where it opens).
     coTokens.ts        The --qb-cooc-* colour tokens: coTokensFrom (pure), readCoTokens (the DOM read).
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
@@ -559,7 +563,8 @@ src/
     docsField.ts       fieldPreview — what a dictionary field row shows closed, and what opening adds (pure).
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring);
-                       facetDetailsHtml / fieldDetailsHtml, shared with the About panel.
+                       facetDetailsHtml / fieldDetailsHtml, shared with the About panel; showFacet (opens a
+                       facet's card for a co-occurrence cell) and detailsToOpen (pure).
     dragMemory.ts      Which dictionary item is being dragged (a browser hides a drag's data until the drop; see "Centre — `queryBuilder.ts`", Drag and drop).
     statsPanel.ts      The statistics column (render + wiring: Show problem, Try again).
     dataPreview.ts     Matching events and the Run button (render + wiring: Run, Previous / Next, an id).
@@ -1755,7 +1760,8 @@ the labelled buttons have a keyboard focus ring like the icon buttons.
 
 **Focus after a toggle.** A repaint or a hidden panel would drop the keyboard
 user's focus to the page, so it is put back: folding the docs while focus is
-inside them moves it to the rail (`setSidebarCollapsed`), and folding or
+inside them moves it to the rail (`setSidebarCollapsed`), or back to the
+co-occurrence cell that opened them (below), and folding or
 unfolding a group in the builder keeps it on that group's (repainted) collapse
 button, like every control a repaint replaces (see "Keyboard focus across
 repaints"); after a mouse click the new button gets no focus ring. Green buttons
@@ -1763,6 +1769,26 @@ repaints"); after a mouse click the new button gets no focus ring. Green buttons
 `:focus-visible` (a light ring on the dark top bar itself, a green one inside
 the light account-menu panel), and keep the resting green on plain `:focus`, so
 a mouse click leaves no stuck colour and Fomantic's blue never shows.
+
+**Opened at a facet from the builder.** A click or Enter on a cell of a
+block's co-occurrence row, or on a box of its Seen together chart ("Centre"),
+opens the dictionary at that facet (spec, section 6, decision 15).
+`app.showFacetInDictionary(facetId)` unfolds the dictionary when it is folded
+(`sidebarCollapsed: false`; a facet the dictionary does not have changes
+nothing), then `showFacet` (returned by `wireDocsSidebar`, called from
+`main.ts`) opens the facet's first card (a facet is listed under each of its
+tags) and the tag section around it (`detailsToOpen`), clears the search if
+the search had hidden it, scrolls the panel (not the page: `scrollIntoView`
+would also scroll the page) so the card is at its top, marks the card
+`is-highlighted` for 2 s (a fade where motion is welcome, a plain colour
+under `prefers-reduced-motion`) and puts the focus on the card's
+`<summary>`. Under 1100 px the dictionary floats, as always. `main.ts`
+remembers how to find the cell or box again (a repaint may have replaced
+it): when the dictionary folds while it has the focus (Escape, or **Hide
+dictionary**), the focus goes back to that cell if it still exists, else to
+the rail. That memory is used once. The cell or box carries
+`data-opens-docs`, so the "click outside closes the floating dictionary"
+handler leaves that click alone.
 
 **Everything you can add has two ways in.** A **grip** (a `draggable` handle
 on the tag section, facet card, field row and value row) starts a drag, and a
@@ -1782,12 +1808,14 @@ in `localStorage` (`qb:docs-width`; if storage is unavailable it just isn't
 remembered). Under 1100 px the open panel floats over the page, so `main.ts`
 starts the page with it collapsed on such a screen (before the first paint;
 `initialState` stays `false`), and Escape closes the floating panel while focus
-is inside it, returning focus to the rail button (`escapeClosesDocs`). In the
+is inside it, returning focus to the rail button, or to the co-occurrence
+cell that opened it (`escapeClosesDocs`; the focus move is
+`setSidebarCollapsed`'s). In the
 search box the first Escape only clears its text (the box calls
 `preventDefault()`, which `escapeClosesDocs` treats as "spent"); a second
 Escape, with the box empty, closes the panel. A click anywhere outside the docs
-column, the rail and the **Hide dictionary** / **Show dictionary** buttons
-closes it too (also `main.ts`, same 1100 px query): the open docs cover the
+column, the rail, the **Hide dictionary** / **Show dictionary** buttons and
+the co-occurrence cells and boxes (`data-opens-docs`) closes it too (also `main.ts`, same 1100 px query): the open docs cover the
 builder, and nothing else would close them. Clicks inside the docs never do, or
 **+ Add** and dragging would break.
 
@@ -1902,10 +1930,10 @@ ANY block, or one whose second field was cleared, keeps its operator). Its
 header has **two lines** (each still wraps in a narrow block). Line 1, in this
 order: the grip, Move up / Move down, the collapse chevron, the facet's name
 (its id if the dictionary doesn't know it), the **Has | Has no** toggle, then
-on the right the panel's tabs **Seen together | About**, the legend's **?**
-("Explain the colours"; plan B task 7 makes it open the legend) and ✕, in one
+on the right the panel's tabs **Seen together | About** and ✕, in one
 right-aligned box (`.qb-block-actions`) that wraps as a whole, so the ✕ never
-starts a line on its own.
+starts a line on its own. (The legend's **?** is on the line above the head,
+at the end of the co-occurrence row: below.)
 Line 2, only once a field is set: "an occurrence where the set field
 matches", or with two or more set fields "an occurrence where **ALL | ANY**
 of the set fields match" (with one field ALL and ANY would change nothing).
@@ -1915,8 +1943,8 @@ each keep their own line. The facet itself cannot be changed: the user adds
 another block instead. A folded block shows line 1 with a one-line
 `blockText` summary in place of Has / Has no and the tabs (it has no rows
 and no panel for them to switch), and, like a folded group, the whole header
-unfolds it. Its **?** has a `data-action` of its own, so a click on it does
-not unfold the block.
+unfolds it. Its **?** is above the head, so a click on it never unfolds the
+block.
 
 **The co-occurrence row** (spec, section 6, decisions 11 to 14;
 `coRowHtml`, `coOccurrenceHtml.ts`) sits above every block's head, folded or
@@ -1940,8 +1968,12 @@ named "Seen together with <facet>"; each cell is a button whose accessible
 name and title say the facet and the backend's text ("<other>: 5 % of
 <facet>'s events", "<other>: never seen together", "<facet> (this facet)",
 "<other>: 1e-400 % of <facet>'s events, too rare to colour": the backend's
-text even then, as spec section 6 asks, over the plan's wording), with `data-facet-id` for
-plan B task 7, which makes a click or Enter open the dictionary there.
+text even then, as spec section 6 asks, over the plan's wording), with `data-facet-id`; a click or Enter on a cell opens the dictionary at that
+facet ("Opened at a facet from the builder" under "Left — `docsSidebar.ts`
+(data dictionary)"). The click handler finds the cell by `data-opens-docs`
+and hands `main.ts` a finder for it (`rovingItemOf`, by the same block, row
+or chart and `data-co-cell` / `data-co-box` the Tab stops are remembered
+by), so the focus can come back to it when the dictionary closes.
 **Keyboard:** the row (and the chart) is one Tab stop: the markup makes the
 first cell `tabindex="0"`, the others `-1`; Left / Right / Home / End move
 the focus (`rovingIndex`, no wrapping round; a key with Alt, Ctrl or Meta is
@@ -1950,7 +1982,36 @@ focused cell the Tab stop and remembers it per block and per row or chart
 (`data-co-cell` / `data-co-box`); every paint puts the remembered stops back
 (`restoreTabStops`, `tabStopIndex`), so after an edit elsewhere Shift+Tab
 still returns to the cell the user left. Focus memory finds a focused cell
-again after a repaint by the same attributes. **The 11 px cells, and the
+again after a repaint by the same attributes. **The line above the head** (`coTopHtml`, `blockHtml.ts`): the row, then
+at its right end the legend's **?** (24 px, round), then the caption. The
+**?** is the row's neighbour, not inside its `role="group"`, so the arrow
+keys never land on it (Tab does, next). Every block has one, folded or not,
+also with no row: the legend then says why (below). **The caption**
+(`CAPTION`, `captionText`): a `title` shows on hover only, never on keyboard
+focus, and the spec asks for name and value on both. So the cell under the
+pointer, else the focused one, has its accessible name shown in a small box
+under the row, laid over the head (`position: absolute`), so showing it
+moves nothing; empty, it is not drawn. It is `aria-hidden`: the words are
+the cell's accessible name already. The chart has one too, laid over its
+title line (below the chart it could reach under the next block, which is
+drawn over it). The cells' `title` is kept as well. **The legend**
+(`legendHtml.ts`, spec section 6, decision 22) is the browser's own popover
+(`<div popover>` opened by `<button popovertarget>`, ids `legend-<block id>`
+and `legend-<block id>-seen`), not a Fomantic popup as the spec first said
+(controller ruling): Escape, a click outside and the focus staying on the
+**?** come from the browser, with no jQuery, and the top layer means no
+block or container query can clip it. It says what is measured, naming the
+block's facet; shows the bar (a CSS gradient through the stops, in OKLab
+where the browser can), the stops' values (`legendTicks`), "rarer" / "more
+often", the log step (`stepFactorText`), keys for the four marks, and that a
+square opens the dictionary. With no data anywhere it says "No
+co-occurrence data for this facet."; without colour tokens, "The colours
+cannot be shown right now." A popover opens in the middle of the window, so
+a capturing `beforetoggle` listener places it by its **?**
+(`legendPlacement`: right edge under the button's, below or above, whichever
+has more room, inside the window down to 512 px). An Escape that closes a
+legend does not also close the open field row or clear About's selection.
+**The 11 px cells, and the
 chart's boxes (at least 12 px at the reference size, about 16 px in a 512 px
 window), are under the 24 px target size** (WCAG 2.5.8); they are accepted
 under its "equivalent" exception, as every facet is also reachable in the
@@ -1989,7 +2050,11 @@ nesting take width too, not the window's width).
   fits whole, never cut. **Why not decide in `seenLayout`:** only the
   browser knows the panel's real width; at 1280 px the chart is about twice
   the reference, and an estimate left almost every box unlabelled. Boxes are buttons with the same names as
-  the cells, `data-facet-id` and a roving tabindex like the row's. An
+  the cells, `data-facet-id`, `data-opens-docs` (a click or Enter opens the
+  dictionary there, as on a cell) and a roving tabindex like the row's; the
+  merged box has neither attribute, as it is not one facet. The tab's
+  title line has its own **?** (the chart uses the row's colours) and the
+  chart's caption. An
   isolated facet, one the dictionary does not know, and a page without any
   co-occurrence data each get one sentence instead. Without a context
   (the dictionary still loading, or no colour tokens) the tab says "Seen

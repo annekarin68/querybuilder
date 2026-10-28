@@ -469,6 +469,20 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (!sameFieldRef(store.getState().selectedField, ref)) store.setState({ selectedField: ref });
   }
 
+  /**
+   * A cell of the co-occurrence row, or a box of the square pie chart, was
+   * pressed: unfold the dictionary if it is folded, so main.ts can open
+   * facet `facetId`'s card there. False (and nothing changes) for a facet
+   * the dictionary does not have: there is no card to open. Display state,
+   * like folding: nothing is refetched.
+   */
+  function showFacetInDictionary(facetId: string): boolean {
+    const { facets, sidebarCollapsed } = store.getState();
+    if (!facets?.some((f) => f.id === facetId)) return false;
+    if (sidebarCollapsed) store.setState({ sidebarCollapsed: false });
+    return true;
+  }
+
   /** "+ N more fields" / "Show fewer fields" on block `blockId`. Display
    *  state, like folding: not a query edit, never saved or sent. */
   function toggleFields(blockId: string): void {
@@ -921,6 +935,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     toggleFields,
     setPanelTab,
     selectFieldForPanel,
+    showFacetInDictionary,
     onMoveNode,
     dismissDropNotice,
     showNotice,

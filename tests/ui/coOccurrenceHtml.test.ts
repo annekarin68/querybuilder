@@ -6,6 +6,7 @@ import {
   seenTogetherHtml,
   rovingIndex,
   tabStopIndex,
+  captionText,
   type CoCtx,
 } from "../../src/ui/coOccurrenceHtml";
 import { newBlock } from "../../src/query/tree";
@@ -361,5 +362,41 @@ describe("tabStopIndex", () => {
   // The merged box's id is "", which must still be found.
   it("finds the merged box by its empty id", () => {
     expect(tabStopIndex(["a", ""], "")).toBe(1);
+  });
+});
+
+describe("opening the dictionary from a cell or box", () => {
+  // `data-opens-docs` tells main.ts's "click outside closes the floating
+  // dictionary" that this click opened it.
+  it("marks every cell and every facet's box, but not the merged box", () => {
+    const count = (html: string) => html.split(" data-opens-docs ").length - 1;
+    expect(count(coRowHtml(ctx, newBlock("a")))).toBe(4);
+    const chart = seenTogetherHtml(ctx, newBlock("a"));
+    expect(chart).toContain("is-merged");
+    expect(count(chart)).toBe(all(chart, "data-facet-id").length);
+    expect(count(chart)).toBe(all(chart, "data-co-box").length - 1);
+  });
+});
+
+describe("the chart's title line", () => {
+  it("holds the caption and the tab's ?, which the caller passes in", () => {
+    const html = seenTogetherHtml(ctx, newBlock("a"), "<button>?</button>");
+    const head = html.slice(html.indexOf("qb-seen-head"), html.indexOf("qb-seen-chart"));
+    expect(head).toContain('<p class="qb-co-caption" aria-hidden="true"></p><button>?</button>');
+  });
+
+  // Nothing to point at, so no caption; the "?" still explains the colours.
+  it("keeps the ? but no caption when there is no chart", () => {
+    const html = seenTogetherHtml(ctx, newBlock("l"), "<button>?</button>");
+    expect(html).toContain("<button>?</button>");
+    expect(html).not.toContain("qb-co-caption");
+  });
+});
+
+describe("captionText", () => {
+  it("shows the hovered item, else the focused one, else nothing", () => {
+    expect(captionText("Beta: 5 %", "Gamma: 1 %")).toBe("Beta: 5 %");
+    expect(captionText(null, "Gamma: 1 %")).toBe("Gamma: 1 %");
+    expect(captionText(null, null)).toBe("");
   });
 });

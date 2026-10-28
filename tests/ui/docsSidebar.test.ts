@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DOCS_HINT,
+  detailsToOpen,
   dragData,
   escapeClosesDocs,
   facetDetailsHtml,
@@ -474,5 +475,25 @@ describe("field rows", () => {
     const out = facetHtml(f, 10, buildFieldCatalog([f]), "t");
     expect(out).toContain('class="qb-doc-field-more">More: 2 previously seen values</span>');
     expect(out).toContain("Previously seen values (2)");
+  });
+});
+
+describe("detailsToOpen", () => {
+  // Plain objects in place of elements: only the tag and the parent are read.
+  type Node = { tagName: string; parentElement: Node | null };
+  const node = (tagName: string, parentElement: Node | null): Node => ({ tagName, parentElement });
+
+  it("opens a facet card and every section around it, outermost first", () => {
+    const panel = node("DIV", null);
+    const section = node("DETAILS", node("DIV", panel));
+    const card = node("DETAILS", node("DIV", section));
+    expect(detailsToOpen(card, panel)).toEqual([section, card]);
+  });
+
+  it("stops at the panel", () => {
+    const outside = node("DETAILS", null);
+    const panel = node("DIV", outside);
+    const card = node("DETAILS", panel);
+    expect(detailsToOpen(card, panel)).toEqual([card]);
   });
 });

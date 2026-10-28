@@ -306,6 +306,32 @@ export function escapeClosesDocs(c: EscapeContext): boolean {
   return c.key === "Escape" && !c.defaultPrevented && c.floating && !c.collapsed && c.focusInDocs;
 }
 
+/** The part of an element `detailsToOpen` reads: an HTMLElement in the
+ *  browser, a plain object in the tests. */
+export interface ParentChain<T> {
+  tagName: string;
+  parentElement: T | null;
+}
+
+/**
+ * The `<details>` to open so that `el` (a facet card) shows: the card
+ * itself and the tag section around it, outermost first, up to the panel
+ * (`panel`). A closed section hides everything in it, so opening only the
+ * card would show nothing.
+ */
+export function detailsToOpen<T extends ParentChain<T>>(el: T, panel: T): T[] {
+  const chain: T[] = [];
+  for (let node: T | null = el; node && node !== panel; node = node.parentElement) {
+    if (node.tagName === "DETAILS") chain.unshift(node);
+  }
+  return chain;
+}
+
+/** How long a card shown from the builder keeps its highlight. */
+const HIGHLIGHT_MS = 2000;
+/** The room left above a card scrolled to the panel's top, in px. */
+const SCROLL_MARGIN_PX = 8;
+
 export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
   if (!state.facets) {
     paint(
@@ -343,12 +369,15 @@ export function renderDocsSidebar(el: HTMLElement, state: AppState): void {
  * (Escape or ✕ clears), grips start a drag, and "+" buttons call `onAdd`.
  * Call once at startup. `getFacets` reads the current facets when an event
  * fires, so the listeners never go stale across repaints.
+ *
+ * Returns `showFacet`, which opens a facet's card for the builder's
+ * co-occurrence cells (see below).
  */
 export function wireDocsSidebar(
   container: HTMLElement,
   getFacets: () => Facet[] | null,
   onAdd: (item: DragItem) => void,
-): void {
+): { showFacet(facetId: string): boolean } {
   const isSearch = (t: EventTarget | null): t is HTMLInputElement =>
     t instanceof HTMLInputElement && t.id === "qb-docs-filter";
   const filter = (text: string) => {
@@ -405,6 +434,15 @@ export function wireDocsSidebar(
   });
   document.addEventListener("dragend", () => stepAside(false));
 
+  /** Empty the search box and show everything again; false without a box. */
+  const clearSearch = (): boolean => {
+    const input = container.querySelector<HTMLInputElement>("#qb-docs-filter");
+    if (!input) return false;
+    input.value = "";
+    filter("");
+    return true;
+  };
+
   container.addEventListener("click", (e) => {
     if (!(e.target instanceof Element)) return;
     // A grip inside a <summary> would otherwise open/close its card.
@@ -417,10 +455,46 @@ export function wireDocsSidebar(
       return;
     }
     if (!e.target.closest("[data-action='clear-filter']")) return;
-    const input = container.querySelector<HTMLInputElement>("#qb-docs-filter");
-    if (!input) return;
-    input.value = "";
-    filter("");
-    input.focus();
+    if (clearSearch()) container.querySelector<HTMLInputElement>("#qb-docs-filter")?.focus();
   });
+
+  // The card highlighted last, and the timer that takes the highlight off.
+  let highlight: { card: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
+
+  /**
+   * Opens facet `facetId`'s card (its first one: a facet is listed under each
+   * of its tags) and the section around it, scrolls it to the top of the
+   * panel, highlights it for a moment and puts the focus on its header, so
+   * the user lands on it with the keyboard too. The panel must be shown
+   * already (app.showFacetInDictionary). False when no card has that facet.
+   */
+  function showFacet(facetId: string): boolean {
+    const cards = container.querySelectorAll<HTMLDetailsElement>(".qb-doc-facet[data-facet-id]");
+    const card = Array.from(cards).find((c) => c.dataset.facetId === facetId);
+    const summary = card?.querySelector<HTMLElement>(":scope > summary");
+    if (!card || !summary) return false;
+    // A search can have hidden it: clear the search, as its ✕ would.
+    if (card.closest("[hidden]")) clearSearch();
+    for (const details of detailsToOpen<HTMLElement>(card, container)) {
+      (details as HTMLDetailsElement).open = true;
+    }
+    // The panel scrolls, not the page (styles.css): scrolling the panel by
+    // hand keeps the page where it is. `scrollIntoView` would also scroll the
+    // page, to line the card up with the window's top.
+    const offset = summary.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollTop += offset - SCROLL_MARGIN_PX;
+    summary.focus({ preventScroll: true });
+    // The highlight is a colour, faded in only where motion is welcome
+    // (styles.css, `.is-highlighted`).
+    if (highlight) {
+      clearTimeout(highlight.timer);
+      highlight.card.classList.remove("is-highlighted");
+    }
+    card.classList.add("is-highlighted");
+    const timer = setTimeout(() => card.classList.remove("is-highlighted"), HIGHLIGHT_MS);
+    highlight = { card, timer };
+    return true;
+  }
+
+  return { showFacet };
 }

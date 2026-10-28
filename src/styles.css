@@ -974,23 +974,149 @@ body {
   outline: 2px solid var(--qb-and);
   outline-offset: -2px;
 }
-/* The legend's "?" (filled in by plan B, task 7): a round, outlined button,
-   so it reads as "help", not as one of the icon actions beside it. */
+/* The legend's "?" (legendHtml.ts): a round, outlined button, so it reads as
+   "help", not as an icon action. 24 px, the smallest target WCAG 2.5.8
+   allows, so the line above the head grows as little as it can. */
 .qb-legend-btn {
+  width: 24px;
+  height: 24px;
   border: 1px solid var(--qb-border-strong);
   border-radius: 50%;
   font-weight: 700;
+}
+/* The legend itself: the browser's popover, in the top layer, so no block or
+   container query can clip it. The browser hides it while it is closed, so
+   it gets no `display` here. queryBuilder.ts places it by its "?"
+   (`legendPlacement` sets left, width, top or bottom, and max-height). */
+.qb-legend {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: var(--qb-radius);
+  background: var(--qb-surface);
+  color: var(--qb-text);
+  box-shadow: var(--qb-shadow);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.qb-legend p {
+  margin: 0 0 0.5rem;
+}
+.qb-legend-note {
+  color: var(--qb-muted);
+}
+/* The colour bar, outlined like a cell (its light end is near the card's
+   colour), then the stops' values and the words for the two ends. */
+.qb-legend-bar {
+  height: 12px;
+  border: 1px solid var(--qb-cooc-cell-border);
+  border-radius: 2px;
+}
+.qb-legend-ticks {
+  position: relative;
+  height: 1.4em;
+  font-size: 0.75rem;
+}
+.qb-legend-ticks > span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+.qb-legend-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  color: var(--qb-muted);
+  font-size: 0.75rem;
+}
+.qb-legend-keys {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+.qb-legend-keys > li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+/* The key's sample marks are spans with the row's classes: no pointer. */
+.qb-legend-keys .qb-co-cell {
+  flex: 0 0 auto;
+  cursor: default;
 }
 /* ---- Seen together (spec, section 6; coOccurrenceHtml.ts) ----------------
    The co-occurrence row above a block's head: one 11 px cell per facet,
    wrapping onto more lines in a narrow block. The colours are the
    --qb-cooc-* tokens; a seen cell's heat colour and dot colour are inline
    (worked out per value), every other kind takes its colours from here. */
+/* The line above the head: the row, then the legend's "?" on the right. The
+   caption is laid over what is below it, so it never moves anything. */
+.qb-co-top {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0 0 0.3rem;
+}
+.qb-co-top > .qb-legend-btn {
+  margin-left: auto;
+}
 .qb-co-row {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+  /* Centred on the "?" while it is one line of cells. */
+  padding-top: 6px;
+}
+/* The name and value of the cell or box under the pointer or the focus
+   (CAPTION, coOccurrenceHtml.ts): a title never shows on keyboard focus.
+   Laid over the page, so showing it moves nothing; empty, it is not drawn.
+   The pointer goes through it to what is under it. */
+.qb-co-caption {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--qb-border-strong);
+  border-radius: 4px;
+  background: var(--qb-surface);
+  color: var(--qb-text);
+  box-shadow: var(--qb-shadow);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+.qb-co-caption:empty {
+  display: none;
+}
+/* The row's caption hangs under the row, over the head. */
+.qb-co-top > .qb-co-caption {
+  top: 100%;
+}
+/* The chart's caption covers its title line, growing upwards when it wraps:
+   below the chart it could reach under the next block, which is drawn over
+   it. It leaves the tab's "?" uncovered. */
+.qb-seen-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   margin: 0 0 0.3rem;
+}
+.qb-seen-head > .qb-legend-btn {
+  margin-left: auto;
+}
+.qb-seen-head > .qb-co-caption {
+  bottom: 0;
+  max-width: calc(100% - 24px - 0.35rem);
 }
 .qb-co-cell {
   display: inline-flex;
@@ -1032,7 +1158,7 @@ body {
   outline-offset: 1px;
 }
 .qb-seen-title {
-  margin: 0 0 0.3rem;
+  margin: 0;
   font-size: 0.95rem;
 }
 /* The square pie chart: 100 x 60 like seenLayout's units, so the boxes'
@@ -1858,6 +1984,29 @@ details[open] > summary > .qb-chevron {
 @media (prefers-reduced-motion: reduce) {
   i.icon.qb-chevron {
     transition: none;
+  }
+}
+/* A facet card opened from a co-occurrence cell (docsSidebar.ts, showFacet)
+   is marked for 2 s, so the eye finds it in the long list. It fades out where
+   motion is welcome, and simply goes when the class is taken off otherwise. */
+.qb-doc-facet.is-highlighted > summary {
+  background: var(--qb-selected-bg);
+  box-shadow: inset 3px 0 0 var(--qb-and);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .qb-doc-facet.is-highlighted > summary {
+    animation: qb-doc-highlight 2s ease-in forwards;
+  }
+}
+@keyframes qb-doc-highlight {
+  0%,
+  50% {
+    background-color: var(--qb-selected-bg);
+    box-shadow: inset 3px 0 0 var(--qb-and);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 3px 0 0 transparent;
   }
 }
 /* The labelled "+ Add" button: a mini button, like "+ Group" in the builder. */

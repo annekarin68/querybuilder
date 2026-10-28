@@ -135,7 +135,8 @@ const tabindexAt = (index: number) => (index === 0 ? "0" : "-1");
 /**
  * The co-occurrence row above a block's head: one cell per connected facet,
  * in dictionary order, the same cells in every block. A cell is a button
- * (task 7 makes it open the dictionary at its facet, by `data-facet-id`);
+ * that opens the dictionary at its facet (`data-facet-id`; `data-opens-docs`
+ * keeps that click from also closing the floating dictionary, main.ts);
  * `data-co-cell` is what focus memory finds it by after a repaint (a box in
  * the chart has the same facet id, so `data-facet-id` alone would mix them
  * up). Empty when no facet is seen with any other: there is no data.
@@ -154,13 +155,31 @@ export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
       const name = escapeHtml(mark.name);
       const style = colourStyle(mark);
       const id = escapeHtml(other.id);
-      return `<button type="button" class="qb-co-cell is-${mark.kind}" data-co-cell="${id}" data-facet-id="${id}" tabindex="${tabindexAt(index)}" aria-label="${name}" title="${name}"${style ? ` style="${style}"` : ""}></button>`;
+      return `<button type="button" class="qb-co-cell is-${mark.kind}" data-co-cell="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}" title="${name}"${style ? ` style="${style}"` : ""}></button>`;
     })
     .join("");
   // A title on the group itself: the browser shows it on the gaps and reads
   // it to screen readers as the group's description.
   const title = isolated ? ` title="${NEVER_WITH_ANY}"` : "";
   return `<div class="qb-co-row" role="group" aria-label="Seen together with ${escapeHtml(ownName)}"${title} data-roving>${cells}</div>`;
+}
+
+// ---- The caption ----------------------------------------------------------
+
+/**
+ * The line that shows the name and value of the cell or box under the
+ * pointer or the keyboard focus. A `title` shows on hover only, never on
+ * keyboard focus, and the spec asks for both (section 6). It is
+ * `aria-hidden`: the same words are already the item's accessible name, and
+ * a screen reader would read them twice. styles.css lays it over the page
+ * (it takes no room), so showing it moves nothing.
+ */
+export const CAPTION = `<p class="qb-co-caption" aria-hidden="true"></p>`;
+
+/** What the caption says: the hovered item's name while the pointer is on
+ *  one (the user is looking there), else the focused item's, else nothing. */
+export function captionText(hovered: string | null, focused: string | null): string {
+  return hovered ?? focused ?? "";
 }
 
 // ---- The square pie chart -------------------------------------------------
@@ -316,15 +335,20 @@ function mergedName(merged: MergedBox): string {
 /**
  * The Seen together tab of `block`: its title and the square pie chart. A box
  * is a button with the same name as the cell of its facet, a roving tabindex
- * like the row's, and `data-facet-id` (task 7 opens the dictionary there).
+ * like the row's, and `data-facet-id` and `data-opens-docs` like a cell's (a
+ * click opens the dictionary there). The merged box has neither: it is not
+ * one facet.
  * `data-co-box` is what focus memory finds it by; the merged box's is empty,
  * which no facet id is. `ctx` is null while there is no data to show.
  */
-export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock): string {
+export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendButton = ""): string {
   const own = ctx ? ownFacet(ctx, block) : null;
   const ownName = own?.name ?? block.facetId;
-  const title = `<h3 class="qb-seen-title">Seen together with ${escapeHtml(ownName)}</h3>`;
-  const note = (text: string) => `${title}<p class="qb-muted">${text}</p>`;
+  // The tab's own "?" sits on the title's line, as the chart uses the row's
+  // colours; so does the chart's caption, laid over the title (styles.css).
+  const head = (caption: string) =>
+    `<div class="qb-seen-head"><h3 class="qb-seen-title">Seen together with ${escapeHtml(ownName)}</h3>${caption}${legendButton}</div>`;
+  const note = (text: string) => `${head("")}<p class="qb-muted">${text}</p>`;
   if (!ctx) return note(CANNOT_SHOW);
   if (ctx.connected.length === 0) return note(NO_DATA);
   if (!own) return note(UNKNOWN_FACET);
@@ -336,7 +360,7 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock): string {
     const id = escapeHtml(mark.facet.id);
     // Every box gets its label; hideCutLabels hides those that do not fit.
     const text = `<span class="qb-seen-label">${escapeHtml(mark.facet.name)}</span>`;
-    return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" tabindex="${tabindexAt(index)}" aria-label="${name}" title="${name}" style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
+    return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}" title="${name}" style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
   });
   if (layout.merged) {
     const merged = layout.merged;
@@ -348,7 +372,7 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock): string {
       `<button type="button" class="qb-seen-box is-merged" data-co-box="" tabindex="${tabindexAt(boxes.length)}" aria-label="${name}" title="${name}" style="${placeStyle(merged.rect)}">${text}</button>`,
     );
   }
-  return `${title}<div class="qb-seen-chart" role="group" aria-label="Seen together with ${escapeHtml(ownName)}, by share of its events" data-roving>${boxes.join("")}</div>`;
+  return `${head(CAPTION)}<div class="qb-seen-chart" role="group" aria-label="Seen together with ${escapeHtml(ownName)}, by share of its events" data-roving>${boxes.join("")}</div>`;
 }
 
 // ---- Keyboard ------------------------------------------------------------

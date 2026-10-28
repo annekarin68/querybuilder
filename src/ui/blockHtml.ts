@@ -14,7 +14,8 @@ import {
   type Position,
 } from "./builderParts";
 import { aboutPanelHtml, aboutTitle, type AboutCtx } from "./aboutPanel";
-import { coRowHtml, seenTogetherHtml, type CoCtx } from "./coOccurrenceHtml";
+import { CAPTION, coRowHtml, seenTogetherHtml, type CoCtx } from "./coOccurrenceHtml";
+import { legendHtml, legendId, legendToggleHtml } from "./legendHtml";
 import { fieldRowsHtml } from "./fieldRows";
 import { countLabel } from "./format";
 import { escapeHtml } from "./panel";
@@ -81,10 +82,39 @@ function panelTabsHtml(open: PanelTab | null): string {
   return `<span class="qb-panel-tabs" role="group" aria-label="Panel beside the fields">${tab("seen", "Seen together")}${tab("about", "About")}</span>`;
 }
 
-/** The "?" that will open the colour legend of the co-occurrence row (plan
- *  B, task 7). Its `data-action` keeps a click on it from unfolding a folded
- *  block, whose whole head is a toggle. */
-const LEGEND_BUTTON = `<button type="button" class="qb-icon-btn qb-legend-btn" data-action="legend" aria-label="Explain the colours" title="Explain the colours">?</button>`;
+/** The block's facet's name: the dictionary's, or its id when the
+ *  dictionary does not know it. */
+function facetNameOf(ctx: BlockCtx, block: FacetBlock): string {
+  return findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
+}
+
+/** The "?" that opens the colour legend, for the row (`row`) or the Seen
+ *  together tab (`seen`): both explain the same colours. */
+function legendButton(ctx: BlockCtx, block: FacetBlock, where: "row" | "seen"): string {
+  const content = legendHtml(
+    facetNameOf(ctx, block),
+    ctx.co?.range ?? null,
+    ctx.co?.tokens ?? null,
+  );
+  return legendToggleHtml(
+    legendId(block.id, where),
+    where === "row" ? "legend" : "legend-seen",
+    content,
+  );
+}
+
+/**
+ * The line above the head (spec, section 6, decision 22): the co-occurrence
+ * row, the legend's "?" at its end, and the caption of the cell under the
+ * pointer or the focus. The "?" is the row's neighbour, not inside it, so
+ * the row's arrow keys never land on it; and it is outside the head, so a
+ * click on it does not unfold a folded block. Every block has the "?", also
+ * when there is no row (no data, or no colours): the legend then says why.
+ */
+function coTopHtml(ctx: BlockCtx, block: FacetBlock): string {
+  const row = ctx.co ? coRowHtml(ctx.co, block) : "";
+  return `<div class="qb-co-top">${row}${legendButton(ctx, block, "row")}${row ? CAPTION : ""}</div>`;
+}
 
 /**
  * The head's second line: which occurrence the block means. Only once a
@@ -111,7 +141,8 @@ function matchLineHtml(block: FacetBlock): string {
 function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
   const id = escapeHtml(block.id);
   if (ctx.panelTab === "seen") {
-    return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}">${seenTogetherHtml(ctx.co, block)}</div></div>`;
+    const chart = seenTogetherHtml(ctx.co, block, legendButton(ctx, block, "seen"));
+    return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}">${chart}</div></div>`;
   }
   if (ctx.panelTab === "about") {
     return `<div class="qb-panel"><div class="qb-about" data-block-id="${id}" tabindex="-1" role="group" aria-label="${escapeHtml(aboutTitle(ctx, block))}">${aboutPanelHtml(ctx, block)}</div></div>`;
@@ -120,33 +151,33 @@ function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
 }
 
 /**
- * A facet block (spec, section 5): the co-occurrence row (`coRowHtml`, also
- * on a folded block), a head of two lines, its issues, then its
- * field rows with the panel beside them. Line 1: grip, Move, fold, the
- * facet's name, Has / Has no, then on the right the panel's tabs, the
- * legend's "?" and ✕. Line 2 (`matchLineHtml`): which occurrence it means.
+ * A facet block (spec, section 5): the co-occurrence row with the legend's
+ * "?" (`coTopHtml`, also on a folded block), a head of two lines, its
+ * issues, then its field rows with the panel beside them. Line 1: grip,
+ * Move, fold, the facet's name, Has / Has no, then on the right the panel's
+ * tabs and ✕. Line 2 (`matchLineHtml`): which occurrence it means.
  * The facet is fixed: to filter on another facet the user adds a block.
  */
 export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position): string {
-  const name = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
+  const name = facetNameOf(ctx, block);
   const tone = blockTone(block);
   const id = escapeHtml(block.id);
   const start = `${nodeGrip(block.id, "facet")}${moveButtons(name, position)}${collapseButton(Boolean(block.collapsed), "facet")}<span class="qb-block-name">${escapeHtml(name)}</span>`;
   const remove = iconButton("remove-node", `Remove ${name}`, "times");
-  const coRow = ctx.co ? coRowHtml(ctx.co, block) : "";
+  const coTop = coTopHtml(ctx, block);
   if (block.collapsed) {
     // A folded block's whole head is a click target for unfolding it, as a
     // folded group's line is (its buttons and grip keep their own jobs). It
     // has no rows and no panel, so no tabs either: they would switch nothing.
     const text = blockText(block, ctx.catalog);
     const summary = `<span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
-    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}">${coRow}<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${LEGEND_BUTTON}${remove}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
+    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}">${coTop}<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${remove}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
   }
   const has = `<span class="qb-logic" role="group" aria-label="Has or has no ${escapeHtml(name)}">${logicButton(!block.negated, "set-has", "Has")}${logicButton(block.negated, "set-has-no", "Has no")}</span>`;
-  // The tabs, "?" and ✕ share one right-aligned box (as a group's actions
+  // The tabs and ✕ share one right-aligned box (as a group's actions
   // do): when the line wraps they move together and stay on the right, so the
   // ✕ is never alone at the start of a line.
-  const actions = `<span class="qb-block-actions">${panelTabsHtml(ctx.panelTab)}${LEGEND_BUTTON}${remove}</span>`;
+  const actions = `<span class="qb-block-actions">${panelTabsHtml(ctx.panelTab)}${remove}</span>`;
   const line1 = `<div class="qb-block-line">${start}${has}${actions}</div>`;
   const expanded = ctx.expandedBlockIds.includes(block.id);
   const openFieldId = ctx.openField?.blockId === block.id ? ctx.openField.fieldId : null;
@@ -164,7 +195,7 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
   if (panel) bodyClasses.push("has-panel");
   if (ctx.panelTab === "about") bodyClasses.push("shows-about");
   const body = `<div class="${bodyClasses.join(" ")}"><div class="qb-field-rows">${rows}</div>${panel}</div>`;
-  return `<div class="qb-block ${tone}" data-node-id="${id}">${coRow}<div class="qb-block-head">${line1}${matchLineHtml(block)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
+  return `<div class="qb-block ${tone}" data-node-id="${id}">${coTop}<div class="qb-block-head">${line1}${matchLineHtml(block)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
 }
 
 /** The "+ Facet" picker: one choice per facet. Choosing one adds a block to

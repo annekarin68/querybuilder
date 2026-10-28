@@ -1319,6 +1319,21 @@ describe("the panel beside each block", () => {
     expect(api.getStats).not.toHaveBeenCalled();
   });
 
+  // A cell or box of the co-occurrence row opens the dictionary at its facet
+  // (main.ts then opens and focuses the facet's card).
+  it("showFacetInDictionary unfolds a folded dictionary for a facet it knows", () => {
+    const { app, store } = setup({ ...shown, sidebarCollapsed: true });
+    expect(app.showFacetInDictionary("thing")).toBe(true);
+    expect(store.getState().sidebarCollapsed).toBe(false);
+    expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
+  });
+
+  it("showFacetInDictionary leaves the dictionary alone for a facet it does not know", () => {
+    const { app, store } = setup({ ...shown, sidebarCollapsed: true });
+    expect(app.showFacetInDictionary("gone")).toBe(false);
+    expect(store.getState().sidebarCollapsed).toBe(true);
+  });
+
   it("selectFieldForPanel selects a field for About, and null goes back to the facet", () => {
     const { app, store } = setup(shown);
     const ref = { blockId: "f-1", fieldId: "size" };
