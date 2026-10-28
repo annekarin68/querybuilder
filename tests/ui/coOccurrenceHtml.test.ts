@@ -386,6 +386,42 @@ describe("opening the dictionary from a cell or box", () => {
   });
 });
 
+describe("the '+ N less often' box's list", () => {
+  // Click or Enter on "+N" opens a popover listing what it stands for, as the
+  // legend opens from its "?" (the same class, so the same placement).
+  it("opens a popover beside the chart that lists the merged facets", () => {
+    const block = newBlock("a");
+    const html = seenTogetherHtml(ctx, block);
+    const id = `legend-${block.id}-merged`;
+    expect(html).toContain(`data-co-box="" popovertarget="${id}"`);
+    const chartEnd = html.indexOf("</div>", html.indexOf('class="qb-seen-chart"'));
+    const popover = html.slice(html.indexOf(`<div id="${id}" popover class="qb-legend">`));
+    expect(html.indexOf(`<div id="${id}"`)).toBeGreaterThan(chartEnd);
+    expect(popover).toContain("1 facet seen together less often with <strong>Alpha</strong>");
+    expect(popover).toContain("<li>Gamma: 1e-400 % of Alpha&#39;s events, too rare to colour</li>");
+  });
+
+  it("lists them largest first, the too-rare ones last", () => {
+    const own = facet("o", "O", {
+      big: co("90"),
+      ...Object.fromEntries(
+        Array.from({ length: 40 }, (_, i) => [`s${i}`, co(String(0.001 * (i + 1)))]),
+      ),
+      rare: co("1e-400", true),
+    });
+    const others = [
+      facet("big", "Big"),
+      ...Array.from({ length: 40 }, (_, i) => facet(`s${i}`, `S${i}`)),
+      facet("rare", "Rare"),
+    ];
+    const html = seenTogetherHtml(coCtxOf([own, ...others], tokens), newBlock("o"));
+    const items = [...html.matchAll(/<li>([^<]*)<\/li>/g)].map((m) => m[1] as string);
+    expect(items.length).toBeGreaterThan(1);
+    expect(items.at(-1)).toContain("Rare:");
+    expect(items[0]).toContain("S39:");
+  });
+});
+
 describe("the chart's title line", () => {
   it("holds the caption and the tab's ?, which the caller passes in", () => {
     const html = seenTogetherHtml(ctx, newBlock("a"), "<button>?</button>");

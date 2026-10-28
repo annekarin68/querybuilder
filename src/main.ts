@@ -240,7 +240,9 @@ docsColumn.addEventListener("focusout", (e) => {
 // cover the builder. Clicks inside the docs must not (that would break "+ Add"
 // and dragging), nor those on the rail or the Hide/Show buttons, which toggle
 // the docs themselves, nor those on a co-occurrence cell or box
-// (`data-opens-docs`), which has just opened them at its facet.
+// (`data-opens-docs`), which has just opened them at its facet. Nor one on
+// the chart's "+ N less often" box (`data-co-box`, as every box has): it
+// opens its list over the page, and the dictionary may stay as it is.
 document.addEventListener("click", (e) => {
   if (!window.matchMedia(NARROW_SCREEN).matches || store.getState().sidebarCollapsed) return;
   // composedPath() is fixed when the click starts, so it still says "inside the
@@ -249,7 +251,7 @@ document.addEventListener("click", (e) => {
   const target = e.target as Element;
   if (
     insideDocs ||
-    target.closest(".qb-docs-rail, [data-menu='toggle-sidebar'], [data-opens-docs]")
+    target.closest(".qb-docs-rail, [data-menu='toggle-sidebar'], [data-opens-docs], [data-co-box]")
   )
     return;
   store.setState({ sidebarCollapsed: true });

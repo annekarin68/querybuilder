@@ -88,10 +88,11 @@ export function legendHtml(facetName: string, range: CoRange | null, tokens: CoT
     <p class="qb-legend-note">Click a square to open that facet in the data dictionary.</p>`;
 }
 
-/** The popover's id: one for the row's "?" and one for the Seen together
- *  tab's, per block (ids are unique on the page). */
-export function legendId(blockId: string, where: "row" | "seen"): string {
-  return where === "row" ? `legend-${blockId}` : `legend-${blockId}-seen`;
+/** A popover's id, per block (ids are unique on the page): the row's "?"
+ *  (`row`), the Seen together tab's "?" (`seen`), and the list of the
+ *  chart's "+ N less often" box (`merged`, coOccurrenceHtml.ts). */
+export function legendId(blockId: string, where: "row" | "seen" | "merged"): string {
+  return where === "row" ? `legend-${blockId}` : `legend-${blockId}-${where}`;
 }
 
 /**

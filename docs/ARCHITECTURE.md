@@ -2055,7 +2055,17 @@ nesting take width too, not the window's width).
   facets are absent (`seenLayout`). Values too rare to have a size, and boxes
   thinner than 12 px at a 300 × 180 px reference (the panel's typical
   width), go into one **+ N less often** box whose accessible name lists them
-  (its caption says only how many). Merging goes by value, not by shape: a thin box goes together
+  (its caption says only how many). **Pressing it** (click or Enter) opens
+  a popover listing them (`mergedListHtml`, id `legend-<block id>-merged`):
+  each facet in its cell's words, largest first, the too-rare ones last.
+  This keeps the spec's "whose hover lists them" now that boxes have no
+  `title`, and the box is no dead control. The popover has the legend's
+  class, so it is placed by its box, follows the scroll, reopens after a
+  repaint and takes Escape like a legend (below). It sits after the chart,
+  outside its `data-roving` group, so the arrow keys still go box to box.
+  Its items are plain text for now (each facet is also a cell in the row,
+  which opens the dictionary). A click on it does not fold the floating
+  dictionary (`main.ts` leaves every `data-co-box` alone). Merging goes by value, not by shape: a thin box goes together
   with every rarer one, so "less often" is true of every facet in it (squarify
   can leave a box thin while a rarer one is thick). Merging gives the rest
   more room, so it repeats until no box is too thin. That box stands for a

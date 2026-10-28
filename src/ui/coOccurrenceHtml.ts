@@ -17,6 +17,7 @@ import {
 import type { FacetBlock } from "../query/types";
 import { betterOn } from "../util/colour";
 import type { CoTokens } from "./coTokens";
+import { legendId } from "./legendHtml";
 import { escapeHtml } from "./panel";
 
 /** What the row and the chart of every block need. Worked out once per
@@ -329,17 +330,36 @@ function placeStyle(rect: Rect): string {
   ].join(";");
 }
 
+/** "1 facet" / "30 facets". */
+const facetCount = (n: number) => `${n} ${n === 1 ? "facet" : "facets"}`;
+
+/** The caption of "+ N less often": what it is, in one short line. */
+function mergedCaption(merged: MergedBox): string {
+  return `${facetCount(merged.items.length)}, each less often than the boxes shown`;
+}
+
 /** The merged box's accessible name lists what it stands for, since it has
  *  no label for each. It can be thousands of characters, too long for the
  *  caption, which gets `mergedCaption` instead (`data-caption`). */
-/** The caption of "+ N less often": what it is, in one short line. */
-function mergedCaption(merged: MergedBox): string {
-  const n = merged.items.length;
-  return `${n} ${n === 1 ? "facet" : "facets"}, each less often than the boxes shown`;
-}
-
 function mergedName(merged: MergedBox): string {
   return `${merged.items.length} less often: ${merged.items.map((m) => m.name).join("; ")}`;
+}
+
+/**
+ * What "+ N less often" stands for, as a popover its box opens (click or
+ * Enter; `popovertarget`): sighted users see only "+N" on the box, and a
+ * box that does nothing when pressed would be a dead control. Each facet in
+ * the words of its cell, largest first, the too-rare ones last (the order of
+ * `MergedBox.items`). It has the legend's class, so queryBuilder.ts places it
+ * by its box, follows the scroll and reopens it after a repaint as it does a
+ * legend. It sits after the chart, not inside it: the chart's arrow keys go
+ * through the chart's own buttons only (`rovingItems`). Plain text items,
+ * for now: the facets are also cells in the row above, which open the
+ * dictionary.
+ */
+function mergedListHtml(id: string, merged: MergedBox, ownName: string): string {
+  const items = merged.items.map((m) => `<li>${escapeHtml(m.name)}</li>`).join("");
+  return `<div id="${escapeHtml(id)}" popover class="qb-legend"><p class="qb-legend-sentence">${facetCount(merged.items.length)} seen together less often with <strong>${escapeHtml(ownName)}</strong>:</p><ul class="qb-merged-list">${items}</ul></div>`;
 }
 
 /**
@@ -347,7 +367,7 @@ function mergedName(merged: MergedBox): string {
  * is a button with the same name as the cell of its facet, a roving tabindex
  * like the row's, and `data-facet-id` and `data-opens-docs` like a cell's (a
  * click opens the dictionary there). The merged box has neither: it is not
- * one facet.
+ * one facet; it opens the list of the facets it stands for (`mergedListHtml`).
  * `data-co-box` is what focus memory finds it by; the merged box's is empty,
  * which no facet id is. `ctx` is null while there is no data to show.
  */
@@ -372,17 +392,20 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendBut
     const text = `<span class="qb-seen-label">${escapeHtml(mark.facet.name)}</span>`;
     return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}" style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
   });
+  let mergedList = "";
   if (layout.merged) {
     const merged = layout.merged;
     const name = escapeHtml(mergedName(merged));
     const text = merged.label
       ? `<span class="qb-seen-label">${escapeHtml(merged.label)}</span>`
       : "";
+    const listId = legendId(block.id, "merged");
     boxes.push(
-      `<button type="button" class="qb-seen-box is-merged" data-co-box="" tabindex="${tabindexAt(boxes.length)}" aria-label="${name}" data-caption="${escapeHtml(mergedCaption(merged))}" style="${placeStyle(merged.rect)}">${text}</button>`,
+      `<button type="button" class="qb-seen-box is-merged" data-co-box="" popovertarget="${escapeHtml(listId)}" tabindex="${tabindexAt(boxes.length)}" aria-label="${name}" data-caption="${escapeHtml(mergedCaption(merged))}" style="${placeStyle(merged.rect)}">${text}</button>`,
     );
+    mergedList = mergedListHtml(listId, merged, ownName);
   }
-  return `${head(CAPTION)}<div class="qb-seen-chart" role="group" aria-label="Seen together with ${escapeHtml(ownName)}, by share of its events" data-roving>${boxes.join("")}</div>`;
+  return `${head(CAPTION)}<div class="qb-seen-chart" role="group" aria-label="Seen together with ${escapeHtml(ownName)}, by share of its events" data-roving>${boxes.join("")}</div>${mergedList}`;
 }
 
 // ---- Keyboard ------------------------------------------------------------

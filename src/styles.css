@@ -1045,6 +1045,11 @@ body {
   align-items: center;
   gap: 0.45rem;
 }
+/* The list behind "+ N less often" (mergedListHtml): one facet a line. */
+.qb-merged-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
 /* The key's sample marks are spans with the row's classes: no pointer. */
 .qb-legend-keys .qb-co-cell {
   flex: 0 0 auto;
@@ -1185,11 +1190,11 @@ body {
   font-size: 0.75rem;
   cursor: pointer;
 }
-/* "+ N less often": not a value, so no heat colour; an outline like a cell. */
+/* "+ N less often": not a value, so no heat colour; an outline like a cell.
+   Pressing it opens the list of its facets, so it keeps the pointer cursor. */
 .qb-seen-box.is-merged {
   border-color: var(--qb-cooc-cell-border);
   background: var(--qb-surface);
-  cursor: default;
 }
 .qb-seen-label {
   position: absolute;
