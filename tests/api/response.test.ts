@@ -651,18 +651,18 @@ describe("toFacet: co-occurrence", () => {
 
   it("reads co-occurrence values as numbers, keeping the backend's text", () => {
     const facet = withCo({ b: "12.5", c: "1.2e-20", a: "100" });
-    expect(facet.coOccurrence.get("b")).toEqual({ text: "12.5", percent: 12.5, tooRare: false });
-    expect(facet.coOccurrence.get("c")!.percent).toBeCloseTo(1.2e-20);
-    expect(facet.coOccurrence.get("a")!.percent).toBe(100);
+    expect(facet.coOccurrence!.get("b")).toEqual({ text: "12.5", percent: 12.5, tooRare: false });
+    expect(facet.coOccurrence!.get("c")!.percent).toBeCloseTo(1.2e-20);
+    expect(facet.coOccurrence!.get("a")!.percent).toBe(100);
   });
 
   it("marks a value too small for a JavaScript number as too rare, with one warning for the facet", () => {
     const facet = withCo({ b: "1e-400", d: "0.5e-999", z: "0", y: "0.0", x: "0e-400" });
-    expect(facet.coOccurrence.get("b")).toEqual({ text: "1e-400", percent: 0, tooRare: true });
-    expect(facet.coOccurrence.get("d")!.tooRare).toBe(true);
-    expect(facet.coOccurrence.get("z")).toEqual({ text: "0", percent: 0, tooRare: false });
-    expect(facet.coOccurrence.get("y")!.tooRare).toBe(false);
-    expect(facet.coOccurrence.get("x")!.tooRare).toBe(false);
+    expect(facet.coOccurrence!.get("b")).toEqual({ text: "1e-400", percent: 0, tooRare: true });
+    expect(facet.coOccurrence!.get("d")!.tooRare).toBe(true);
+    expect(facet.coOccurrence!.get("z")).toEqual({ text: "0", percent: 0, tooRare: false });
+    expect(facet.coOccurrence!.get("y")!.tooRare).toBe(false);
+    expect(facet.coOccurrence!.get("x")!.tooRare).toBe(false);
     expect(console.warn).toHaveBeenCalledTimes(1);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("too small"));
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"b"'));
@@ -670,14 +670,14 @@ describe("toFacet: co-occurrence", () => {
 
   it("leaves out values that are not percentages, with one warning for the facet", () => {
     const facet = withCo({ b: "abc", c: "101", d: "-1", e: 5, f: "", g: "0x10", h: "1e400" });
-    expect([...facet.coOccurrence.keys()]).toEqual([]);
+    expect([...facet.coOccurrence!.keys()]).toEqual([]);
     expect(console.warn).toHaveBeenCalledTimes(1);
   });
 
   it("leaves out a negative value even when it is too small to tell from zero", () => {
     const facet = withCo({ b: "-1e-400", c: "-0", d: "-0.0e5" });
-    expect([...facet.coOccurrence.keys()]).toEqual(["c", "d"]);
-    expect(facet.coOccurrence.get("c")).toEqual({ text: "-0", percent: 0, tooRare: false });
+    expect([...facet.coOccurrence!.keys()]).toEqual(["c", "d"]);
+    expect(facet.coOccurrence!.get("c")).toEqual({ text: "-0", percent: 0, tooRare: false });
   });
 
   it("warns for each facet, even when their ids differ only in digits", () => {
@@ -691,21 +691,29 @@ describe("toFacet: co-occurrence", () => {
   });
 
   it("trims padded text but keeps the trimmed text for display", () => {
-    expect(withCo({ b: " 7 " }).coOccurrence.get("b")).toEqual({
+    expect(withCo({ b: " 7 " }).coOccurrence!.get("b")).toEqual({
       text: "7",
       percent: 7,
       tooRare: false,
     });
   });
 
-  it("is empty, without a warning of its own, when the map is missing", () => {
-    expect(toFacet(read(wireFacet())).coOccurrence.size).toBe(0);
+  it("is null (no data), without a warning of its own, when the map is missing", () => {
+    expect(toFacet(read(wireFacet())).coOccurrence).toBeNull();
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  it("is empty, with a warning, when the map is not an object", () => {
-    expect(withCo(["b"]).coOccurrence.size).toBe(0);
+  it("is null, with a warning, when the map is not an object", () => {
+    expect(withCo(["b"]).coOccurrence).toBeNull();
     expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("is an empty map, not null, for an empty object", () => {
+    expect(withCo({}).coOccurrence).toEqual(new Map());
+  });
+
+  it("is an empty map, not null, when every entry is unreadable", () => {
+    expect(withCo({ b: "abc" }).coOccurrence).toEqual(new Map());
   });
 });
 
@@ -723,8 +731,8 @@ describe("pruneUnknownCoOccurrence", () => {
       facetWith("a", ["b", "x", "y"]),
       facetWith("b", ["a", "x"]),
     ]);
-    expect([...facets[0]!.coOccurrence.keys()]).toEqual(["b"]);
-    expect([...facets[1]!.coOccurrence.keys()]).toEqual(["a"]);
+    expect([...facets[0]!.coOccurrence!.keys()]).toEqual(["b"]);
+    expect([...facets[1]!.coOccurrence!.keys()]).toEqual(["a"]);
     expect(console.warn).toHaveBeenCalledTimes(2);
     expect(console.warn).toHaveBeenCalledWith(expect.stringMatching(/"a".*"x", "y"|"x", "y".*"a"/));
   });
@@ -739,6 +747,12 @@ describe("pruneUnknownCoOccurrence", () => {
       );
     pruneUnknownCoOccurrence([f("f1"), f("f2")]);
     expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a facet without data as it is", () => {
+    const noData = toFacet(read(wireFacet({ label: "a" })));
+    expect(pruneUnknownCoOccurrence([noData])[0]!.coOccurrence).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it("does not warn when every id exists", () => {

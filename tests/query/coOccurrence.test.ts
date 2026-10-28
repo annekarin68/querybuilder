@@ -6,6 +6,7 @@ import {
   coOccurrenceRange,
   formatPercent,
   legendTicks,
+  roundPercentText,
   scalePosition,
   squarify,
   stepFactorText,
@@ -189,5 +190,73 @@ describe("robustness", () => {
   });
   it("scalePosition of NaN is 0", () => {
     expect(scalePosition(NaN, { min: 1, max: 10 })).toBe(0);
+  });
+});
+
+describe("facets without data", () => {
+  const noData = (id: string): Facet => ({ ...facet(id), coOccurrence: null });
+
+  it("connectedFacets counts a facet without data when another facet names it", () => {
+    const a = facet("a", { b: co("5") });
+    expect(connectedFacets([a, noData("b"), noData("c")]).map((f) => f.id)).toEqual(["a", "b"]);
+  });
+
+  it("coOccurrenceRange skips a facet without data", () => {
+    expect(coOccurrenceRange([noData("a"), facet("b", { a: co("7") })])).toEqual({
+      min: 7,
+      max: 7,
+    });
+    expect(coOccurrenceRange([noData("a")])).toBeNull();
+  });
+});
+
+describe("roundPercentText", () => {
+  it.each([
+    ["76.19047619047619", "76.2"],
+    ["0.000123456", "0.000123"],
+    ["100", "100"],
+    ["5", "5"],
+    ["1.23456e-20", "1.23e-20"],
+    ["1.2345E-7", "1.23E-7"],
+    ["0.0001", "0.0001"],
+    ["100.04", "100"],
+    ["100.5", "101"],
+    ["1e-400", "1e-400"],
+    ["99.96", "100"],
+    ["9.996e-5", "1e-4"],
+    ["99.96e-5", "10e-4"],
+    ["12.30000", "12.3"],
+    ["1.20", "1.20"],
+    ["0.9996", "1"],
+    ["0.0999999", "0.1"],
+    ["50.5", "50.5"],
+    ["0", "0"],
+    ["0.0000", "0.0000"],
+    ["12345.6", "12346"],
+    ["abc", "abc"],
+  ])("%s becomes %s", (text, expected) => {
+    expect(roundPercentText(text)).toBe(expected);
+  });
+
+  it("takes the number of significant digits as an argument", () => {
+    // Digits before the point are never dropped, even with 1 digit asked for.
+    expect(roundPercentText("76.19047619047619", 1)).toBe("76");
+    expect(roundPercentText("0.76190476", 1)).toBe("0.8");
+    expect(roundPercentText("76.19047619047619", 5)).toBe("76.19");
+  });
+});
+
+describe("squarify with keepLast", () => {
+  it("lays the last value out last, in the bottom-right corner, even when it is the largest", () => {
+    const rects = squarify([5, 3, 2, 400], 100, 60, true);
+    const last = rects[3]!;
+    expect(last.x + last.w).toBeCloseTo(100);
+    expect(last.y + last.h).toBeCloseTo(60);
+    const area = rects.reduce((sum, r) => sum + r.w * r.h, 0);
+    expect(area).toBeCloseTo(100 * 60);
+  });
+
+  it("does the same as plain squarify when the last value is the smallest", () => {
+    expect(squarify([5, 3, 2], 100, 60, true)).toEqual(squarify([5, 3, 2], 100, 60));
   });
 });

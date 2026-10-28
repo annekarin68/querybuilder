@@ -138,17 +138,20 @@ function namesForWarning(ids: string[]): string {
  * A facet's `co_occurrence` as a map by the other facet's id. Display data,
  * so nothing here throws: a value that is not a percentage is left out and a
  * too-rare one is flagged, each with one warning per facet listing them. A
- * missing map is empty and silent here; `countWithoutCoOccurrence` reports
- * those once for the whole list.
+ * missing map (or one that is not an object) is null, "no data", which is not
+ * the same as an empty map ("never seen together"); it is silent here:
+ * `countWithoutCoOccurrence` reports the missing ones once for the whole list.
  */
 export function readCoOccurrence(
   i: ResponseObject<IndividualResponse>,
   facetId: string,
-): Map<string, CoValue> {
+): Map<string, CoValue> | null {
+  const entries = i.optionalEntries("co_occurrence");
+  if (entries === undefined) return null;
   const map = new Map<string, CoValue>();
   const notPercentages: string[] = [];
   const tooRare: string[] = [];
-  for (const [otherId, raw] of i.optionalEntries("co_occurrence") ?? []) {
+  for (const [otherId, raw] of entries) {
     const value = toCoValue(raw);
     if (value === null) notPercentages.push(otherId);
     else {
@@ -181,7 +184,7 @@ export function countWithoutCoOccurrence(items: ResponseObject<IndividualRespons
   const missing = items.filter((i) => !i.hasKey("co_occurrence")).length;
   if (missing > 0) {
     warnOnce(
-      `Unexpected response from ${items[0]!.requestName()}: ${missing} of ${items.length} facets have no co_occurrence. Treating it as empty.`,
+      `Unexpected response from ${items[0]!.requestName()}: ${missing} of ${items.length} facets have no co_occurrence. Showing them as having no data.`,
     );
   }
   return missing;
@@ -194,6 +197,7 @@ export function countWithoutCoOccurrence(items: ResponseObject<IndividualRespons
 export function pruneUnknownCoOccurrence(facets: Facet[]): Facet[] {
   const known = new Set(facets.map((f) => f.id));
   return facets.map((facet) => {
+    if (facet.coOccurrence === null) return facet;
     const unknown = [...facet.coOccurrence.keys()].filter((id) => !known.has(id));
     if (unknown.length === 0) return facet;
     warnOnce(

@@ -54,14 +54,19 @@
   /* Co-occurrence (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 7).
      Stops run from "rarely together" to "often together"; add or remove
      --qb-cooc-stop-N freely (at least 2, numbered without gaps). */
-  --qb-cooc-stop-1: #eef5e0;
-  --qb-cooc-stop-2: #d3e8b5;
-  --qb-cooc-stop-3: #b0d68a;
+  --qb-cooc-stop-1: #d6e9b9; /* at least 1.25:1 against --qb-surface: the lightest box must show on the card */
+  --qb-cooc-stop-2: #bddb96;
+  --qb-cooc-stop-3: #a2cc77;
   --qb-cooc-stop-4: #86bd5f;
   --qb-cooc-stop-5: #5f9a3f;
   --qb-cooc-stop-6: #3f7a2c;
   --qb-cooc-stop-7: #24521a;
   --qb-cooc-never: #e4e1d2;
+  /* The "+ N less often" box stands for a list, not a value: a cool grey with
+     a diagonal stripe, off the green heat scale so it never reads as "the most
+     often". Its label (--qb-cooc-dot-dark) must reach 4.5:1 on both greys. */
+  --qb-cooc-merged: #e1e3e6;
+  --qb-cooc-merged-stripe: #cfd2d7;
   --qb-cooc-cell-border: #85836f;
   --qb-cooc-own: #8a6400;
   --qb-cooc-dot-dark: #060a04;
@@ -1051,6 +1056,10 @@ body {
 .qb-merged-list {
   margin: 0;
   padding-left: 1.1rem;
+  /* Production has hundreds of facets: the list scrolls inside itself, so
+     the sentence above it stays in view. */
+  max-height: 16rem;
+  overflow-y: auto;
 }
 /* The key's sample marks are spans with the row's classes: no pointer. */
 .qb-legend-keys .qb-co-cell {
@@ -1197,11 +1206,16 @@ body {
   font-size: 0.75rem;
   cursor: pointer;
 }
-/* "+ N less often": not a value, so no heat colour; an outline like a cell.
-   Pressing it opens the list of its facets, so it keeps the pointer cursor. */
+/* "+ N less often": not a value, so no heat colour: a neutral, striped
+   aggregate, an outline like a cell. Pressing it opens the list of its
+   facets, so it keeps the pointer cursor. */
 .qb-seen-box.is-merged {
   border-color: var(--qb-cooc-cell-border);
-  background: var(--qb-surface);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--qb-cooc-merged) 0 6px,
+    var(--qb-cooc-merged-stripe) 6px 9px
+  );
 }
 .qb-seen-label {
   position: absolute;

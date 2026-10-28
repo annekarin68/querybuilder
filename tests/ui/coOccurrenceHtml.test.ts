@@ -491,3 +491,100 @@ describe("KEEPS_FLOATING_DOCS_OPEN", () => {
     expect(matchesOneOf(remove, KEEPS_FLOATING_DOCS_OPEN)).toBe(false);
   });
 });
+
+describe("a facet without co-occurrence data (null, not 'never seen together')", () => {
+  const noData: Facet = { ...facet("n", "Nodata"), coOccurrence: null };
+  const withNoData = coCtxOf([alpha, beta, gamma, delta, lonely, noData], tokens) as CoCtx;
+  const questionMark = "<button>?</button>";
+
+  it("draws no row for its block", () => {
+    expect(coRowHtml(withNoData, newBlock("n"))).toBe("");
+  });
+
+  it("says so in the Seen together tab, without a ?", () => {
+    const html = seenTogetherHtml(withNoData, newBlock("n"), questionMark);
+    expect(html).toContain("No co-occurrence data for this facet.");
+    expect(html).not.toContain(questionMark);
+    expect(html).not.toContain("Never seen together");
+  });
+
+  it("is still a cell in the rows of facets that name it", () => {
+    const names = new Map(alpha.coOccurrence);
+    names.set("n", co("25"));
+    const naming: Facet = { ...alpha, coOccurrence: names };
+    const ctxNaming = coCtxOf([naming, beta, noData], tokens) as CoCtx;
+    const row = coRowHtml(ctxNaming, newBlock("a"));
+    expect(all(row, "data-facet-id")).toEqual(["a", "b", "n"]);
+    expect(all(row, "aria-label")).toContain("Nodata: 25 % of Alpha's events");
+  });
+
+  it("keeps the ? for an isolated facet that does have a map", () => {
+    expect(seenTogetherHtml(withNoData, newBlock("l"), questionMark)).toContain(questionMark);
+  });
+});
+
+describe("rounded text on screen", () => {
+  const long = "76.19047619047619";
+  const own = facet("o", "Own", { x: co(long), y: co("1.23456e-20") });
+  const rounded = coCtxOf([own, facet("x", "X"), facet("y", "Y")], tokens) as CoCtx;
+
+  it("rounds a cell's caption but keeps the full text in its accessible name", () => {
+    const row = coRowHtml(rounded, newBlock("o"));
+    expect(all(row, "aria-label")).toContain(`X: ${long} % of Own's events`);
+    expect(all(row, "data-caption")).toContain("X: 76.2 % of Own's events");
+    expect(all(row, "data-caption")).toContain("Y: 1.23e-20 % of Own's events");
+  });
+
+  it("rounds a box's caption the same way", () => {
+    const html = seenTogetherHtml(rounded, newBlock("o"));
+    expect(all(html, "aria-label")).toContain(`X: ${long} % of Own's events`);
+    expect(all(html, "data-caption")).toContain("X: 76.2 % of Own's events");
+  });
+
+  it("leaves out data-caption when the caption would repeat the name", () => {
+    expect(all(coRowHtml(ctx, newBlock("a")), "data-caption")).toEqual([]);
+  });
+
+  it("rounds the values in the merged list too, not in its accessible name", () => {
+    const values: Record<string, CoValue> = { big: co("90") };
+    const others = [facet("big", "Big")];
+    for (let i = 0; i < 30; i++) {
+      values[`s${i}`] = co("0.0012345678");
+      others.push(facet(`s${i}`, `S${i}`));
+    }
+    const html = seenTogetherHtml(
+      coCtxOf([facet("o", "O", values), ...others], tokens),
+      newBlock("o"),
+    );
+    expect(html).toContain("<li>S0: 0.00123 % of O&#39;s events</li>");
+    expect(all(html, "aria-label").join("|")).toContain("S0: 0.0012345678 % of O's events");
+  });
+});
+
+describe("the merged box with hundreds of facets", () => {
+  const COUNT = 300;
+  const values: Record<string, CoValue> = { big: co("10") };
+  const others = [facet("big", "Big")];
+  for (let i = 0; i < COUNT; i++) {
+    values[`s${i}`] = co("0.5");
+    others.push(facet(`s${i}`, `S${i}`));
+  }
+  const crowded = coCtxOf([facet("o", "O", values), ...others], tokens) as CoCtx;
+
+  it("lists every merged facet and counts them in the heading", () => {
+    const html = seenTogetherHtml(crowded, newBlock("o"));
+    const merged = seenLayout(crowded, crowded.facets[0] as Facet).merged!;
+    expect(merged.items.length).toBe(COUNT);
+    expect([...html.matchAll(/<li>/g)]).toHaveLength(COUNT);
+    expect(html).toContain(`${COUNT} facets seen together less often with`);
+  });
+
+  it("lays the merged box out last, in the bottom-right corner, even when it is the largest", () => {
+    const { boxes, merged } = seenLayout(crowded, crowded.facets[0] as Facet);
+    expect(merged!.rect.w * merged!.rect.h).toBeGreaterThan(
+      Math.max(...boxes.map((b) => b.rect.w * b.rect.h)),
+    );
+    expect(merged!.rect.x + merged!.rect.w).toBeCloseTo(100);
+    expect(merged!.rect.y + merged!.rect.h).toBeCloseTo(60);
+  });
+});

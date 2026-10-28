@@ -232,6 +232,30 @@ describe("blockHtml", () => {
       }
     });
 
+    // "No data" for this block's facet (the backend left co_occurrence out)
+    // is not a row of never-seen cells: no row, no top line, no caption, no ?.
+    it("draws no row, top line, caption or ? for a facet without data, though other facets have a row", () => {
+      const dict = withCoDict();
+      // "other" names "thing", so the row exists for other blocks.
+      const names = new Map([["thing", { text: "5", percent: 5, tooRare: false }]]);
+      const noData = dict.map((f) =>
+        f.id === "thing" ? { ...f, coOccurrence: null } : { ...f, coOccurrence: names },
+      );
+      const co = coCtxOf(
+        noData,
+        coTokensFrom((name) => TOKENS[name] ?? ""),
+      );
+      expect(co!.connected).toHaveLength(2);
+      for (const panelTab of ["seen", null] as const) {
+        const html = blockHtml({ ...ctxFor(q), co, panelTab }, b, pos);
+        expect(html).not.toContain("qb-co-top");
+        expect(html).not.toContain("qb-co-caption");
+        expect(html).not.toContain("Explain the colours");
+      }
+      const html = blockHtml({ ...ctxFor(q), co, panelTab: "seen" }, b, pos);
+      expect(html).toContain("No co-occurrence data for this facet.");
+    });
+
     it("gives the Seen together tab a ? of its own when there is a row", () => {
       const co = coCtxOf(
         withCoDict(),

@@ -178,8 +178,8 @@ describe("api client", () => {
       ]),
     );
     const out = await getFacets();
-    expect([...out[0]!.coOccurrence.keys()]).toEqual(["b"]);
-    expect(out[1]!.coOccurrence.size).toBe(0);
+    expect([...out[0]!.coOccurrence!.keys()]).toEqual(["b"]);
+    expect(out[1]!.coOccurrence).toBeNull();
     const messages = warn.mock.calls.map((c) => String(c[0]));
     expect(messages.filter((m) => m.includes("ghost"))).toHaveLength(1);
     expect(messages.filter((m) => m.includes("2 of 3"))).toHaveLength(1);

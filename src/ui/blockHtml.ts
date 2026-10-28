@@ -14,7 +14,7 @@ import {
   type Position,
 } from "./builderParts";
 import { aboutPanelHtml, aboutTitle, type AboutCtx } from "./aboutPanel";
-import { CAPTION, coRowHtml, seenTogetherHtml, type CoCtx } from "./coOccurrenceHtml";
+import { CAPTION, coRowHtml, hasCoRow, seenTogetherHtml, type CoCtx } from "./coOccurrenceHtml";
 import { legendHtml, legendToggleHtml } from "./legendHtml";
 import { facetNameOrId } from "./facetWords";
 import { fieldRowsHtml } from "./fieldRows";
@@ -103,9 +103,10 @@ function legendButton(co: CoCtx, block: FacetBlock, name: string, where: "row" |
 }
 
 /** Whether the block draws a co-occurrence row: there is a context (colour
- *  tokens, a loaded dictionary) and some facet is seen with another. */
-function hasRow(co: CoCtx | null): co is CoCtx {
-  return co !== null && co.connected.length > 0;
+ *  tokens, a loaded dictionary), some facet is seen with another, and the
+ *  block's own facet has data (`hasCoRow`). */
+function hasRow(co: CoCtx | null, block: FacetBlock): co is CoCtx {
+  return co !== null && hasCoRow(co, block);
 }
 
 /**
@@ -120,7 +121,7 @@ function hasRow(co: CoCtx | null): co is CoCtx {
  * in the head's first line (`rowCaption`).
  */
 function coTopHtml(ctx: BlockCtx, block: FacetBlock): string {
-  if (!hasRow(ctx.co)) return "";
+  if (!hasRow(ctx.co, block)) return "";
   const row = coRowHtml(ctx.co, block);
   return `<div class="qb-co-top">${row}${legendButton(ctx.co, block, facetNameOf(ctx, block), "row")}</div>`;
 }
@@ -128,8 +129,8 @@ function coTopHtml(ctx: BlockCtx, block: FacetBlock): string {
 /** The caption of the row's cell under the pointer or the focus (`CAPTION`),
  *  at the end of the head's first line: styles.css hangs it under that line,
  *  so it never covers the grip, Move or fold buttons. Only with a row. */
-function rowCaption(ctx: BlockCtx): string {
-  return hasRow(ctx.co) ? CAPTION : "";
+function rowCaption(ctx: BlockCtx, block: FacetBlock): string {
+  return hasRow(ctx.co, block) ? CAPTION : "";
 }
 
 /**
@@ -158,7 +159,7 @@ function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
   const id = escapeHtml(block.id);
   if (ctx.panelTab === "seen") {
     // The tab's own "?" only with a row, like the row's (coTopHtml).
-    const legend = hasRow(ctx.co)
+    const legend = hasRow(ctx.co, block)
       ? legendButton(ctx.co, block, facetNameOf(ctx, block), "seen")
       : "";
     const chart = seenTogetherHtml(ctx.co, block, legend);
@@ -191,14 +192,14 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
     // has no rows and no panel, so no tabs either: they would switch nothing.
     const text = blockText(block, ctx.catalog);
     const summary = `<span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
-    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}">${coTop}<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${remove}${rowCaption(ctx)}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
+    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}">${coTop}<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${remove}${rowCaption(ctx, block)}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
   }
   const has = `<span class="qb-logic" role="group" aria-label="Has or has no ${escapeHtml(name)}">${logicButton(!block.negated, "set-has", "Has")}${logicButton(block.negated, "set-has-no", "Has no")}</span>`;
   // The tabs and ✕ share one right-aligned box (as a group's actions
   // do): when the line wraps they move together and stay on the right, so the
   // ✕ is never alone at the start of a line.
   const actions = `<span class="qb-block-actions">${panelTabsHtml(ctx.panelTab)}${remove}</span>`;
-  const line1 = `<div class="qb-block-line">${start}${has}${actions}${rowCaption(ctx)}</div>`;
+  const line1 = `<div class="qb-block-line">${start}${has}${actions}${rowCaption(ctx, block)}</div>`;
   const expanded = ctx.expandedBlockIds.includes(block.id);
   const openFieldId = ctx.openField?.blockId === block.id ? ctx.openField.fieldId : null;
   const rows = fieldRowsHtml(

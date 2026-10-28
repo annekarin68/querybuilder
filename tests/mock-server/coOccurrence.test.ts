@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { coOccurrenceOf } from "../../mock-server/coOccurrence";
-import { INDIVIDUALS } from "../../mock-server/vehicleData";
+import { FACET_WITHOUT_CO_OCCURRENCE, INDIVIDUALS } from "../../mock-server/vehicleData";
 import type { Entryset } from "../../mock-server/vehicleData";
 
 const event = (id: number, ...facets: string[]): Entryset => ({
@@ -41,9 +41,18 @@ describe("coOccurrenceOf", () => {
     expect(counted["b"]!["a"]).toBe("100");
   });
 
-  it("is on every individual the mock answers", () => {
+  it("is on every individual the mock answers, except the one left out on purpose", () => {
     for (const individual of INDIVIDUALS) {
-      expect(Object.keys(individual.co_occurrence ?? {})).toHaveLength(INDIVIDUALS.length);
+      if (individual.label === FACET_WITHOUT_CO_OCCURRENCE) {
+        expect(individual).not.toHaveProperty("co_occurrence");
+      } else {
+        expect(Object.keys(individual.co_occurrence ?? {})).toHaveLength(INDIVIDUALS.length);
+      }
     }
+  });
+
+  it("still names the facet left out in the other facets' maps", () => {
+    const other = INDIVIDUALS.find((i) => i.label !== FACET_WITHOUT_CO_OCCURRENCE)!;
+    expect(other.co_occurrence).toHaveProperty(FACET_WITHOUT_CO_OCCURRENCE);
   });
 });

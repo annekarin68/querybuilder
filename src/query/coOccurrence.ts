@@ -24,7 +24,8 @@ export interface Rect {
 export function connectedFacets(facets: Facet[]): Facet[] {
   const seen = new Set<string>();
   for (const facet of facets) {
-    for (const [otherId, value] of facet.coOccurrence) {
+    // A facet without data names nobody; others may still name it.
+    for (const [otherId, value] of facet.coOccurrence ?? []) {
       if (otherId === facet.id) continue;
       if (value.percent > 0 || value.tooRare) {
         seen.add(facet.id);
@@ -42,7 +43,7 @@ export function coOccurrenceRange(facets: Facet[]): CoRange | null {
   let min = Infinity;
   let max = 0;
   for (const facet of facets) {
-    for (const [otherId, value] of facet.coOccurrence) {
+    for (const [otherId, value] of facet.coOccurrence ?? []) {
       if (otherId === facet.id || value.tooRare || !(value.percent > 0)) continue;
       min = Math.min(min, value.percent);
       max = Math.max(max, value.percent);
@@ -126,18 +127,86 @@ export function formatPercent(text: string): string {
   return text + " %";
 }
 
+/** How many significant digits a value shown on screen keeps. Three keep
+ *  every value within 0.5 % of itself and fit one short line; one digit would
+ *  show 76.19 as 80. */
+const SHOWN_DIGITS = 3;
+
+/** The parts of a number written as text: digits before the point, digits
+ *  after it, and the exponent (letter, then sign and digits). */
+const NUMBER_TEXT = /^(\d*)(?:\.(\d*))?(?:([eE])([+-]?)(\d+))?$/;
+
+/**
+ * The backend's percentage text cut to `digits` significant digits, for what
+ * sighted users read (captions, lists); the accessible names keep the full
+ * text. It works on the text, not on a number, so "1e-400" (too small for a
+ * number) works too. Text with at most `digits` significant digits is kept
+ * as it is; longer text is rounded half up, in its own form ("1.23456e-20"
+ * becomes "1.23e-20", a plain decimal stays plain) without trailing zeros
+ * after the point. Digits before the point are never dropped. Text that is
+ * not a plain number is returned unchanged.
+ */
+export function roundPercentText(text: string, digits = SHOWN_DIGITS): string {
+  const match = NUMBER_TEXT.exec(text);
+  if (!match) return text;
+  const [, whole = "", fraction = "", expLetter, expSign = "", expDigits] = match;
+  const all = whole + fraction;
+  const first = all.search(/[1-9]/);
+  if (first === -1 || all.length - first <= digits) return text;
+
+  let pointAt = whole.length; // how many digits are before the point
+  const keep = Math.max(first + digits, pointAt);
+  if (keep >= all.length) return text;
+  let kept = all.slice(0, keep);
+  let exponent = expDigits === undefined ? null : Number(expSign + expDigits);
+  if (Number(all[keep]) >= 5) {
+    // Add one in the last kept place, carrying leftwards.
+    const incremented = (BigInt("1" + kept) + 1n).toString();
+    if (incremented.startsWith("2")) {
+      // "999" became "1000": one more digit before the point, or in a number
+      // with an exponent a larger exponent ("9.996e-5" is "1e-4").
+      kept = "1" + "0".repeat(keep);
+      if (exponent === null) pointAt += 1;
+      else {
+        kept = kept.slice(0, keep);
+        exponent += 1;
+      }
+    } else {
+      kept = incremented.slice(1);
+    }
+  }
+  const mantissaWhole = kept.slice(0, pointAt);
+  const mantissaFraction = kept.slice(pointAt).replace(/0+$/, "");
+  const mantissa = mantissaWhole + (mantissaFraction ? "." + mantissaFraction : "");
+  if (exponent === null) return mantissa || "0";
+  const sign = exponent < 0 ? "-" : expSign === "+" ? "+" : "";
+  return `${mantissa || "0"}${expLetter}${sign}${Math.abs(exponent)}`;
+}
+
 /** Square pie chart layout (squarified treemap, Bruls et al.): rectangles with
  *  area proportional to value, filling width x height, as square as possible.
- *  Returned in the order of `values`; a zero value gets an empty rect. */
-export function squarify(values: number[], width: number, height: number): Rect[] {
+ *  Returned in the order of `values`; a zero value gets an empty rect.
+ *  With `keepLast`, the last value is not sorted in but laid out last, so it
+ *  ends in the bottom-right corner whatever its size (the merged box). */
+export function squarify(
+  values: number[],
+  width: number,
+  height: number,
+  keepLast = false,
+): Rect[] {
   const rects: Rect[] = values.map(() => ({ x: 0, y: 0, w: 0, h: 0 }));
-  const order = values
+  const drawn = values
     .map((value, index) => ({ value, index }))
-    .filter((item) => Number.isFinite(item.value) && item.value > 0)
-    .sort((a, b) => b.value - a.value);
+    .filter((item) => Number.isFinite(item.value) && item.value > 0);
+  const lastIndex = values.length - 1;
+  const pinned = keepLast ? drawn.filter((item) => item.index === lastIndex) : [];
+  const order = [
+    ...drawn.filter((item) => !pinned.includes(item)).sort((a, b) => b.value - a.value),
+    ...pinned,
+  ];
   // Sizes relative to the largest (1 and below): the sum of the values
   // themselves can overflow to Infinity (1e308 + 1e308), the shares cannot.
-  const largest = order[0]?.value ?? 0;
+  const largest = Math.max(0, ...order.map((item) => item.value));
   const share = (value: number) => value / largest;
   const total = order.reduce((sum, item) => sum + share(item.value), 0);
   if (total === 0 || width <= 0 || height <= 0) return rects;

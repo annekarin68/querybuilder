@@ -225,7 +225,11 @@ stand out 3:1 from the track and the card.
 
 **Co-occurrence colours.** The heat colours of the co-occurrence cells are the
 `--qb-cooc-*` tokens in the same `:root` block, again opaque `#rrggbb` only:
-`--qb-cooc-stop-1`, `-2`, … run from "rarely together" to "often together", and
+`--qb-cooc-stop-1`, `-2`, … run from "rarely together" to "often together"
+(the lightest stop must stay at least 1.25:1 from `--qb-surface`, checked in
+`tests/themeContrast.test.ts`, so the "rarest" box shows on the card), and
+`--qb-cooc-merged` and `--qb-cooc-merged-stripe` (the two neutral greys of the
+"+ N less often" box, off the heat scale; its label must reach 4.5:1 on both),
 `--qb-cooc-never` (a value of 0), `--qb-cooc-cell-border` (each cell's outline),
 `--qb-cooc-own` (the mark for the facet itself) and the two dot/label colours
 `--qb-cooc-dot-dark` and `--qb-cooc-dot-light`. Change them there, never in a
@@ -497,7 +501,8 @@ src/
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator.
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
     coOccurrence.ts    "Seen together" maths (pure): connectedFacets, coOccurrenceRange, scalePosition (log),
-                       coOccurrenceColour, legendTicks, stepFactorText, squarify, formatPercent.
+                       coOccurrenceColour, legendTicks, stepFactorText, squarify (optionally keeping the last value last),
+                       formatPercent, roundPercentText.
     validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue. An unknown field or a
                        field set twice is an issue on that condition (it gets its own removable row).
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
@@ -981,8 +986,12 @@ The mapping is also where the backend's quirks are dealt with, once:
 - **Co-occurrence** (`co_occurrence`, "Seen together") becomes
   `Facet.coOccurrence`, a map by the other facet's id to a `CoValue`
   (`text`, the backend's own text kept for display; `percent`, 0 to 100;
-  `tooRare`). `toFacet` reads it with `readCoOccurrence`; a missing map is
-  empty, and `getFacets` warns once for the whole list (`countWithoutCoOccurrence`).
+  `tooRare`). `toFacet` reads it with `readCoOccurrence`. **A missing map (or
+  one that is not an object) is `null`, "no data"; an object is a map even
+  when every entry is dropped as unreadable (then it is empty, "never seen
+  together").** The two are shown differently ("Centre — `queryBuilder.ts`"), so
+  `Facet.coOccurrence` is `ReadonlyMap | null`. `getFacets` warns once for the
+  whole list about the facets without a map (`countWithoutCoOccurrence`).
   A value that is not a plain number from 0 to 100 is left out, and one too
   small for a JavaScript number (`"1e-400"` reads as 0) is kept as
   `tooRare` with `percent` 0, each with one warning per facet listing them.
@@ -1986,7 +1995,14 @@ with no other *from its own values* (all its cells never-seen; also a facet
 only other facets name, and one the dictionary does not know) gets a row of
 never-seen cells and the group's title "Never seen together with another
 facet." (the chart uses the same rule, so the two agree); with no data at all
-(nothing seen with anything), no row is drawn.
+(nothing seen with anything), no row is drawn. **A facet whose own map is
+`null`** (the backend left `co_occurrence` out for it) gets no row, no top
+line, no caption and no **?** (`hasCoRow`, `coOccurrenceHtml.ts`): "no data" is
+not "never seen together", and a **?** for content that is not shown only
+confuses (maintainers, 2026-10-28). Its Seen together tab says "No
+co-occurrence data for this facet." with no **?**. The other facets' rows
+are unchanged: its cell in their rows comes from *their* maps, and
+`connectedFacets` still counts it when any map names it.
 The connected facets and the range are worked out once per paint
 (`coCtxOf`, cached per dictionary array), and without two colour stops
 (`readCoTokens` found none) there is no row and no chart: co-occurrence is
@@ -2016,7 +2032,7 @@ at its right end the legend's **?** (24 px, round). The
 **?** is the row's neighbour, not inside its `role="group"`, so the arrow
 keys never land on it (Tab does, next). Every block with a row has one,
 folded or not, an isolated row too. With no row at all (no co-occurrence
-data, or no colour tokens) there is no line and no **?**: the legend
+data, a facet whose own map is `null`, or no colour tokens) there is no line and no **?**: the legend
 explains the row's colours, and there are none, and the line would take
 about 29 px in every block (decided 2026-10-28, to be confirmed by the
 maintainers, who asked for a **?** on every block). **The caption**
@@ -2033,8 +2049,15 @@ not drawn. It is one line: a long text ends in
 are the cell's accessible name already. The chart has one too, laid over
 its title line (below the chart it could reach under the next block, which
 is drawn over it). An item's `data-caption`, when it has one, replaces the
-name in the caption: only the merged box has one ("30 facets, each less
-often than the boxes shown"), as its name lists every facet in it. Cells
+name in the caption. The merged box always has one ("30 facets, each less
+often than the boxes shown"), as its name lists every facet in it. A cell or
+box has one when the backend's number is longer than 3 significant digits:
+the caption shows it rounded (`roundPercentText`: "76.19047619047619" reads
+"76.2", "1.23456e-20" reads "1.23e-20"; a string operation, so "1e-400"
+works; the form is kept and digits before the point are never dropped),
+while the accessible name keeps the full text. Three digits, not one: one
+would show 76.19 as 80, three keep every value within 0.5 % of itself and
+fit one short line. Cells
 and boxes have **no `title`**: the browser's tooltip would repeat the
 caption a second later, over the neighbouring cells. Escape in the builder
 empties every caption until the user points at an item or moves the focus
@@ -2099,7 +2122,10 @@ nesting take width too, not the window's width).
   width), go into one **+ N less often** box whose accessible name lists them
   (its caption says only how many). **Pressing it** (click or Enter) opens
   a popover listing them (`mergedListHtml`, id `popover-<block id>-merged`):
-  each facet in its cell's words, largest first, the too-rare ones last.
+  each facet in its cell's words with the number rounded as in the caption,
+  largest first, the too-rare ones last. Production has hundreds of facets,
+  so the list scrolls inside itself (`max-height` on `.qb-merged-list`) and
+  the sentence above it stays in view.
   This keeps the spec's "whose hover lists them" now that boxes have no
   `title`, and the box is no dead control. It is a co-occurrence
   popover (`qb-popover`) like the legend, so it is placed by its box,
@@ -2113,7 +2139,11 @@ nesting take width too, not the window's width).
   can leave a box thin while a rarer one is thick). Merging gives the rest
   more room, so it repeats until no box is too thin. That box stands for a
   list, not a value, so it is not to scale: it gets at least 2 % of the
-  chart, growing until it is 12 px thick too. It gets both labels, "+ N less
+  chart, growing until it is 12 px thick too. It is often the largest box
+  (many facets merge), and must not read as "the most often": it is a
+  neutral striped grey (`--qb-cooc-merged`, off the green heat scale) and
+  is always laid out last, bottom-right, whatever its size (`squarify`'s
+  `keepLast`). It gets both labels, "+ N less
   often" and "+N" (the browser can hide a label but not shorten it), and
   shows the long one where it fits in the real panel, else the short one,
   else neither (`labelToShow`; decided 2026-10-28: "+30" alone is unclear
@@ -2130,7 +2160,7 @@ nesting take width too, not the window's width).
   merged box has neither attribute, as it is not one facet. The tab's
   title line has its own **?** (the chart uses the row's colours; like the
   row's, only when there is a row) and the chart's caption. An
-  isolated facet, one the dictionary does not know, and a page without any
+  isolated facet, a facet without data (no **?**), one the dictionary does not know, and a page without any
   co-occurrence data each get one sentence instead. Without a context
   (the dictionary still loading, or no colour tokens) the tab says "Seen
   together cannot be shown right now.", which claims nothing about the data.
@@ -2788,7 +2818,9 @@ to a named handler function — add a route there, and a test in
   tested) works out, at startup, for every individual the share of its sample
   events that also hold each other individual (`"100"` for itself, `"0"` for
   never), as text like the real backend's; `vehicleData.ts` adds it to every
-  individual the mock answers.
+  individual the mock answers, except one (`FACET_WITHOUT_CO_OCCURRENCE`,
+  `vehicleData.ts`) that answers with no `co_occurrence` at all, so the
+  frontend's "no data" case shows in the browser; the other facets still name it.
 - **Data:** 7 databases (`ALPHA`…`ETA`, sizes 12K to 5.6B) in `databases.ts`;
   each event is assigned to one database by a hash of its numeric id
   (`dbIndexForEntrysetId`), never by its content. `rows.ts` prepares every

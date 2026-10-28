@@ -50,7 +50,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  expect(console.warn).not.toHaveBeenCalled();
+  // The mock leaves co_occurrence out of one facet on purpose (vehicleData.ts),
+  // and the client says so once; any other warning is a disagreement.
+  const unexpected = vi
+    .mocked(console.warn)
+    .mock.calls.filter((call) => !/facets have no co_occurrence/.test(String(call[0])));
+  expect(unexpected).toEqual([]);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   cookie = "";
@@ -103,6 +108,8 @@ describe("the client reads every mock response", () => {
     const facets = await client.getFacets();
     expect(facets.length).toBeGreaterThan(0);
     expect(facets.every((f) => f.fields.length > 0)).toBe(true);
+    // Exactly one facet has no co-occurrence data (null), the rest have a map.
+    expect(facets.filter((f) => f.coOccurrence === null)).toHaveLength(1);
   });
 
   it("login state and compliance, anonymous and logged in", async () => {

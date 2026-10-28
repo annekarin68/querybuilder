@@ -91,8 +91,9 @@ describe("statistics bars", () => {
 
 // Co-occurrence colours (docs/ARCHITECTURE.md, "Pickle theme and mascot").
 // The light stops cannot reach 3:1 against the card without losing the
-// gradient, so each cell has an outline that does, and the stops themselves
-// are deliberately not checked against the card.
+// gradient, so each cell has an outline that does; the stops themselves are
+// checked against the card only for the lightest one, at 1.25:1, so it is
+// still told from the card.
 const stops = (): string[] => {
   const found: string[] = [];
   for (let n = 1; new RegExp(`--qb-cooc-stop-${n}:`).test(root); n++)
@@ -120,6 +121,20 @@ describe("co-occurrence colours", () => {
   ])("%s against %s meets WCAG 1.4.11 (3:1)", (mark, neighbour) => {
     expect(contrastRatio(token(mark), token(neighbour))).toBeGreaterThanOrEqual(3);
   });
+
+  // The lightest stop is the "rarely together" box: it must show on the card.
+  it("the lightest stop is at least 1.25:1 against the card", () => {
+    expect(contrastRatio(stops()[0]!, token("qb-surface"))).toBeGreaterThanOrEqual(1.25);
+  });
+
+  // The merged box ("+ N less often") is striped with two greys; its label
+  // sits on both.
+  it.each(["qb-cooc-merged", "qb-cooc-merged-stripe"])(
+    "the merged box's label reaches 4.5:1 on %s",
+    (grey) => {
+      expect(contrastRatio(token(grey), token("qb-cooc-dot-dark"))).toBeGreaterThanOrEqual(4.5);
+    },
+  );
 
   // Every stop, and three blends between each pair of neighbours, as the
   // painter will draw them.

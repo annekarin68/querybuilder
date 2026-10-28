@@ -9,6 +9,7 @@ import {
   coOccurrenceRange,
   connectedFacets,
   formatPercent,
+  roundPercentText,
   squarify,
   type CoRange,
   type Rect,
@@ -68,6 +69,10 @@ export interface CoMark {
   facet: Facet;
   kind: CellKind;
   name: string;
+  /** What the caption and the merged list show: `name`, but with the
+   *  backend's number cut to a few digits (`roundPercentText`). The name
+   *  keeps the full text for screen readers. */
+  caption: string;
   /** The value's size, 0 to 100; 0 for every kind but "seen" (a too-rare
    *  value is below what a number holds). */
   percent: number;
@@ -81,6 +86,16 @@ function ownFacet(ctx: CoCtx, block: FacetBlock): Facet | null {
   return ctx.facets.find((f) => f.id === block.facetId) ?? null;
 }
 
+/** Whether `block` has a co-occurrence row (and so a "?" for its colours):
+ *  some facet is seen with another, and the block's own facet has data. A
+ *  facet the backend sent no `co_occurrence` for has none: "no data" is not
+ *  "never seen together", and a row of never-seen cells would claim the
+ *  second. A facet the dictionary does not know keeps its row, as before. */
+export function hasCoRow(ctx: CoCtx, block: FacetBlock): boolean {
+  if (ctx.connected.length === 0) return false;
+  return ownFacet(ctx, block)?.coOccurrence !== null;
+}
+
 function kindOf(own: Facet | null, other: Facet, value: CoValue | undefined): CellKind {
   if (own && other.id === own.id) return "own";
   if (value?.tooRare) return "too-rare";
@@ -90,22 +105,29 @@ function kindOf(own: Facet | null, other: Facet, value: CoValue | undefined): Ce
 /** How `other` is seen from `own` (null: a facet the dictionary does not
  *  know, which is drawn as seen with nobody). `ownName` names the block. */
 function markOf(ctx: CoCtx, own: Facet | null, ownName: string, other: Facet): CoMark {
-  const value = own?.coOccurrence.get(other.id);
+  const value = own?.coOccurrence?.get(other.id);
   const kind = kindOf(own, other, value);
   const percent = kind === "seen" ? value!.percent : 0;
   const mark = { facet: other, kind, percent, background: null, ink: null };
+  // The name says the backend's text in full; the caption rounds it.
+  const worded = (text: string) => `${other.name}: ${formatPercent(text)} of ${ownName}'s events`;
+  const both = (words: (text: string) => string) => ({
+    name: words(value?.text ?? ""),
+    caption: words(roundPercentText(value?.text ?? "")),
+  });
   switch (kind) {
-    case "own":
-      return { ...mark, name: `${other.name} (this facet)` };
+    case "own": {
+      const name = `${other.name} (this facet)`;
+      return { ...mark, name, caption: name };
+    }
     case "too-rare":
       // Still the backend's text ("1e-400 %"): it is all there is to say
       // about a value too small for a number, and hover must never lose it.
-      return {
-        ...mark,
-        name: `${other.name}: ${formatPercent(value!.text)} of ${ownName}'s events, too rare to colour`,
-      };
-    case "never":
-      return { ...mark, name: `${other.name}: never seen together` };
+      return { ...mark, ...both((text) => `${worded(text)}, too rare to colour`) };
+    case "never": {
+      const name = `${other.name}: never seen together`;
+      return { ...mark, name, caption: name };
+    }
     case "seen": {
       const { stops, dotDark, dotLight } = ctx.tokens;
       // A seen value is always inside the range, which is built from them all.
@@ -113,8 +135,8 @@ function markOf(ctx: CoCtx, own: Facet | null, ownName: string, other: Facet): C
       const background = coOccurrenceColour(value!.percent, range, stops);
       return {
         ...mark,
-        // The backend's own text, never re-formatted (formatPercent).
-        name: `${other.name}: ${formatPercent(value!.text)} of ${ownName}'s events`,
+        // The name has the backend's own text, never re-formatted (formatPercent).
+        ...both(worded),
         background,
         ink: betterOn(background, dotDark, dotLight),
       };
@@ -126,6 +148,13 @@ function markOf(ctx: CoCtx, own: Facet | null, ownName: string, other: Facet): C
  *  from styles.css. */
 function colourStyle(mark: CoMark): string {
   return mark.background ? `background-color:${mark.background};color:${mark.ink}` : "";
+}
+
+/** ` data-caption="…"` when the caption differs from the accessible name
+ *  (it shows the rounded number), else nothing: the caption falls back to the
+ *  name, so repeating it would only make the page larger. */
+function captionAttr(mark: CoMark): string {
+  return mark.caption === mark.name ? "" : ` data-caption="${escapeHtml(mark.caption)}"`;
 }
 
 /** The roving tabindex: only the first item of a row or chart is a Tab stop;
@@ -142,7 +171,7 @@ const tabindexAt = (index: number) => (index === 0 ? "0" : "-1");
  * up). Empty when no facet is seen with any other: there is no data.
  */
 export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
-  if (ctx.connected.length === 0) return "";
+  if (!hasCoRow(ctx, block)) return "";
   const own = ownFacet(ctx, block);
   const ownName = facetNameOrId(ctx.facets, block.facetId);
   const marks = ctx.connected.map((other) => markOf(ctx, own, ownName, other));
@@ -155,7 +184,7 @@ export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
       const name = escapeHtml(mark.name);
       const style = colourStyle(mark);
       const id = escapeHtml(other.id);
-      return `<button type="button" class="qb-co-cell is-${mark.kind}" data-co-cell="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}"${style ? ` style="${style}"` : ""}></button>`;
+      return `<button type="button" class="qb-co-cell is-${mark.kind}" data-co-cell="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}"${captionAttr(mark)}${style ? ` style="${style}"` : ""}></button>`;
     })
     .join("");
   // A title on the group itself: the browser shows it on the gaps and reads
@@ -249,6 +278,9 @@ export function seenLayout(ctx: CoCtx, own: Facet): SeenLayout {
       [...values, mergedValue(values, merged, mergedShare)],
       CHART_WIDTH,
       CHART_HEIGHT,
+      // Always last (bottom-right), whatever its size: it is an aggregate,
+      // not "the most often", and in production it is often the largest.
+      true,
     );
     const tiny = shown.filter((_, index) => isTiny(rects[index] as Rect));
     if (tiny.length > 0) {
@@ -325,7 +357,7 @@ function mergedName(merged: MergedBox): string {
  * dictionary.
  */
 function mergedListHtml(id: string, merged: MergedBox, ownName: string): string {
-  const items = merged.items.map((m) => `<li>${escapeHtml(m.name)}</li>`).join("");
+  const items = merged.items.map((m) => `<li>${escapeHtml(m.caption)}</li>`).join("");
   return `<div id="${escapeHtml(id)}" popover class="${POPOVER_CLASS}"><p>${facetCount(merged.items.length)} seen together less often with <strong>${escapeHtml(ownName)}</strong>:</p><ul class="qb-merged-list">${items}</ul></div>`;
 }
 
@@ -349,6 +381,10 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendBut
   if (!ctx) return note(CANNOT_SHOW);
   if (ctx.connected.length === 0) return note(NO_DATA);
   if (!own) return note(UNKNOWN_FACET);
+  // No "?" here: it would explain colours that are not shown.
+  if (own.coOccurrence === null) {
+    return `<div class="qb-seen-head"><h3 class="qb-seen-title">Seen together with ${escapeHtml(ownName)}</h3></div><p class="qb-muted">${NO_DATA}</p>`;
+  }
   const layout = seenLayout(ctx, own);
   if (layout.boxes.length === 0 && !layout.merged) return note(NEVER_WITH_ANY);
 
@@ -357,7 +393,7 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendBut
     const id = escapeHtml(mark.facet.id);
     // Every box gets its label; hideCutLabels hides those that do not fit.
     const text = `<span class="qb-seen-label">${escapeHtml(mark.facet.name)}</span>`;
-    return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}" style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
+    return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}"${captionAttr(mark)} style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
   });
   let mergedList = "";
   if (layout.merged) {

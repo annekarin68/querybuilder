@@ -48,13 +48,21 @@ function loadEntrysets(): Record<string, Entryset> {
 
 export const ENTRYSETS: Record<string, Entryset> = loadEntrysets();
 
-/** The individuals, each answering with the co-occurrence worked out from the sample events. */
+/** The one facet that answers without `co_occurrence`, so the frontend's
+ *  "no data" case (not the same as "never seen together") shows in the browser.
+ *  The others still name it in their own maps. */
+export const FACET_WITHOUT_CO_OCCURRENCE = "road_surface_condition";
+
+/** The individuals, each answering with the co-occurrence worked out from the
+ *  sample events (except `FACET_WITHOUT_CO_OCCURRENCE`). */
 function withCoOccurrence(individuals: Individual[]): Individual[] {
   const table = coOccurrenceOf(
     Object.values(ENTRYSETS),
     individuals.map((i) => i.label),
   );
-  return individuals.map((i) => ({ ...i, co_occurrence: table[i.label]! }));
+  return individuals.map((i) =>
+    i.label === FACET_WITHOUT_CO_OCCURRENCE ? i : { ...i, co_occurrence: table[i.label]! },
+  );
 }
 
 export const INDIVIDUALS: Individual[] = withCoOccurrence(loadIndividuals());

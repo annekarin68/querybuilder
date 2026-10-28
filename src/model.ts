@@ -76,9 +76,11 @@ export interface Facet {
   description: string;
   /** How many events, across all databases, hold a value for this facet. */
   eventCount: number;
-  /** By the other facet's id (this facet's own id too, at 100). Empty when
-   *  the backend sent none. Display data only: nothing depends on it. */
-  coOccurrence: ReadonlyMap<string, CoValue>;
+  /** By the other facet's id (this facet's own id too, at 100). Null when
+   *  the backend left `co_occurrence` out: "no data" is not "never seen
+   *  together", which is an empty map or one without a seen value. Display
+   *  data only: nothing depends on it. */
+  coOccurrence: ReadonlyMap<string, CoValue> | null;
   fields: Field[];
 }
 
