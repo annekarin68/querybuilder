@@ -36,7 +36,7 @@ import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
 import { escapeHtml } from "./ui/panel";
 import { renderSavedDialog, wireSavedDialog } from "./ui/savedQueries";
 import { renderEventDialog, wireEventDialog } from "./ui/eventDialog";
-import { createClickCounter, easterEggReaction, startRain } from "./ui/pickleRain";
+import { createClickCounter, startRain } from "./ui/pickleRain";
 
 // This file only sets up the page: it renders the frame, wires each panel to
 // `app` (src/app.ts, where everything the app DOES lives) and repaints panels
@@ -62,17 +62,17 @@ const app = createApp({
 });
 
 // Hidden: five quick clicks on the logo switch the mascot to the easter-egg set
-// (five more switch back) and make it rain with the new set (instead, a toast
-// when switching on, for people who prefer reduced motion).
+// (five more switch back) and make it rain with the new set; switching on also
+// shows a toast (switching off needs none: the face changes back). It rains even for
+// people who prefer reduced motion: five quick clicks are a deliberate choice
+// (maintainers' decision, 2026-10-28; "Pickle theme and mascot").
 const logoClicked = createClickCounter();
 shell.logo.addEventListener("click", () => {
   if (!logoClicked()) return;
   const easterEgg = !store.getState().easterEgg;
   store.setState({ easterEgg });
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const reaction = easterEggReaction(easterEgg, reduceMotion);
-  if (reaction === "rain") startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
-  else if (reaction === "toast") showToast(EASTER_EGG_TOAST);
+  startRain(Object.values(easterEgg ? EASTER_EGG_MASCOT : MASCOT));
+  if (easterEgg) showToast(EASTER_EGG_TOAST);
 });
 
 // Wire every panel once. The listeners are delegated to the panel containers
