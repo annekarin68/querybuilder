@@ -1,5 +1,5 @@
 import type { Facet } from "../model";
-import { findFacet, type FieldCatalog } from "../query/fieldCatalog";
+import type { FieldCatalog } from "../query/fieldCatalog";
 import type { FieldRef } from "../query/drop";
 import { blockText, queryToText } from "../query/summary";
 import { countBlocks, ungroupBlocker } from "../query/tree";
@@ -15,10 +15,12 @@ import {
 } from "./builderParts";
 import { aboutPanelHtml, aboutTitle, type AboutCtx } from "./aboutPanel";
 import { CAPTION, coRowHtml, seenTogetherHtml, type CoCtx } from "./coOccurrenceHtml";
-import { legendHtml, legendId, legendToggleHtml } from "./legendHtml";
+import { legendHtml, legendToggleHtml } from "./legendHtml";
+import { facetNameOrId } from "./facetWords";
 import { fieldRowsHtml } from "./fieldRows";
 import { countLabel } from "./format";
 import { escapeHtml } from "./panel";
+import { popoverId } from "./popover";
 
 // The HTML of the facet-block builder's tree: groups, facet blocks and the
 // footer line. Pure strings, so the Node-only tests can reach them;
@@ -82,17 +84,22 @@ function panelTabsHtml(open: PanelTab | null): string {
   return `<span class="qb-panel-tabs" role="group" aria-label="Panel beside the fields">${tab("seen", "Seen together")}${tab("about", "About")}</span>`;
 }
 
-/** The block's facet's name: the dictionary's, or its id when the
- *  dictionary does not know it. */
+/** The block's facet's name: the field catalog's, or its id when the
+ *  catalog does not know it. (The catalog, not the dictionary: it is there
+ *  as soon as the builder is drawn.) */
 function facetNameOf(ctx: BlockCtx, block: FacetBlock): string {
-  return findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
+  return facetNameOrId(ctx.catalog.facets, block.facetId);
 }
 
 /** The "?" that opens the colour legend, for the row (`row`) or the Seen
  *  together tab (`seen`): both explain the same colours. */
 function legendButton(co: CoCtx, block: FacetBlock, name: string, where: "row" | "seen"): string {
   const action = where === "row" ? "legend" : "legend-seen";
-  return legendToggleHtml(legendId(block.id, where), action, legendHtml(name, co.range, co.tokens));
+  return legendToggleHtml(
+    popoverId(block.id, where),
+    action,
+    legendHtml(name, co.range, co.tokens),
+  );
 }
 
 /** Whether the block draws a co-occurrence row: there is a context (colour
@@ -103,18 +110,26 @@ function hasRow(co: CoCtx | null): co is CoCtx {
 
 /**
  * The line above the head (spec, section 6, decision 22): the co-occurrence
- * row, the legend's "?" at its end, and the caption of the cell under the
- * pointer or the focus. The "?" is the row's neighbour, not inside it, so
- * the row's arrow keys never land on it; and it is outside the head, so a
- * click on it does not unfold a folded block. No row, no line: the legend
- * explains the row's colours, and without a row (no co-occurrence data, or
- * no colour tokens) there are none, so the line would only take room
- * (controller ruling, Task 7 review).
+ * row and the legend's "?" at its end. The "?" is the row's neighbour, not
+ * inside it, so the row's arrow keys never land on it; and it is outside the
+ * head, so a click on it does not unfold a folded block. No row, no line:
+ * the legend explains the row's colours, and without a row (no
+ * co-occurrence data, or no colour tokens) there are none, so the line would
+ * only take room (decided 2026-10-28, to be confirmed by the maintainers:
+ * they asked for a "?" on every block). The row's caption is not here but
+ * in the head's first line (`rowCaption`).
  */
 function coTopHtml(ctx: BlockCtx, block: FacetBlock): string {
   if (!hasRow(ctx.co)) return "";
   const row = coRowHtml(ctx.co, block);
-  return `<div class="qb-co-top">${row}${legendButton(ctx.co, block, facetNameOf(ctx, block), "row")}${CAPTION}</div>`;
+  return `<div class="qb-co-top">${row}${legendButton(ctx.co, block, facetNameOf(ctx, block), "row")}</div>`;
+}
+
+/** The caption of the row's cell under the pointer or the focus (`CAPTION`),
+ *  at the end of the head's first line: styles.css hangs it under that line,
+ *  so it never covers the grip, Move or fold buttons. Only with a row. */
+function rowCaption(ctx: BlockCtx): string {
+  return hasRow(ctx.co) ? CAPTION : "";
 }
 
 /**
@@ -176,14 +191,14 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
     // has no rows and no panel, so no tabs either: they would switch nothing.
     const text = blockText(block, ctx.catalog);
     const summary = `<span class="qb-group-summary" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
-    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}">${coTop}<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${remove}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
+    return `<div class="qb-block ${tone} is-collapsed" data-node-id="${id}">${coTop}<div class="qb-block-head" data-action="toggle-collapse" title="Click to expand"><div class="qb-block-line">${start}${summary}<span class="qb-spacer"></span>${remove}${rowCaption(ctx)}</div></div>${issuesHtml(block.id, ctx.issues)}</div>`;
   }
   const has = `<span class="qb-logic" role="group" aria-label="Has or has no ${escapeHtml(name)}">${logicButton(!block.negated, "set-has", "Has")}${logicButton(block.negated, "set-has-no", "Has no")}</span>`;
   // The tabs and ✕ share one right-aligned box (as a group's actions
   // do): when the line wraps they move together and stay on the right, so the
   // ✕ is never alone at the start of a line.
   const actions = `<span class="qb-block-actions">${panelTabsHtml(ctx.panelTab)}${remove}</span>`;
-  const line1 = `<div class="qb-block-line">${start}${has}${actions}</div>`;
+  const line1 = `<div class="qb-block-line">${start}${has}${actions}${rowCaption(ctx)}</div>`;
   const expanded = ctx.expandedBlockIds.includes(block.id);
   const openFieldId = ctx.openField?.blockId === block.id ? ctx.openField.fieldId : null;
   const rows = fieldRowsHtml(

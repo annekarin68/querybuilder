@@ -192,11 +192,29 @@ describe("blockHtml", () => {
         const html = blockHtml({ ...ctxFor(q), co, panelTab: null }, block, pos);
         const top = html.slice(html.indexOf('class="qb-co-top"'), html.indexOf("qb-block-head"));
         const rowEnd = top.indexOf("</div>", top.indexOf('class="qb-co-row"'));
-        expect(top.indexOf(`popovertarget="legend-${b.id}"`)).toBeGreaterThan(rowEnd);
+        expect(top.indexOf(`popovertarget="popover-${b.id}-row"`)).toBeGreaterThan(rowEnd);
         const head = html.slice(html.indexOf("qb-block-head"));
         expect(head).not.toContain("Explain the colours");
-        // The caption of the focused or hovered cell, for sighted users only.
-        expect(top).toContain('<p class="qb-co-caption" aria-hidden="true"></p>');
+        expect(top).not.toContain("qb-co-caption");
+      }
+    });
+
+    // The caption of the focused or hovered cell (sighted users only) hangs
+    // under the head's first line, so it never covers the grip, Move or fold.
+    it("puts the row's caption at the end of the head's first line", () => {
+      const co = coCtxOf(
+        withCoDict(),
+        coTokensFrom((name) => TOKENS[name] ?? ""),
+      );
+      for (const block of [b, { ...b, collapsed: true }]) {
+        const html = blockHtml({ ...ctxFor(q), co, panelTab: null }, block, pos);
+        const head = html.slice(html.indexOf('class="qb-block-head"'));
+        const line1 = head.slice(head.indexOf('class="qb-block-line"'));
+        expect(line1).toMatch(/^[^]*?<p class="qb-co-caption" aria-hidden="true"><\/p><\/div>/);
+        // Exactly one caption, and it is in that first line.
+        expect(html.split("qb-co-caption")).toHaveLength(2);
+        const firstLineEnd = line1.indexOf("</div>");
+        expect(line1.indexOf("qb-co-caption")).toBeLessThan(firstLineEnd);
       }
     });
 
@@ -221,7 +239,7 @@ describe("blockHtml", () => {
       );
       const html = blockHtml({ ...ctxFor(q), co, panelTab: "seen" }, b, pos);
       const panel = html.slice(html.indexOf('class="qb-seen"'));
-      expect(panel).toContain(`popovertarget="legend-${b.id}-seen"`);
+      expect(panel).toContain(`popovertarget="popover-${b.id}-seen"`);
       expect(panel).toContain('data-action="legend-seen"');
     });
 

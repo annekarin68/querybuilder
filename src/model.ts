@@ -46,7 +46,6 @@ export interface Field {
   values: string[];
 }
 
-/** One described aspect of an event: a signal, a reading, a piece of context. */
 /** How often events holding one facet also hold another (the backend's
  *  `co_occurrence`, "Seen together" in docs/ARCHITECTURE.md). */
 export interface CoValue {
@@ -60,6 +59,7 @@ export interface CoValue {
   tooRare: boolean;
 }
 
+/** One described aspect of an event: a signal, a reading, a piece of context. */
 export interface Facet {
   id: string;
   name: string;

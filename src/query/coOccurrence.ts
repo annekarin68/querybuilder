@@ -78,19 +78,47 @@ function stopValue(range: CoRange, stopCount: number, k: number): number {
   return 10 ** (lo + (k * (hi - lo)) / (stopCount - 1));
 }
 
+/** The smallest tick written as a plain decimal: below it a decimal would
+ *  be a row of zeros ("0.0000001 %"). */
+const SMALLEST_DECIMAL = 0.001;
+
+/** A tick's label: "48 %", "0.5 %", or "1e-12 %" for a very small value
+ *  (the exponent as the backend writes it, so it reads like the captions).
+ *  `String(0.0001)` would already say "0.0001", hence the explicit limit. */
+function tickLabel(value: number): string {
+  if (value >= 1) return `${Number(value.toPrecision(2))} %`;
+  const rounded = Number(value.toPrecision(1));
+  return rounded >= SMALLEST_DECIMAL ? `${rounded} %` : `${value.toExponential(0)} %`;
+}
+
 /** One legend label per colour stop, at the stop's position on the bar. */
 export function legendTicks(range: CoRange, stopCount: number): { at: number; label: string }[] {
-  return Array.from({ length: stopCount }, (_, k) => {
-    const v = stopValue(range, stopCount, k);
-    const label = v >= 1 ? Number(v.toPrecision(2)) + " %" : v.toExponential(0) + " %";
-    return { at: k / (stopCount - 1), label };
-  });
+  return Array.from({ length: stopCount }, (_, k) => ({
+    at: k / (stopCount - 1),
+    label: tickLabel(stopValue(range, stopCount, k)),
+  }));
+}
+
+/** From this factor on, a step is written as a power of ten: "about
+ *  100000000000000 times" cannot be read at a glance. */
+const POWER_FORM_FROM = 1e6;
+
+/** The superscript digits, by value: "⁰" is SUPERSCRIPT_DIGITS[0]. */
+const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/** "10¹⁴", or "3.2 × 10¹⁴": `value` (at least 1) with two significant
+ *  digits. `toExponential(1)` gives "3.2e+14". */
+function powerOfTen(value: number): string {
+  const [mantissa = "", exponent = ""] = value.toExponential(1).split("e+");
+  const power = `10${[...exponent].map((d) => SUPERSCRIPT_DIGITS[Number(d)]).join("")}`;
+  const m = Number(mantissa);
+  return m === 1 ? power : `${m} × ${power}`;
 }
 
 /** "about 100 times": how much more often one legend step is than the one before. */
 export function stepFactorText(range: CoRange, stopCount: number): string {
-  const factor = stopValue(range, stopCount, 1) / range.min;
-  return `about ${Number(factor.toPrecision(2))} times`;
+  const factor = Number((stopValue(range, stopCount, 1) / range.min).toPrecision(2));
+  return `about ${factor >= POWER_FORM_FROM ? powerOfTen(factor) : factor} times`;
 }
 
 /** The backend's text with its unit; never re-formatted, so nothing is rounded. */
@@ -107,10 +135,14 @@ export function squarify(values: number[], width: number, height: number): Rect[
     .map((value, index) => ({ value, index }))
     .filter((item) => Number.isFinite(item.value) && item.value > 0)
     .sort((a, b) => b.value - a.value);
-  const total = order.reduce((sum, item) => sum + item.value, 0);
+  // Sizes relative to the largest (1 and below): the sum of the values
+  // themselves can overflow to Infinity (1e308 + 1e308), the shares cannot.
+  const largest = order[0]?.value ?? 0;
+  const share = (value: number) => value / largest;
+  const total = order.reduce((sum, item) => sum + share(item.value), 0);
   if (total === 0 || width <= 0 || height <= 0) return rects;
 
-  const areaPerValue = (width * height) / total;
+  const areaPerShare = (width * height) / total;
   let free: Rect = { x: 0, y: 0, w: width, h: height };
   let row: { index: number; area: number }[] = [];
 
@@ -151,7 +183,7 @@ export function squarify(values: number[], width: number, height: number): Rect[
   };
 
   for (const item of order) {
-    const next = { index: item.index, area: item.value * areaPerValue };
+    const next = { index: item.index, area: share(item.value) * areaPerShare };
     const side = Math.min(free.w, free.h);
     const areas = row.map((r) => r.area);
     if (row.length > 0 && worst([...areas, next.area], side) > worst(areas, side)) flushRow();
@@ -159,9 +191,4 @@ export function squarify(values: number[], width: number, height: number): Rect[
   }
   flushRow();
   return rects;
-}
-
-/** Whether a box shows its name: the whole name on one line, never cut. */
-export function labelFits(name: string, rect: Rect, charWidth = 7, lineHeight = 16): boolean {
-  return rect.w >= name.length * charWidth && rect.h >= lineHeight;
 }

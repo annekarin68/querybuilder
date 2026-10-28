@@ -23,6 +23,7 @@ import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import {
   createReturnFocus,
   escapeClosesDocs,
+  KEEPS_FLOATING_DOCS_OPEN,
   renderDocsSidebar,
   wireDocsSidebar,
 } from "./ui/docsSidebar";
@@ -238,22 +239,14 @@ docsColumn.addEventListener("focusout", (e) => {
 
 // A click anywhere else on the page also closes the floating docs, since they
 // cover the builder. Clicks inside the docs must not (that would break "+ Add"
-// and dragging), nor those on the rail or the Hide/Show buttons, which toggle
-// the docs themselves, nor those on a co-occurrence cell or box
-// (`data-opens-docs`), which has just opened them at its facet. Nor one on
-// the chart's "+ N less often" box (`data-co-box`, as every box has): it
-// opens its list over the page, and the dictionary may stay as it is.
+// and dragging), nor those `KEEPS_FLOATING_DOCS_OPEN` lists (docsSidebar.ts
+// says why for each).
 document.addEventListener("click", (e) => {
   if (!window.matchMedia(NARROW_SCREEN).matches || store.getState().sidebarCollapsed) return;
   // composedPath() is fixed when the click starts, so it still says "inside the
   // docs" if a handler has already repainted the element that was clicked.
   const insideDocs = e.composedPath().includes(docsColumn);
-  const target = e.target as Element;
-  if (
-    insideDocs ||
-    target.closest(".qb-docs-rail, [data-menu='toggle-sidebar'], [data-opens-docs], [data-co-box]")
-  )
-    return;
+  if (insideDocs || (e.target as Element).closest(KEEPS_FLOATING_DOCS_OPEN)) return;
   store.setState({ sidebarCollapsed: true });
 });
 

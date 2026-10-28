@@ -1,7 +1,7 @@
 // "Seen together" on screen (spec, section 6): the row of small cells above
 // every facet block, and the square pie chart of the Seen together tab. Pure
 // strings, so the Node-only tests can reach them; queryBuilder.ts paints
-// them and wires their arrow keys. The maths is in src/query/coOccurrence.ts.
+// them and coOccurrenceWiring.ts wires their arrow keys. The maths is in src/query/coOccurrence.ts.
 
 import type { CoValue, Facet } from "../model";
 import {
@@ -9,7 +9,6 @@ import {
   coOccurrenceRange,
   connectedFacets,
   formatPercent,
-  labelFits,
   squarify,
   type CoRange,
   type Rect,
@@ -17,8 +16,9 @@ import {
 import type { FacetBlock } from "../query/types";
 import { betterOn } from "../util/colour";
 import type { CoTokens } from "./coTokens";
-import { legendId } from "./legendHtml";
+import { facetNameOrId, UNKNOWN_FACET } from "./facetWords";
 import { escapeHtml } from "./panel";
+import { POPOVER_CLASS, popoverId } from "./popover";
 
 /** What the row and the chart of every block need. Worked out once per
  *  paint (`coCtxOf`), because the connected facets and the colour range are
@@ -54,7 +54,6 @@ export function coCtxOf(facets: Facet[], tokens: CoTokens): CoCtx | null {
 /** Said (hover and screen readers) by a block whose facet is seen with no
  *  other facet; its row is a row of never-seen cells. */
 const NEVER_WITH_ANY = "Never seen together with another facet.";
-const UNKNOWN_FACET = "This facet is not in the data dictionary.";
 const NO_DATA = "No co-occurrence data for this facet.";
 /** Without a context (the dictionary is loading, or the colour tokens are
  *  missing) nothing is known about the data, so nothing is claimed about it. */
@@ -130,7 +129,7 @@ function colourStyle(mark: CoMark): string {
 }
 
 /** The roving tabindex: only the first item of a row or chart is a Tab stop;
- *  the arrow keys move inside it (queryBuilder.ts). */
+ *  the arrow keys move inside it (coOccurrenceWiring.ts). */
 const tabindexAt = (index: number) => (index === 0 ? "0" : "-1");
 
 /**
@@ -145,7 +144,7 @@ const tabindexAt = (index: number) => (index === 0 ? "0" : "-1");
 export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
   if (ctx.connected.length === 0) return "";
   const own = ownFacet(ctx, block);
-  const ownName = own?.name ?? block.facetId;
+  const ownName = facetNameOrId(ctx.facets, block.facetId);
   const marks = ctx.connected.map((other) => markOf(ctx, own, ownName, other));
   // Decided from this block's own values, as the chart is, so the two agree:
   // a facet that only other facets name is seen with nobody from its side.
@@ -193,9 +192,9 @@ export function captionText(hovered: string | null, focused: string | null): str
 const CHART_WIDTH = 100;
 const CHART_HEIGHT = 60;
 /** The panel's typical width is about 300 px: one unit is about 3 px. The
- *  12 px rule and the merged box's label are worked out at that size. The
- *  facets' labels are not: every box gets one, and the browser, which knows
- *  the real size, hides those that do not fit (hideCutLabels, queryBuilder.ts). */
+ *  12 px rule is worked out at that size. The labels are not: every box gets
+ *  one (the merged box two), and the browser, which knows the real size,
+ *  hides those that do not fit (hideCutLabels, coOccurrenceWiring.ts). */
 const PX_PER_UNIT = 3;
 /** A box thinner than this is hard to see and to press: it is merged. */
 const MIN_BOX_PX = 12;
@@ -216,24 +215,12 @@ export interface MergedBox {
   /** The facets it stands for, largest first, the too-rare ones last. */
   items: CoMark[];
   rect: Rect;
-  /** "+ N less often", or the short "+N", or nothing: whichever fits. */
-  label: string | null;
 }
 
 export interface SeenLayout {
   /** Largest first. */
   boxes: SeenBox[];
   merged: MergedBox | null;
-}
-
-/** A rect in reference pixels, for the 12 px rule and `labelFits`. */
-function inPx(rect: Rect): Rect {
-  return {
-    x: rect.x * PX_PER_UNIT,
-    y: rect.y * PX_PER_UNIT,
-    w: rect.w * PX_PER_UNIT,
-    h: rect.h * PX_PER_UNIT,
-  };
 }
 
 const isTiny = (rect: Rect) => Math.min(rect.w, rect.h) * PX_PER_UNIT < MIN_BOX_PX;
@@ -282,7 +269,7 @@ export function seenLayout(ctx: CoCtx, own: Facet): SeenLayout {
       continue;
     }
     const boxes = shown.map((mark, index) => ({ mark, rect: rects[index] as Rect }));
-    return { boxes, merged: merged.length ? mergedBox(merged, mergedRect) : null };
+    return { boxes, merged: merged.length ? { items: merged, rect: mergedRect } : null };
   }
 }
 
@@ -296,26 +283,6 @@ function mergedValue(shownValues: number[], merged: CoMark[], share: number): nu
   if (shownTotal === 0) return 1; // the merged box is the whole chart
   // share = value / (shownTotal + value), solved for value.
   return Math.max(mergedSum, (share * shownTotal) / (1 - share));
-}
-
-/** The label's inset inside its box (styles.css, `.qb-seen-label`): 4 px
- *  left and right, 2 px top and bottom. */
-const LABEL_INSET_X = 8;
-const LABEL_INSET_Y = 4;
-
-/** Whether `text` fits inside a box at the reference size, less the inset. */
-function fitsInBox(text: string, rect: Rect): boolean {
-  const px = inPx(rect);
-  return labelFits(text, { ...px, w: px.w - LABEL_INSET_X, h: px.h - LABEL_INSET_Y });
-}
-
-/** "+ N less often" where it fits, or "+N", chosen here because the browser
- *  can only hide a label, not shorten it. */
-function mergedBox(items: CoMark[], rect: Rect): MergedBox {
-  const long = `+ ${items.length} less often`;
-  const short = `+${items.length}`;
-  const label = fitsInBox(long, rect) ? long : fitsInBox(short, rect) ? short : null;
-  return { items, rect, label };
 }
 
 /** A length in chart units as a percentage of the chart's side. */
@@ -350,16 +317,16 @@ function mergedName(merged: MergedBox): string {
  * Enter; `popovertarget`): sighted users see only "+N" on the box, and a
  * box that does nothing when pressed would be a dead control. Each facet in
  * the words of its cell, largest first, the too-rare ones last (the order of
- * `MergedBox.items`). It has the legend's class, so queryBuilder.ts places it
- * by its box, follows the scroll and reopens it after a repaint as it does a
- * legend. It sits after the chart, not inside it: the chart's arrow keys go
+ * `MergedBox.items`). It is a popover like the legend (`POPOVER_CLASS`), so
+ * coOccurrenceWiring.ts places it by its box, follows the scroll and reopens
+ * it after a repaint as it does a legend. It sits after the chart, not inside it: the chart's arrow keys go
  * through the chart's own buttons only (`rovingItems`). Plain text items,
  * for now: the facets are also cells in the row above, which open the
  * dictionary.
  */
 function mergedListHtml(id: string, merged: MergedBox, ownName: string): string {
   const items = merged.items.map((m) => `<li>${escapeHtml(m.name)}</li>`).join("");
-  return `<div id="${escapeHtml(id)}" popover class="qb-legend"><p class="qb-legend-sentence">${facetCount(merged.items.length)} seen together less often with <strong>${escapeHtml(ownName)}</strong>:</p><ul class="qb-merged-list">${items}</ul></div>`;
+  return `<div id="${escapeHtml(id)}" popover class="${POPOVER_CLASS}"><p>${facetCount(merged.items.length)} seen together less often with <strong>${escapeHtml(ownName)}</strong>:</p><ul class="qb-merged-list">${items}</ul></div>`;
 }
 
 /**
@@ -373,7 +340,7 @@ function mergedListHtml(id: string, merged: MergedBox, ownName: string): string 
  */
 export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendButton = ""): string {
   const own = ctx ? ownFacet(ctx, block) : null;
-  const ownName = own?.name ?? block.facetId;
+  const ownName = facetNameOrId(ctx?.facets ?? null, block.facetId);
   // The tab's own "?" sits on the title's line, as the chart uses the row's
   // colours; so does the chart's caption, laid over the title (styles.css).
   const head = (caption: string) =>
@@ -396,10 +363,12 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendBut
   if (layout.merged) {
     const merged = layout.merged;
     const name = escapeHtml(mergedName(merged));
-    const text = merged.label
-      ? `<span class="qb-seen-label">${escapeHtml(merged.label)}</span>`
-      : "";
-    const listId = legendId(block.id, "merged");
+    // Both labels: the browser shows the long one if it fits, else the
+    // short one, else neither (hideCutLabels). A label can be hidden there,
+    // not shortened, so the short one has to be drawn already.
+    const count = merged.items.length;
+    const text = `<span class="qb-seen-label">+ ${count} less often</span><span class="qb-seen-label is-short">+${count}</span>`;
+    const listId = popoverId(block.id, "merged");
     boxes.push(
       `<button type="button" class="qb-seen-box is-merged" data-co-box="" popovertarget="${escapeHtml(listId)}" tabindex="${tabindexAt(boxes.length)}" aria-label="${name}" data-caption="${escapeHtml(mergedCaption(merged))}" style="${placeStyle(merged.rect)}">${text}</button>`,
     );

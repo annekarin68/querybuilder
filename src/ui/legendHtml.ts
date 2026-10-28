@@ -4,12 +4,14 @@
 // The popover is the browser's own (`<div popover>` opened by a
 // `<button popovertarget>`): Escape, a click outside and the focus going back
 // to the "?" come from the browser, with no jQuery. Pure strings and maths,
-// so the Node-only tests can reach them; queryBuilder.ts places it on screen.
+// so the Node-only tests can reach them; coOccurrenceWiring.ts places it on
+// screen (popover.ts says where).
 
 import { legendTicks, stepFactorText, type CoRange } from "../query/coOccurrence";
 import { betterOn } from "../util/colour";
 import type { CoTokens } from "./coTokens";
 import { escapeHtml } from "./panel";
+import { POPOVER_CLASS } from "./popover";
 
 /** A row whose values are all too rare for a number has no scale to draw:
  *  `coOccurrenceRange` leaves such values out. */
@@ -88,13 +90,6 @@ export function legendHtml(facetName: string, range: CoRange | null, tokens: CoT
     <p class="qb-legend-note">Click a square to open that facet in the data dictionary.</p>`;
 }
 
-/** A popover's id, per block (ids are unique on the page): the row's "?"
- *  (`row`), the Seen together tab's "?" (`seen`), and the list of the
- *  chart's "+ N less often" box (`merged`, coOccurrenceHtml.ts). */
-export function legendId(blockId: string, where: "row" | "seen" | "merged"): string {
-  return where === "row" ? `legend-${blockId}` : `legend-${blockId}-${where}`;
-}
-
 /**
  * The "?" and its popover. `action` (`legend` or `legend-seen`) is what focus
  * memory tells the two "?" of a block apart by after a repaint; the builder's
@@ -104,51 +99,5 @@ export function legendId(blockId: string, where: "row" | "seen" | "merged"): str
  */
 export function legendToggleHtml(id: string, action: string, content: string): string {
   const safeId = escapeHtml(id);
-  return `<button type="button" class="qb-icon-btn qb-legend-btn" data-action="${action}" popovertarget="${safeId}" aria-label="Explain the colours" title="Explain the colours">?</button><div id="${safeId}" popover class="qb-legend">${content}</div>`;
-}
-
-// ---- Where the popover opens ---------------------------------------------
-
-/** The popover's widest, and its distance from the button and the window's
- *  edges, in px. styles.css gives `.qb-legend` no width of its own. */
-export const LEGEND_MAX_WIDTH_PX = 352;
-export const LEGEND_GAP_PX = 8;
-
-/** Where to put the popover (fixed, in window pixels). Exactly one of `top`
- *  and `bottom` is set: it opens below the button, or above it when there is
- *  more room there. */
-export interface LegendPlacement {
-  left: number;
-  width: number;
-  top: number | null;
-  bottom: number | null;
-  maxHeight: number;
-}
-
-/**
- * Places the popover by its "?" (`button`, the button's window rectangle).
- * A popover opens in the middle of the window unless placed, far from the
- * block it explains; CSS anchor positioning would do this, but not in every
- * desktop browser yet. Its right edge lines up with the button's, as the
- * "?" sits on the right; it never leaves the window, even at 512 px.
- */
-export function legendPlacement(
-  button: { top: number; bottom: number; right: number },
-  viewport: { width: number; height: number },
-): LegendPlacement {
-  const gap = LEGEND_GAP_PX;
-  const width = Math.min(LEGEND_MAX_WIDTH_PX, viewport.width - 2 * gap);
-  const left = Math.max(gap, Math.min(button.right - width, viewport.width - width - gap));
-  const roomBelow = viewport.height - button.bottom;
-  const roomAbove = button.top;
-  if (roomBelow >= roomAbove) {
-    return { left, width, top: button.bottom + gap, bottom: null, maxHeight: roomBelow - 2 * gap };
-  }
-  return {
-    left,
-    width,
-    top: null,
-    bottom: viewport.height - button.top + gap,
-    maxHeight: roomAbove - 2 * gap,
-  };
+  return `<button type="button" class="qb-icon-btn qb-legend-btn" data-action="${action}" popovertarget="${safeId}" aria-label="Explain the colours" title="Explain the colours">?</button><div id="${safeId}" popover class="${POPOVER_CLASS} qb-legend">${content}</div>`;
 }

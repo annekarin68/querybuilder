@@ -12,6 +12,8 @@ import {
 import { newBlock } from "../../src/query/tree";
 import type { CoValue, Facet } from "../../src/model";
 import type { CoTokens } from "../../src/ui/coTokens";
+import { KEEPS_FLOATING_DOCS_OPEN } from "../../src/ui/docsSidebar";
+import { legendToggleHtml } from "../../src/ui/legendHtml";
 
 // Made-up facets: src/ never names backend data, and neither do these tests.
 function co(text: string, tooRare = false): CoValue {
@@ -227,22 +229,6 @@ describe("seenLayout", () => {
     expect(largestMerged).toBeLessThan(smallestShown);
   });
 
-  it("shortens the merged box's label to '+N', or drops it, as its box allows", () => {
-    // Alpha's merged box holds one too-rare value: it is at its smallest.
-    expect(seenLayout(ctx, alpha).merged?.label).not.toBe("+ 1 less often");
-    const values: Record<string, CoValue> = { m: co("1") };
-    const others = [facet("m", "M")];
-    for (let i = 0; i < 40; i++) {
-      values[`r${i}`] = co("1e-400", true);
-      others.push(facet(`r${i}`, `R${i}`));
-    }
-    const own = facet("own", "Own", values);
-    // Only too-rare values besides one: the merged box grows no further than
-    // it must, yet "+ 40 less often" is chosen only where it fits.
-    const merged = seenLayout(coCtxOf([own, ...others], tokens) as CoCtx, own).merged!;
-    expect(["+ 40 less often", "+40", null]).toContain(merged.label);
-  });
-
   it("is empty for an isolated facet", () => {
     expect(seenLayout(ctx, lonely)).toEqual({ boxes: [], merged: null });
   });
@@ -255,6 +241,23 @@ describe("seenTogetherHtml", () => {
     expect(all(html, "data-facet-id")).toEqual(["b"]);
     expect(all(html, "tabindex")).toEqual(["0", "-1"]);
     expect(all(html, "data-co-box")).toEqual(["b", ""]);
+  });
+
+  // Only the browser knows the box's real size, so both labels are drawn and
+  // hideCutLabels (coOccurrenceWiring.ts) shows the long one, else the short.
+  it("draws the merged box's long and short label, for the browser to pick", () => {
+    const values: Record<string, CoValue> = { m: co("1") };
+    const others = [facet("m", "M")];
+    for (let i = 0; i < 40; i++) {
+      values[`r${i}`] = co("1e-400", true);
+      others.push(facet(`r${i}`, `R${i}`));
+    }
+    const own = facet("own", "Own", values);
+    const html = seenTogetherHtml(coCtxOf([own, ...others], tokens), newBlock("own"));
+    const merged = /<button[^>]*is-merged[^>]*>(.*?)<\/button>/.exec(html)?.[1];
+    expect(merged).toBe(
+      `<span class="qb-seen-label">+ 40 less often</span><span class="qb-seen-label is-short">+40</span>`,
+    );
   });
 
   it("lists the merged facets in the '+ N less often' box's accessible name", () => {
@@ -392,10 +395,10 @@ describe("the '+ N less often' box's list", () => {
   it("opens a popover beside the chart that lists the merged facets", () => {
     const block = newBlock("a");
     const html = seenTogetherHtml(ctx, block);
-    const id = `legend-${block.id}-merged`;
+    const id = `popover-${block.id}-merged`;
     expect(html).toContain(`data-co-box="" popovertarget="${id}"`);
     const chartEnd = html.indexOf("</div>", html.indexOf('class="qb-seen-chart"'));
-    const popover = html.slice(html.indexOf(`<div id="${id}" popover class="qb-legend">`));
+    const popover = html.slice(html.indexOf(`<div id="${id}" popover class="qb-popover">`));
     expect(html.indexOf(`<div id="${id}"`)).toBeGreaterThan(chartEnd);
     expect(popover).toContain("1 facet seen together less often with <strong>Alpha</strong>");
     expect(popover).toContain("<li>Gamma: 1e-400 % of Alpha&#39;s events, too rare to colour</li>");
@@ -442,5 +445,49 @@ describe("captionText", () => {
     expect(captionText("Beta: 5 %", "Gamma: 1 %")).toBe("Beta: 5 %");
     expect(captionText(null, "Gamma: 1 %")).toBe("Gamma: 1 %");
     expect(captionText(null, null)).toBe("");
+  });
+});
+
+// main.ts folds the floating dictionary on a click outside it, except on
+// what `KEEPS_FLOATING_DOCS_OPEN` matches. Opening the dictionary from a
+// cell or box, or opening or reading a popover, is a peek: it must stay open.
+describe("KEEPS_FLOATING_DOCS_OPEN", () => {
+  /** Whether the opening tag `tag` matches one of the comma-separated
+   *  `selectors`. Only the kinds the list uses: `.class`, `[attr]` and
+   *  `[attr='value']`; any other kind fails the test rather than pass it. */
+  function matchesOneOf(tag: string, selectors: string): boolean {
+    const classes = /\sclass="([^"]*)"/.exec(tag)?.[1]?.split(/\s+/) ?? [];
+    return selectors.split(",").some((part) => {
+      const sel = part.trim();
+      if (/^\.[\w-]+$/.test(sel)) return classes.includes(sel.slice(1));
+      const attr = /^\[([\w-]+)(?:='([^']*)')?\]$/.exec(sel);
+      if (!attr) throw new Error(`The test cannot read the selector ${sel}`);
+      const [, name, value] = attr;
+      return value === undefined
+        ? new RegExp(`\\s${name}(=|\\s|>)`).test(tag)
+        : tag.includes(` ${name}="${value}"`);
+    });
+  }
+  const openingTags = (html: string) => html.match(/<(button|div)\b[^>]*>/g) ?? [];
+
+  it("matches the row's cells, the chart's boxes and the merged box", () => {
+    const html = coRowHtml(ctx, newBlock("a")) + seenTogetherHtml(ctx, newBlock("a"));
+    const items = openingTags(html).filter((t) => /qb-co-cell|qb-seen-box/.test(t));
+    expect(items.some((t) => t.includes("is-merged"))).toBe(true);
+    for (const tag of items) expect(matchesOneOf(tag, KEEPS_FLOATING_DOCS_OPEN)).toBe(true);
+  });
+
+  it("matches the legend's ? and every popover, so a click inside one counts too", () => {
+    const html =
+      legendToggleHtml("popover-a-row", "legend", "<p>inside</p>") +
+      seenTogetherHtml(ctx, newBlock("a"));
+    const tags = openingTags(html).filter((t) => /popover|qb-legend-btn/.test(t));
+    expect(tags.filter((t) => / popover( |>)/.test(t))).toHaveLength(2);
+    for (const tag of tags) expect(matchesOneOf(tag, KEEPS_FLOATING_DOCS_OPEN)).toBe(true);
+  });
+
+  it("does not match the builder's other buttons", () => {
+    const remove = `<button type="button" class="qb-icon-btn" data-action="remove-node">`;
+    expect(matchesOneOf(remove, KEEPS_FLOATING_DOCS_OPEN)).toBe(false);
   });
 });

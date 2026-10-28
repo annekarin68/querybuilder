@@ -4,6 +4,7 @@ import type { FieldRef } from "../query/drop";
 import { findNode } from "../query/tree";
 import type { FacetBlock } from "../query/types";
 import { facetDetailsHtml, fieldDetailsHtml, totalEvents } from "./docsSidebar";
+import { facetNameOrId, UNKNOWN_FACET } from "./facetWords";
 import { escapeHtml, paint } from "./panel";
 
 // The About tab of the panel beside each facet block (spec, section 5 and
@@ -38,8 +39,8 @@ export function aboutCtxOf(state: AppState): AboutCtx {
   };
 }
 
-/** The words for a part the dictionary does not (or not yet) know. */
-const UNKNOWN_FACET = "This facet is not in the data dictionary.";
+/** The words for a part the dictionary does not (or not yet) know
+ *  (`UNKNOWN_FACET` is in facetWords.ts: the chart says it too). */
 const UNKNOWN_FIELD = "This field is not in the data dictionary.";
 const NO_DESCRIPTION = "No description in the data dictionary.";
 /** Tells a first-time user that About can say more than the facet. */
@@ -54,7 +55,7 @@ function facetOf(ctx: AboutCtx, block: FacetBlock): Facet | null {
  *  name, from one place so the two never differ. The facet id stands in for
  *  a facet the dictionary does not know. Plain text: escape it for HTML. */
 export function aboutTitle(ctx: AboutCtx, block: FacetBlock): string {
-  return `About ${facetOf(ctx, block)?.name ?? block.facetId}`;
+  return `About ${facetNameOrId(ctx.facets, block.facetId)}`;
 }
 
 /** The About panel's content for `block`: its facet, or the selected field

@@ -984,11 +984,13 @@ body {
   border-radius: 50%;
   font-weight: 700;
 }
-/* The legend itself: the browser's popover, in the top layer, so no block or
-   container query can clip it. The browser hides it while it is closed, so
-   it gets no `display` here. queryBuilder.ts places it by its "?"
-   (`legendPlacement` sets left, width, top or bottom, and max-height). */
-.qb-legend {
+/* A co-occurrence popover (POPOVER_CLASS, popover.ts): the legend a "?"
+   opens and the list the "+ N less often" box opens. The browser's popover,
+   in the top layer, so no block or container query can clip it. The browser
+   hides it while it is closed, so it gets no `display` here.
+   coOccurrenceWiring.ts places it by its button (`popoverPlacement` sets
+   left, width, top or bottom, and max-height). */
+.qb-popover {
   position: fixed;
   inset: auto;
   margin: 0;
@@ -1003,7 +1005,7 @@ body {
   font-size: 0.85rem;
   line-height: 1.4;
 }
-.qb-legend p {
+.qb-popover p {
   margin: 0 0 0.5rem;
 }
 .qb-legend-note {
@@ -1107,8 +1109,13 @@ body {
 .qb-co-caption:empty {
   display: none;
 }
-/* The row's caption hangs under the row, over the head. */
-.qb-co-top > .qb-co-caption {
+/* The row's caption hangs under the head's first line (it is that line's
+   last child, blockHtml.ts), over line 2 or the rows: never over the grip,
+   Move or fold buttons on line 1. */
+.qb-block-head > .qb-block-line:first-child {
+  position: relative;
+}
+.qb-block-line > .qb-co-caption {
   top: 100%;
 }
 /* The chart's caption covers its title line: below the chart it could reach
@@ -1205,7 +1212,8 @@ body {
   text-align: left;
 }
 /* A label that would be cut in this panel is hidden, never cut
-   (hideCutLabels in queryBuilder.ts). */
+   (hideCutLabels in coOccurrenceWiring.ts). The merged box has two labels,
+   "+ N less often" and "+N": at most one of them is left visible. */
 .qb-seen-label.is-cut {
   visibility: hidden;
 }

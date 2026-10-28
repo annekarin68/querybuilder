@@ -8,6 +8,7 @@ import { DRAG_MIME, parseDragItem, type DragItem } from "../query/drop";
 import { TEXT_SOURCES, type TextSource } from "../config";
 import { forgetDrag, rememberDrag } from "./dragMemory";
 import { findField, type FieldCatalog } from "../query/fieldCatalog";
+import { POPOVER_CLASS } from "./popover";
 
 /**
  * The small logo in front of a text, saying who wrote it (`TEXT_SOURCES` in
@@ -305,6 +306,20 @@ export interface EscapeContext {
 export function escapeClosesDocs(c: EscapeContext): boolean {
   return c.key === "Escape" && !c.defaultPrevented && c.floating && !c.collapsed && c.focusInDocs;
 }
+
+/**
+ * What a click may land on without folding the floating dictionary (main.ts
+ * folds it on a click anywhere else, since it covers the builder):
+ * - the rail and the Hide/Show buttons, which toggle it themselves;
+ * - a co-occurrence cell or box (`data-opens-docs`), which has just opened it
+ *   at its facet;
+ * - a popover's button (`popovertarget`: the legends' "?" and the chart's
+ *   "+ N less often" box) and anything inside an open popover (`.qb-popover`,
+ *   which sits outside the dictionary): opening or reading a popover is a
+ *   peek, not leaving the dictionary.
+ * Clicks inside the dictionary itself are checked apart (by `composedPath`).
+ */
+export const KEEPS_FLOATING_DOCS_OPEN = `.qb-docs-rail, [data-menu='toggle-sidebar'], [data-opens-docs], [popovertarget], .${POPOVER_CLASS}`;
 
 /** The part of an element `detailsToOpen` reads: an HTMLElement in the
  *  browser, a plain object in the tests. */

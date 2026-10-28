@@ -5,7 +5,6 @@ import {
   coOccurrenceColour,
   coOccurrenceRange,
   formatPercent,
-  labelFits,
   legendTicks,
   scalePosition,
   squarify,
@@ -126,16 +125,6 @@ describe("squarify", () => {
   });
 });
 
-describe("labelFits", () => {
-  it("is true when the whole name fits on one line", () => {
-    expect(labelFits("abc", { x: 0, y: 0, w: 40, h: 20 }, 6, 14)).toBe(true);
-  });
-  it("is false when the name is too wide or the box too low", () => {
-    expect(labelFits("abcdefgh", { x: 0, y: 0, w: 40, h: 20 }, 6, 14)).toBe(false);
-    expect(labelFits("abc", { x: 0, y: 0, w: 40, h: 10 }, 6, 14)).toBe(false);
-  });
-});
-
 describe("legend text", () => {
   it("labels 7 stops from 1e-12 % to 100 %", () => {
     const ticks = legendTicks({ min: 1e-12, max: 100 }, 7);
@@ -147,6 +136,25 @@ describe("legend text", () => {
   });
   it("says how many times more often each step is", () => {
     expect(stepFactorText({ min: 1e-4, max: 100 }, 4)).toBe("about 100 times");
+  });
+  it("writes values below 1 % as plain decimals down to 0.001 %", () => {
+    const labels = (min: number, max: number, n: number) =>
+      legendTicks({ min, max }, n).map((t) => t.label);
+    expect(labels(0.5, 50, 3)).toEqual(["0.5 %", "5 %", "50 %"]);
+    expect(labels(0.04, 4, 2)).toEqual(["0.04 %", "4 %"]);
+    expect(labels(0.001, 0.1, 3)).toEqual(["0.001 %", "0.01 %", "0.1 %"]);
+    // Below 0.001 % a decimal would be a row of zeros: the exponent, as the
+    // backend writes such values in the captions.
+    expect(labels(1e-4, 1, 2)).toEqual(["1e-4 %", "1 %"]);
+  });
+  it("writes a huge step as a power of ten, not a row of digits", () => {
+    // Two stops over 1e-12 … 100: one step of 10^14.
+    expect(stepFactorText({ min: 1e-12, max: 100 }, 2)).toBe("about 10¹⁴ times");
+    expect(stepFactorText({ min: 1e-12, max: 3.2e2 }, 2)).toBe("about 3.2 × 10¹⁴ times");
+    // Below a million the digits are still easy to read.
+    expect(stepFactorText({ min: 1, max: 500_000 }, 2)).toBe("about 500000 times");
+    // Judged after rounding: 999 000 is "about a million".
+    expect(stepFactorText({ min: 1, max: 999_000 }, 2)).toBe("about 10⁶ times");
   });
   it("formatPercent adds the unit to the backend's text", () => {
     expect(formatPercent("1.2e-20")).toBe("1.2e-20 %");
@@ -162,6 +170,10 @@ describe("robustness", () => {
     }
     const big = rects[1];
     expect(Math.abs((big?.w ?? 0) * (big?.h ?? 0) - 60000)).toBeLessThan(1e-3);
+  });
+  it("squarify copes with values whose sum overflows", () => {
+    const rects = squarify([1e308, 1e308], 100, 60);
+    expect(rects.map((r) => r.w * r.h)).toEqual([3000, 3000]);
   });
   it("squarify gives non-finite values an empty rect", () => {
     const rects = squarify([Infinity, 1, NaN], 100, 100);

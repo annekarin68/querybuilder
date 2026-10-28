@@ -187,8 +187,9 @@ desktop windows, not for tablets.
   do. The one growth left is a database whose answer carries a note line or
   a failure reason (neither can be predicted, so that row grows by a line), and
   **Show problem**, which appears with the first answer that reports a
-  problem in the query (accepted by the
-  maintainers, 2026-10-27).
+  problem in the query (decided 2026-10-27, to be confirmed by the
+  maintainers: reserving a line for every row would waste room on every
+  run for a note that is rare).
 - **The floating dictionary steps aside during a drag** (maintainers,
   2026-10-27). At 1100 px and below the dictionary covers part of the page,
   including the builder's drop targets. When a drag starts from a dictionary
@@ -496,7 +497,7 @@ src/
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator.
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
     coOccurrence.ts    "Seen together" maths (pure): connectedFacets, coOccurrenceRange, scalePosition (log),
-                       coOccurrenceColour, legendTicks, stepFactorText, squarify, labelFits, formatPercent.
+                       coOccurrenceColour, legendTicks, stepFactorText, squarify, formatPercent.
     validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue. An unknown field or a
                        field set twice is an issue on that condition (it gets its own removable row).
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
@@ -553,14 +554,22 @@ src/
                        cells above each block), seenLayout / seenTogetherHtml (the square pie chart),
                        rovingIndex (the arrow keys of both), CAPTION / captionText (the line naming the
                        cell or box under the pointer or the focus).
+    coOccurrenceWiring.ts The behaviour of the rows and charts in the builder (wireCoOccurrence, called by
+                       wireQueryBuilder): arrow keys, Tab stops across repaints, captions, opening the
+                       dictionary from a cell or box, placing and reopening the popovers, hiding cut chart
+                       labels (labelToShow is pure).
     legendHtml.ts      The colour legend, a native popover from a "?" (pure): legendHtml (its content),
-                       legendToggleHtml / legendId (the "?" and the popover), legendPlacement (where it opens).
+                       legendToggleHtml (the "?" and the popover).
+    popover.ts         What the legends and the "+ N less often" list share (pure): POPOVER_CLASS, popoverId,
+                       popoverPlacement (where one opens).
+    facetWords.ts      Words about a block's facet that several panels say: facetNameOrId, UNKNOWN_FACET.
     coTokens.ts        The --qb-cooc-* colour tokens: coTokensFrom (pure), readCoTokens (the DOM read).
     databasePicker.ts  Database scope pills (render + wiring), the failure markers on them
                        (failedDatabases, failureReasons, queryIsAtFault) and Deselect failing (deselectFailingIds).
     queryBuilder.ts    The query builder: paints blockHtml.ts's tree and wires it (field rows, "+ Facet",
                        drop targets, node grips, the panel's tabs and field selection, the title row with
-                       Save… and Saved queries; returns its render function). QUERY_BUILDER_KEYS.
+                       Save… and Saved queries; returns its render function; "Seen together" is wired by
+                       coOccurrenceWiring.ts). QUERY_BUILDER_KEYS.
     savedQueries.ts    The Save… and Saved queries dialogs: savedDialogHtml, focusAfterRepaint and
                        escapeAction (pure), renderSavedDialog (paints and opens/closes the <dialog>),
                        wireSavedDialog.
@@ -568,7 +577,8 @@ src/
     docsFilter.ts      tagsOf / groupByTag / matchDocs / filterStatus — the data dictionary's sections and search (pure).
     docsSidebar.ts     The data dictionary (render + search, drag-start and "Add to query" wiring);
                        facetDetailsHtml / fieldDetailsHtml, shared with the About panel; showFacet (opens a
-                       facet's card for a co-occurrence cell) and detailsToOpen (pure).
+                       facet's card for a co-occurrence cell) and detailsToOpen (pure);
+                       KEEPS_FLOATING_DOCS_OPEN (what a click may land on without folding it).
     dragMemory.ts      Which dictionary item is being dragged (a browser hides a drag's data until the drop; see "Centre — `queryBuilder.ts`", Drag and drop).
     statsPanel.ts      The statistics column (render + wiring: Show problem, Try again).
     dataPreview.ts     Matching events and the Run button (render + wiring: Run, Previous / Next, an id).
@@ -1823,11 +1833,17 @@ cell that opened it (`escapeClosesDocs`; the focus move is
 `setSidebarCollapsed`'s). In the
 search box the first Escape only clears its text (the box calls
 `preventDefault()`, which `escapeClosesDocs` treats as "spent"); a second
-Escape, with the box empty, closes the panel. A click anywhere outside the docs
-column, the rail, the **Hide dictionary** / **Show dictionary** buttons and
-the co-occurrence cells and boxes (`data-opens-docs`) closes it too (also `main.ts`, same 1100 px query): the open docs cover the
-builder, and nothing else would close them. Clicks inside the docs never do, or
-**+ Add** and dragging would break.
+Escape, with the box empty, closes the panel. A click anywhere else closes it too (also
+`main.ts`, same 1100 px query): the open docs cover the builder, and nothing
+else would close them. Clicks inside the docs never do, or **+ Add** and
+dragging would break. Nor do the clicks `KEEPS_FLOATING_DOCS_OPEN`
+(`docsSidebar.ts`) lists: the rail and the **Hide dictionary** / **Show
+dictionary** buttons (they toggle it themselves), the co-occurrence cells and
+boxes (`data-opens-docs`, which have just opened it at a facet), every popover
+button (`popovertarget`: the legends' **?** and the chart's "+ N less often"
+box) and any click inside an open popover (`.qb-popover`, which sits outside
+the docs). Opening or reading a popover is a peek, not leaving the
+dictionary (decided 2026-10-28).
 
 A floating panel that is wider than the room is cut to fit. That is the case in
 a window narrower than the remembered width plus the rail plus one gap (a stored
@@ -1968,8 +1984,9 @@ block's own facet is a round mustard mark; a value too small for a
 JavaScript number is an empty box with a dot. A block whose facet is seen
 with no other *from its own values* (all its cells never-seen; also a facet
 only other facets name, and one the dictionary does not know) gets a row of
-never-seen cells, the same rule the chart uses, so the two agree, with the group's title "Never seen together with another
-facet."; with no data at all (nothing seen with anything), no row is drawn.
+never-seen cells and the group's title "Never seen together with another
+facet." (the chart uses the same rule, so the two agree); with no data at all
+(nothing seen with anything), no row is drawn.
 The connected facets and the range are worked out once per paint
 (`coCtxOf`, cached per dictionary array), and without two colour stops
 (`readCoTokens` found none) there is no row and no chart: co-occurrence is
@@ -1978,10 +1995,12 @@ named "Seen together with <facet>"; each cell is a button whose accessible
 name (shown by the caption, below; no `title`) says the facet and the backend's text ("<other>: 5 % of
 <facet>'s events", "<other>: never seen together", "<facet> (this facet)",
 "<other>: 1e-400 % of <facet>'s events, too rare to colour": the backend's
-text even then, as spec section 6 asks, over the plan's wording), with `data-facet-id`; a click or Enter on a cell opens the dictionary at that
+text even then, since spec section 6 says hover shows the original text and
+it is all there is to say about such a value), with `data-facet-id`; a click or Enter on a cell opens the dictionary at that
 facet ("Opened at a facet from the builder" under "Left — `docsSidebar.ts`
 (data dictionary)"). The click handler finds the cell by `data-opens-docs`
-and hands `main.ts` a finder for it (`rovingItemOf`, by the same block, row
+(`coOccurrenceWiring.ts`, like everything below that moves the focus or
+fills a caption) and hands `main.ts` a finder for it (`rovingItemOf`, by the same block, row
 or chart and `data-co-cell` / `data-co-box` the Tab stops are remembered
 by), so the focus can come back to it when the dictionary closes.
 **Keyboard:** the row (and the chart) is one Tab stop: the markup makes the
@@ -1993,18 +2012,23 @@ focused cell the Tab stop and remembers it per block and per row or chart
 (`restoreTabStops`, `tabStopIndex`), so after an edit elsewhere Shift+Tab
 still returns to the cell the user left. Focus memory finds a focused cell
 again after a repaint by the same attributes. **The line above the head** (`coTopHtml`, `blockHtml.ts`): the row, then
-at its right end the legend's **?** (24 px, round), then the caption. The
+at its right end the legend's **?** (24 px, round). The
 **?** is the row's neighbour, not inside its `role="group"`, so the arrow
 keys never land on it (Tab does, next). Every block with a row has one,
 folded or not, an isolated row too. With no row at all (no co-occurrence
 data, or no colour tokens) there is no line and no **?**: the legend
-explains the row's colours, and there are none (controller ruling after the
-Task 7 review). **The caption**
+explains the row's colours, and there are none, and the line would take
+about 29 px in every block (decided 2026-10-28, to be confirmed by the
+maintainers, who asked for a **?** on every block). **The caption**
 (`CAPTION`, `captionText`): a `title` shows on hover only, never on keyboard
 focus, and the spec asks for name and value on both. So the cell under the
 pointer, else the focused one, has its accessible name shown in a small box
-under the row, laid over the head (`position: absolute`), so showing it
-moves nothing; empty, it is not drawn. It is one line: a long text ends in
+laid over the page (`position: absolute`), so showing it moves nothing. It
+is the last child of the head's first line (`rowCaption`, `blockHtml.ts`),
+which is `position: relative`, so it hangs just under that line, over line 2
+or the rows: never over the grip, Move or fold buttons it would otherwise
+hide (decided 2026-10-28); a folded block has that line too. Empty, it is
+not drawn. It is one line: a long text ends in
 "…" (the whole text is the accessible name). It is `aria-hidden`: the words
 are the cell's accessible name already. The chart has one too, laid over
 its title line (below the chart it could reach under the next block, which
@@ -2015,14 +2039,15 @@ and boxes have **no `title`**: the browser's tooltip would repeat the
 caption a second later, over the neighbouring cells. Escape in the builder
 empties every caption until the user points at an item or moves the focus
 again (content shown on hover or focus must be dismissible, and the caption
-covers the head); a repaint putting the focus back does not bring it back
+covers what is under it); a repaint putting the focus back does not bring it back
 (`isRestoringFocus`). It does not use up that Escape, which goes on to the
 block, since for a screen reader, which never sees the caption, it would do
 nothing. The row group's title for an isolated row stays (there is no cell
 to caption). **The legend** (`legendHtml.ts`, spec section 6, decision 22)
-is the browser's own popover (`<div popover>` opened by `<button popovertarget>`, ids `legend-<block id>`
-and `legend-<block id>-seen`), not a Fomantic popup as the spec first said
-(controller ruling): Escape, a click outside and the focus staying on the
+is the browser's own popover (`<div popover>` opened by `<button popovertarget>`, ids
+`popover-<block id>-row` and `popover-<block id>-seen` from `popoverId`,
+class `qb-popover` like every co-occurrence popover, plus `qb-legend`), not a
+Fomantic popup as the spec first said: Escape, a click outside and the focus staying on the
 **?** come from the browser, with no jQuery, and the top layer means no
 block or container query can clip it. It says what is measured, naming the
 block's facet; shows the bar (a CSS gradient through the stops, in OKLab
@@ -2030,16 +2055,22 @@ where the browser can), the stops' values (`legendTicks`), "rarer" / "more
 often", the log step (`stepFactorText`), keys for the four marks, and that a
 square opens the dictionary. When every value is too rare to have a number
 (a row, but no range), "Every value is too small to colour." replaces the
-bar, and the keys stay. A popover opens in the middle of the window, so
-a capturing `beforetoggle` listener places it by its **?**
-(`legendPlacement`: right edge under the button's, below or above, whichever
+bar, and the keys stay. The numbers are written to be read
+at a glance: a tick is "48 %", "0.5 %" or, below 0.001 %, "1e-12 %" (the
+exponent as the backend writes it in the captions; `legendTicks`), and a
+step of a million times or more is "about 10¹⁴ times" or "about 3.2 × 10¹⁴
+times" (`stepFactorText`), not a row of digits. A popover opens in the
+middle of the window, so a capturing `beforetoggle` listener
+(`coOccurrenceWiring.ts`) places it by its button
+(`popoverPlacement`, `popover.ts`: right edge under the button's, below or above, whichever
 has more room, inside the window down to 512 px), and places it again on
 every page scroll and window resize while it is open (the listeners go when
 it closes, or when a repaint has removed it). A builder repaint replaces an
-open legend's popover, which the browser then hides, so the render function
-opens the new one again (`showPopover`); focus memory puts the focus back on
-its **?**. An Escape that closes a legend does not also close the open field
-row or clear About's selection (`openLegendOf`, which also keeps Escape
+open popover, which the browser then hides, so the render function opens the
+new one again (`beforePaint` / `afterPaint`, `showPopover`); focus memory
+puts the focus back on its button. An Escape that closes a popover does not
+also close the open field row or clear About's selection (`openPopoverOf`,
+which also keeps Escape
 working in a browser without popovers, where the `:popover-open` selector
 would throw).
 **The 11 px cells, and the
@@ -2067,25 +2098,28 @@ nesting take width too, not the window's width).
   thinner than 12 px at a 300 × 180 px reference (the panel's typical
   width), go into one **+ N less often** box whose accessible name lists them
   (its caption says only how many). **Pressing it** (click or Enter) opens
-  a popover listing them (`mergedListHtml`, id `legend-<block id>-merged`):
+  a popover listing them (`mergedListHtml`, id `popover-<block id>-merged`):
   each facet in its cell's words, largest first, the too-rare ones last.
   This keeps the spec's "whose hover lists them" now that boxes have no
-  `title`, and the box is no dead control. The popover has the legend's
-  class, so it is placed by its box, follows the scroll, reopens after a
-  repaint and takes Escape like a legend (below). It sits after the chart,
+  `title`, and the box is no dead control. It is a co-occurrence
+  popover (`qb-popover`) like the legend, so it is placed by its box,
+  follows the scroll, reopens after a repaint and takes Escape like a legend
+  (above). It sits after the chart,
   outside its `data-roving` group, so the arrow keys still go box to box.
   Its items are plain text for now (each facet is also a cell in the row,
-  which opens the dictionary). A click on it does not fold the floating
-  dictionary (`main.ts` leaves every `data-co-box` alone). Merging goes by value, not by shape: a thin box goes together
+  which opens the dictionary). A click on the box or inside its list does
+  not fold the floating dictionary (`KEEPS_FLOATING_DOCS_OPEN`). Merging goes by value, not by shape: a thin box goes together
   with every rarer one, so "less often" is true of every facet in it (squarify
   can leave a box thin while a rarer one is thick). Merging gives the rest
   more room, so it repeats until no box is too thin. That box stands for a
   list, not a value, so it is not to scale: it gets at least 2 % of the
-  chart, growing until it is 12 px thick too. Its label is "+ N less often",
-  or "+N", or none, whichever fits at the reference size less the label's
-  inset (`labelFits`): the browser can hide a label but not shorten it.
+  chart, growing until it is 12 px thick too. It gets both labels, "+ N less
+  often" and "+N" (the browser can hide a label but not shorten it), and
+  shows the long one where it fits in the real panel, else the short one,
+  else neither (`labelToShow`; decided 2026-10-28: "+30" alone is unclear
+  wherever the whole words fit).
   **Every other box gets its facet's name as a label**, and `hideCutLabels`
-  (`queryBuilder.ts`, through a `ResizeObserver` on every chart, so on the
+  (`coOccurrenceWiring.ts`, through a `ResizeObserver` on every chart, so on the
   first paint and whenever the panel's size changes) hides each label whose
   text overflows its box in the real panel: a name is shown only where it
   fits whole, never cut. **Why not decide in `seenLayout`:** only the
@@ -2102,7 +2136,10 @@ nesting take width too, not the window's width).
   together cannot be shown right now.", which claims nothing about the data.
 - **About** (`aboutPanelHtml`, `aboutPanel.ts`) shows the dictionary's details
   of the block's facet (`facetDetailsHtml`, the same markup as the opened
-  dictionary card, without its fields) and a hint that a field can be
+  dictionary card, without its fields: the block's rows beside it already
+  list every field, and a field's name selects it for About, which then
+  describes it; decided 2026-10-28, to be confirmed by the maintainers, as
+  spec section 6 lists the fields too) and a hint that a field can be
   selected. When `AppState.selectedField` is a field of this block it shows
   that field's name, type and texts (`fieldDetailsHtml`, the same markup as
   the opened dictionary field, without the known values, whose drag and "+"

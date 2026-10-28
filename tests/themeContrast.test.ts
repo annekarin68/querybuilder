@@ -105,6 +105,15 @@ describe("co-occurrence colours", () => {
     expect(stops().length).toBeGreaterThanOrEqual(2);
   });
 
+  // The app (coTokens.ts) and `stops()` above both stop counting at the first
+  // missing number, so a gap would silently drop every later stop.
+  it("numbers its stops 1, 2, 3 … without a gap", () => {
+    const numbers = [...root.matchAll(/--qb-cooc-stop-(\d+):/g)]
+      .map((m) => Number(m[1]))
+      .sort((a, b) => a - b);
+    expect(numbers).toEqual(numbers.map((_, i) => i + 1));
+  });
+
   it.each([
     ["qb-cooc-cell-border", "qb-surface"],
     ["qb-cooc-own", "qb-surface"],

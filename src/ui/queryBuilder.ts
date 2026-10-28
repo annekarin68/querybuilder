@@ -39,8 +39,8 @@ import { RESTORED_MESSAGE } from "../util/keptQuery";
 import { escapeHtml, paint } from "./panel";
 import { aboutCtxOf } from "./aboutPanel";
 import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
-import { captionText, coCtxOf, rovingIndex, tabStopIndex } from "./coOccurrenceHtml";
-import { legendPlacement } from "./legendHtml";
+import { coCtxOf } from "./coOccurrenceHtml";
+import { wireCoOccurrence } from "./coOccurrenceWiring";
 import { readCoTokens } from "./coTokens";
 import { pickedOperatorId } from "./fieldRows";
 import { onDropdownChange, openDropdown } from "./fomantic";
@@ -105,105 +105,6 @@ export function revealNode(container: HTMLElement, nodeId: string): void {
   if (!node.hasAttribute("tabindex")) node.setAttribute("tabindex", "-1");
   node.scrollIntoView({ block: "center" });
   node.focus();
-}
-
-/** The buttons of a row of co-occurrence cells or of a Seen together chart
- *  (`data-roving`): one Tab stop, the arrow keys move between them. */
-function rovingItems(group: Element): HTMLElement[] {
-  return Array.from(group.querySelectorAll<HTMLElement>(":scope > button"));
-}
-
-/** The id a row's cell or a chart's box is remembered by: its
- *  `data-co-cell` or `data-co-box` (the merged box's is ""). */
-function rovingIdOf(item: HTMLElement): string {
-  return item.dataset.coCell ?? item.dataset.coBox ?? "";
-}
-
-/** Which row or chart `group` is, in words that survive a repaint: its
- *  block's id and whether it is the row or the chart. Null outside a block. */
-function rovingGroupKey(group: Element): string | null {
-  const blockId = group.closest<HTMLElement>(".qb-block[data-node-id]")?.dataset.nodeId;
-  if (!blockId) return null;
-  return `${blockId} ${group.classList.contains("qb-co-row") ? "row" : "chart"}`;
-}
-
-/** The cell or box `itemId` of the row or chart `groupKey` (rovingGroupKey),
- *  as it is on screen now (a repaint replaces them), or null if it is gone. */
-function rovingItemOf(
-  container: HTMLElement,
-  groupKey: string,
-  itemId: string,
-): HTMLElement | null {
-  for (const group of container.querySelectorAll("[data-roving]")) {
-    if (rovingGroupKey(group) !== groupKey) continue;
-    return rovingItems(group).find((item) => rovingIdOf(item) === itemId) ?? null;
-  }
-  return null;
-}
-
-/** Fills the caption of a row or chart (`CAPTION`, coOccurrenceHtml.ts) with
- *  the item under the pointer, else the focused one: its short
- *  `data-caption` if it has one, else its accessible name. Either may be
- *  null, or an item of another group (then it does not count). */
-function showCaption(group: Element, hovered: Element | null, focused: Element | null): void {
-  // The row's caption is beside it; the chart's is in the title line above.
-  const caption = group.parentElement?.querySelector(".qb-co-caption");
-  if (!caption) return;
-  const nameIn = (item: Element | null) =>
-    item && group.contains(item)
-      ? (item.getAttribute("data-caption") ?? item.getAttribute("aria-label"))
-      : null;
-  caption.textContent = captionText(nameIn(hovered), nameIn(focused));
-}
-
-/**
- * Puts a legend popover by its "?" as it opens (`legendPlacement`): without
- * this the browser opens it in the middle of the window. It is fixed in the
- * window, so its place is worked out from the button's place on screen.
- */
-function placeLegend(container: HTMLElement, popover: HTMLElement): void {
-  const button = container.querySelector(`[popovertarget="${CSS.escape(popover.id)}"]`);
-  if (!button) return;
-  const place = legendPlacement(button.getBoundingClientRect(), {
-    // The window without its scrollbar, as for the floating dictionary.
-    width: document.documentElement.clientWidth,
-    height: window.innerHeight,
-  });
-  const px = (n: number | null) => (n === null ? "auto" : `${n}px`);
-  Object.assign(popover.style, {
-    left: px(place.left),
-    width: px(place.width),
-    top: px(place.top),
-    bottom: px(place.bottom),
-    maxHeight: px(place.maxHeight),
-  });
-}
-
-/** The open legend popover in `container`, or null. Null too where the
- *  browser has no popovers: the selector would throw there (and break every
- *  Escape in the builder), and no legend can be open anyway. */
-function openLegendOf(container: HTMLElement): HTMLElement | null {
-  if (!("showPopover" in HTMLElement.prototype)) return null;
-  return container.querySelector<HTMLElement>(".qb-legend:popover-open");
-}
-
-/** Make item `index` of `group` its one Tab stop. */
-function setTabStop(group: Element, index: number): void {
-  rovingItems(group).forEach((item, i) => (item.tabIndex = i === index ? 0 : -1));
-}
-
-/**
- * Hides the chart's labels that do not fit: every box gets its facet's
- * label (`seenTogetherHtml`), and only the browser knows the real size. A
- * label that would be cut is hidden instead (a cut name is never shown; the
- * name is still the box's accessible name and its caption).
- * Hiding it changes no size, so this cannot loop.
- */
-function hideCutLabels(chart: Element): void {
-  for (const label of chart.querySelectorAll<HTMLElement>(".qb-seen-label")) {
-    const cut = label.scrollWidth > label.clientWidth || label.scrollHeight > label.clientHeight;
-    label.classList.toggle("is-cut", cut);
-  }
 }
 
 /** The row of field `fieldId` in block `blockId`, or null if it is not on
@@ -387,6 +288,9 @@ export function wireQueryBuilder(
     showFacetInDictionary(facetId: string, returnFocusTo: () => HTMLElement | null): void;
   },
 ): (state: AppState) => void {
+  // "Seen together": the rows of cells, the charts and their popovers.
+  const coOccurrence = wireCoOccurrence(container, hooks.showFacetInDictionary);
+
   /** The facet block a field row (or anything else inside a block) belongs
    *  to, as it is in the query now; null if it is gone. */
   function blockOf(el: HTMLElement): FacetBlock | null {
@@ -539,27 +443,12 @@ export function wireQueryBuilder(
     if (getState().dropNotice) hooks.onDismissNotice();
   }
 
-  /** A cell or box (`data-opens-docs`) pressed, by a click or Enter: open
-   *  the dictionary at its facet. It is found again by the words the Tab
-   *  stops are remembered by, since a repaint may replace it meanwhile. */
-  function openInDictionary(item: HTMLElement): void {
-    const group = item.parentElement;
-    const groupKey = group ? rovingGroupKey(group) : null;
-    const facetId = item.dataset.facetId;
-    if (!groupKey || !facetId) return;
-    const itemId = rovingIdOf(item);
-    hooks.showFacetInDictionary(facetId, () => rovingItemOf(container, groupKey, itemId));
-  }
-
   container.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("[data-action='dismiss-notice']")) {
       return dismissNotice();
     }
-    // A button's Enter and Space arrive here as a click too.
-    const opener = (e.target as HTMLElement).closest<HTMLElement>(
-      "[data-roving] > [data-opens-docs]",
-    );
-    if (opener) return openInDictionary(opener);
+    // A co-occurrence cell or box: open the dictionary at its facet.
+    if (coOccurrence.handleClick(e.target as HTMLElement)) return;
     // The grip is for dragging; a click on it must not also toggle a folded group.
     if ((e.target as HTMLElement).closest(".qb-grip")) return;
     const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
@@ -690,11 +579,11 @@ export function wireQueryBuilder(
   // It also takes About back to the block's facet (spec, section 5).
   container.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    // An open legend takes this Escape (the browser closes it); the field
+    // An open popover takes this Escape (the browser closes it); the field
     // row and About stay as they are.
-    if (openLegendOf(container)) return;
+    if (coOccurrence.openPopover()) return;
     // Not a layer of its own: this Escape goes on to the block as well.
-    dismissCaptions();
+    coOccurrence.dismissCaptions();
     const target = e.target as HTMLElement;
     const block = blockOf(target);
     if (!block) return;
@@ -721,130 +610,6 @@ export function wireQueryBuilder(
     hooks.openFieldRow(null);
     if (wasInRow) keepFocusInRow(container, open.blockId, open.fieldId);
   }
-
-  // The co-occurrence row and the Seen together chart: Left / Right / Home /
-  // End move the focus between their buttons (`rovingIndex`).
-  container.addEventListener("keydown", (e) => {
-    const item = (e.target as HTMLElement).closest<HTMLElement>("[data-roving] > button");
-    if (!item?.parentElement) return;
-    const items = rovingItems(item.parentElement);
-    // Keys with Alt, Ctrl or Meta are left to the browser (rovingIndex).
-    const next = rovingIndex(e, items.indexOf(item), items.length);
-    if (next === null) return;
-    e.preventDefault(); // Home / End would scroll the page
-    items[next]?.focus();
-  });
-
-  // Each row's and chart's Tab stop is the item the user was last on. The
-  // markup always makes the first item the stop, so it is remembered here,
-  // per block, and put back after every paint (`restoreTabStops`): otherwise
-  // an edit elsewhere would send Shift+Tab back to the first cell. (Entries
-  // of removed blocks stay; they are a few short strings.)
-  const tabStops = new Map<string, string>();
-  container.addEventListener("focusin", (e) => {
-    const item = (e.target as HTMLElement).closest<HTMLElement>("[data-roving] > button");
-    const group = item?.parentElement;
-    const key = group ? rovingGroupKey(group) : null;
-    if (!item || !group || !key) return;
-    tabStops.set(key, rovingIdOf(item));
-    setTabStop(group, rovingItems(group).indexOf(item));
-  });
-  function restoreTabStops(): void {
-    for (const group of container.querySelectorAll("[data-roving]")) {
-      const key = rovingGroupKey(group);
-      const ids = rovingItems(group).map(rovingIdOf);
-      setTabStop(group, tabStopIndex(ids, key ? tabStops.get(key) : undefined));
-    }
-  }
-
-  // The caption under a row or chart follows the pointer and the focus
-  // (`showCaption`). The item under the pointer is kept here: a `mouseout`
-  // must know whether the pointer left the item or moved within it.
-  let hovered: Element | null = null;
-  // A caption lies over the block's head, so Escape puts it away (content
-  // shown on hover or focus must be dismissible: `dismissCaptions`) until the
-  // user points at or moves the focus to an item again. A repaint putting
-  // the focus back (`isRestoringFocus`) is not such a move: the Escape itself
-  // often repaints. Escape is not used up by this: the caption is hidden
-  // from screen readers, so for them that Escape would do nothing.
-  let captionsDismissed = false;
-  function dismissCaptions(): void {
-    captionsDismissed = true;
-    for (const line of container.querySelectorAll(".qb-co-caption")) line.textContent = "";
-  }
-  const caption = (group: Element, hoveredItem: Element | null, focused: Element | null) => {
-    if (!captionsDismissed) showCaption(group, hoveredItem, focused);
-  };
-  const rovingItemAt = (target: EventTarget | null) =>
-    target instanceof Element ? target.closest("[data-roving] > button") : null;
-  const focusedItem = () => rovingItemAt(document.activeElement);
-  container.addEventListener("mouseover", (e) => {
-    const item = rovingItemAt(e.target);
-    if (!item?.parentElement || item === hovered) return;
-    hovered = item;
-    captionsDismissed = false;
-    caption(item.parentElement, item, focusedItem());
-  });
-  container.addEventListener("mouseout", (e) => {
-    const item = rovingItemAt(e.target);
-    if (!item?.parentElement || item.contains(e.relatedTarget as Node | null)) return;
-    hovered = null;
-    caption(item.parentElement, null, focusedItem());
-  });
-  container.addEventListener("focusin", (e) => {
-    const item = rovingItemAt(e.target);
-    if (!item?.parentElement) return;
-    if (!isRestoringFocus()) captionsDismissed = false;
-    caption(item.parentElement, hovered, item);
-  });
-  container.addEventListener("focusout", (e) => {
-    const item = rovingItemAt(e.target);
-    // `relatedTarget`: where the focus goes (the next cell, or outside).
-    if (item?.parentElement) caption(item.parentElement, hovered, rovingItemAt(e.relatedTarget));
-  });
-
-  // A legend opening is placed by its "?" (`placeLegend`), and placed again
-  // while it is open whenever the page scrolls or the window changes size:
-  // it is fixed in the window, and its "?" moves with the page. Only one
-  // legend can be open at a time (the browser closes the other).
-  let followed: HTMLElement | null = null;
-  const placeFollowed = () => {
-    // A repaint removes an open legend without a closing event: stop then.
-    if (followed?.isConnected && followed.matches(":popover-open")) {
-      placeLegend(container, followed);
-    } else {
-      stopFollowing();
-    }
-  };
-  const scrollOptions = { capture: true, passive: true };
-  function stopFollowing(): void {
-    followed = null;
-    window.removeEventListener("scroll", placeFollowed, scrollOptions);
-    window.removeEventListener("resize", placeFollowed);
-  }
-  // `beforetoggle` does not bubble, so it is caught on the way down (capture).
-  container.addEventListener(
-    "beforetoggle",
-    (e) => {
-      const popover = e.target;
-      if (!(popover instanceof HTMLElement) || !popover.classList.contains("qb-legend")) return;
-      stopFollowing();
-      if ((e as ToggleEvent).newState !== "open") return;
-      placeLegend(container, popover);
-      followed = popover;
-      // Capture: a scroll inside a panel does not bubble to the window.
-      window.addEventListener("scroll", placeFollowed, scrollOptions);
-      window.addEventListener("resize", placeFollowed);
-    },
-    true,
-  );
-
-  // Re-checks the chart's labels whenever a chart changes size, and once
-  // when it is first observed (after each paint, below).
-  const chartSizes =
-    typeof ResizeObserver === "undefined"
-      ? null
-      : new ResizeObserver((entries) => entries.forEach((entry) => hideCutLabels(entry.target)));
 
   // The warning's ✕ is an icon, not a <button>, so Enter/Space need wiring.
   container.addEventListener("keydown", (e) => {
@@ -971,18 +736,10 @@ export function wireQueryBuilder(
   });
 
   return (state) => {
-    // A repaint replaces an open legend's popover, and the browser hides a
-    // popover that leaves the page: open the new one again, so a repaint
-    // the user did not cause (statistics' issues arriving, the dictionary
-    // reloading) does not take the legend away while it is being read.
-    // The focus comes back to its "?" through focus memory, as for any button.
-    const openLegendId = openLegendOf(container)?.id;
+    // An open popover is opened again after the paint (coOccurrenceWiring.ts).
+    const openPopoverId = coOccurrence.beforePaint();
     paintQueryBuilder(container, state);
-    if (openLegendId) document.getElementById(openLegendId)?.showPopover();
-    restoreTabStops();
-    // The old charts are gone with the repaint: watch the new ones.
-    chartSizes?.disconnect();
-    container.querySelectorAll(".qb-seen-chart").forEach((chart) => chartSizes?.observe(chart));
+    coOccurrence.afterPaint(openPopoverId);
     onDropdownChange(container, (el) => {
       const part = el.querySelector("select")?.dataset.part;
       if (part === "add-facet") return handleAddFacet(el);
