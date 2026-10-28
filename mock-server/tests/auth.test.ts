@@ -19,7 +19,7 @@ import {
   complianceStateCookieHeader,
   clearComplianceStateCookieHeader,
   complianceStateFromCookie,
-} from "../../mock-server/auth";
+} from "../auth";
 
 describe("parseCookie", () => {
   it("finds a named cookie's value among several", () => {

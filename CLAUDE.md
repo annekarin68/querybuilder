@@ -63,7 +63,10 @@ logic lives in small pure functions that the Node-only tests can reach.
 ## Before you commit
 
 Run `npm run typecheck && npm test && npm run lint && npm run build`, the same
-steps as CI (the build also runs `check:offline`). Then read your whole diff:
+steps as CI (the build also runs `check:offline`), and, while `mock-server/`
+exists, `npm run typecheck:mock && npm run test:mock`: CI leaves the mock out,
+so this is the only place its tests and the `noBackendDataInSrc` guard run.
+Then read your whole diff:
 
 - Is it easy for a junior developer to maintain?
 - Could it have broken something in the code it touches (including Fomantic's
@@ -88,7 +91,7 @@ somebody else's server.
 - **`src/` never names backend data**: no facet, field, tag, group or database
   from the mock or the real backend, not even in a comment or an example. The
   mock dataset is fictional. Anything deployment-specific goes in
-  `src/config.ts`, which ships empty. `tests/noBackendDataInSrc.test.ts`
+  `src/config.ts`, which ships empty. `mock-server/tests/noBackendDataInSrc.test.ts`
   enforces this. Prefer our own `tags` over the third-party `group`.
 - **Offline-first**: no CDN, web font or remote image ("Offline-first").
   `npm run check:offline` fails the build if the output reaches off-origin.

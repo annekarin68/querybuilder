@@ -1,0 +1,8 @@
+// `npm run typecheck:mock`: the mock server and its tests (docs/ARCHITECTURE.md,
+// "Testing and tooling"). Kept apart from tsconfig.json so that a mock that has
+// drifted from src/api/types.ts, or has been deleted, never fails
+// `npm run typecheck`, `npm run build` or CI.
+{
+  "extends": "./tsconfig.json",
+  "include": ["mock-server"]
+}

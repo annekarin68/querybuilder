@@ -22,7 +22,8 @@ small:
 - **Test narrowly while you work**, then fully once:
   `npx vitest run <test file>` for the tests your change touches, and the
   four checks from CLAUDE.md
-  (`npm run typecheck && npm test && npm run lint && npm run build`) once,
+  (`npm run typecheck && npm test && npm run lint && npm run build`, then
+  `npm run typecheck:mock && npm run test:mock`) once,
   before you commit. Pipe long output through `tail`.
 - **Browser checks with the repo's scripts**, not hand-written set-up:
   `npm run servers -- start` (ports 5191 / 3091; it waits until both answer)

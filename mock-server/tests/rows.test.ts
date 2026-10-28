@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toMockEvent } from "../../mock-server/rows";
-import { databaseIdForEntrysetId } from "../../mock-server/databases";
+import { toMockEvent } from "../rows";
+import { databaseIdForEntrysetId } from "../databases";
 
 describe("toMockEvent", () => {
   it("keeps every occurrence of every facet, one or several", () => {

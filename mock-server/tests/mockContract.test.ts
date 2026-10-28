@@ -4,9 +4,9 @@ import type { Server } from "node:http";
 import * as client from "../../src/api/client";
 import type { DatabaseResult } from "../../src/model";
 import type { FacetBlock, Group } from "../../src/query/types";
-import { createMockServer } from "../../mock-server/server";
-import { MAX_TEXT_LENGTH } from "../../mock-server/evaluate";
-import { unfinishedDraft, unfinishedTree, withoutNodeIds } from "../savedQueryFixtures";
+import { createMockServer } from "../server";
+import { MAX_TEXT_LENGTH } from "../evaluate";
+import { unfinishedDraft, unfinishedTree, withoutNodeIds } from "../../tests/savedQueryFixtures";
 import {
   exchangeCodeForSession,
   exchangeComplianceToken,
@@ -14,7 +14,7 @@ import {
   issueFakeComplianceToken,
   startCompliance,
   startLogin,
-} from "../../mock-server/auth";
+} from "../auth";
 
 // The real client (src/api/client.ts) against the mock server, over real HTTP:
 // every mock response must pass the client's contract checks

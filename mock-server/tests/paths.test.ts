@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pathBelow } from "../../mock-server/paths";
+import { pathBelow } from "../paths";
 
 describe("pathBelow: the part of a path below the API prefix", () => {
   const api = "/api/v1";

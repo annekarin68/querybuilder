@@ -604,6 +604,9 @@ mock-server/           Dev-only stand-in backend — see "Mock server".
                        (a user without an id is refused, never given a shared list).
   data/                individual.json (157 facets) and entrysets.json (21 events): fictional
                        vehicle-telemetry sample data.
+  tests/               The mock's own tests (`npm run test:mock`), inside mock-server/ so that deleting
+                       the folder takes them along: one per mock file, plus mockContract and
+                       noBackendDataInSrc ("Testing and tooling").
 public/sources/third-party.svg  The third party's logo in the dictionary (a placeholder; replace it).
 public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.svg, loading.svg, and the
                        easter-egg faces egg-logo.svg, egg-disappointed.svg, egg-loading.svg — replaceable
@@ -611,8 +614,8 @@ public/pickle/         The pickle mascot: favicon.svg, logo.svg, disappointed.sv
                        ("Pickle theme and mascot"). Served as-is, scanned by `check:offline`.
 tests/                 One test file per source file it tests (tests/query/tree.test.ts ↔
                        src/query/tree.ts), plus app.test, appScripts, env, lintRules, docReferences,
-                       offlineCheck, thirdPartyNotices, themeContrast, noBackendDataInSrc and
-                       api/mockContract; shared fixtures in dateCases, savedQueryFixtures and statsFixtures.
+                       offlineCheck, thirdPartyNotices and themeContrast; shared fixtures in dateCases,
+                       savedQueryFixtures and statsFixtures. Nothing here imports mock-server/.
 scripts/check-offline.mjs  The offline guard ("Offline-first"); findOffOrigin(text) is pure and tested.
 scripts/dev-servers.mjs    `npm run servers -- start|stop`: a second pair of dev servers (app 5191, mock 3091)
                            for browser checks, stopped by the process ids it saved in test-results/.
@@ -626,10 +629,12 @@ eslint.config.js       ESLint + the import airlocks (jQuery; src/ never imports 
                        imports src/api/types.ts), including jQuery's globals and `import("…")`.
 .github/workflows/ci.yml  typecheck, test, lint, build on every PR and push to main (read-only token).
 package.json           Scripts and dependencies; package-lock.json pins them (`npm ci`).
-tsconfig.json          Strict TypeScript for everything `npm run typecheck` checks (src, mock-server, tests,
+tsconfig.json          Strict TypeScript for everything `npm run typecheck` checks (src, tests,
                        vite.config.ts, vitest.config.ts), with Node's types.
+tsconfig.mock.json     tsconfig.json for mock-server/ instead, used by `typecheck:mock`.
 tsconfig.app.json      Just src/, with Vite's browser types and not Node's, used by `build:app`.
-vitest.config.ts       Vitest: tests/**/*.test.ts, Node environment (no DOM).
+vitest.config.ts       Vitest, Node environment (no DOM): project "app" (tests/, `npm test`) and project
+                       "mock" (mock-server/, `npm run test:mock`).
 .prettierrc.json       Prettier options (100 columns, double quotes, trailing commas).
 .prettierignore        What Prettier skips (docs/, README.md, build output, lock file).
 .claude/agents/        The subagents Claude Code dispatches for planned work: sdd-implementer and
@@ -1053,7 +1058,7 @@ warning, not a dead app; keys the app doesn't read are never checked; unknown
 keys are ignored. A warning is logged once per page load, not once per item,
 so the console stays readable.
 
-`tests/api/mockContract.test.ts` runs the real client against the mock server
+`mock-server/tests/mockContract.test.ts` runs the real client against the mock server
 and fails on any `ContractError` or warning, so the mock and `response.ts`
 can't drift apart unnoticed.
 
@@ -2798,7 +2803,7 @@ Dev-only (`mock-server/`). `npm run mock` starts it; `npm run dev` starts it
 together with the Vite dev server (`npm run dev:app`). Plain Node `http`, no
 Express. `server.ts` has one route table, `routes()`, mapping `"METHOD /path"`
 to a named handler function — add a route there, and a test in
-`tests/mock-server/server.test.ts`, which drives the server over real HTTP.
+`mock-server/tests/server.test.ts`, which drives the server over real HTTP.
 
 - **Just another backend.** Neither the app nor `vite.config.ts` knows the
   mock is there. The dev server forwards the API prefix to `DEV_BACKEND_URL`
@@ -2909,7 +2914,8 @@ Besides `.env`, three environment variables, read by `index.ts`:
 
 The sample data is **fictional** vehicle telemetry, and the real backend's
 data differs — which is why `src/` must never name it (`src/config.ts` holds
-deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
+deployment-specific names; `mock-server/tests/noBackendDataInSrc.test.ts`
+enforces it, in `npm run test:mock`).
 
 ---
 
@@ -2968,7 +2974,8 @@ deployment-specific names; `tests/noBackendDataInSrc.test.ts` enforces it).
 ## 12. Testing and tooling
 
 Vitest, unit tests in the node environment, no DOM. One test file per source
-file it tests, in the same place under `tests/`. The ones to know about:
+file it tests, in the same place under `tests/` (the mock server's under
+`mock-server/tests/`). The ones to know about:
 
 - `tests/app.test.ts` — `createApp` with a fake API: Run and its 401/403
   redirects, stale responses, streamed statistics, logout, startup and
@@ -2985,8 +2992,6 @@ file it tests, in the same place under `tests/`. The ones to know about:
 - `tests/api/` — the client over a stubbed `fetch`, the contract checks
   (`contract.test.ts`), and the translation both ways: `response.test.ts`
   (backend → model) and `request.test.ts` (query → request body).
-  `mockContract.test.ts` runs the real client against the mock server.
-- `tests/mock-server/server.test.ts` — every mock route over real HTTP.
 - `tests/dateCases.ts` — date values shared by the frontend's and the mock's
   date tests, so their two copies of the timestamp pattern can't drift.
 - `tests/ui/` — the pure parts of the panels: docs filter and sidebar HTML,
@@ -2995,15 +3000,21 @@ file it tests, in the same place under `tests/`. The ones to know about:
 - `tests/lintRules.test.ts` — the ESLint import airlocks still fire.
 - `tests/docReferences.test.ts` — every section of this file cited in code
   (`docs/ARCHITECTURE.md, "…"`) still exists.
-- `tests/noBackendDataInSrc.test.ts` — fails if `src/` or `index.html` names
-  a mock facet, field, tag, group, database or owner.
+- `tests/appScripts.test.ts` — the scripts below keep working without the
+  mock server (see the end of this section).
+- `mock-server/tests/` — the mock's own tests (`npm run test:mock`):
+  `server.test.ts` drives every mock route over real HTTP;
+  `mockContract.test.ts` runs the real client against the mock server;
+  `noBackendDataInSrc.test.ts` fails if `src/` or `index.html` names a mock
+  facet, field, tag, group, database or owner.
 - Fixtures use one neutral vocabulary: a `thing` facet with fields such as
   `color`, `count`, `size`, `active`; databases `alpha` and `beta`.
 
 Scripts: `npm run dev` (mock + Vite), `dev:app` (Vite alone, for a real
 backend), `mock`, `build` (`typecheck`, then `build:app`), `build:app`
 (type-check the app only + bundle + `check:offline`), `preview`, `test`,
-`test:watch`, `typecheck`, `lint` (ESLint + Prettier check), `format` (Prettier,
+`test:watch`, `typecheck`, `test:mock` and `typecheck:mock` (the mock server
+and its tests), `lint` (ESLint + Prettier check), `format` (Prettier,
 rewriting files), `check:offline`. CI (`.github/workflows/ci.yml`) runs
 typecheck, test, lint and build on every pull request and push to `main`.
 
@@ -3012,8 +3023,17 @@ building. `dev:app` is Vite alone, which doesn't type-check and loads no
 `mock-server/` code. `build:app` type-checks only what ends up in `dist/`
 (`tsconfig.app.json`: `src/`, as browser code without Node's types), so it
 still works when the mock or the tests have drifted from `src/api/types.ts`. `build` is the full
-`typecheck` followed by `build:app`, so it still checks everything.
-`tests/appScripts.test.ts` keeps both that way.
+`typecheck` followed by `build:app`, so it still checks the tests too.
+
+**Decision: the mock is not part of CI.** It is a development aid for us and
+Claude Code, and either drifts from the real backend or is deleted, so
+`typecheck`, `test`, `build` and CI pass with `mock-server/` gone or broken.
+Its type-check and tests are the separate `typecheck:mock`
+(`tsconfig.mock.json`) and `test:mock` (Vitest project "mock"), run before a
+commit while the folder exists. Its tests live in `mock-server/tests/`, so
+deleting the folder removes them too; no file in `tests/` may import it,
+because `tsc` follows imports and would pull it back into `typecheck`.
+`tests/appScripts.test.ts` keeps all of this that way.
 
 `tsconfig.json` is `strict` with `noUncheckedIndexedAccess`,
 `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUnusedLocals` and
@@ -3047,7 +3067,7 @@ and `import("…")`; the jQuery one also forbids the `$` / `jQuery` globals and
 **…follow a backend rename or reshape** (say `total_entrysets` becomes
 `entryset_count`)? Change the type in `src/api/types.ts`; `npm run typecheck`
 then points at the line in `src/api/response.ts` (or `request.ts`) that reads
-the old name, and at the mock server. Fix those and their tests in
+the old name, and `npm run typecheck:mock` at the mock server. Fix those and their tests in
 `tests/api/`. Nothing outside `src/api/` and `mock-server/` should need a
 change. See "Data model".
 
@@ -3083,11 +3103,11 @@ styles in their own section of `src/styles.css`.
    responses"), with a test in `tests/api/response.test.ts`; a function in
    `src/api/client.ts` that returns the model (use `getJson` / `postJson` /
    `post`, which add the prefix, the timeout, `ApiError` and the JSON check),
-   and a case in `tests/api/mockContract.test.ts`.
+   and a case in `mock-server/tests/mockContract.test.ts`.
 2. Call it from `src/app.ts`: add its name to `AppApi` and add it to
    `fakeApi` in `tests/app.test.ts`.
 3. A route in `mock-server/server.ts` (`routes()`) and a test in
-   `tests/mock-server/server.test.ts`. Keep it under the API prefix, even a
+   `mock-server/tests/server.test.ts`. Keep it under the API prefix, even a
    mock-only page the browser navigates to: the dev server proxies nothing else.
 4. Describe it in "API contract".
 

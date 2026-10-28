@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { coOccurrenceOf } from "../../mock-server/coOccurrence";
-import { FACET_WITHOUT_CO_OCCURRENCE, INDIVIDUALS } from "../../mock-server/vehicleData";
-import type { Entryset } from "../../mock-server/vehicleData";
+import { coOccurrenceOf } from "../coOccurrence";
+import { FACET_WITHOUT_CO_OCCURRENCE, INDIVIDUALS } from "../vehicleData";
+import type { Entryset } from "../vehicleData";
 
 const event = (id: number, ...facets: string[]): Entryset => ({
   id,

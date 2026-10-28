@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -24,6 +24,8 @@ const headings = new Set(
 );
 
 function files(dir: string): string[] {
+  // mock-server/ may have been deleted (docs/ARCHITECTURE.md, "Testing and tooling").
+  if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((name) => {
     const p = path.join(dir, name);
     if (statSync(p).isDirectory()) return name === "data" ? [] : files(p);
@@ -41,6 +43,7 @@ const ROOT_FILES = [
   ".github/workflows/ci.yml",
   "vite.config.ts",
   "vitest.config.ts",
+  "tsconfig.mock.json",
   "eslint.config.js",
   "index.html",
 ];
