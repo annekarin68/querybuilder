@@ -30,6 +30,7 @@
 - **Blending:** in OKLab (the perceptual space OKLCH is built on), which avoids hue wrap-around; the spec's "OKLCH" intent (no muddy middle) holds.
 - **Legend popover:** the native `popover` attribute (`<div popover>` + `<button popovertarget>`), not a Fomantic popup: Escape, light dismiss and focus return come from the browser, with no jQuery.
 - **Panel selection without repaint:** `AppState.selectedField` (what About shows) is painted by its own painter that rewrites only `.qb-about` elements; the builder's painter does not listen to it.
+- **Where `colour.ts` lives (decided during Task 3):** `src/util/colour.ts`, tested in `tests/util/colour.test.ts`, not `src/ui/` as the tasks below say: `src/query/coOccurrence.ts` uses it, and `src/query/` must not import the UI layer. The task text is left as written.
 
 ---
 
