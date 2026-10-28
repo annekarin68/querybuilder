@@ -8,7 +8,10 @@
 import { readFileSync } from "node:fs";
 
 const query = process.argv.slice(2).join(" ");
-const lines = readFileSync("docs/ARCHITECTURE.md", "utf8").split("\n");
+// Joined from parts so that tests/docReferences.test.ts, which checks every
+// quoted title after this file name, does not read the next argument as one.
+const DOC = ["docs", "ARCHITECTURE.md"].join("/");
+const lines = readFileSync(DOC, "utf8").split("\n");
 
 // The heading level of each line (1 for "# x"), 0 for other lines. A "# "
 // inside a fenced code block is a shell comment, not a heading.
@@ -35,6 +38,6 @@ if (!query) {
   const level = levels[start];
   let end = start + 1;
   while (end < lines.length && !(levels[end] && levels[end] <= level)) end++;
-  console.log(`(docs/ARCHITECTURE.md lines ${start + 1}–${end})`);
+  console.log(`(${DOC} lines ${start + 1}–${end})`);
   console.log(lines.slice(start, end).join("\n"));
 }
