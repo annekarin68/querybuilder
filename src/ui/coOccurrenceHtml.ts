@@ -155,7 +155,7 @@ export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
       const name = escapeHtml(mark.name);
       const style = colourStyle(mark);
       const id = escapeHtml(other.id);
-      return `<button type="button" class="qb-co-cell is-${mark.kind}" data-co-cell="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}" title="${name}"${style ? ` style="${style}"` : ""}></button>`;
+      return `<button type="button" class="qb-co-cell is-${mark.kind}" data-co-cell="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}"${style ? ` style="${style}"` : ""}></button>`;
     })
     .join("");
   // A title on the group itself: the browser shows it on the gaps and reads
@@ -169,10 +169,13 @@ export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
 /**
  * The line that shows the name and value of the cell or box under the
  * pointer or the keyboard focus. A `title` shows on hover only, never on
- * keyboard focus, and the spec asks for both (section 6). It is
- * `aria-hidden`: the same words are already the item's accessible name, and
- * a screen reader would read them twice. styles.css lays it over the page
- * (it takes no room), so showing it moves nothing.
+ * keyboard focus, and the spec asks for both (section 6); so the cells and
+ * boxes have no `title`, which would repeat the caption a second later. It
+ * shows an item's `data-caption`, else its accessible name (only the merged
+ * box has one: its name is the whole list). It is `aria-hidden`: the words
+ * are the item's accessible name already, and a screen reader would read
+ * them twice. styles.css lays it over the page on one line (it takes no
+ * room, and a long one ends in "…"), so showing it moves nothing.
  */
 export const CAPTION = `<p class="qb-co-caption" aria-hidden="true"></p>`;
 
@@ -326,8 +329,15 @@ function placeStyle(rect: Rect): string {
   ].join(";");
 }
 
-/** The merged box's name lists what it stands for, since it has no label
- *  for each. */
+/** The merged box's accessible name lists what it stands for, since it has
+ *  no label for each. It can be thousands of characters, too long for the
+ *  caption, which gets `mergedCaption` instead (`data-caption`). */
+/** The caption of "+ N less often": what it is, in one short line. */
+function mergedCaption(merged: MergedBox): string {
+  const n = merged.items.length;
+  return `${n} ${n === 1 ? "facet" : "facets"}, each less often than the boxes shown`;
+}
+
 function mergedName(merged: MergedBox): string {
   return `${merged.items.length} less often: ${merged.items.map((m) => m.name).join("; ")}`;
 }
@@ -360,7 +370,7 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendBut
     const id = escapeHtml(mark.facet.id);
     // Every box gets its label; hideCutLabels hides those that do not fit.
     const text = `<span class="qb-seen-label">${escapeHtml(mark.facet.name)}</span>`;
-    return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}" title="${name}" style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
+    return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}" style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
   });
   if (layout.merged) {
     const merged = layout.merged;
@@ -369,7 +379,7 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendBut
       ? `<span class="qb-seen-label">${escapeHtml(merged.label)}</span>`
       : "";
     boxes.push(
-      `<button type="button" class="qb-seen-box is-merged" data-co-box="" tabindex="${tabindexAt(boxes.length)}" aria-label="${name}" title="${name}" style="${placeStyle(merged.rect)}">${text}</button>`,
+      `<button type="button" class="qb-seen-box is-merged" data-co-box="" tabindex="${tabindexAt(boxes.length)}" aria-label="${name}" data-caption="${escapeHtml(mergedCaption(merged))}" style="${placeStyle(merged.rect)}">${text}</button>`,
     );
   }
   return `${head(CAPTION)}<div class="qb-seen-chart" role="group" aria-label="Seen together with ${escapeHtml(ownName)}, by share of its events" data-roving>${boxes.join("")}</div>`;

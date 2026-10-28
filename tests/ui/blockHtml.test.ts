@@ -200,16 +200,26 @@ describe("blockHtml", () => {
       }
     });
 
-    // Every block has the "?", even before there is anything to colour with.
-    it("draws the ? without a co-occurrence context, saying why nothing is shown", () => {
-      const html = draw(null);
-      expect(html).toContain(`popovertarget="legend-${b.id}"`);
-      expect(html).toContain("The colours cannot be shown right now.");
-      expect(html).not.toContain("qb-co-caption");
+    // The legend explains the row's colours: with no row (no data, or no
+    // colour tokens) there is nothing to explain, so no line and no "?".
+    it("draws no top line and no ? when there is no row", () => {
+      const noData = coCtxOf(
+        facets.map((f) => ({ ...f, coOccurrence: new Map() })),
+        coTokensFrom((name) => TOKENS[name] ?? ""),
+      );
+      for (const co of [null, noData]) {
+        const html = blockHtml({ ...ctxFor(q), co, panelTab: "seen" }, b, pos);
+        expect(html).not.toContain("qb-co-top");
+        expect(html).not.toContain("Explain the colours");
+      }
     });
 
-    it("gives the Seen together tab a ? of its own", () => {
-      const html = draw("seen");
+    it("gives the Seen together tab a ? of its own when there is a row", () => {
+      const co = coCtxOf(
+        withCoDict(),
+        coTokensFrom((name) => TOKENS[name] ?? ""),
+      );
+      const html = blockHtml({ ...ctxFor(q), co, panelTab: "seen" }, b, pos);
       const panel = html.slice(html.indexOf('class="qb-seen"'));
       expect(panel).toContain(`popovertarget="legend-${b.id}-seen"`);
       expect(panel).toContain('data-action="legend-seen"');
@@ -283,10 +293,6 @@ describe("blockHtml", () => {
       const html = blockHtml(ctxFor(q), { ...b, collapsed: true }, pos);
       expect(html).not.toContain("panel-seen");
       expect(html).not.toContain(`class="qb-panel"`);
-      // The legend explains the co-occurrence row above every block, folded
-      // too, and sits outside the head, which unfolds the block on a click.
-      expect(html).toContain('aria-label="Explain the colours"');
-      expect(html.slice(html.indexOf("qb-block-head"))).not.toContain("Explain the colours");
     });
   });
 

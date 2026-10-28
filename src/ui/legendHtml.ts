@@ -11,12 +11,9 @@ import { betterOn } from "../util/colour";
 import type { CoTokens } from "./coTokens";
 import { escapeHtml } from "./panel";
 
-/** With no value anywhere in the matrix there is no scale to explain. The
- *  same words as the Seen together tab's (coOccurrenceHtml.ts). */
-const NO_DATA = "No co-occurrence data for this facet.";
-/** Without the colour tokens (the stylesheet did not load, or the dictionary
- *  is still loading) nothing is known about the data, so nothing is claimed. */
-const CANNOT_SHOW = "The colours cannot be shown right now.";
+/** A row whose values are all too rare for a number has no scale to draw:
+ *  `coOccurrenceRange` leaves such values out. */
+const NO_SCALE = "Every value is too small to colour.";
 
 /** The CSS gradient through the designer's stops, evenly spaced, as the
  *  colour scale places them (`coOccurrenceColour`). */
@@ -75,20 +72,18 @@ function keysHtml(facetName: string, tokens: CoTokens): string {
  * What the popover says for the block of facet `facetName`: one sentence on
  * what is measured, the colour bar labelled with the real values of the
  * matrix-wide `range`, the log step, keys for the four marks, and that a
- * square opens the dictionary. A sentence instead when there is nothing to
- * explain: `tokens` null (no colours) or `range` null (no data at all).
+ * square opens the dictionary. Only drawn for a block that has a row, so
+ * there are always colour tokens (blockHtml.ts). `range` is null only when
+ * every value is too rare to have a number: then a sentence replaces the
+ * bar, and the keys still explain the marks.
  */
-export function legendHtml(
-  facetName: string,
-  range: CoRange | null,
-  tokens: CoTokens | null,
-): string {
+export function legendHtml(facetName: string, range: CoRange | null, tokens: CoTokens): string {
   const name = escapeHtml(facetName);
-  if (!tokens || tokens.stops.length < 2) return `<p class="qb-muted">${CANNOT_SHOW}</p>`;
-  if (!range) return `<p class="qb-muted">${NO_DATA}</p>`;
+  const scale = range
+    ? `${barHtml(range, tokens.stops)}${stepHtml(range, tokens.stops.length)}`
+    : `<p class="qb-legend-note">${NO_SCALE}</p>`;
   return `<p class="qb-legend-sentence">How often each facet is seen together with <strong>${name}</strong>: the share of ${name}'s events that also hold it.</p>
-    ${barHtml(range, tokens.stops)}
-    ${stepHtml(range, tokens.stops.length)}
+    ${scale}
     ${keysHtml(facetName, tokens)}
     <p class="qb-legend-note">Click a square to open that facet in the data dictionary.</p>`;
 }

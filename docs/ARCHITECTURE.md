@@ -1778,7 +1778,8 @@ opens the dictionary at that facet (spec, section 6, decision 15).
 nothing), then `showFacet` (returned by `wireDocsSidebar`, called from
 `main.ts`) opens the facet's first card (a facet is listed under each of its
 tags) and the tag section around it (`detailsToOpen`), clears the search if
-the search had hidden it, scrolls the panel (not the page: `scrollIntoView`
+the search had hidden it (as the search's ✕ does, this also folds the cards
+and sections the user had opened), scrolls the panel (not the page: `scrollIntoView`
 would also scroll the page) so the card is at its top, marks the card
 `is-highlighted` for 2 s (a fade where motion is welcome, a plain colour
 under `prefers-reduced-motion`) and puts the focus on the card's
@@ -1786,7 +1787,10 @@ under `prefers-reduced-motion`) and puts the focus on the card's
 remembers how to find the cell or box again (a repaint may have replaced
 it): when the dictionary folds while it has the focus (Escape, or **Hide
 dictionary**), the focus goes back to that cell if it still exists, else to
-the rail. That memory is used once. The cell or box carries
+the rail. That memory is used once, and only for a direct round trip
+(`createReturnFocus`): once the focus leaves the dictionary for something
+outside it, the cell is forgotten and a later close goes to the rail. The
+cell or box carries
 `data-opens-docs`, so the "click outside closes the floating dictionary"
 handler leaves that click alone.
 
@@ -1965,7 +1969,7 @@ The connected facets and the range are worked out once per paint
 (`readCoTokens` found none) there is no row and no chart: co-occurrence is
 display data and never blocks the builder. The row is a `role="group"`
 named "Seen together with <facet>"; each cell is a button whose accessible
-name and title say the facet and the backend's text ("<other>: 5 % of
+name (shown by the caption, below; no `title`) says the facet and the backend's text ("<other>: 5 % of
 <facet>'s events", "<other>: never seen together", "<facet> (this facet)",
 "<other>: 1e-400 % of <facet>'s events, too rare to colour": the backend's
 text even then, as spec section 6 asks, over the plan's wording), with `data-facet-id`; a click or Enter on a cell opens the dictionary at that
@@ -1985,16 +1989,25 @@ still returns to the cell the user left. Focus memory finds a focused cell
 again after a repaint by the same attributes. **The line above the head** (`coTopHtml`, `blockHtml.ts`): the row, then
 at its right end the legend's **?** (24 px, round), then the caption. The
 **?** is the row's neighbour, not inside its `role="group"`, so the arrow
-keys never land on it (Tab does, next). Every block has one, folded or not,
-also with no row: the legend then says why (below). **The caption**
+keys never land on it (Tab does, next). Every block with a row has one,
+folded or not, an isolated row too. With no row at all (no co-occurrence
+data, or no colour tokens) there is no line and no **?**: the legend
+explains the row's colours, and there are none (controller ruling after the
+Task 7 review). **The caption**
 (`CAPTION`, `captionText`): a `title` shows on hover only, never on keyboard
 focus, and the spec asks for name and value on both. So the cell under the
 pointer, else the focused one, has its accessible name shown in a small box
 under the row, laid over the head (`position: absolute`), so showing it
-moves nothing; empty, it is not drawn. It is `aria-hidden`: the words are
-the cell's accessible name already. The chart has one too, laid over its
-title line (below the chart it could reach under the next block, which is
-drawn over it). The cells' `title` is kept as well. **The legend**
+moves nothing; empty, it is not drawn. It is one line: a long text ends in
+"…" (the whole text is the accessible name). It is `aria-hidden`: the words
+are the cell's accessible name already. The chart has one too, laid over
+its title line (below the chart it could reach under the next block, which
+is drawn over it). An item's `data-caption`, when it has one, replaces the
+name in the caption: only the merged box has one ("30 facets, each less
+often than the boxes shown"), as its name lists every facet in it. Cells
+and boxes have **no `title`**: the browser's tooltip would repeat the
+caption a second later, over the neighbouring cells. The row group's title
+for an isolated row stays (there is no cell to caption). **The legend**
 (`legendHtml.ts`, spec section 6, decision 22) is the browser's own popover
 (`<div popover>` opened by `<button popovertarget>`, ids `legend-<block id>`
 and `legend-<block id>-seen`), not a Fomantic popup as the spec first said
@@ -2004,13 +2017,20 @@ block or container query can clip it. It says what is measured, naming the
 block's facet; shows the bar (a CSS gradient through the stops, in OKLab
 where the browser can), the stops' values (`legendTicks`), "rarer" / "more
 often", the log step (`stepFactorText`), keys for the four marks, and that a
-square opens the dictionary. With no data anywhere it says "No
-co-occurrence data for this facet."; without colour tokens, "The colours
-cannot be shown right now." A popover opens in the middle of the window, so
+square opens the dictionary. When every value is too rare to have a number
+(a row, but no range), "Every value is too small to colour." replaces the
+bar, and the keys stay. A popover opens in the middle of the window, so
 a capturing `beforetoggle` listener places it by its **?**
 (`legendPlacement`: right edge under the button's, below or above, whichever
-has more room, inside the window down to 512 px). An Escape that closes a
-legend does not also close the open field row or clear About's selection.
+has more room, inside the window down to 512 px), and places it again on
+every page scroll and window resize while it is open (the listeners go when
+it closes, or when a repaint has removed it). A builder repaint replaces an
+open legend's popover, which the browser then hides, so the render function
+opens the new one again (`showPopover`); focus memory puts the focus back on
+its **?**. An Escape that closes a legend does not also close the open field
+row or clear About's selection (`openLegendOf`, which also keeps Escape
+working in a browser without popovers, where the `:popover-open` selector
+would throw).
 **The 11 px cells, and the
 chart's boxes (at least 12 px at the reference size, about 16 px in a 512 px
 window), are under the 24 px target size** (WCAG 2.5.8); they are accepted
@@ -2034,8 +2054,8 @@ nesting take width too, not the window's width).
   stretches with the panel), largest first, coloured like the row; never-seen
   facets are absent (`seenLayout`). Values too rare to have a size, and boxes
   thinner than 12 px at a 300 × 180 px reference (the panel's typical
-  width), go into one **+ N less often** box whose title and accessible name
-  list them. Merging goes by value, not by shape: a thin box goes together
+  width), go into one **+ N less often** box whose accessible name lists them
+  (its caption says only how many). Merging goes by value, not by shape: a thin box goes together
   with every rarer one, so "less often" is true of every facet in it (squarify
   can leave a box thin while a rarer one is thick). Merging gives the rest
   more room, so it repeats until no box is too thin. That box stands for a
@@ -2053,8 +2073,8 @@ nesting take width too, not the window's width).
   the cells, `data-facet-id`, `data-opens-docs` (a click or Enter opens the
   dictionary there, as on a cell) and a roving tabindex like the row's; the
   merged box has neither attribute, as it is not one facet. The tab's
-  title line has its own **?** (the chart uses the row's colours) and the
-  chart's caption. An
+  title line has its own **?** (the chart uses the row's colours; like the
+  row's, only when there is a row) and the chart's caption. An
   isolated facet, one the dictionary does not know, and a page without any
   co-occurrence data each get one sentence instead. Without a context
   (the dictionary still loading, or no colour tokens) the tab says "Seen

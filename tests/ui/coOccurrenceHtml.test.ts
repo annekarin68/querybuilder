@@ -97,9 +97,10 @@ describe("coRowHtml", () => {
     ]);
   });
 
-  it("uses the same words for the hover title as for the accessible name", () => {
-    const html = coRowHtml(ctx, newBlock("a"));
-    expect(all(html, "title").slice(-4)).toEqual(all(html, "aria-label").slice(-4));
+  // The caption shows the name on hover and focus; a title as well would
+  // repeat it a second later, over the neighbouring cells.
+  it("gives the cells no hover title (the caption shows their name)", () => {
+    expect(all(coRowHtml(ctx, newBlock("a")), "title")).toEqual([]);
   });
 
   it("marks each cell's kind, and colours only the seen ones", () => {
@@ -256,11 +257,18 @@ describe("seenTogetherHtml", () => {
     expect(all(html, "data-co-box")).toEqual(["b", ""]);
   });
 
-  it("lists the merged facets in the '+ N less often' box's name and title", () => {
+  it("lists the merged facets in the '+ N less often' box's accessible name", () => {
     const html = seenTogetherHtml(ctx, newBlock("a"));
     const name = "1 less often: Gamma: 1e-400 % of Alpha's events, too rare to colour";
     expect(all(html, "aria-label")).toContain(name);
-    expect(all(html, "title")).toContain(name);
+    expect(all(html, "title")).toEqual([]);
+  });
+
+  // The whole list can be thousands of characters: the caption gets a short
+  // text of its own (data-caption), the list stays in the accessible name.
+  it("gives the merged box a short caption", () => {
+    const html = seenTogetherHtml(ctx, newBlock("a"));
+    expect(all(html, "data-caption")).toEqual(["1 facet, each less often than the boxes shown"]);
   });
 
   // Whether a name fits depends on the panel's real width, which only the

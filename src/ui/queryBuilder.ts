@@ -142,14 +142,17 @@ function rovingItemOf(
 }
 
 /** Fills the caption of a row or chart (`CAPTION`, coOccurrenceHtml.ts) with
- *  the name of the item under the pointer, else of the focused one. Either
- *  may be null, or an item of another group (then it does not count). */
+ *  the item under the pointer, else the focused one: its short
+ *  `data-caption` if it has one, else its accessible name. Either may be
+ *  null, or an item of another group (then it does not count). */
 function showCaption(group: Element, hovered: Element | null, focused: Element | null): void {
   // The row's caption is beside it; the chart's is in the title line above.
   const caption = group.parentElement?.querySelector(".qb-co-caption");
   if (!caption) return;
   const nameIn = (item: Element | null) =>
-    item && group.contains(item) ? item.getAttribute("aria-label") : null;
+    item && group.contains(item)
+      ? (item.getAttribute("data-caption") ?? item.getAttribute("aria-label"))
+      : null;
   caption.textContent = captionText(nameIn(hovered), nameIn(focused));
 }
 
@@ -174,6 +177,14 @@ function placeLegend(container: HTMLElement, popover: HTMLElement): void {
     bottom: px(place.bottom),
     maxHeight: px(place.maxHeight),
   });
+}
+
+/** The open legend popover in `container`, or null. Null too where the
+ *  browser has no popovers: the selector would throw there (and break every
+ *  Escape in the builder), and no legend can be open anyway. */
+function openLegendOf(container: HTMLElement): HTMLElement | null {
+  if (!("showPopover" in HTMLElement.prototype)) return null;
+  return container.querySelector<HTMLElement>(".qb-legend:popover-open");
 }
 
 /** Make item `index` of `group` its one Tab stop. */
@@ -681,7 +692,7 @@ export function wireQueryBuilder(
     if (e.key !== "Escape") return;
     // An open legend takes this Escape (the browser closes it); the field
     // row and About stay as they are.
-    if (container.querySelector(".qb-legend:popover-open")) return;
+    if (openLegendOf(container)) return;
     const target = e.target as HTMLElement;
     const block = blockOf(target);
     if (!block) return;
@@ -774,16 +785,38 @@ export function wireQueryBuilder(
       showCaption(item.parentElement, hovered, rovingItemAt(e.relatedTarget));
   });
 
-  // A legend opening is placed by its "?" (`placeLegend`). `beforetoggle`
-  // does not bubble, so it is caught on the way down (capture).
+  // A legend opening is placed by its "?" (`placeLegend`), and placed again
+  // while it is open whenever the page scrolls or the window changes size:
+  // it is fixed in the window, and its "?" moves with the page. Only one
+  // legend can be open at a time (the browser closes the other).
+  let followed: HTMLElement | null = null;
+  const placeFollowed = () => {
+    // A repaint removes an open legend without a closing event: stop then.
+    if (followed?.isConnected && followed.matches(":popover-open")) {
+      placeLegend(container, followed);
+    } else {
+      stopFollowing();
+    }
+  };
+  const scrollOptions = { capture: true, passive: true };
+  function stopFollowing(): void {
+    followed = null;
+    window.removeEventListener("scroll", placeFollowed, scrollOptions);
+    window.removeEventListener("resize", placeFollowed);
+  }
+  // `beforetoggle` does not bubble, so it is caught on the way down (capture).
   container.addEventListener(
     "beforetoggle",
     (e) => {
       const popover = e.target;
-      const opening = (e as ToggleEvent).newState === "open";
-      if (opening && popover instanceof HTMLElement && popover.classList.contains("qb-legend")) {
-        placeLegend(container, popover);
-      }
+      if (!(popover instanceof HTMLElement) || !popover.classList.contains("qb-legend")) return;
+      stopFollowing();
+      if ((e as ToggleEvent).newState !== "open") return;
+      placeLegend(container, popover);
+      followed = popover;
+      // Capture: a scroll inside a panel does not bubble to the window.
+      window.addEventListener("scroll", placeFollowed, scrollOptions);
+      window.addEventListener("resize", placeFollowed);
     },
     true,
   );
@@ -920,7 +953,14 @@ export function wireQueryBuilder(
   });
 
   return (state) => {
+    // A repaint replaces an open legend's popover, and the browser hides a
+    // popover that leaves the page: open the new one again, so a repaint
+    // the user did not cause (statistics' issues arriving, the dictionary
+    // reloading) does not take the legend away while it is being read.
+    // The focus comes back to its "?" through focus memory, as for any button.
+    const openLegendId = openLegendOf(container)?.id;
     paintQueryBuilder(container, state);
+    if (openLegendId) document.getElementById(openLegendId)?.showPopover();
     restoreTabStops();
     // The old charts are gone with the repaint: watch the new ones.
     chartSizes?.disconnect();

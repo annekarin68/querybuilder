@@ -327,6 +327,33 @@ export function detailsToOpen<T extends ParentChain<T>>(el: T, panel: T): T[] {
   return chain;
 }
 
+/**
+ * Where the focus goes back to when the dictionary folds: the co-occurrence
+ * cell or box that opened it at a facet (main.ts). `remember` keeps a finder,
+ * not the element, as a repaint may replace the cell meanwhile. Only a
+ * direct round trip goes back (cell, dictionary, close): once the focus
+ * leaves the dictionary for somewhere else, the cell is forgotten, and a
+ * later close goes to the rail as usual. `take` gives it once.
+ */
+export function createReturnFocus<T>() {
+  let finder: (() => T | null) | null = null;
+  return {
+    remember(find: () => T | null): void {
+      finder = find;
+    },
+    /** The focus left a dictionary element: `elsewhere` is true when it went
+     *  to something outside the dictionary (not within it, not to nothing). */
+    focusLeftDocs(elsewhere: boolean): void {
+      if (elsewhere) finder = null;
+    },
+    take(): T | null {
+      const find = finder;
+      finder = null;
+      return find?.() ?? null;
+    },
+  };
+}
+
 /** How long a card shown from the builder keeps its highlight. */
 const HIGHLIGHT_MS = 2000;
 /** The room left above a card scrolled to the panel's top, in px. */

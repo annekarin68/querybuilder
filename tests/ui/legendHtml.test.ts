@@ -74,19 +74,17 @@ describe("legendHtml", () => {
     expect(html).toContain("Click a square to open that facet in the data dictionary.");
   });
 
-  // With no value anywhere there is no scale to explain.
-  it("says there is no data when nothing is ever seen together", () => {
-    const empty = legendHtml("Alpha", null, tokens);
-    expect(empty).toContain("No co-occurrence data for this facet.");
-    expect(empty).not.toContain("linear-gradient");
-  });
-
-  // Without the colour tokens nothing is known: no claim about the data.
-  it("says the colours cannot be shown without tokens", () => {
-    const none = legendHtml("Alpha", range, null);
-    expect(none).toContain("The colours cannot be shown right now.");
-    expect(none).not.toContain("No co-occurrence data");
-    expect(none).not.toContain("linear-gradient");
+  // A row without a range: every value it has is too rare for a number,
+  // so there is no scale, but the marks still need their keys.
+  it("keeps the sentence and the keys without a bar when every value is too rare", () => {
+    const rare = legendHtml("Alpha", null, tokens);
+    expect(rare).toContain("How often each facet is seen together with <strong>Alpha</strong>");
+    expect(rare).toContain("Every value is too small to colour.");
+    expect(rare).not.toContain("linear-gradient");
+    expect(rare).not.toContain("Log scale");
+    for (const kind of ["is-seen", "is-never", "is-own", "is-too-rare"]) {
+      expect(rare).toContain(`qb-co-cell ${kind}`);
+    }
   });
 });
 

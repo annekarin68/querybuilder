@@ -1092,6 +1092,11 @@ body {
   color: var(--qb-text);
   box-shadow: var(--qb-shadow);
   font-size: 0.8rem;
+  /* One line: a long name and value end in "…" (the whole text is the
+     item's accessible name), so the caption never covers the block. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
 }
 .qb-co-caption:empty {
@@ -1101,9 +1106,9 @@ body {
 .qb-co-top > .qb-co-caption {
   top: 100%;
 }
-/* The chart's caption covers its title line, growing upwards when it wraps:
-   below the chart it could reach under the next block, which is drawn over
-   it. It leaves the tab's "?" uncovered. */
+/* The chart's caption covers its title line: below the chart it could reach
+   under the next block, which is drawn over it. It leaves the tab's "?"
+   uncovered. */
 .qb-seen-head {
   position: relative;
   display: flex;

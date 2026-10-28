@@ -90,17 +90,15 @@ function facetNameOf(ctx: BlockCtx, block: FacetBlock): string {
 
 /** The "?" that opens the colour legend, for the row (`row`) or the Seen
  *  together tab (`seen`): both explain the same colours. */
-function legendButton(ctx: BlockCtx, block: FacetBlock, where: "row" | "seen"): string {
-  const content = legendHtml(
-    facetNameOf(ctx, block),
-    ctx.co?.range ?? null,
-    ctx.co?.tokens ?? null,
-  );
-  return legendToggleHtml(
-    legendId(block.id, where),
-    where === "row" ? "legend" : "legend-seen",
-    content,
-  );
+function legendButton(co: CoCtx, block: FacetBlock, name: string, where: "row" | "seen"): string {
+  const action = where === "row" ? "legend" : "legend-seen";
+  return legendToggleHtml(legendId(block.id, where), action, legendHtml(name, co.range, co.tokens));
+}
+
+/** Whether the block draws a co-occurrence row: there is a context (colour
+ *  tokens, a loaded dictionary) and some facet is seen with another. */
+function hasRow(co: CoCtx | null): co is CoCtx {
+  return co !== null && co.connected.length > 0;
 }
 
 /**
@@ -108,12 +106,15 @@ function legendButton(ctx: BlockCtx, block: FacetBlock, where: "row" | "seen"): 
  * row, the legend's "?" at its end, and the caption of the cell under the
  * pointer or the focus. The "?" is the row's neighbour, not inside it, so
  * the row's arrow keys never land on it; and it is outside the head, so a
- * click on it does not unfold a folded block. Every block has the "?", also
- * when there is no row (no data, or no colours): the legend then says why.
+ * click on it does not unfold a folded block. No row, no line: the legend
+ * explains the row's colours, and without a row (no co-occurrence data, or
+ * no colour tokens) there are none, so the line would only take room
+ * (controller ruling, Task 7 review).
  */
 function coTopHtml(ctx: BlockCtx, block: FacetBlock): string {
-  const row = ctx.co ? coRowHtml(ctx.co, block) : "";
-  return `<div class="qb-co-top">${row}${legendButton(ctx, block, "row")}${row ? CAPTION : ""}</div>`;
+  if (!hasRow(ctx.co)) return "";
+  const row = coRowHtml(ctx.co, block);
+  return `<div class="qb-co-top">${row}${legendButton(ctx.co, block, facetNameOf(ctx, block), "row")}${CAPTION}</div>`;
 }
 
 /**
@@ -141,7 +142,11 @@ function matchLineHtml(block: FacetBlock): string {
 function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
   const id = escapeHtml(block.id);
   if (ctx.panelTab === "seen") {
-    const chart = seenTogetherHtml(ctx.co, block, legendButton(ctx, block, "seen"));
+    // The tab's own "?" only with a row, like the row's (coTopHtml).
+    const legend = hasRow(ctx.co)
+      ? legendButton(ctx.co, block, facetNameOf(ctx, block), "seen")
+      : "";
+    const chart = seenTogetherHtml(ctx.co, block, legend);
     return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}">${chart}</div></div>`;
   }
   if (ctx.panelTab === "about") {

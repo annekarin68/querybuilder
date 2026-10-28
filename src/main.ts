@@ -20,7 +20,12 @@ import { showToast } from "./ui/fomantic";
 import { renderShell } from "./ui/layout";
 import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
-import { escapeClosesDocs, renderDocsSidebar, wireDocsSidebar } from "./ui/docsSidebar";
+import {
+  createReturnFocus,
+  escapeClosesDocs,
+  renderDocsSidebar,
+  wireDocsSidebar,
+} from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
 import { QUERY_BUILDER_KEYS, revealNode, wireQueryBuilder } from "./ui/queryBuilder";
@@ -76,10 +81,10 @@ shell.onMenu({
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
 });
 const docs = wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
-// The co-occurrence cell or box that last opened the dictionary (a finder,
-// as a repaint may replace it): when the user closes the dictionary again,
-// the focus goes back there, not to the rail (`takeReturnFocus`).
-let returnFocusOnFold: (() => HTMLElement | null) | null = null;
+// The co-occurrence cell or box that last opened the dictionary: when the
+// user closes the dictionary straight after, the focus goes back there, not
+// to the rail (`createReturnFocus`).
+const returnFocus = createReturnFocus<HTMLElement>();
 wireDocsResize(shell.docsResizeHandle);
 wireDataPreview(panels.preview, {
   onRun: app.runPreview,
@@ -112,19 +117,11 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   showFacetInDictionary: (facetId, returnFocusTo) => {
     // The app unfolds the dictionary first: a folded one has no card to show.
     if (app.showFacetInDictionary(facetId) && docs.showFacet(facetId)) {
-      returnFocusOnFold = returnFocusTo;
+      returnFocus.remember(returnFocusTo);
     }
   },
 });
 
-/** Where the focus goes when the dictionary folds while it has the focus:
- *  the cell or box that opened it, if it is still there (null: the rail).
- *  Used once: a later fold goes to the rail as before. */
-function takeReturnFocus(): HTMLElement | null {
-  const find = returnFocusOnFold;
-  returnFocusOnFold = null;
-  return find?.() ?? null;
-}
 wireSavedDialog(shell.savedDialog, app);
 wireEventDialog(shell.eventDialog, app.closeEvent);
 
@@ -141,7 +138,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   {
     keys: ["sidebarCollapsed"],
     run: (s) =>
-      shell.setSidebarCollapsed(s.sidebarCollapsed, s.sidebarCollapsed ? takeReturnFocus() : null),
+      shell.setSidebarCollapsed(s.sidebarCollapsed, s.sidebarCollapsed ? returnFocus.take() : null),
   },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
@@ -229,6 +226,14 @@ document.addEventListener("keydown", (e) => {
   });
   if (!closes) return;
   store.setState({ sidebarCollapsed: true });
+});
+
+// The focus going from the docs to anything outside them ends the round trip
+// from a co-occurrence cell (`createReturnFocus`). Null (the focus going
+// nowhere, as when the docs fold) does not count.
+docsColumn.addEventListener("focusout", (e) => {
+  const next = e.relatedTarget;
+  returnFocus.focusLeftDocs(next instanceof Node && !docsColumn.contains(next));
 });
 
 // A click anywhere else on the page also closes the floating docs, since they
