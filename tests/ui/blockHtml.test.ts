@@ -180,8 +180,8 @@ describe("blockHtml", () => {
       const html = draw("seen");
       expect(html).toContain('<div class="qb-block-body has-panel">');
       expect(html).toContain(`<div class="qb-seen" data-block-id="${b.id}">`);
-      // Without co-occurrence data the tab says so (coOccurrenceHtml.ts).
-      expect(html).toContain("No co-occurrence data for this facet.");
+      // Without a co-occurrence context the tab says so (coOccurrenceHtml.ts).
+      expect(html).toContain("Seen together cannot be shown right now.");
       expect(html).not.toContain("qb-about");
     });
 

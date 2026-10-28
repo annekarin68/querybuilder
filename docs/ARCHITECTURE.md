@@ -1928,8 +1928,9 @@ colour (`coOccurrenceColour` on the matrix-wide range, so blocks compare) and
 a dot (`betterOn`); never seen is plain `--qb-cooc-never` with no dot; the
 block's own facet is a round mustard mark; a value too small for a
 JavaScript number is an empty box with a dot. A block whose facet is seen
-with no other (or that the dictionary does not know) gets a row of
-never-seen cells, with the group's title "Never seen together with another
+with no other *from its own values* (all its cells never-seen; also a facet
+only other facets name, and one the dictionary does not know) gets a row of
+never-seen cells, the same rule the chart uses, so the two agree, with the group's title "Never seen together with another
 facet."; with no data at all (nothing seen with anything), no row is drawn.
 The connected facets and the range are worked out once per paint
 (`coCtxOf`, cached per dictionary array), and without two colour stops
@@ -1938,16 +1939,22 @@ display data and never blocks the builder. The row is a `role="group"`
 named "Seen together with <facet>"; each cell is a button whose accessible
 name and title say the facet and the backend's text ("<other>: 5 % of
 <facet>'s events", "<other>: never seen together", "<facet> (this facet)",
-"<other>: seen together, too rare to colour"), with `data-facet-id` for
+"<other>: 1e-400 % of <facet>'s events, too rare to colour": the backend's
+text even then, as spec section 6 asks, over the plan's wording), with `data-facet-id` for
 plan B task 7, which makes a click or Enter open the dictionary there.
 **Keyboard:** the row (and the chart) is one Tab stop: the markup makes the
 first cell `tabindex="0"`, the others `-1`; Left / Right / Home / End move
-the focus (`rovingIndex`, no wrapping round), and a `focusin` listener makes
-the focused cell the Tab stop (`makeTabStop`). Focus memory finds a cell
-again after a repaint by `data-co-cell` (a box by `data-co-box`), and the
-`focusin` of that restore moves the Tab stop to it too. **The 11 px cells are
-under the 24 px target size** (WCAG 2.5.8); they are accepted under its
-"equivalent" exception, as every facet is also reachable in the dictionary.
+the focus (`rovingIndex`, no wrapping round; a key with Alt, Ctrl or Meta is
+left to the browser, e.g. Alt+Left for Back). A `focusin` listener makes the
+focused cell the Tab stop and remembers it per block and per row or chart
+(`data-co-cell` / `data-co-box`); every paint puts the remembered stops back
+(`restoreTabStops`, `tabStopIndex`), so after an edit elsewhere Shift+Tab
+still returns to the cell the user left. Focus memory finds a focused cell
+again after a repaint by the same attributes. **The 11 px cells, and the
+chart's boxes (at least 12 px at the reference size, about 16 px in a 512 px
+window), are under the 24 px target size** (WCAG 2.5.8); they are accepted
+under its "equivalent" exception, as every facet is also reachable in the
+dictionary.
 
 **The panel** beside a block's rows (spec, section 5, decisions 10 and 17)
 shows the tab that is open in `AppState.panelTab`, the same tab in every
@@ -1970,16 +1977,23 @@ nesting take width too, not the window's width).
   list them. Merging goes by value, not by shape: a thin box goes together
   with every rarer one, so "less often" is true of every facet in it (squarify
   can leave a box thin while a rarer one is thick). Merging gives the rest
-  more room, so it repeats until no box is too thin. That box stands for a list, not a value, so it is not to scale:
-  it gets at least 2 % of the chart, growing until it is 12 px thick too. A
-  box shows its facet's name only where the whole name fits at the
-  reference size (`labelFits`); as a safety net, `hideCutLabels`
-  (`queryBuilder.ts`, through a `ResizeObserver` on every chart, so also when
-  the window is resized) hides a label whose text overflows its box in the
-  real panel: a name is never cut. Boxes are buttons with the same names as
+  more room, so it repeats until no box is too thin. That box stands for a
+  list, not a value, so it is not to scale: it gets at least 2 % of the
+  chart, growing until it is 12 px thick too. Its label is "+ N less often",
+  or "+N", or none, whichever fits at the reference size less the label's
+  inset (`labelFits`): the browser can hide a label but not shorten it.
+  **Every other box gets its facet's name as a label**, and `hideCutLabels`
+  (`queryBuilder.ts`, through a `ResizeObserver` on every chart, so on the
+  first paint and whenever the panel's size changes) hides each label whose
+  text overflows its box in the real panel: a name is shown only where it
+  fits whole, never cut. **Why not decide in `seenLayout`:** only the
+  browser knows the panel's real width; at 1280 px the chart is about twice
+  the reference, and an estimate left almost every box unlabelled. Boxes are buttons with the same names as
   the cells, `data-facet-id` and a roving tabindex like the row's. An
   isolated facet, one the dictionary does not know, and a page without any
-  co-occurrence data each get one sentence instead.
+  co-occurrence data each get one sentence instead. Without a context
+  (the dictionary still loading, or no colour tokens) the tab says "Seen
+  together cannot be shown right now.", which claims nothing about the data.
 - **About** (`aboutPanelHtml`, `aboutPanel.ts`) shows the dictionary's details
   of the block's facet (`facetDetailsHtml`, the same markup as the opened
   dictionary card, without its fields) and a hint that a field can be

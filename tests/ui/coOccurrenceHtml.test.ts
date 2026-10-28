@@ -5,6 +5,7 @@ import {
   seenLayout,
   seenTogetherHtml,
   rovingIndex,
+  tabStopIndex,
   type CoCtx,
 } from "../../src/ui/coOccurrenceHtml";
 import { newBlock } from "../../src/query/tree";
@@ -89,7 +90,8 @@ describe("coRowHtml", () => {
     expect(names).toEqual([
       "Alpha (this facet)",
       "Beta: 50 % of Alpha's events",
-      "Gamma: seen together, too rare to colour",
+      // The backend's text even when it is too small to colour (spec, section 6).
+      "Gamma: 1e-400 % of Alpha's events, too rare to colour",
       "Delta: never seen together",
     ]);
   });
@@ -126,6 +128,16 @@ describe("coRowHtml", () => {
     expect(html).not.toContain("is-own");
     expect(html).not.toContain("is-seen");
     expect(all(html, "data-facet-id")).toEqual(["a", "b", "c", "d"]);
+  });
+
+  // The row must agree with the chart, which says "Never seen together…":
+  // a facet only other facets name (its own map is empty) is isolated too.
+  it("treats a facet whose own values name nobody as isolated", () => {
+    const quiet = facet("q", "Quiet");
+    const talker = facet("t", "Talker", { q: co("3") });
+    const html = coRowHtml(coCtxOf([quiet, talker], tokens) as CoCtx, newBlock("q"));
+    expect(html).toContain('title="Never seen together with another facet."');
+    expect(html).toContain("is-own");
   });
 
   it("treats a facet the dictionary does not know like an isolated one", () => {
@@ -213,15 +225,20 @@ describe("seenLayout", () => {
     expect(largestMerged).toBeLessThan(smallestShown);
   });
 
-  it("labels a box only where its whole name fits", () => {
-    const own = facet("o", "O", { w: co("90"), n: co("10") });
-    const wide = facet("w", "Wide");
-    const narrow = facet("n", "A name far too long to fit in a small box");
-    const layout = seenLayout(coCtxOf([own, wide, narrow], tokens) as CoCtx, own);
-    expect(layout.boxes.map((b) => [b.mark.facet.id, b.label])).toEqual([
-      ["w", true],
-      ["n", false],
-    ]);
+  it("shortens the merged box's label to '+N', or drops it, as its box allows", () => {
+    // Alpha's merged box holds one too-rare value: it is at its smallest.
+    expect(seenLayout(ctx, alpha).merged?.label).not.toBe("+ 1 less often");
+    const values: Record<string, CoValue> = { m: co("1") };
+    const others = [facet("m", "M")];
+    for (let i = 0; i < 40; i++) {
+      values[`r${i}`] = co("1e-400", true);
+      others.push(facet(`r${i}`, `R${i}`));
+    }
+    const own = facet("own", "Own", values);
+    // Only too-rare values besides one: the merged box grows no further than
+    // it must, yet "+ 40 less often" is chosen only where it fits.
+    const merged = seenLayout(coCtxOf([own, ...others], tokens) as CoCtx, own).merged!;
+    expect(["+ 40 less often", "+40", null]).toContain(merged.label);
   });
 
   it("is empty for an isolated facet", () => {
@@ -240,8 +257,23 @@ describe("seenTogetherHtml", () => {
 
   it("lists the merged facets in the '+ N less often' box's name and title", () => {
     const html = seenTogetherHtml(ctx, newBlock("a"));
-    const name = "1 less often: Gamma: seen together, too rare to colour";
-    expect(html).toContain(`aria-label="${name}" title="${name}"`);
+    const name = "1 less often: Gamma: 1e-400 % of Alpha's events, too rare to colour";
+    expect(all(html, "aria-label")).toContain(name);
+    expect(all(html, "title")).toContain(name);
+  });
+
+  // Whether a name fits depends on the panel's real width, which only the
+  // browser knows: every box gets its label, and hideCutLabels (queryBuilder.ts)
+  // hides the ones that would be cut.
+  it("writes every box's name as its label, even a long one", () => {
+    const own = facet("o", "O", { w: co("90"), n: co("10") });
+    const long = "A name far too long to fit in a small box";
+    const html = seenTogetherHtml(
+      coCtxOf([own, facet("w", "Wide"), facet("n", long)], tokens),
+      newBlock("o"),
+    );
+    expect(html).toContain('<span class="qb-seen-label">Wide</span>');
+    expect(html).toContain(`<span class="qb-seen-label">${long}</span>`);
   });
 
   it("places boxes in percentages of the chart", () => {
@@ -256,7 +288,17 @@ describe("seenTogetherHtml", () => {
     expect(seenTogetherHtml(ctx, newBlock("gone"))).toContain(
       "This facet is not in the data dictionary.",
     );
-    expect(seenTogetherHtml(null, newBlock("a"))).toContain("No co-occurrence data");
+    expect(seenTogetherHtml(coCtxOf([gamma], tokens), newBlock("c"))).toContain(
+      "No co-occurrence data for this facet.",
+    );
+  });
+
+  // Without colours (the stylesheet did not load) or while the dictionary
+  // loads, nothing is known about the data: no claim about it is made.
+  it("makes no claim about the data when it cannot draw the chart", () => {
+    const html = seenTogetherHtml(null, newBlock("a"));
+    expect(html).toContain("Seen together cannot be shown right now.");
+    expect(html).not.toContain("No co-occurrence data");
   });
 
   it("never draws an empty accessible name", () => {
@@ -269,20 +311,55 @@ describe("seenTogetherHtml", () => {
 });
 
 describe("rovingIndex", () => {
+  const press = (
+    key: string,
+    mods: Partial<Record<"altKey" | "ctrlKey" | "metaKey", boolean>> = {},
+  ) => ({
+    key,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    ...mods,
+  });
+
   it("moves one step with Left / Right, and to the ends with Home / End", () => {
-    expect(rovingIndex("ArrowRight", 1, 4)).toBe(2);
-    expect(rovingIndex("ArrowLeft", 1, 4)).toBe(0);
-    expect(rovingIndex("Home", 2, 4)).toBe(0);
-    expect(rovingIndex("End", 0, 4)).toBe(3);
+    expect(rovingIndex(press("ArrowRight"), 1, 4)).toBe(2);
+    expect(rovingIndex(press("ArrowLeft"), 1, 4)).toBe(0);
+    expect(rovingIndex(press("Home"), 2, 4)).toBe(0);
+    expect(rovingIndex(press("End"), 0, 4)).toBe(3);
   });
 
   it("stays at the ends instead of wrapping", () => {
-    expect(rovingIndex("ArrowLeft", 0, 4)).toBe(0);
-    expect(rovingIndex("ArrowRight", 3, 4)).toBe(3);
+    expect(rovingIndex(press("ArrowLeft"), 0, 4)).toBe(0);
+    expect(rovingIndex(press("ArrowRight"), 3, 4)).toBe(3);
   });
 
   it("ignores other keys", () => {
-    expect(rovingIndex("Enter", 1, 4)).toBeNull();
-    expect(rovingIndex("ArrowDown", 1, 4)).toBeNull();
+    expect(rovingIndex(press("Enter"), 1, 4)).toBeNull();
+    expect(rovingIndex(press("ArrowDown"), 1, 4)).toBeNull();
+  });
+
+  // Alt+Left is the browser's Back, Ctrl+Home / End scroll the page: those
+  // belong to the browser, not to the row.
+  it("leaves keys with Alt, Ctrl or Meta to the browser", () => {
+    expect(rovingIndex(press("ArrowLeft", { altKey: true }), 1, 4)).toBeNull();
+    expect(rovingIndex(press("Home", { ctrlKey: true }), 2, 4)).toBeNull();
+    expect(rovingIndex(press("End", { metaKey: true }), 0, 4)).toBeNull();
+  });
+});
+
+describe("tabStopIndex", () => {
+  it("keeps the remembered item as the Tab stop after a repaint", () => {
+    expect(tabStopIndex(["a", "b", "c"], "c")).toBe(2);
+  });
+
+  it("falls back to the first item when nothing is remembered or it is gone", () => {
+    expect(tabStopIndex(["a", "b"], undefined)).toBe(0);
+    expect(tabStopIndex(["a", "b"], "gone")).toBe(0);
+  });
+
+  // The merged box's id is "", which must still be found.
+  it("finds the merged box by its empty id", () => {
+    expect(tabStopIndex(["a", ""], "")).toBe(1);
   });
 });

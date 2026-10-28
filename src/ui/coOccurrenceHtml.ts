@@ -55,6 +55,9 @@ export function coCtxOf(facets: Facet[], tokens: CoTokens): CoCtx | null {
 const NEVER_WITH_ANY = "Never seen together with another facet.";
 const UNKNOWN_FACET = "This facet is not in the data dictionary.";
 const NO_DATA = "No co-occurrence data for this facet.";
+/** Without a context (the dictionary is loading, or the colour tokens are
+ *  missing) nothing is known about the data, so nothing is claimed about it. */
+const CANNOT_SHOW = "Seen together cannot be shown right now.";
 
 /** What a cell (or a box) shows about another facet. */
 export type CellKind = "own" | "seen" | "too-rare" | "never";
@@ -95,7 +98,12 @@ function markOf(ctx: CoCtx, own: Facet | null, ownName: string, other: Facet): C
     case "own":
       return { ...mark, name: `${other.name} (this facet)` };
     case "too-rare":
-      return { ...mark, name: `${other.name}: seen together, too rare to colour` };
+      // Still the backend's text ("1e-400 %"): it is all there is to say
+      // about a value too small for a number, and hover must never lose it.
+      return {
+        ...mark,
+        name: `${other.name}: ${formatPercent(value!.text)} of ${ownName}'s events, too rare to colour`,
+      };
     case "never":
       return { ...mark, name: `${other.name}: never seen together` };
     case "seen": {
@@ -136,10 +144,13 @@ export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
   if (ctx.connected.length === 0) return "";
   const own = ownFacet(ctx, block);
   const ownName = own?.name ?? block.facetId;
-  const isolated = !own || !ctx.connected.includes(own);
-  const cells = ctx.connected
-    .map((other, index) => {
-      const mark = markOf(ctx, own, ownName, other);
+  const marks = ctx.connected.map((other) => markOf(ctx, own, ownName, other));
+  // Decided from this block's own values, as the chart is, so the two agree:
+  // a facet that only other facets name is seen with nobody from its side.
+  const isolated = marks.every((mark) => mark.kind === "never" || mark.kind === "own");
+  const cells = marks
+    .map((mark, index) => {
+      const other = mark.facet;
       const name = escapeHtml(mark.name);
       const style = colourStyle(mark);
       const id = escapeHtml(other.id);
@@ -159,8 +170,9 @@ export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
 const CHART_WIDTH = 100;
 const CHART_HEIGHT = 60;
 /** The panel's typical width is about 300 px: one unit is about 3 px. The
- *  12 px rule and the labels are worked out at that size; a label that does
- *  not fit in the real panel is hidden after the paint (hideCutLabels, queryBuilder.ts). */
+ *  12 px rule and the merged box's label are worked out at that size. The
+ *  facets' labels are not: every box gets one, and the browser, which knows
+ *  the real size, hides those that do not fit (hideCutLabels, queryBuilder.ts). */
 const PX_PER_UNIT = 3;
 /** A box thinner than this is hard to see and to press: it is merged. */
 const MIN_BOX_PX = 12;
@@ -175,8 +187,6 @@ const MERGED_GROWTH = 1.5;
 export interface SeenBox {
   mark: CoMark;
   rect: Rect;
-  /** Whether the whole name fits at the reference size (`labelFits`). */
-  label: boolean;
 }
 
 export interface MergedBox {
@@ -248,10 +258,7 @@ export function seenLayout(ctx: CoCtx, own: Facet): SeenLayout {
       mergedShare = Math.min(MERGED_MAX_SHARE, mergedShare * MERGED_GROWTH);
       continue;
     }
-    const boxes = shown.map((mark, index) => {
-      const rect = rects[index] as Rect;
-      return { mark, rect, label: labelFits(mark.facet.name, inPx(rect)) };
-    });
+    const boxes = shown.map((mark, index) => ({ mark, rect: rects[index] as Rect }));
     return { boxes, merged: merged.length ? mergedBox(merged, mergedRect) : null };
   }
 }
@@ -268,10 +275,23 @@ function mergedValue(shownValues: number[], merged: CoMark[], share: number): nu
   return Math.max(mergedSum, (share * shownTotal) / (1 - share));
 }
 
+/** The label's inset inside its box (styles.css, `.qb-seen-label`): 4 px
+ *  left and right, 2 px top and bottom. */
+const LABEL_INSET_X = 8;
+const LABEL_INSET_Y = 4;
+
+/** Whether `text` fits inside a box at the reference size, less the inset. */
+function fitsInBox(text: string, rect: Rect): boolean {
+  const px = inPx(rect);
+  return labelFits(text, { ...px, w: px.w - LABEL_INSET_X, h: px.h - LABEL_INSET_Y });
+}
+
+/** "+ N less often" where it fits, or "+N", chosen here because the browser
+ *  can only hide a label, not shorten it. */
 function mergedBox(items: CoMark[], rect: Rect): MergedBox {
   const long = `+ ${items.length} less often`;
   const short = `+${items.length}`;
-  const label = labelFits(long, inPx(rect)) ? long : labelFits(short, inPx(rect)) ? short : null;
+  const label = fitsInBox(long, rect) ? long : fitsInBox(short, rect) ? short : null;
   return { items, rect, label };
 }
 
@@ -305,15 +325,17 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock): string {
   const ownName = own?.name ?? block.facetId;
   const title = `<h3 class="qb-seen-title">Seen together with ${escapeHtml(ownName)}</h3>`;
   const note = (text: string) => `${title}<p class="qb-muted">${text}</p>`;
-  if (!ctx || ctx.connected.length === 0) return note(NO_DATA);
+  if (!ctx) return note(CANNOT_SHOW);
+  if (ctx.connected.length === 0) return note(NO_DATA);
   if (!own) return note(UNKNOWN_FACET);
   const layout = seenLayout(ctx, own);
   if (layout.boxes.length === 0 && !layout.merged) return note(NEVER_WITH_ANY);
 
-  const boxes = layout.boxes.map(({ mark, rect, label }, index) => {
+  const boxes = layout.boxes.map(({ mark, rect }, index) => {
     const name = escapeHtml(mark.name);
     const id = escapeHtml(mark.facet.id);
-    const text = label ? `<span class="qb-seen-label">${escapeHtml(mark.facet.name)}</span>` : "";
+    // Every box gets its label; hideCutLabels hides those that do not fit.
+    const text = `<span class="qb-seen-label">${escapeHtml(mark.facet.name)}</span>`;
     return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" tabindex="${tabindexAt(index)}" aria-label="${name}" title="${name}" style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
   });
   if (layout.merged) {
@@ -331,14 +353,24 @@ export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock): string {
 
 // ---- Keyboard ------------------------------------------------------------
 
+/** The part of a key press `rovingIndex` reads (a KeyboardEvent has it). */
+export interface KeyPress {
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+}
+
 /**
  * Where the arrow keys move the focus in a row of cells or a chart's boxes
  * (one Tab stop, then arrows): Left / Right one step, Home / End to the
  * ends. The ends do not wrap round, so holding a key stops at the end.
- * Null for a key that does not move.
+ * Null for a key that does not move: also any key with Alt, Ctrl or Meta,
+ * which belongs to the browser (Alt+Left is Back, Ctrl+Home scrolls).
  */
-export function rovingIndex(key: string, index: number, count: number): number | null {
-  switch (key) {
+export function rovingIndex(press: KeyPress, index: number, count: number): number | null {
+  if (press.altKey || press.ctrlKey || press.metaKey) return null;
+  switch (press.key) {
     case "ArrowLeft":
       return Math.max(0, index - 1);
     case "ArrowRight":
@@ -350,4 +382,15 @@ export function rovingIndex(key: string, index: number, count: number): number |
     default:
       return null;
   }
+}
+
+/**
+ * Which item of a repainted row or chart is its Tab stop: the one the user
+ * was last on (`remembered`, its `data-co-cell` / `data-co-box`), so Tab
+ * comes back to it even after an edit somewhere else repainted the row; the
+ * first item when nothing is remembered or that facet is no longer there.
+ */
+export function tabStopIndex(itemIds: string[], remembered: string | undefined): number {
+  const index = remembered === undefined ? -1 : itemIds.indexOf(remembered);
+  return index === -1 ? 0 : index;
 }

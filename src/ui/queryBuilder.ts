@@ -39,7 +39,7 @@ import { RESTORED_MESSAGE } from "../util/keptQuery";
 import { escapeHtml, paint } from "./panel";
 import { aboutCtxOf } from "./aboutPanel";
 import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
-import { coCtxOf, rovingIndex } from "./coOccurrenceHtml";
+import { coCtxOf, rovingIndex, tabStopIndex } from "./coOccurrenceHtml";
 import { readCoTokens } from "./coTokens";
 import { pickedOperatorId } from "./fieldRows";
 import { onDropdownChange, openDropdown } from "./fomantic";
@@ -112,16 +112,23 @@ function rovingItems(group: Element): HTMLElement[] {
   return Array.from(group.querySelectorAll<HTMLElement>(":scope > button"));
 }
 
-/**
- * Make `item` its row's (or chart's) one Tab stop. Called on every focus move
- * into one, so it also holds after a repaint: the markup makes the first item
- * the stop, and focus memory putting the focus back on another item
- * (`data-co-cell` / `data-co-box`) fires `focusin`, which moves the stop there.
- */
-function makeTabStop(item: HTMLElement): void {
-  const group = item.parentElement;
-  if (!group?.hasAttribute("data-roving")) return;
-  for (const other of rovingItems(group)) other.tabIndex = other === item ? 0 : -1;
+/** The id a row's cell or a chart's box is remembered by: its
+ *  `data-co-cell` or `data-co-box` (the merged box's is ""). */
+function rovingIdOf(item: HTMLElement): string {
+  return item.dataset.coCell ?? item.dataset.coBox ?? "";
+}
+
+/** Which row or chart `group` is, in words that survive a repaint: its
+ *  block's id and whether it is the row or the chart. Null outside a block. */
+function rovingGroupKey(group: Element): string | null {
+  const blockId = group.closest<HTMLElement>(".qb-block[data-node-id]")?.dataset.nodeId;
+  if (!blockId) return null;
+  return `${blockId} ${group.classList.contains("qb-co-row") ? "row" : "chart"}`;
+}
+
+/** Make item `index` of `group` its one Tab stop. */
+function setTabStop(group: Element, index: number): void {
+  rovingItems(group).forEach((item, i) => (item.tabIndex = i === index ? 0 : -1));
 }
 
 /**
@@ -634,12 +641,34 @@ export function wireQueryBuilder(
     const item = (e.target as HTMLElement).closest<HTMLElement>("[data-roving] > button");
     if (!item?.parentElement) return;
     const items = rovingItems(item.parentElement);
-    const next = rovingIndex(e.key, items.indexOf(item), items.length);
+    // Keys with Alt, Ctrl or Meta are left to the browser (rovingIndex).
+    const next = rovingIndex(e, items.indexOf(item), items.length);
     if (next === null) return;
     e.preventDefault(); // Home / End would scroll the page
     items[next]?.focus();
   });
-  container.addEventListener("focusin", (e) => makeTabStop(e.target as HTMLElement));
+
+  // Each row's and chart's Tab stop is the item the user was last on. The
+  // markup always makes the first item the stop, so it is remembered here,
+  // per block, and put back after every paint (`restoreTabStops`): otherwise
+  // an edit elsewhere would send Shift+Tab back to the first cell. (Entries
+  // of removed blocks stay; they are a few short strings.)
+  const tabStops = new Map<string, string>();
+  container.addEventListener("focusin", (e) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>("[data-roving] > button");
+    const group = item?.parentElement;
+    const key = group ? rovingGroupKey(group) : null;
+    if (!item || !group || !key) return;
+    tabStops.set(key, rovingIdOf(item));
+    setTabStop(group, rovingItems(group).indexOf(item));
+  });
+  function restoreTabStops(): void {
+    for (const group of container.querySelectorAll("[data-roving]")) {
+      const key = rovingGroupKey(group);
+      const ids = rovingItems(group).map(rovingIdOf);
+      setTabStop(group, tabStopIndex(ids, key ? tabStops.get(key) : undefined));
+    }
+  }
 
   // Re-checks the chart's labels whenever a chart changes size, and once
   // when it is first observed (after each paint, below).
@@ -774,6 +803,7 @@ export function wireQueryBuilder(
 
   return (state) => {
     paintQueryBuilder(container, state);
+    restoreTabStops();
     // The old charts are gone with the repaint: watch the new ones.
     chartSizes?.disconnect();
     container.querySelectorAll(".qb-seen-chart").forEach((chart) => chartSizes?.observe(chart));
