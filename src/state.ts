@@ -154,6 +154,9 @@ export interface AppState {
   save: SaveState;
   savedList: SavedListState;
   savedConfirm: SavedConfirm;
+  /** The saved query whose Delete is still waiting for the server, or null:
+   *  its buttons are drawn busy meanwhile. */
+  deletingSavedId: string | null;
   /** How the last delete in the Saved queries dialog went, shown above the
    *  list; null when there is nothing to say. It lives in the state, not in the
    *  toast, because the toast is drawn under the open dialog's backdrop. Cleared
@@ -190,6 +193,7 @@ export const initialState: AppState = {
   save: { status: "idle" },
   savedList: { status: "idle" },
   savedConfirm: null,
+  deletingSavedId: null,
   savedListNotice: null,
 };
 

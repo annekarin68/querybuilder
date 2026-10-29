@@ -213,6 +213,31 @@ export const QUERY_BUILDER_KEYS: (keyof AppState)[] = [
   "selectedDatabaseIds",
 ];
 
+/** The builder's keys that no user action of the builder's own sets: a
+ *  statistics line writes `serverIssues` while the user may be typing. */
+const STREAMED_BUILDER_KEYS: ReadonlySet<keyof AppState> = new Set(["serverIssues"]);
+
+/**
+ * Whether a change must wait before it repaints the query builder: only
+ * streamed keys changed and the user is in a value box or a dropdown. A
+ * repaint rebuilds the box being typed in and fires its `change`, which
+ * commits half-typed text (issue #76). The repaint is done when the focus
+ * leaves (main.ts); any other change repaints at once, with the latest state.
+ */
+export function holdsBuilderRepaint(changed: ReadonlySet<keyof AppState>, inUse: boolean): boolean {
+  if (!inUse) return false;
+  return QUERY_BUILDER_KEYS.filter((k) => changed.has(k)).every((k) =>
+    STREAMED_BUILDER_KEYS.has(k),
+  );
+}
+
+/** Whether the focus is in a value box, or any other text box or dropdown,
+ *  of the query builder in `container`. */
+export function isValueBoxInUse(container: HTMLElement, focused = document.activeElement): boolean {
+  if (!focused || !container.contains(focused)) return false;
+  return focused.matches("input, textarea") || focused.closest(".ui.dropdown") !== null;
+}
+
 function paintQueryBuilder(el: HTMLElement, state: AppState): void {
   if (!state.catalog) {
     paint(el, `<div class="qb-card"><div class="ui active centered inline loader"></div></div>`);

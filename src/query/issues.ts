@@ -73,3 +73,37 @@ export function placeIssues(query: Group, issues: Issue[]): Issue[] {
     issues.map((issue) => ({ ...issue, nodeId: drawn.get(issue.nodeId) ?? query.id })),
   );
 }
+
+/** The node (group, block or field condition) with this id in `query`, or null. */
+function nodeWithId(query: Group, id: string): object | null {
+  let found: object | null = null;
+  const visit = (node: QueryNode) => {
+    if (found) return;
+    if (node.id === id) found = node;
+    else if (node.kind === "group") node.children.forEach(visit);
+    else found = node.conditions.find((c) => c.id === id) ?? null;
+  };
+  visit(query);
+  return found;
+}
+
+/**
+ * The server's problems that still apply after an edit from `before` to
+ * `after`: those on a node the edit did not touch. Tree edits never change a
+ * node in place, they copy it (src/query/tree.ts), so "untouched" means "the
+ * very same object in both trees". A problem on an edited, removed or
+ * enclosing node is dropped: the new statistics will say whether it is still
+ * there. Carrying the rest over means an unchanged problem never makes the
+ * query builder repaint while the user types (issue #76).
+ */
+export function issuesOnUnchangedNodes(before: Group, after: Group, issues: Issue[]): Issue[] {
+  return issues.filter((issue) => {
+    const node = nodeWithId(before, issue.nodeId);
+    return node !== null && node === nodeWithId(after, issue.nodeId);
+  });
+}
+
+/** `a` and `b` together, each problem kept once (see withoutRepeats). */
+export function mergeIssues(a: Issue[], b: Issue[]): Issue[] {
+  return withoutRepeats([...a, ...b]);
+}

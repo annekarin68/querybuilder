@@ -114,9 +114,18 @@ function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
  * one of those asks about that item instead. The first item's **Open** is
  * where the keyboard starts (`first`).
  */
-function savedItemHtml(q: SavedQuery, confirm: SavedConfirm, first: boolean): string {
+function savedItemHtml(
+  q: SavedQuery,
+  confirm: SavedConfirm,
+  first: boolean,
+  deleting: boolean,
+): string {
   const name = escapeHtml(q.name);
   const id = escapeHtml(q.id);
+  // While its Delete runs: aria-disabled, not disabled, so the focus that
+  // Delete's question handed back to the button stays on it (app.ts ignores
+  // the presses).
+  const busy = deleting ? ` aria-disabled="true"` : "";
   const asking = confirm?.id === q.id ? confirm.action : null;
   const actions =
     asking === "open"
@@ -137,8 +146,8 @@ function savedItemHtml(q: SavedQuery, confirm: SavedConfirm, first: boolean): st
             destructive: true,
           })
         : `<div class="qb-saved-actions">
-            <button type="button" class="ui mini basic button" data-action="open-saved" data-id="${id}" aria-label="Open ${name}"${first ? " data-initial-focus" : ""}>Open</button>
-            <button type="button" class="ui mini basic button" data-action="delete-saved" data-id="${id}" aria-label="Delete ${name}">Delete</button>
+            <button type="button" class="ui mini basic button${deleting ? " disabled" : ""}" data-action="open-saved" data-id="${id}" aria-label="Open ${name}"${busy}${first ? " data-initial-focus" : ""}>Open</button>
+            <button type="button" class="ui mini basic button${deleting ? " loading" : ""}" data-action="delete-saved" data-id="${id}" aria-label="${deleting ? "Deleting" : "Delete"} ${name}"${busy}>Delete</button>
           </div>`;
   const note = q.note ? `<p class="qb-saved-note">${escapeHtml(q.note)}</p>` : "";
   return `<li class="qb-saved-item">
@@ -189,7 +198,9 @@ function savedListBodyHtml(state: AppState): string {
       }
       const note = unreadable ? `<p class="qb-muted">${unreadable}</p>` : "";
       const items = list.queries
-        .map((q, i) => savedItemHtml(q, state.savedConfirm, i === 0))
+        .map((q, i) =>
+          savedItemHtml(q, state.savedConfirm, i === 0, state.deletingSavedId === q.id),
+        )
         .join("");
       return `${note}<ul class="qb-saved-list" aria-labelledby="${SAVED_TITLE_ID}">${items}</ul>`;
     }
