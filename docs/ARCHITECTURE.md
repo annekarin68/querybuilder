@@ -724,7 +724,8 @@ lacks won't compile). Every read checks its value:
 | `formatted` | a whole message the backend owns (the compliance log), as indented JSON | never throws or warns |
 | `optionalText`, `optionalStrings`, `optionalNumber` | keys marked `?` | `""`, `[]` or `undefined`; a warning only for a value of the wrong kind |
 | `optionalEntries`, `hasKey` | an object keyed by backend ids (`co_occurrence`) | missing is `undefined`; a non-object warns |
-| `items` | a list read item by item, so one bad item is skipped (saved queries) | throws if not a list |
+| `requiredText` | text the app needs and shows (a saved query's name) | trimmed; blank or missing throws, like `id` |
+| `items` | a list read item by item, so one bad item is set aside (saved queries) | throws if not a list |
 | `textForMessage` | naming an item in a console message | `null`; never throws |
 
 A `ContractError` names the request and the place in the body:
@@ -757,6 +758,14 @@ next to what is wrong** (`serverIssues`, `src/query/issues.ts`) and blocks Run
 (`runBlocker` → `"rejected"`); the statistics only offer **Show problem**. An
 error without one makes that database's row a red bar with the reason.
 `info_messages` become `notes`.
+
+The stream answers each requested database once, and `getStats` holds it to
+that (issue #79): a line for a database that wasn't asked for, or a second
+line for one, is left out with a console warning (`unexpectedLine`; counted,
+it could push the headline over 100 %), and every requested database the
+stream ended without answering gets a failed result, "The server sent no
+answer for this database." (`missingAnswers`), so the statistics never look
+complete when they are not.
 
 ### The field catalog (there is no schema endpoint)
 
@@ -1501,14 +1510,21 @@ dictionary's order (`fieldRowsHtml`, `fieldRows.ts`). An unset field means
 
 **The value control** (`valueControl.ts`): nothing; for **Equals** / **Not
 equals** on a field with a pick-list, a free-entry dropdown (known values, plus
-anything typed); otherwise one input, a boolean toggle or a timestamp box; a
+anything typed); otherwise one input, a timestamp box, or for a yes/no field a
+**Choose… / true / false** dropdown that starts unset (a toggle could not show
+"unset", and a default of false ran statistics on a value nobody chose;
+maintainers' decision on #83); a
 from–to pair (numbers and dates); or, for **Is any of** / **Is none of**, a
 free-entry multi-select. Free-entry dropdowns are Fomantic `search` dropdowns
 with `allowAdditions` (`data-free-entry`): their `delimiter` is a character no
 key can type, so a comma is part of an entry, and `optionEntry` undoes
 Fomantic's HTML-escaping of a typed entry, so it goes out exactly as typed. An
 entry becomes the field's type (`parseEntry`: `"3"` → `3` on a number field;
-anything else stays as typed, for validation to report). Every box shows its
+anything else stays as typed, for validation to report). Text typed into a
+free-entry dropdown and left there (Tab, a click elsewhere) is added as an
+entry, as Enter would add it (`withTypedEntry`, issue #82): Fomantic neither
+adds nor clears it on blur, so the box showed text the condition did not
+have. A click on a menu item still picks that item. Every box shows its
 full content on hover; keyboard and screen-reader users get the same text from
 the control.
 
@@ -1772,7 +1788,10 @@ saved-queries state.
   "Replace the current query? Its changes are not saved." Loading, the empty
   state, errors with **Try again**, unreadable entries ("N saved queries from
   an older version can't be opened.") and how a delete went
-  (`savedListNotice`) all show inside the dialog.
+  (`savedListNotice`) all show inside the dialog. An unreadable entry whose
+  id could be read is listed after the others by its name ("Unnamed saved
+  query" without one), with **Delete** only, so an old entry does not stay
+  for ever (issue #80).
 - **Logged out**: "Log in to save queries" / "Log in to see saved queries",
   saying the query is kept, with **Log in** (`app.logInToSave`) and **Cancel**.
 

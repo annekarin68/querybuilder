@@ -141,6 +141,12 @@ describe("validateQuery: the messages for a tampered or odd value", () => {
     expect(one(newFieldCondition("active", "eq", false))).toEqual([]);
   });
 
+  it("asks to choose a yes/no value that is still unset (#83)", () => {
+    expect(one(newFieldCondition("active", "eq", null))).toEqual([
+      ["incomplete", "Choose true or false."],
+    ]);
+  });
+
   describe("dates", () => {
     const badDate = "Enter a UTC time such as 2024, 2024-11-06 or 2024-11-06T14:30Z.";
 

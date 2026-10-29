@@ -50,6 +50,23 @@ function freeEntryDropdown(field: CatalogField, current: unknown, multiple: bool
   </select>`;
 }
 
+/**
+ * A yes/no value: "true" or "false", and nothing chosen until the user picks
+ * one (maintainers' decision on #83, 2026-10-29). A toggle could not show
+ * "unset", and its fixed "true" label read as the value while it was off.
+ */
+function booleanDropdown(current: unknown): string {
+  const opts = optionsHtml(
+    ["true", "false"],
+    (o) => o,
+    (o) => o,
+    (o) => typeof current === "boolean" && String(current) === o,
+  );
+  return `<select class="ui selection dropdown" data-part="value" aria-label="Value">
+    <option value="">Choose…</option>${opts}
+  </select>`;
+}
+
 /** A date is typed, not picked: a full or partial ISO UTC timestamp
  *  ("2024", "2024-11-06", "2024-11-06T14:30Z"; see src/query/dates.ts). */
 const DATE_ATTRS = `placeholder="${UTC_TIMESTAMP_HINT}" spellcheck="false" autocomplete="off"`;
@@ -77,11 +94,7 @@ export function renderValueControl(
     return `<div class="qb-range">${scalarInput(field, from, 'data-range="from" aria-label="From"')}<span class="qb-range-to">to</span>${scalarInput(field, to, 'data-range="to" aria-label="To"')}</div>`;
   }
   // arity "one"
-  if (field.valueType === "boolean") {
-    return `<div class="ui toggle checkbox" data-part="value">
-      <input type="checkbox" aria-label="Value"${value === true ? " checked" : ""} /><label>true</label>
-    </div>`;
-  }
+  if (field.valueType === "boolean") return booleanDropdown(value);
   if (field.options && PICK_OPERATORS.has(operator.id)) {
     return freeEntryDropdown(field, value, false);
   }
@@ -95,6 +108,26 @@ export function renderValueControl(
  */
 export function parseEntry(text: string, valueType: ValueType): string | number {
   return valueType === "number" && isNumberText(text) ? Number(text) : text;
+}
+
+/**
+ * A free-entry dropdown's value once `typed` (text left in its typing box
+ * when the focus left, without Enter) is added as an entry: the one value for
+ * Equals, one more item for Is any of (unless it is already there). Without
+ * this the box kept showing the text while the condition had no value
+ * (issue #82). Blank text changes nothing.
+ */
+export function withTypedEntry(
+  current: unknown,
+  typed: string,
+  multiple: boolean,
+  valueType: ValueType,
+): unknown {
+  if (typed.trim() === "") return current;
+  const entry = parseEntry(typed, valueType);
+  if (!multiple) return entry;
+  const items = Array.isArray(current) ? current : [];
+  return items.includes(entry) ? items : [...items, entry];
 }
 
 /** What Fomantic's HTML escaping turns each character into (see optionEntry). */
@@ -139,11 +172,13 @@ export function readValueControl(row: HTMLElement, arity: Arity, valueType: Valu
   if (!control) return null;
   if (control instanceof HTMLSelectElement) {
     const chosen = control.selectedOptions[0];
-    return parseEntry(chosen ? optionEntry(chosen) : "", valueType);
+    const entry = chosen ? optionEntry(chosen) : "";
+    // The yes/no dropdown (booleanDropdown): nothing chosen is null.
+    if (valueType === "boolean") return entry === "" ? null : entry === "true";
+    return parseEntry(entry, valueType);
   }
   if (control instanceof HTMLInputElement) return readInput(control, valueType);
-  // The boolean toggle: a .ui.checkbox wrapper around the real checkbox.
-  return control.querySelector<HTMLInputElement>("input")?.checked ?? false;
+  return null;
 }
 
 function readInput(el: HTMLInputElement | null, valueType: ValueType): unknown {

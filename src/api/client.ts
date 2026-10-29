@@ -16,6 +16,7 @@ import type {
   SavedQuery,
   SavedQueryDraft,
   SavedQueryList,
+  UnreadableSaved,
   User,
 } from "../model";
 import type { Group } from "../query/types";
@@ -23,6 +24,7 @@ import { ContractError, ResponseValue } from "./contract";
 import { toQueryRequest, toSavedQueryRequest } from "./request";
 import {
   countWithoutCoOccurrence,
+  missingAnswers,
   pruneUnknownCoOccurrence,
   toCompliance,
   toDatabase,
@@ -31,6 +33,7 @@ import {
   toFacet,
   toSavedQuery,
   toUser,
+  unexpectedLine,
 } from "./response";
 
 // The only file that calls fetch(): one function per endpoint. Every one of
@@ -120,6 +123,9 @@ export async function getFacets(): Promise<Facet[]> {
  * `databaseIds`, as soon as that database's result is ready. `onResult` is
  * called once per line, in arrival order; the returned promise resolves when
  * the stream ends, or rejects (before any line is read) on a non-2xx response.
+ * A line for a database not asked for, or a second one for the same database,
+ * is left out with a warning; a database the stream ended without answering
+ * gets a "failed" result (`unexpectedLine`, `missingAnswers`).
  * Aborting `signal` stops reading and rejects with the abort reason — callers
  * use it to drop a stream whose query is no longer on screen.
  *
@@ -135,11 +141,20 @@ export async function getStats(
   const body = toQueryRequest(query, databaseIds);
   await send("POST", "/filter/validate", { body, signal }, async (res, source, touch) => {
     let lineNumber = 0;
+    const answered = new Set<string>();
     await readLines(res, source, touch, (line) => {
       lineNumber += 1;
       const value = ResponseValue.parse(line, `${source}, line ${lineNumber}`);
-      onResult(toDatabaseResult(value.object<StatsResponse>()));
+      const result = toDatabaseResult(value.object<StatsResponse>());
+      const problem = unexpectedLine(result, databaseIds, answered);
+      if (problem) {
+        console.warn(`${source}, line ${lineNumber}: left out, it is for ${problem}.`);
+        return;
+      }
+      answered.add(result.databaseId);
+      onResult(result);
     });
+    missingAnswers(databaseIds, answered).forEach(onResult);
   });
 }
 
@@ -201,22 +216,23 @@ export function invalidateCompliance(): Promise<void> {
 
 /**
  * The user's saved queries. An entry that can't be read (a `ContractError`:
- * saved by an older version, in a shape this one does not read) is skipped
- * with a console warning and counted, so one old entry does not make the
- * whole list unreadable. Anything else (an HTTP error, a body that is not a
+ * saved by an older version, in a shape this one does not read) is set aside
+ * with a console warning, by id and name (so it can still be deleted), and
+ * one old entry does not make the whole list unreadable. Anything else (an HTTP error, a body that is not a
  * list) still fails as a whole.
  */
 export async function listSavedQueries(): Promise<SavedQueryList> {
   const body = await getJson("/filter/saved");
   const queries: SavedQuery[] = [];
-  let unreadable = 0;
+  const unreadable: UnreadableSaved[] = [];
   for (const entry of body.items()) {
     try {
       queries.push(toSavedQuery(entry.object<SavedQueryResponse>()));
     } catch (err) {
       if (!(err instanceof ContractError)) throw err;
-      unreadable += 1;
-      const name = entry.textForMessage("name");
+      // Kept by id and name so that it can still be deleted.
+      const name = entry.textForMessage("name")?.trim() ?? "";
+      unreadable.push({ id: entry.textForMessage("id")?.trim() || null, name });
       console.warn(`Skipped the saved query${name ? ` “${name}”` : ""}: ${err.message}`);
     }
   }

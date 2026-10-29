@@ -5,6 +5,7 @@ import {
   parseEntry,
   readValueControl,
   renderValueControl,
+  withTypedEntry,
 } from "../../src/ui/valueControl";
 
 function field(overrides: Partial<CatalogField> = {}): CatalogField {
@@ -46,9 +47,16 @@ describe("renderValueControl", () => {
     expect(html).toContain('title="9"');
   });
 
-  it('arity "one" + boolean renders a toggle checkbox', () => {
-    const html = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), true);
-    expect(html).toContain("ui toggle checkbox");
+  it('arity "one" + boolean is a true/false dropdown that can be unset (#83)', () => {
+    const unset = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), null);
+    expect(unset).toContain('class="ui selection dropdown"');
+    expect(unset).toContain('<option value="">Choose…</option>');
+    expect(unset).not.toContain("selected");
+    expect(unset).not.toContain("checkbox");
+    const yes = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), true);
+    expect(yes).toContain('<option value="true" selected>true</option>');
+    const no = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), false);
+    expect(no).toContain('<option value="false" selected>false</option>');
   });
 
   it("Equals on a field with a pick-list is a free-entry dropdown of its values", () => {
@@ -201,5 +209,23 @@ describe("readValueControl on a free-entry dropdown", () => {
     expect(readValueControl(rowWith(option("4"), option("42", true)), "many", "number")).toEqual([
       4, 42,
     ]);
+  });
+});
+
+describe("withTypedEntry (#82)", () => {
+  it("makes text left in the box the value, as Enter would", () => {
+    expect(withTypedEntry(null, "abc", false, "string")).toBe("abc");
+    expect(withTypedEntry(null, "42", false, "number")).toBe(42);
+  });
+
+  it("adds it to a list once", () => {
+    expect(withTypedEntry(["a"], "b", true, "string")).toEqual(["a", "b"]);
+    expect(withTypedEntry(["a"], "a", true, "string")).toEqual(["a"]);
+    expect(withTypedEntry(null, "a", true, "string")).toEqual(["a"]);
+  });
+
+  it("changes nothing for blank text", () => {
+    expect(withTypedEntry(["a"], "  ", true, "string")).toEqual(["a"]);
+    expect(withTypedEntry("x", "", false, "string")).toBe("x");
   });
 });

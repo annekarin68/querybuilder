@@ -3,26 +3,11 @@ import {
   findField,
   findOperator,
   type Arity,
-  type CatalogField,
-  type CatalogOperator,
   type FieldCatalog,
   type ValueType,
 } from "./fieldCatalog";
 import { newFieldCondition, removeCondition, setFieldCondition } from "./tree";
 import type { FacetBlock, FieldCondition, Group } from "./types";
-
-/**
- * The value a condition holds before the user enters one. Not every control
- * can show "unset" (a boolean toggle is always true or false), so this is
- * where a field's real default lives.
- */
-export function defaultValueFor(
-  field: CatalogField | undefined,
-  operator: CatalogOperator | undefined,
-): unknown {
-  if (field?.valueType === "boolean" && operator?.arity === "one") return false;
-  return null;
-}
 
 /**
  * A field row after the user picked an operator or typed a value. Null means
@@ -50,7 +35,9 @@ export function nextFieldCondition(
   // is a read-only stray): rewriting the condition would erase its value.
   if (existing && !field) return existing;
   const operator = findOperator(operatorId);
-  let value = defaultValueFor(field, operator);
+  // Unset until the user enters one, a yes/no value too: a default would
+  // run statistics on a value nobody chose (maintainers' decision on #83).
+  let value: unknown = null;
   const sameShape =
     existing !== undefined && findOperator(existing.operatorId)?.arity === operator?.arity;
   if (sameShape && field && operator && operator.arity !== "none")

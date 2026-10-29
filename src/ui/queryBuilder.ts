@@ -48,7 +48,7 @@ import { onDropdownChange, openDropdown } from "./fomantic";
 import { forgetDrag, draggedItem } from "./dragMemory";
 import { isRestoringFocus } from "./focusMemory";
 import { hoverTitle } from "./format";
-import { readValueControl } from "./valueControl";
+import { readValueControl, withTypedEntry } from "./valueControl";
 
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
@@ -364,7 +364,9 @@ export function wireQueryBuilder(
 
   /** Apply the value shown in field row `row` to its condition. Only a set
    *  row with an operator has a value control. */
-  function commitValue(row: HTMLElement): void {
+  /** `typed`: text left in a free-entry dropdown's typing box, added as an
+   *  entry (withTypedEntry). */
+  function commitValue(row: HTMLElement, typed = ""): void {
     const { query, catalog } = getState();
     const block = blockOf(row);
     const fieldId = row.dataset.fieldId;
@@ -382,7 +384,8 @@ export function wireQueryBuilder(
       fieldId,
       existing.operatorId,
       catalog,
-      (arity, valueType) => readValueControl(row, arity, valueType),
+      (arity, valueType) =>
+        withTypedEntry(readValueControl(row, arity, valueType), typed, arity === "many", valueType),
     );
     if (next) onChange(queryAfterFieldEdit(query, block, existing.id, next, catalog));
   }
@@ -744,6 +747,31 @@ export function wireQueryBuilder(
     else box.removeAttribute("title");
   });
 
+  // Text typed into a free-entry dropdown and left there (Tab, a click
+  // elsewhere) is added as an entry, as Enter would (issue #82): Fomantic
+  // neither adds nor clears it on blur. Through afterPointer, like every typed
+  // value, so a click on a menu item (which also blurs the box for a moment)
+  // is done first: then the focus is back in the dropdown and the menu's own
+  // choice stands.
+  container.addEventListener("focusout", (e) => {
+    const box = e.target;
+    if (!(box instanceof HTMLInputElement) || !box.classList.contains("search")) return;
+    const dropdown = box.closest<HTMLElement>(".ui.dropdown");
+    const row = box.closest<HTMLElement>(".qb-field-row[data-node-id]");
+    if (!dropdown?.querySelector("select[data-free-entry]") || !row) return;
+    const typed = box.value;
+    if (typed.trim() === "") return;
+    const conditionNow = () => blockOf(row)?.conditions.find((c) => c.id === row.dataset.nodeId);
+    const before = conditionNow();
+    afterPointer.run(() => {
+      // A menu item was picked meanwhile (the condition changed), or the
+      // focus is back in the dropdown: the typed text is not the choice.
+      if (conditionNow() !== before) return;
+      if (dropdown.isConnected && dropdown.contains(document.activeElement)) return;
+      commitValue(row, typed);
+    });
+  });
+
   container.addEventListener("change", (e) => {
     const target = e.target as HTMLElement;
     // Fomantic dispatches a native bubbling "change" on the <select> behind each
@@ -754,7 +782,7 @@ export function wireQueryBuilder(
     // it loses focus on the mousedown before a menu click; repainting then would
     // remove the item under the pointer before the click lands. So anything
     // inside a .ui.dropdown is skipped, and this listener handles only the plain
-    // <input>s (text/number, the range pair and the boolean toggle's checkbox).
+    // <input>s (text/number and the range pair).
     if (target instanceof HTMLSelectElement || target.closest(".ui.dropdown")) return;
     const row = target.closest<HTMLElement>(".qb-field-row[data-node-id]");
     // A box's "change" fires as it loses focus, before the user's next action

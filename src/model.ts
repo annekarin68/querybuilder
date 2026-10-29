@@ -158,11 +158,20 @@ export interface SavedQuery {
 }
 
 /** The user's saved queries as the list endpoint gives them: the ones that
- *  could be read, newest first, and how many could not (saved by an older
+ *  could be read, newest first, and the ones that could not (saved by an older
  *  version, in a shape this one does not read). */
 export interface SavedQueryList {
   queries: SavedQuery[];
-  unreadable: number;
+  unreadable: UnreadableSaved[];
+}
+
+/** A saved query this version can't read. It can't be opened, but it can be
+ *  deleted, so it does not stay in the list for ever (issue #80). `id` is
+ *  null when not even the id could be read: then it can only be counted.
+ *  `name` is "" when it has none. */
+export interface UnreadableSaved {
+  id: string | null;
+  name: string;
 }
 
 /** What is sent to save a query. */

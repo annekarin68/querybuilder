@@ -102,7 +102,7 @@ function savedFrom(draft: SavedQueryDraft, id: string): SavedQuery {
 /** A saved query as the list holds it. */
 /** A saved-queries list in which every entry could be read. */
 function listOf(...queries: SavedQuery[]): SavedQueryList {
-  return { queries, unreadable: 0 };
+  return { queries, unreadable: [] };
 }
 
 function savedQuery(id: string, name: string, overrides: Partial<SavedQuery> = {}): SavedQuery {
@@ -1496,7 +1496,7 @@ describe("display state follows the query", () => {
       ...shownBlock,
       auth: { status: "authenticated", user: { name: "pat" } },
       savedDialog: "list",
-      savedList: { status: "ok", queries: [target], unreadable: 0 },
+      savedList: { status: "ok", queries: [target], unreadable: [] },
     });
     app.askOpenSaved("t");
     // The query on screen is unsaved work: the app asks first.
@@ -1582,18 +1582,19 @@ describe("saved queries: opening the dialogs", () => {
     expect(store.getState().savedDialog).toBe("list");
     expect(store.getState().savedList).toEqual({ status: "loading" });
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries, unreadable: 0 });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries, unreadable: [] });
   });
 
-  it("keeps how many saved queries could not be read, for the dialog to say", async () => {
+  it("keeps the saved queries that could not be read, for the dialog to list", async () => {
     const queries = [savedQuery("a", "Weekly")];
+    const old = { id: "sq-old", name: "Old" };
     const { app, store } = setup(
       ready(),
-      fakeApi({ listSavedQueries: vi.fn(async () => ({ queries, unreadable: 2 })) }),
+      fakeApi({ listSavedQueries: vi.fn(async () => ({ queries, unreadable: [old, old] })) }),
     );
     app.openSavedList();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries, unreadable: 2 });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries, unreadable: [old, old] });
   });
 
   it("shows a failed list load and loads again on retry", async () => {
@@ -1612,7 +1613,7 @@ describe("saved queries: opening the dialogs", () => {
     app.retrySavedList();
     expect(store.getState().savedList).toEqual({ status: "loading" });
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [], unreadable: 0 });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [], unreadable: [] });
   });
 
   it("a 401 on the list redirects to log in", async () => {
@@ -1929,7 +1930,7 @@ describe("saved queries: saving", () => {
     const { app, store } = setup({ ...ready(emptyQuery()), ...loggedIn, savedDialog: "save" }, api);
     app.saveQuery("Weekly", "");
     app.closeSavedDialog();
-    store.setState({ savedList: { status: "ok", queries: [other], unreadable: 0 } });
+    store.setState({ savedList: { status: "ok", queries: [other], unreadable: [] } });
     app.askOpenSaved("b");
     slow.resolve(savedQuery("a", "Weekly"));
     await flushPromises();
@@ -1953,7 +1954,7 @@ describe("saved queries: opening one from the list", () => {
   const target = savedQuery("t", "Weekly", { databaseIds: ["alpha", "gone"] });
   const inList: Partial<AppState> = {
     savedDialog: "list",
-    savedList: { status: "ok", queries: [target], unreadable: 0 },
+    savedList: { status: "ok", queries: [target], unreadable: [] },
   };
 
   it("opens at once when nothing would be lost, dropping databases that no longer exist", async () => {
@@ -2007,7 +2008,7 @@ describe("saved queries: opening one from the list", () => {
       ...loggedIn,
       ...ready(emptyQuery()),
       savedDialog: "list",
-      savedList: { status: "ok", queries: [many], unreadable: 0 },
+      savedList: { status: "ok", queries: [many], unreadable: [] },
     });
     app.askOpenSaved("t");
     expect(store.getState().dropNotice).toBe(
@@ -2022,7 +2023,7 @@ describe("saved queries: opening one from the list", () => {
       ...ready(emptyQuery()),
       dropNotice: "old",
       savedDialog: "list",
-      savedList: { status: "ok", queries: [whole], unreadable: 0 },
+      savedList: { status: "ok", queries: [whole], unreadable: [] },
     });
     app.askOpenSaved("t");
     expect(store.getState().dropNotice).toBeNull();
@@ -2086,7 +2087,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a, b], unreadable: 0 },
+        savedList: { status: "ok", queries: [a, b], unreadable: [] },
       },
       fakeApi({ listSavedQueries: list }),
     );
@@ -2097,7 +2098,7 @@ describe("saved queries: deleting", () => {
     expect(store.getState().savedConfirm).toBeNull();
     await flushPromises();
     expect(api.deleteSavedQuery).toHaveBeenCalledWith("a");
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b], unreadable: 0 });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b], unreadable: [] });
     expect(announce).toHaveBeenCalledWith("Deleted “Weekly”.");
   });
 
@@ -2110,15 +2111,30 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a, b], unreadable: 0 },
+        savedList: { status: "ok", queries: [a, b], unreadable: [] },
       },
       fakeApi({ listSavedQueries: list }),
     );
     app.askDeleteSaved("a");
     app.confirmSavedAction();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b], unreadable: 0 });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [b], unreadable: [] });
     expect(store.getState().savedListNotice).toEqual({ tone: "done", text: "Deleted “Weekly”." });
+  });
+
+  it("deletes an unreadable saved query, naming it (#80)", async () => {
+    const { app, store, api, announce } = setup({
+      ...loggedIn,
+      ...ready(),
+      savedDialog: "list",
+      savedList: { status: "ok", queries: [], unreadable: [{ id: "sq-old", name: "" }] },
+    });
+    app.askDeleteSaved("sq-old");
+    app.confirmSavedAction();
+    await flushPromises();
+    expect(api.deleteSavedQuery).toHaveBeenCalledWith("sq-old");
+    expect(announce).toHaveBeenCalledWith("Deleted “Unnamed saved query”.");
+    expect(store.getState().deletingSavedId).toBeNull();
   });
 
   it("draws a running delete as busy and ignores its buttons meanwhile (#84)", async () => {
@@ -2129,7 +2145,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a], unreadable: 0 },
+        savedList: { status: "ok", queries: [a], unreadable: [] },
       },
       api,
     );
@@ -2155,7 +2171,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a], unreadable: 0 },
+        savedList: { status: "ok", queries: [a], unreadable: [] },
       },
       api,
     );
@@ -2173,7 +2189,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a], unreadable: 0 },
+        savedList: { status: "ok", queries: [a], unreadable: [] },
       },
       api,
     );
@@ -2191,7 +2207,7 @@ describe("saved queries: deleting", () => {
       ...ready(a.query),
       openSaved: openFrom(a),
       savedDialog: "list",
-      savedList: { status: "ok", queries: [a], unreadable: 0 },
+      savedList: { status: "ok", queries: [a], unreadable: [] },
     });
     app.askDeleteSaved("a");
     app.confirmSavedAction();
@@ -2205,7 +2221,7 @@ describe("saved queries: deleting", () => {
       ...ready(a.query),
       openSaved: openFrom(a),
       savedDialog: "list",
-      savedList: { status: "ok", queries: [a, b], unreadable: 0 },
+      savedList: { status: "ok", queries: [a, b], unreadable: [] },
     });
     app.askDeleteSaved("b");
     app.confirmSavedAction();
@@ -2223,7 +2239,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a], unreadable: 0 },
+        savedList: { status: "ok", queries: [a], unreadable: [] },
       },
       api,
     );
@@ -2231,7 +2247,7 @@ describe("saved queries: deleting", () => {
     app.confirmSavedAction();
     await flushPromises();
     expect(showError).not.toHaveBeenCalled();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [], unreadable: 0 });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [], unreadable: [] });
   });
 
   // The toast is drawn under the modal dialog's backdrop and the page's live
@@ -2245,14 +2261,14 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a], unreadable: 0 },
+        savedList: { status: "ok", queries: [a], unreadable: [] },
       },
       api,
     );
     app.askDeleteSaved("a");
     app.confirmSavedAction();
     await flushPromises();
-    expect(store.getState().savedList).toEqual({ status: "ok", queries: [a], unreadable: 0 });
+    expect(store.getState().savedList).toEqual({ status: "ok", queries: [a], unreadable: [] });
     expect(store.getState().savedListNotice).toEqual({
       tone: "error",
       text: `Couldn't delete “${a.name}”. The server is busy or unavailable right now. Try again in a moment.`,
@@ -2272,7 +2288,7 @@ describe("saved queries: deleting", () => {
           ...loggedIn,
           ...ready(),
           savedDialog: "list",
-          savedList: { status: "ok", queries: [a], unreadable: 0 },
+          savedList: { status: "ok", queries: [a], unreadable: [] },
         },
         failing(),
       );
@@ -2308,7 +2324,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a], unreadable: 0 },
+        savedList: { status: "ok", queries: [a], unreadable: [] },
       },
       api,
     );
@@ -2329,7 +2345,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a], unreadable: 0 },
+        savedList: { status: "ok", queries: [a], unreadable: [] },
       },
       api,
     );

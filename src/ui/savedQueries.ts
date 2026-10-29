@@ -1,5 +1,6 @@
 import type { AppState, SavedConfirm, SavedListNotice } from "../state";
-import type { SavedQuery } from "../model";
+import type { SavedQuery, UnreadableSaved } from "../model";
+import { unreadableName } from "./savedNames";
 import type { createApp } from "../app";
 import { dialogBody, escapeHtml, paint } from "./panel";
 import { countLabel, formatDate } from "./format";
@@ -122,9 +123,6 @@ function savedItemHtml(
 ): string {
   const name = escapeHtml(q.name);
   const id = escapeHtml(q.id);
-  // While its Delete runs: aria-disabled, not disabled, so the focus that
-  // Delete's question handed back to the button stays on it (app.ts ignores
-  // the presses).
   const busy = deleting ? ` aria-disabled="true"` : "";
   const asking = confirm?.id === q.id ? confirm.action : null;
   const actions =
@@ -137,17 +135,10 @@ function savedItemHtml(
           cancelAction: "cancel-saved-action",
         })
       : asking === "delete"
-        ? questionHtml({
-            id: "qb-delete-question",
-            textHtml: `Delete “${name}”?`,
-            yes: "Delete",
-            yesAction: "confirm-saved-action",
-            cancelAction: "cancel-saved-action",
-            destructive: true,
-          })
+        ? deleteQuestionHtml(name)
         : `<div class="qb-saved-actions">
             <button type="button" class="ui mini basic button${deleting ? " disabled" : ""}" data-action="open-saved" data-id="${id}" aria-label="Open ${name}"${busy}${first ? " data-initial-focus" : ""}>Open</button>
-            <button type="button" class="ui mini basic button${deleting ? " loading" : ""}" data-action="delete-saved" data-id="${id}" aria-label="${deleting ? "Deleting" : "Delete"} ${name}"${busy}>Delete</button>
+            ${deleteButtonHtml(id, name, deleting, false)}
           </div>`;
   const note = q.note ? `<p class="qb-saved-note">${escapeHtml(q.note)}</p>` : "";
   return `<li class="qb-saved-item">
@@ -155,6 +146,52 @@ function savedItemHtml(
         <p class="qb-saved-name">${name}</p>
         ${note}
         <p class="qb-saved-meta">${countLabel(q.databaseIds.length, "database")} · <time datetime="${escapeHtml(q.updatedAt)}">${escapeHtml(formatDate(q.updatedAt))}</time></p>
+      </div>
+      ${actions}
+    </li>`;
+}
+
+/** "Delete “…”?" in place of an item's buttons. `name` is escaped already. */
+function deleteQuestionHtml(name: string): string {
+  return questionHtml({
+    id: "qb-delete-question",
+    textHtml: `Delete “${name}”?`,
+    yes: "Delete",
+    yesAction: "confirm-saved-action",
+    cancelAction: "cancel-saved-action",
+    destructive: true,
+  });
+}
+
+/** An item's Delete (`id` and `name` escaped already). While its delete runs
+ *  it is busy: aria-disabled, not disabled, so the focus that Delete's
+ *  question handed back to the button stays on it (app.ts ignores the
+ *  presses). */
+function deleteButtonHtml(id: string, name: string, deleting: boolean, first: boolean): string {
+  const busy = deleting ? ` aria-disabled="true"` : "";
+  return `<button type="button" class="ui mini basic button${deleting ? " loading" : ""}" data-action="delete-saved" data-id="${id}" aria-label="${deleting ? "Deleting" : "Delete"} ${name}"${busy}${first ? " data-initial-focus" : ""}>Delete</button>`;
+}
+
+/**
+ * A saved query this version can't read (issue #80): its name and Delete
+ * only, so an old entry can be cleared away. It comes after the readable
+ * ones; its Delete is where the keyboard starts only if there are none.
+ */
+function unreadableItemHtml(
+  u: UnreadableSaved & { id: string },
+  confirm: SavedConfirm,
+  first: boolean,
+  deleting: boolean,
+): string {
+  const name = escapeHtml(unreadableName(u));
+  const asking = confirm?.id === u.id && confirm.action === "delete";
+  const actions = asking
+    ? deleteQuestionHtml(name)
+    : `<div class="qb-saved-actions">${deleteButtonHtml(escapeHtml(u.id), name, deleting, first)}</div>`;
+  return `<li class="qb-saved-item">
+      <div class="qb-saved-info">
+        <p class="qb-saved-name">${name}</p>
+        <p class="qb-saved-meta">Saved by an older version: it can't be opened.</p>
       </div>
       ${actions}
     </li>`;
@@ -191,17 +228,30 @@ function savedListBodyHtml(state: AppState): string {
           <button type="button" class="ui mini basic button" data-action="retry-saved-list" data-initial-focus>Try again</button>
         </div>`;
     case "ok": {
-      const unreadable = unreadableText(list.unreadable);
-      // Only unreadable ones: "No saved queries yet" would be untrue.
-      if (list.queries.length === 0) {
+      const unreadable = unreadableText(list.unreadable.length);
+      const deletable = list.unreadable.filter(
+        (u): u is UnreadableSaved & { id: string } => u.id !== null,
+      );
+      // Only unreadable ones that can't even be deleted: "No saved queries
+      // yet" would be untrue.
+      if (list.queries.length === 0 && deletable.length === 0) {
         return statusHtml(unreadable || "No saved queries yet. Build a query and press Save…");
       }
       const note = unreadable ? `<p class="qb-muted">${unreadable}</p>` : "";
-      const items = list.queries
-        .map((q, i) =>
-          savedItemHtml(q, state.savedConfirm, i === 0, state.deletingSavedId === q.id),
-        )
-        .join("");
+      const { savedConfirm, deletingSavedId } = state;
+      const items = [
+        ...list.queries.map((q, i) =>
+          savedItemHtml(q, savedConfirm, i === 0, deletingSavedId === q.id),
+        ),
+        ...deletable.map((u, i) =>
+          unreadableItemHtml(
+            u,
+            savedConfirm,
+            list.queries.length === 0 && i === 0,
+            deletingSavedId === u.id,
+          ),
+        ),
+      ].join("");
       return `${note}<ul class="qb-saved-list" aria-labelledby="${SAVED_TITLE_ID}">${items}</ul>`;
     }
   }

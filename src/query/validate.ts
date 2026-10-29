@@ -22,13 +22,15 @@ function invalid(nodeId: string, message: string): Issue {
   return { nodeId, message, kind: "invalid" };
 }
 
-/** What the user still has to fill in for the operator's arity, or null. */
-function shapeProblem(arity: Arity, v: unknown): string | null {
+/** What the user still has to fill in for the operator's arity, or null. A
+ *  yes/no value is chosen, not entered, so its row says so. */
+function shapeProblem(arity: Arity, valueType: ValueType, v: unknown): string | null {
   switch (arity) {
     case "none": // checked before this, in checkCondition
       return null;
     case "one":
-      return isBlankValue(v) ? "Enter a value." : null;
+      if (!isBlankValue(v)) return null;
+      return valueType === "boolean" ? "Choose true or false." : "Enter a value.";
     case "two":
       return Array.isArray(v) && v.length === 2 && !v.some(isBlankValue)
         ? null
@@ -97,7 +99,7 @@ function checkCondition(
     if (c.value !== null) out.push(invalid(c.id, "This operator takes no value."));
     return;
   }
-  const shape = shapeProblem(op.arity, c.value);
+  const shape = shapeProblem(op.arity, fieldDef.valueType, c.value);
   if (shape) {
     out.push(incomplete(c.id, shape));
     return;

@@ -125,12 +125,10 @@ export function activate(container: HTMLElement): void {
       describeDropdown(node);
       keepFocusOnEscape(node);
     });
-  $(container).find(".ui.checkbox").checkbox();
 }
 
 export function destroy(container: HTMLElement): void {
   $(container).find(".ui.dropdown").dropdown("destroy");
-  $(container).find(".ui.checkbox").checkbox("destroy");
 }
 
 /**
