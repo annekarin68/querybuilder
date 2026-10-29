@@ -134,8 +134,8 @@ function hasRow(co: CoCtx | null, block: FacetBlock): co is CoCtx {
  * head, so a click on it does not unfold a folded block. No row, no line:
  * the legend explains the row's colours, and without a row (no
  * co-occurrence data, or no colour tokens) there are none, so the line would
- * only take room (decided 2026-10-28, to be confirmed by the maintainers:
- * they asked for a "?" on every block). The row's caption is not here but
+ * only take room (confirmed by the maintainers, 2026-10-29). The row's
+ * caption is not here but
  * in the head's first line (`rowCaption`).
  */
 function coTopHtml(ctx: BlockCtx, block: FacetBlock): string {
