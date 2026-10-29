@@ -8,9 +8,9 @@
 >
 > It does not repeat the code. Types, signatures and details live in the source
 > files named below; their doc comments are part of this documentation. The
-> history of how the design got here is archived in `docs/CHANGELOG.md` and in
-> the pull requests. Code comments refer to sections here **by title** (for
-> example `docs/ARCHITECTURE.md, "Correctness invariant"`).
+> history of how the design got here is in git and in the pull requests. Code
+> comments refer to sections here **by title** (for example
+> `docs/ARCHITECTURE.md, "Correctness invariant"`).
 > `tests/docReferences.test.ts` fails if a cited title no longer exists, so
 > when you rename a section, update the comments it names.
 
@@ -652,8 +652,10 @@ vitest.config.ts       Vitest, Node environment (no DOM): project "app" (tests/,
                        checks; CLAUDE.md, "Subagents", says when).
 docs/
   ARCHITECTURE.md      This file.
-  CHANGELOG.md         The archived design history (not updated any more).
-  superpowers/specs/   Historical design records of past features. Not maintained; this file wins.
+  superpowers/specs/   The design records the code still cites: facet blocks (the "spec, section N" in
+                       comments), the OAuth2 login and compliance logging (their §7: what a real backend
+                       must add, issue #15). Not maintained otherwise; this file wins. Older records
+                       were removed on 2026-10-29 and are in git.
   superpowers/plans/   A feature's implementation plan while it is being built; deleted once it is merged.
 ```
 
@@ -1348,9 +1350,7 @@ query on a reload (#69).
    corrupted entry: old queries are not migrated (decided 2026-10-27). The
    restored query is then validated and its statistics fetched. Database ids that no longer exist are dropped and said
    in `dropNotice` ("2 selected databases no longer exist and were left out.",
-   as opening a saved query does). The build before the rename kept it under
-   `qb:pending-query`, which is still read, so a tab that was out on the login
-   page during that deploy gets its query back. A load that fails
+   as opening a saved query does). A load that fails
    (databases or facets can't be loaded) sets no state, so the copy is still
    there for the next try.
 4. **No automatic retry.** The user presses Run (or **Save…**) again. This

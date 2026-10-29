@@ -17,11 +17,6 @@ import type { FieldCondition, Group, QueryNode } from "../query/types";
  */
 const KEY = "qb:kept-query";
 
-/** Where the build before the rename (2026-10-13) kept it. A tab open across
- *  that deploy, out on the login page, comes back with its query only here,
- *  so it is still read. Remove once no such tab can be left. */
-const OLD_KEY = "qb:pending-query";
-
 /** The Restored notice above the query, and what a screen reader hears when a
  *  page load brings the query back (`app.start`). */
 export const RESTORED_MESSAGE = "Restored the query you were building.";
@@ -49,11 +44,10 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** Remove the copy (and one an older build kept), so no page load brings it back. */
+/** Remove the copy, so no page load brings it back. */
 export function forgetKeptQuery(): void {
   try {
     sessionStorage.removeItem(KEY);
-    sessionStorage.removeItem(OLD_KEY);
   } catch {
     // Storage unavailable: then nothing was kept either.
   }
@@ -107,7 +101,7 @@ function isFieldCondition(v: unknown): v is FieldCondition {
  */
 export function readKeptQuery(): KeptQuery | null {
   try {
-    const raw = sessionStorage.getItem(KEY) ?? sessionStorage.getItem(OLD_KEY);
+    const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (

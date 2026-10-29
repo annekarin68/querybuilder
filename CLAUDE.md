@@ -72,8 +72,7 @@ Then read your whole diff:
 - Could it have broken something in the code it touches (including Fomantic's
   behaviour)?
 - Does `docs/ARCHITECTURE.md` still describe the code? A disagreement between
-  the two is a bug: fix the doc in the same change. `docs/CHANGELOG.md` is an
-  archive and is not updated any more.
+  the two is a bug: fix the doc in the same change.
 
 Say in your report what you checked. The tests run in Node without a DOM, so
 check UI changes in a real browser too (Playwright with Chromium; install the
