@@ -1,4 +1,4 @@
-import type { SavedQueryResponse, SavedQueryRequest } from "../src/api/types";
+import { NODE_KIND, type SavedQueryResponse, type SavedQueryRequest } from "../src/api/types";
 import type { SavedQueryDraft } from "../src/model";
 import type { Group, QueryNode } from "../src/query/types";
 
@@ -42,21 +42,26 @@ export const unfinishedRequest: SavedQueryRequest = {
   note: "the ones to check",
   databases: ["alpha"],
   query: {
-    kind: "group",
+    kind: NODE_KIND.group,
     operator: "OR",
     children: [
-      { kind: "facet", facet_id: "thing", negated: false, operator: "AND", conditions: [] },
+      { kind: NODE_KIND.facet, facet_id: "thing", negated: false, operator: "AND", conditions: [] },
       {
-        kind: "facet",
+        kind: NODE_KIND.facet,
         facet_id: "thing",
         negated: true,
         operator: "OR",
         conditions: [
-          { kind: "condition", field_id: "size", operator_id: null, value: null },
-          { kind: "condition", field_id: "label", operator_id: "between", value: [3, null] },
+          { kind: NODE_KIND.condition, field_id: "size", operator_id: null, value: null },
+          {
+            kind: NODE_KIND.condition,
+            field_id: "label",
+            operator_id: "between",
+            value: [3, null],
+          },
         ],
       },
-      { kind: "group", operator: "AND", children: [] },
+      { kind: NODE_KIND.group, operator: "AND", children: [] },
     ],
   },
 };

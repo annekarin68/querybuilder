@@ -5,11 +5,6 @@
 import type { Facet } from "../model";
 import { mixOklab } from "../util/colour";
 
-export interface CoRange {
-  min: number;
-  max: number;
-}
-
 export interface Rect {
   x: number;
   y: number;
@@ -36,95 +31,76 @@ export function connectedFacets(facets: Facet[]): Facet[] {
   return facets.filter((facet) => seen.has(facet.id));
 }
 
-/** Smallest and largest positive value in the whole matrix, so every block
- *  uses the same colours. Own entries, zeros and too-rare values are left out
- *  (a value of 1e-300 would stretch the scale and squash all the others). */
-export function coOccurrenceRange(facets: Facet[]): CoRange | null {
-  let min = Infinity;
-  let max = 0;
-  for (const facet of facets) {
-    for (const [otherId, value] of facet.coOccurrence ?? []) {
-      if (otherId === facet.id || value.tooRare || !(value.percent > 0)) continue;
-      min = Math.min(min, value.percent);
-      max = Math.max(max, value.percent);
-    }
-  }
-  return max > 0 ? { min, max } : null;
+/** The share that means "in every event": the top of the colour scale, and
+ *  the only value whose cell has a dot. */
+export const FULL_PERCENT = 100;
+
+/** Whether a value is "in every event" (100 %): the backend's 100. */
+export function isFull(percent: number): boolean {
+  return percent >= FULL_PERCENT;
 }
 
-/** 0 to 1 along the range. Log scale, because the values span many powers of
- *  ten and a linear scale would show almost everything as "nearly nothing". */
-export function scalePosition(percent: number, range: CoRange): number {
+/** Whether `facet`'s own map says it is seen with some other facet: a
+ *  facet without data (`null`), or one no event holds (all zeros), is not. */
+function seesOthers(facet: Facet): boolean {
+  for (const [otherId, value] of facet.coOccurrence ?? []) {
+    if (otherId !== facet.id && (value.percent > 0 || value.tooRare)) return true;
+  }
+  return false;
+}
+
+/**
+ * The facets seen in every event of every other facet: 100 % in the map of
+ * each facet that is seen with any other. In production a few facets are in
+ * every event, and in every chart they would take half the room from the
+ * facets that say something, so the chart gathers them in one box
+ * (seenLayout). A facet without data, or one that no event holds, has no
+ * say (its map is all zeros); when no facet has a say, none qualifies.
+ */
+export function alwaysTogetherIds(facets: Facet[]): Set<string> {
+  const withData = facets.filter(seesOthers);
+  const always = new Set<string>();
+  for (const candidate of facets) {
+    const others = withData.filter((facet) => facet.id !== candidate.id);
+    if (others.length === 0) continue;
+    const inEveryEvent = others.every((facet) =>
+      isFull(facet.coOccurrence?.get(candidate.id)?.percent ?? 0),
+    );
+    if (inEveryEvent) always.add(candidate.id);
+  }
+  return always;
+}
+
+/** 0 to 1 along the colour scale: the share itself, from 0 % to 100 %.
+ *  Linear, so the facets seen most often stand out (the data analysts'
+ *  wish, 2026-10-29: the valuable data is in the highest values); the
+ *  smallest values all look alike, and the merged box gathers them. */
+export function scalePosition(percent: number): number {
   if (Number.isNaN(percent)) return 0;
-  if (range.min === range.max) return 1;
-  const t =
-    (Math.log10(percent) - Math.log10(range.min)) / (Math.log10(range.max) - Math.log10(range.min));
-  return Math.min(1, Math.max(0, t));
+  return Math.min(1, Math.max(0, percent / FULL_PERCENT));
 }
 
 /** The colour for a value: blended between the two designer stops around it. */
-export function coOccurrenceColour(percent: number, range: CoRange, stops: string[]): string {
+export function coOccurrenceColour(percent: number, stops: string[]): string {
   const n = stops.length;
   if (n < 2) throw new Error("coOccurrenceColour needs at least two stops");
-  const t = scalePosition(percent, range);
+  const t = scalePosition(percent);
   const segment = Math.min(Math.floor(t * (n - 1)), n - 2);
   const local = t * (n - 1) - segment;
   return mixOklab(stops[segment] as string, stops[segment + 1] as string, local);
 }
 
-function stopValue(range: CoRange, stopCount: number, k: number): number {
-  if (stopCount < 2) throw new Error("A legend needs at least two stops");
-  const lo = Math.log10(range.min);
-  const hi = Math.log10(range.max);
-  return 10 ** (lo + (k * (hi - lo)) / (stopCount - 1));
-}
+/** The legend's labels, at their places on the bar. Always these five,
+ *  however many colour stops the stylesheet has: one label per stop could
+ *  not be read with 100 stops. */
+export const LEGEND_TICKS: { at: number; label: string }[] = [0, 25, 50, 75, 100].map(
+  (percent) => ({ at: percent / FULL_PERCENT, label: `${percent} %` }),
+);
 
-/** The smallest tick written as a plain decimal: below it a decimal would
- *  be a row of zeros ("0.0000001 %"). */
-const SMALLEST_DECIMAL = 0.001;
-
-/** A tick's label: "48 %", "0.5 %", or "1e-12 %" for a very small value
- *  (the exponent as the backend writes it, so it reads like the captions).
- *  `String(0.0001)` would already say "0.0001", hence the explicit limit. */
-function tickLabel(value: number): string {
-  if (value >= 1) return `${Number(value.toPrecision(2))} %`;
-  const rounded = Number(value.toPrecision(1));
-  return rounded >= SMALLEST_DECIMAL ? `${rounded} %` : `${value.toExponential(0)} %`;
-}
-
-/** One legend label per colour stop, at the stop's position on the bar. */
-export function legendTicks(range: CoRange, stopCount: number): { at: number; label: string }[] {
-  return Array.from({ length: stopCount }, (_, k) => ({
-    at: k / (stopCount - 1),
-    label: tickLabel(stopValue(range, stopCount, k)),
-  }));
-}
-
-/** From this factor on, a step is written as a power of ten: "about
- *  100000000000000 times" cannot be read at a glance. */
-const POWER_FORM_FROM = 1e6;
-
-/** The superscript digits, by value: "⁰" is SUPERSCRIPT_DIGITS[0]. */
-const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
-
-/** "10¹⁴", or "3.2 × 10¹⁴": `value` (at least 1) with two significant
- *  digits. `toExponential(1)` gives "3.2e+14". */
-function powerOfTen(value: number): string {
-  const [mantissa = "", exponent = ""] = value.toExponential(1).split("e+");
-  const power = `10${[...exponent].map((d) => SUPERSCRIPT_DIGITS[Number(d)]).join("")}`;
-  const m = Number(mantissa);
-  return m === 1 ? power : `${m} × ${power}`;
-}
-
-/** "about 100 times": how much more often one legend step is than the one before. */
-export function stepFactorText(range: CoRange, stopCount: number): string {
-  const factor = Number((stopValue(range, stopCount, 1) / range.min).toPrecision(2));
-  return `about ${factor >= POWER_FORM_FROM ? powerOfTen(factor) : factor} times`;
-}
-
-/** The backend's text with its unit; never re-formatted, so nothing is rounded. */
-export function formatPercent(text: string): string {
-  return text + " %";
+/** The backend's text with its unit; never rounded. Only its decimal point
+ *  becomes `decimal`, the mark every other number on screen has. */
+export function formatPercent(text: string, decimal = "."): string {
+  return text.replace(".", decimal) + " %";
 }
 
 /** How many significant digits a value shown on screen keeps. Three keep
@@ -183,26 +159,39 @@ export function roundPercentText(text: string, digits = SHOWN_DIGITS): string {
   return `${mantissa || "0"}${expLetter}${sign}${Math.abs(exponent)}`;
 }
 
+/** Which values `squarify` does not sort in by size: with `first`, the
+ *  first value is laid out first, top-left (the "in every event" box); with
+ *  `last`, the last value is laid out last, bottom-right (the merged box). */
+export interface Pinned {
+  first?: boolean;
+  last?: boolean;
+}
+
 /** Square pie chart layout (squarified treemap, Bruls et al.): rectangles with
  *  area proportional to value, filling width x height, as square as possible.
  *  Returned in the order of `values`; a zero value gets an empty rect.
- *  With `keepLast`, the last value is not sorted in but laid out last, so it
- *  ends in the bottom-right corner whatever its size (the merged box). */
+ *  `pinned` keeps the first or last value in its corner whatever its size. */
 export function squarify(
   values: number[],
   width: number,
   height: number,
-  keepLast = false,
+  pinned: Pinned = {},
 ): Rect[] {
   const rects: Rect[] = values.map(() => ({ x: 0, y: 0, w: 0, h: 0 }));
   const drawn = values
     .map((value, index) => ({ value, index }))
     .filter((item) => Number.isFinite(item.value) && item.value > 0);
   const lastIndex = values.length - 1;
-  const pinned = keepLast ? drawn.filter((item) => item.index === lastIndex) : [];
+  const head = pinned.first ? drawn.filter((item) => item.index === 0) : [];
+  const tail = pinned.last
+    ? drawn.filter((item) => item.index === lastIndex && !head.includes(item))
+    : [];
   const order = [
-    ...drawn.filter((item) => !pinned.includes(item)).sort((a, b) => b.value - a.value),
-    ...pinned,
+    ...head,
+    ...drawn
+      .filter((item) => !head.includes(item) && !tail.includes(item))
+      .sort((a, b) => b.value - a.value),
+    ...tail,
   ];
   // Sizes relative to the largest (1 and below): the sum of the values
   // themselves can overflow to Infinity (1e308 + 1e308), the shares cannot.

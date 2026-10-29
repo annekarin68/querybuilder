@@ -1,4 +1,10 @@
-import type { RequestFacet, RequestNode, StatsErrorMessage, StatsResponse } from "../src/api/types";
+import {
+  NODE_KIND,
+  type RequestFacet,
+  type RequestNode,
+  type StatsErrorMessage,
+  type StatsResponse,
+} from "../src/api/types";
 import type { MockEvent } from "./rows";
 import type { Occurrence } from "./vehicleData";
 
@@ -200,7 +206,7 @@ export function facetMatches(f: RequestFacet, event: MockEvent): boolean {
 }
 
 export function eventMatches(node: RequestNode, event: MockEvent): boolean {
-  if (node.kind === "facet") return facetMatches(node, event);
+  if (node.kind === NODE_KIND.facet) return facetMatches(node, event);
   if (node.children.length === 0) return true;
   return node.operator === "AND"
     ? node.children.every((c) => eventMatches(c, event))
@@ -231,7 +237,7 @@ export const MAX_TEXT_LENGTH = 100;
  * Empty when there are none.
  */
 export function queryErrors(node: RequestNode): StatsErrorMessage[] {
-  if (node.kind === "facet") {
+  if (node.kind === NODE_KIND.facet) {
     const errors = node.conditions.flatMap(textTooLong);
     // Mirrors the group rule below: a block whose every set field failed.
     if (node.conditions.length > 0 && errors.length === node.conditions.length) {

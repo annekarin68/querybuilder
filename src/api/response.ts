@@ -14,6 +14,7 @@ import type {
   StatsResponse,
   UserResponse,
 } from "./types";
+import { NODE_KIND } from "./types";
 import { setOwnKey, warnOnce, type ResponseObject, type ResponseValue } from "./contract";
 import type {
   CoValue,
@@ -168,7 +169,7 @@ export function readCoOccurrence(
   }
   if (tooRare.length > 0) {
     warnOnce(
-      `${where}: co_occurrence for ${namesForWarning(tooRare)} is too small for a JavaScript number. Showing it as seen together, too rare to colour.`,
+      `${where}: co_occurrence for ${namesForWarning(tooRare)} is too small for a JavaScript number. Showing it as seen together, in the colour of 0 %.`,
       `tooRare ${facetId}`,
     );
   }
@@ -304,12 +305,12 @@ export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery 
  * has none. The tree comes back as it was saved, unfinished parts included.
  */
 export function fromSavedTree(root: ResponseObject<SavedGroup>): Group {
-  root.oneOf("kind", ["group"]); // a saved query's root is always a group
+  root.oneOf("kind", [NODE_KIND.group]); // a saved query's root is always a group
   return savedGroupOf(root);
 }
 
 function savedNodeOf(n: ResponseObject<SavedNode>): QueryNode {
-  return n.oneOf("kind", ["group", "facet"]) === "group"
+  return n.oneOf("kind", [NODE_KIND.group, NODE_KIND.facet]) === NODE_KIND.group
     ? savedGroupOf(n as ResponseObject<SavedGroup>)
     : savedFacetOf(n as ResponseObject<SavedFacet>);
 }
@@ -329,6 +330,6 @@ function savedFacetOf(f: ResponseObject<SavedFacet>): FacetBlock {
 }
 
 function savedConditionOf(c: ResponseObject<SavedFieldCondition>): FieldCondition {
-  c.oneOf("kind", ["condition"]);
+  c.oneOf("kind", [NODE_KIND.condition]);
   return newFieldCondition(c.id("field_id"), c.nullableId("operator_id"), c.savedValue("value"));
 }

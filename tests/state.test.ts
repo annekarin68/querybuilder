@@ -14,7 +14,7 @@ describe("store", () => {
     const s = createStore(initialState);
     s.setState({ sidebarCollapsed: true });
     expect(s.getState().sidebarCollapsed).toBe(true);
-    expect(s.getState().activeView).toBe("filter");
+    expect(s.getState().panelTab).toBe("seen");
   });
 
   it("subscribers receive the new state and the set of changed keys", () => {
@@ -23,8 +23,8 @@ describe("store", () => {
     s.subscribe((_state, changed) => {
       seen.push(...changed);
     });
-    s.setState({ activeView: "review" });
-    expect(seen).toEqual(["activeView"]);
+    s.setState({ sidebarCollapsed: true });
+    expect(seen).toEqual(["sidebarCollapsed"]);
   });
 
   it("unsubscribe stops notifications", () => {

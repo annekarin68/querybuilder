@@ -110,7 +110,7 @@ desktop windows, not for tablets.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ top bar: Query Builder · 1 Filter  2 Review  3 Approval  4 Done · account ▾  │
+│ top bar: Query Builder ·                                          account ▾  │
 ├──┬────────────────────────────────────────────────────────┬──────────────────┤
 │D │ databases (pill toggles · N of M selected · All/None)  │ statistics       │
 │O │ query · name (edited)          [Save…] [Saved queries] │ (pinned: live    │
@@ -122,17 +122,16 @@ desktop windows, not for tablets.
  ↑ dictionary rail: shows or hides the data dictionary (« Hide dictionary / » Show dictionary; open by default, resizable, 26rem to start)
 ```
 
-- **Top bar** — app name, the workflow steps, and the account menu (login +
-  compliance acknowledgment). The steps never shrink or scroll: when the bar is
-  tight it is the account name that is cut short (an ellipsis; the full name is
-  its tooltip). At **800 px and below** (`@media (max-width: 800px)`, "Narrow top
-  bar" in `styles.css`) the bar spends less so that it fits down to 512 px, the
-  narrowest supported window: tighter spacing; only the **active step** keeps its
-  label, the others show their number, with the label as visually hidden text and
-  a `title` tooltip (so every step keeps its accessible name); the compliance
-  badge shrinks to its icon, text hidden the same way. The logo and the app name
-  always stay. Spacing alone was tried first and is not enough: with every label
-  shown, the logged-in bar needs over 600 px even with the name cut to nothing.
+- **Top bar** — app name and the account menu (login + compliance
+  acknowledgment). When the bar is tight it is the account name that is cut
+  short (an ellipsis; the full name is its tooltip). At **800 px and below**
+  (`@media (max-width: 800px)`, "Narrow top bar" in `styles.css`) the bar
+  spends less so that it fits down to 512 px, the narrowest supported window:
+  tighter spacing, and the compliance badge shrinks to its icon, its text
+  visually hidden (so it keeps its accessible name). The logo and the app name
+  always stay. (The workflow steps Filter / Review / Approval / Done that used
+  to sit here were removed on 2026-10-29: only Filter was a real view. They
+  come back with the views.)
 - **Data dictionary and its rail** — generated from
   `GET /api/documentation/individuals`. Open by default, because dragging from
   it is the main way to build a query. It is 26rem wide to start, the user can
@@ -201,9 +200,6 @@ desktop windows, not for tablets.
   `display: none`: the dragged element has to stay in the DOM or `dragend` may
   never fire. With `prefers-reduced-motion` there is no transition. Above
   1100 px the dictionary is in the grid and nothing moves.
-- **Workflow steps** — `Filter | Review | Approval | Done`. Only **Filter** is
-  a real view; the others show a "Coming soon" placeholder (signed off for the
-  first release, issue #19).
 
 ### Pickle theme and mascot
 
@@ -230,13 +226,16 @@ stand out 3:1 from the track and the card.
 `tests/themeContrast.test.ts`, so the "rarest" box shows on the card), and
 `--qb-cooc-merged` and `--qb-cooc-merged-stripe` (the two neutral greys of the
 "+ N less often" box, off the heat scale; its label must reach 4.5:1 on both),
-`--qb-cooc-never` (a value of 0), `--qb-cooc-cell-border` (each cell's outline),
+`--qb-cooc-cell-border` (each cell's outline, dotted for "never seen together"),
 `--qb-cooc-own` (the mark for the facet itself) and the two dot/label colours
 `--qb-cooc-dot-dark` and `--qb-cooc-dot-light`. Change them there, never in a
 rule. The stops may be added or removed freely, but they must be numbered from 1
 without gaps and there must be at least two, because `readCoTokens()` in
 `src/ui/coTokens.ts` (the only DOM read, via `getComputedStyle` at paint time;
 the parsing is the pure `coTokensFrom`) reads them until the first empty one.
+A stop that is not `#rrggbb` (a stray `;` or quote, `#f00`, `red`) is left out
+and named once in the console: the colour maths would read it as black, while
+the legend's bar, which the browser draws from the same text, would not.
 Colours between two stops are blended in OKLab (`src/util/colour.ts`).
 `tests/themeContrast.test.ts` checks, for every stop, three blends between each
 pair of neighbouring stops and the "never" colour, that the better of the dark
@@ -316,7 +315,8 @@ is why the rain used to work only in some browsers, or only with a steady hand.
 
 ### Non-goals (for now)
 
-- The Review / Approval / Done views. Tabs exist; content does not.
+- The Review / Approval / Done views (their steps were removed from the top
+  bar until they exist).
 - Any real backend. The mock server stands in; it shares no runtime code with
   `src/`.
 - Sharing saved queries (with other users, or by link). A user saves queries
@@ -474,15 +474,15 @@ src/
                        actions (`openSaveDialog`, `saveQuery`,
                        `askOpenSaved`, …), previewAnnouncement (what a screen reader hears about Run).
                        Tested with a fake API.
-  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; `restoredNotice`; the builder's display state `openField`, `expandedBlockIds`, `panelTab`, `selectedField` and displayStateFor; the saved-queries keys), the
+  state.ts             AppState (auth, compliance, stats and preview are unions on `status`; `openEventId`; `dropNotice`; `restoredNotice`; the builder's display state `openField`, `expandedBlockIds`, `panelTab`, `coNamesShown`, `selectedField` and displayStateFor; the saved-queries keys), the
                        store (getState / setState / subscribe), runBlocker() — the one "can this query run?" check.
   model.ts             The frontend's own data model: Database, Facet, Field, EventRecord, DatabaseResult,
                        User, Compliance, SavedQuery / SavedQueryDraft / SavedQueryList ("Data model").
   config.ts            Hand-edited display settings — the ONLY place src/ may name backend data. Empty by
                        default: FIRST_COLUMNS (the facets the Matching events table shows first). Also MASCOT (the pickle files),
                        EASTER_EGG_MASCOT (the easter-egg faces), EASTER_EGG_TOAST (the toast
-                       shown with the rain) and TEXT_SOURCES (the logos in front of the
-                       dictionary's texts).
+                       shown with the rain), TEXT_SOURCES (the logos in front of the
+                       dictionary's texts) and NUMBER_LOCALE (the digit grouping and decimal mark).
   setup-jquery.ts      Publishes window.jQuery before Fomantic's JS evaluates ("The bootstrap wrinkle").
   styles.css           Theme and layout on top of Fomantic; colours and sizes are tokens at the top
                        ("Pickle theme and mascot").
@@ -507,9 +507,9 @@ src/
     fieldCatalog.ts    buildFieldCatalog(facets), OPERATORS, OPERATOR_PROFILE,
                        TYPE_NAMES, pickListFor, findFacet / findField / fieldsOfFacet / findOperator.
     dates.ts           isUtcTimestamp — is this a (partial) ISO UTC timestamp?
-    coOccurrence.ts    "Seen together" maths (pure): connectedFacets, coOccurrenceRange, scalePosition (log),
-                       coOccurrenceColour, legendTicks, stepFactorText, squarify (optionally keeping the last value last),
-                       formatPercent, roundPercentText.
+    coOccurrence.ts    "Seen together" maths (pure): connectedFacets, alwaysTogetherIds, isFull, scalePosition
+                       (linear, 0 to 100 %), coOccurrenceColour, LEGEND_TICKS, squarify (optionally keeping the
+                       first and the last value in their corners), formatPercent, roundPercentText.
     validate.ts        validateQuery(tree, catalog) -> Issue[] for facet blocks; isBlankValue. An unknown field or a
                        field set twice is an issue on that condition (it gets its own removable row).
     summary.ts         blockText(block, catalog), queryToText(tree, catalog) — the query in short plain words
@@ -541,7 +541,7 @@ src/
     focusMemory.ts     rememberFocus / restoreFocus — the same control after a repaint, or a
                        `data-focus-landing`; controlOf / sameControl (pure) ("Keyboard focus across repaints").
     layout.ts          renderShell(root) -> Shell: the panel containers, the saved-queries and event <dialog>s
-                       (`savedDialog`, `eventDialog`), setActiveView, setSidebarCollapsed (and where the
+                       (`savedDialog`, `eventDialog`), setSidebarCollapsed (and where the
                        focus goes when the docs fold), announce, setMascot,
                        the sidebar's resize handle, onMenu. Also BRAND_HTML (the logo, not draggable)
                        and mascotFile (which face file to show, with its fallbacks; pure).
@@ -549,20 +549,24 @@ src/
     pickleRain.ts      The hidden five-click pickle rain: createClickCounter, planRain, startRain.
     docsResize.ts      wireDocsResize — drag/keyboard resizing of the data dictionary, width kept in localStorage.
     format.ts          Display formatting: compact / exact / matchRatio / barWidth (billion-row scale),
-                       displayLabel, databaseTitle, countLabel, formatWhen, formatDate, hoverTitle.
+                       displayLabel, databaseTitle, countLabel, formatWhen, formatDate, decimalMark, hoverTitle.
+                       English words, the separators of NUMBER_LOCALE (config.ts): "1,2 billion", "12 345".
     valueControl.ts    The value input(s) of a field row, by operator × field valueType; parseEntry.
     builderParts.ts    HTML pieces of the builder's groups and blocks: issuesHtml, nodeGrip, iconButton,
                        moveButtons, collapseButton, Position.
     fieldRows.ts       Pure HTML of a facet block's field rows (set, unset, open, stray, the fold button):
-                       fieldRowsHtml, visibleFieldIds; NOT_FILTERED / pickedOperatorId (the operator
-                       dropdown's "Not filtered" choice).
+                       fieldRowsHtml, visibleFieldIds, foldLabel; NOT_FILTERED / pickedOperatorId (the
+                       operator dropdown's "Not filtered" choice).
+    fieldRowsFit.ts    fitFoldedRows: shows a folded facet's hidden rows where they fit beside the panel
+                       (after each paint and on resize); extraRowsToShow (pure).
     blockHtml.ts       Pure HTML of the facet-block tree: blockHtml (the two-line head, rows and the panel
-                       beside them), groupHtml (with the "+ Facet" picker), footerHtml, BlockCtx. Painted by
+                       beside them), shownPanelTab, groupHtml (with the "+ Facet" picker), footerHtml, BlockCtx. Painted by
                        queryBuilder.ts; its styles are the "Facet blocks" section of styles.css.
     aboutPanel.ts      The About tab of a block's panel: aboutPanelHtml (pure), paintAboutPanels (repaints
                        only the About panels when `selectedField` changes), ABOUT_PANEL_KEYS.
-    coOccurrenceHtml.ts "Seen together" on screen (pure): coCtxOf (once per paint), coRowHtml (the row of
-                       cells above each block), seenLayout / seenTogetherHtml (the square pie chart),
+    coOccurrenceHtml.ts "Seen together" on screen (pure): coCtxOf (once per paint), offersSeenTogether,
+                       coRowHtml (the row of cells above each block), seenLayout / seenTogetherHtml (the
+                       square pie chart),
                        rovingIndex (the arrow keys of both), CAPTION / captionText (the line naming the
                        cell or box under the pointer or the focus).
     coOccurrenceWiring.ts The behaviour of the rows and charts in the builder (wireCoOccurrence, called by
@@ -571,7 +575,7 @@ src/
                        labels (labelToShow is pure).
     legendHtml.ts      The colour legend, a native popover from a "?" (pure): legendHtml (its content),
                        legendToggleHtml (the "?" and the popover).
-    popover.ts         What the legends and the "+ N less often" list share (pure): POPOVER_CLASS, popoverId,
+    popover.ts         What the legends and the gathered boxes' lists share (pure): POPOVER_CLASS, popoverId,
                        popoverPlacement (where one opens).
     facetWords.ts      Words about a block's facet that several panels say: facetNameOrId, UNKNOWN_FACET.
     coTokens.ts        The --qb-cooc-* colour tokens: coTokensFrom (pure), readCoTokens (the DOM read).
@@ -671,13 +675,14 @@ Run, so the dialog never shows a result that is gone or hidden.
 brought the kept query back ("Saved query across the login/compliance
 redirect"). Its ✕, **Start fresh** and the first edit (`changeScope`) clear it.
 
-**Display state of the builder.** Four keys say how the query is shown, not
+**Display state of the builder.** Five keys say how the query is shown, not
 what it means: `openField` (`{ blockId, fieldId }` of the one field row drawn
 open for editing, or `null`: an open unset row gets real dropdowns),
 `expandedBlockIds` (the blocks whose folded field list is open: "+ N more
 fields"), `panelTab` (`"seen"`, `"about"` or `null`: the tab open in the panel
-beside every block, `"seen"` at first; `null` hides the panel for all blocks)
-and `selectedField` (`{ blockId, fieldId }` of the field the About tab
+beside every block, `"seen"` at first; `null` hides the panel for all blocks),
+`coNamesShown` (the legend's "Show facet names above the squares", in every
+row at once, off at first) and `selectedField` (`{ blockId, fieldId }` of the field the About tab
 describes, or `null` for the block's facet). Focusing a row does not open it,
 so moving through the rows never repaints them; it selects the row's field
 for About, and **only the About panels repaint** for that: `selectedField` is
@@ -686,8 +691,8 @@ not among the builder's keys (`QUERY_BUILDER_KEYS`), but has its own painter
 stays open. They are not part of the query, so they are never saved, never
 sent and never compared when the app asks whether the query was edited.
 Changing them is not a query edit either: only the builder (or the About
-panels) repaint, and nothing is reset or refetched. Except `panelTab`, which
-is about every block, they are reset whenever the query is replaced (startup,
+panels) repaint, and nothing is reset or refetched. Except `panelTab` and
+`coNamesShown`, which are about every block, they are reset whenever the query is replaced (startup,
 **Start fresh**, opening a saved query), and `displayStateFor`
 (`src/state.ts`) drops the ones that point at a block a query edit has
 removed. Without that, ids of removed blocks would stay in the state for
@@ -749,7 +754,8 @@ binding its Fomantic dropdowns must always happen together.
 | App starts | Only the query builder and the data dictionary paint a loader; the other panels (databases, matching events, statistics, account menu) stay empty until the app has loaded (`statsPanelHtml`, for one, returns `""` while `runBlocker` is `"loading"`). `app.start()` loads databases, facets, login state and compliance status in parallel, derives the field catalog, and sets them in one `setState` with the starting query, an empty group (or the kept query, restored: "Saved query across the login/compliance redirect"). A failure loading databases or facets is fatal (full-page error + Reload, or Log in after a `401`); login/compliance failures are logged and the visitor is treated as anonymous / not compliant. |
 | User edits the query | A `tree.ts` function → `app.onQueryChange` → `changeScope`: cancel both request slots and, in one `setState`, write `query` + `issues` and reset `stats`, `serverIssues`, `preview` and `openEventId`. Then a debounced (400 ms) stats fetch is scheduled; it does nothing unless `runBlocker` says the query can run. Collapsing a group (`sameSemantics`) only updates `query`. |
 | User opens a field row (its empty slot, a dropped field or value), presses Escape in a block, or presses **+ N more fields** / **Show fewer fields** | `app.openFieldRow` / `app.toggleFields` write `openField` / `expandedBlockIds` directly, not through `changeScope`: display state, like folding, so nothing is reset or refetched and only the query builder repaints. Escape first commits a value still being typed in its row. A query edit (`onQueryChange`) drops the ids of blocks that are no longer in the query (`displayStateFor`, `src/state.ts`); Start fresh, opening a saved query and restoring a kept one reset both (and `selectedField`). |
-| User presses a panel tab (**Seen together** / **About**) on any block | `app.setPanelTab` writes `panelTab`; the tab that is open sets `null` (no panel in any block). Display state: only the builder repaints. |
+| User presses a panel tab (**Seen together** / **About**) on any block | `app.setPanelTab(tab, isOpen)` writes `panelTab`; the tab that is open (`aria-pressed`) sets `null` (no panel in any block). Display state: only the builder repaints. |
+| User presses **Show facet names above the squares** in a legend | `app.toggleCoNames` flips `coNamesShown`; only the builder repaints (the open legend opens again after the repaint). |
 | The focus moves into a field row, the user clicks a field's name, presses **← About <facet>** or Escape in a block | `app.selectFieldForPanel` writes `selectedField` (the same field again writes nothing). Only `paintAboutPanels` runs: it rewrites the content of each `.qb-about` element, never the rows, so an open dropdown stays open. It reads the state afresh, because the selection can change inside the builder's own repaint (paint() puts the focus back into a row, which fires `focusin`). |
 | A stats line streams in | If its request is still current, it becomes a `DatabaseResult` appended to `stats.results` → only the statistics panel repaints. When the stream ends, `status` becomes `"ok"`. A line whose `errors` point at query nodes also changes `serverIssues` (`setStats` in `app.ts`), which shows them in the builder and blocks Run (see "Statistics lines"). `serverIssues` is written only when it changes, so the query builder doesn't repaint for every line: a repaint closes an open dropdown and drops a value being typed. |
 | User clicks **Run query** | `preview` → `"loading"`, then `"ok"` (at page 0) / `"error"`, or a redirect into login or compliance (see "API contract"). Each of the three is also announced (`previewAnnouncement`: "Fetching events…", "Showing 12 results.", "Could not load events: …"; numbers in the viewer's format). Starting a run also resets `openEventId`. |
@@ -764,7 +770,7 @@ binding its Fomantic dropdowns must always happen together.
 | User saves, or deletes a saved query | Only the saved-queries keys change (`save`, `savedDialog`, `savedList`, `savedConfirm`, `savedListNotice`, `openSaved`): the query card's title and the dialog repaint; no statistics are refetched (saving changes no query). |
 | Five clicks on the logo | `easterEgg` flips → only the mascot repaints (`setMascot`); `main.ts` starts the rain (`startRain`) and, when turning on, the toast. |
 | User drops a docs item or a query node on the builder, or presses a "+" button | `app.onDropItem` / `app.onAddItem` ("Centre — `queryBuilder.ts`"): what can be created is inserted (`dropItem`: a new facet block, a value in an unset row of the target block, or a group of blocks for a tag) and goes through `onQueryChange` like any edit; the row a drop is about becomes `openField` (`onDropItem` returns it, and after a mouse drop the builder moves the keyboard focus into it; "Add to query" keeps the focus in the dictionary); what can't is explained in `dropNotice`. |
-| Dictionary rail, workflow step | `sidebarCollapsed` / `activeView` → `layout.ts` toggles a class or `hidden`. Nothing repaints or refetches. |
+| Dictionary rail | `sidebarCollapsed` → `layout.ts` toggles a class. Nothing repaints or refetches. |
 
 ### Keyboard focus across repaints
 
@@ -1426,6 +1432,18 @@ built them, and only display state (`collapsed`) is left out. The UI's own
 never meets an unfinished field condition (`toQueryRequest` throws on one, and
 on a value that is not JSON scalars: both are bugs).
 
+**The `kind` words are the backend's, spelled once.** A node's `kind`
+(`"group"`, `"facet"`, `"condition"`) is written only in `NODE_KIND` in
+`src/api/types.ts`; `request.ts` writes it, `response.ts` checks it when a
+saved query is read back, and the mock server answers with it. The backend
+may call a facet block by another name: change the text in `NODE_KIND` and
+nothing else needs to change. (The frontend's own `QueryNode.kind` in
+`src/query/types.ts` is a separate word that never goes over the wire, so
+the UI's logic does not depend on the backend's names: maintainers,
+2026-10-29, after a renamed `kind` broke saving.) The wire fixtures in
+`tests/api/` and `tests/savedQueryFixtures.ts` use `NODE_KIND` too; the mock
+server's own tests spell the words out.
+
 `value` is shaped by the operator's arity:
 
 | Arity (operators) | `value` |
@@ -1609,11 +1627,14 @@ state: none of it changes what the query means, and none is sent or saved
     between two blocks;
   - `Thing has no (size > 40)`: "has no" is **always** bracketed, even around
     one field, because `Thing has no size > 40` could be read as "has no size";
-  - `Thing present` / `Thing absent` for a block with nothing set;
+  - `Thing is present` / `Thing is absent` for a block with nothing set
+    (the "is" was asked for: "Thing present" was unclear, maintainers,
+    2026-10-29). The block's second head line uses the same words;
   - operators as symbols or one word (`OPERATOR_TEXT`): `=`, `≠`, `>`, `≥`,
     `<`, `≤`, `before`, `after`, `contains`, `in (a, b)`, `not in (a, b)`,
     `between (20, 80)` (not `20–80`, which can read as "twenty minus eighty"),
-    and `size present` / `size absent` for the field tests;
+    and `size present` / `size absent` for the field tests (no "is": "Thing
+    has size is present" would read badly);
   - a block's fields in the facet's own field order, which is how its rows are
     drawn;
   - groups join their children with AND / OR and are bracketed, except the
@@ -1824,15 +1845,13 @@ the search had hidden it (as the search's ✕ does, this also folds the cards
 and sections the user had opened), scrolls the panel (not the page: `scrollIntoView`
 would also scroll the page) so the card is at its top, marks the card
 `is-highlighted` for 2 s (a fade where motion is welcome, a plain colour
-under `prefers-reduced-motion`) and puts the focus on the card's
-`<summary>`. Under 1100 px the dictionary floats, as always. `main.ts`
-remembers how to find the cell or box again (a repaint may have replaced
-it): when the dictionary folds while it has the focus (Escape, or **Hide
-dictionary**), the focus goes back to that cell if it still exists, else to
-the rail. That memory is used once, and only for a direct round trip
-(`createReturnFocus`): once the focus leaves the dictionary for something
-outside it, the cell is forgotten and a later close goes to the rail. The
-cell or box carries
+under `prefers-reduced-motion`). **The focus stays on the cell or box**
+(a mouse click puts it there too, `handleClick` in `coOccurrenceWiring.ts`),
+so it shows as chosen and the arrow keys go on along the row, with the
+caption naming each square (maintainers, 2026-10-29: clicking a square used
+to move the focus into the dictionary); `main.ts` announces "<facet> is open
+in the data dictionary." for screen readers instead. Under 1100 px the
+dictionary floats, as always. The cell or box carries
 `data-opens-docs`, so the "click outside closes the floating dictionary"
 handler leaves that click alone.
 
@@ -1854,9 +1873,9 @@ in `localStorage` (`qb:docs-width`; if storage is unavailable it just isn't
 remembered). Under 1100 px the open panel floats over the page, so `main.ts`
 starts the page with it collapsed on such a screen (before the first paint;
 `initialState` stays `false`), and Escape closes the floating panel while focus
-is inside it, returning focus to the rail button, or to the co-occurrence
-cell that opened it (`escapeClosesDocs`; the focus move is
-`setSidebarCollapsed`'s). In the
+is inside it, returning focus to the rail button (`escapeClosesDocs`; the
+focus move is `setSidebarCollapsed`'s), or while the focus is on the
+co-occurrence square that opened it (the focus then stays on the square). In the
 search box the first Escape only clears its text (the box calls
 `preventDefault()`, which `escapeClosesDocs` treats as "spent"); a second
 Escape, with the box empty, closes the panel. A click anywhere else closes it too (also
@@ -1986,9 +2005,13 @@ on the right the panel's tabs **Seen together | About** and ✕, in one
 right-aligned box (`.qb-block-actions`) that wraps as a whole, so the ✕ never
 starts a line on its own. (The legend's **?** is on the line above the head,
 at the end of the co-occurrence row: below.)
-Line 2, only once a field is set: "an occurrence where the set field
-matches", or with two or more set fields "an occurrence where **ALL | ANY**
-of the set fields match" (with one field ALL and ANY would change nothing).
+Line 2: with no field set, "No field set: matches every event where
+**<facet> is present**" (or "is absent" under **Has no**), in the summary's
+words, because users did not know that a block with empty fields is a valid
+filter (maintainers, 2026-10-29); once a field is set, "an occurrence where
+the set field matches", or with two or more set fields "an occurrence where
+**ALL | ANY** of the set fields match" (with one field ALL and ANY would
+change nothing).
 **Why two lines:** with the tabs the single line wrapped at an arbitrary
 place; now the controls about the block and the sentence about its fields
 each keep their own line. The facet itself cannot be changed: the user adds
@@ -2002,12 +2025,21 @@ block.
 `coRowHtml`, `coOccurrenceHtml.ts`) sits above every block's head, folded or
 not: one 11 px cell per facet that is seen with at least one other facet
 (`connectedFacets`), in dictionary order, the same cells in every block,
-wrapping onto more lines in a narrow block. Each cell says how often that
-facet is seen in the events of *this block's* facet: a seen cell has the heat
-colour (`coOccurrenceColour` on the matrix-wide range, so blocks compare) and
-a dot (`betterOn`); never seen is plain `--qb-cooc-never` with no dot; the
-block's own facet is a round mustard mark; a value too small for a
-JavaScript number is an empty box with a dot. A block whose facet is seen
+wrapping onto more lines in a narrow block, **right-aligned** next to its
+**?** (a short row sat far from the legend that explains it; maintainers,
+2026-10-29). Each cell says how often that facet is seen in the events of
+*this block's* facet. A seen cell has the heat colour
+(`coOccurrenceColour`), on a **linear scale from 0 % to 100 %**
+(`scalePosition`), the same in every block: the data analysts want the
+facets seen most often to stand out (2026-10-29; it was a log scale over the
+matrix's range, which spread the tiny values and squashed the large ones).
+Only a value of **100 %** has a dot (`.is-full`; `betterOn` picks its
+colour), the designer's choice: it marks "in every event". **Never seen** is
+an empty box with a **dotted outline**, so it cannot be taken for a value so
+small that it has the lightest colour (there is no separate "never" colour
+any more); the block's own facet is a round mustard mark; a value too small
+for a JavaScript number has the colour of 0 %, like every value too small to
+tell from it on a linear scale. A block whose facet is seen
 with no other *from its own values* (all its cells never-seen; also a facet
 only other facets name, and one the dictionary does not know) gets a row of
 never-seen cells and the group's title "Never seen together with another
@@ -2020,22 +2052,34 @@ confuses (maintainers, 2026-10-28). Its Seen together tab says "No
 co-occurrence data for this facet." with no **?**. The other facets' rows
 are unchanged: its cell in their rows comes from *their* maps, and
 `connectedFacets` still counts it when any map names it.
-The connected facets and the range are worked out once per paint
+The connected facets and the always-together facets (`alwaysTogetherIds`,
+below) are worked out once per paint
 (`coCtxOf`, cached per dictionary array), and without two colour stops
 (`readCoTokens` found none) there is no row and no chart: co-occurrence is
 display data and never blocks the builder. The row is a `role="group"`
 named "Seen together with <facet>"; each cell is a button whose accessible
 name (shown by the caption, below; no `title`) says the facet and the backend's text ("<other>: 5 % of
 <facet>'s events", "<other>: never seen together", "<facet> (this facet)",
-"<other>: 1e-400 % of <facet>'s events, too rare to colour": the backend's
+"<other>: 1e-400 % of <facet>'s events": the backend's
 text even then, since spec section 6 says hover shows the original text and
-it is all there is to say about such a value), with `data-facet-id`; a click or Enter on a cell opens the dictionary at that
+it is all there is to say about such a value; its decimal point is the
+app's decimal mark, "76,2 %", like every number on screen), with
+`data-facet-id`; a click or Enter on a cell opens the dictionary at that
 facet ("Opened at a facet from the builder" under "Left — `docsSidebar.ts`
-(data dictionary)"). The click handler finds the cell by `data-opens-docs`
-(`coOccurrenceWiring.ts`, like everything below that moves the focus or
-fills a caption) and hands `main.ts` a finder for it (`rovingItemOf`, by the same block, row
-or chart and `data-co-cell` / `data-co-box` the Tab stops are remembered
-by), so the focus can come back to it when the dictionary closes.
+(data dictionary)") and **keeps the focus on the cell**, so a mouse user
+sees which square was chosen (`:focus`, not only `:focus-visible`, draws
+the ring) and can go on with the arrow keys. The click handler finds the
+cell by `data-opens-docs` (`coOccurrenceWiring.ts`, like everything below
+that moves the focus or fills a caption).
+**Names above the cells.** The legend's **Show facet names above the
+squares** (a toggle button, `aria-pressed`, `AppState.coNamesShown`, the
+same in every block) writes each cell's facet name upwards above it
+(`.qb-co-name`, `aria-hidden`: the name already starts the cell's
+accessible name); every line of cells gets 7.5rem for its names, and a
+longer name ends in "…". Off at first: it makes every block taller, and
+with hundreds of facets in production most rows wrap (the data analysts
+asked for the names, 2026-10-29; the caption and the arrow keys are the
+everyday way to read them).
 **Keyboard:** the row (and the chart) is one Tab stop: the markup makes the
 first cell `tabindex="0"`, the others `-1`; Left / Right / Home / End move
 the focus (`rovingIndex`, no wrapping round; a key with Alt, Ctrl or Meta is
@@ -2091,15 +2135,12 @@ Fomantic popup as the spec first said: Escape, a click outside and the focus sta
 **?** come from the browser, with no jQuery, and the top layer means no
 block or container query can clip it. It says what is measured, naming the
 block's facet; shows the bar (a CSS gradient through the stops, in OKLab
-where the browser can), the stops' values (`legendTicks`), "rarer" / "more
-often", the log step (`stepFactorText`), keys for the four marks, and that a
-square opens the dictionary. When every value is too rare to have a number
-(a row, but no range), "Every value is too small to colour." replaces the
-bar, and the keys stay. The numbers are written to be read
-at a glance: a tick is "48 %", "0.5 %" or, below 0.001 %, "1e-12 %" (the
-exponent as the backend writes it in the captions; `legendTicks`), and a
-step of a million times or more is "about 10¹⁴ times" or "about 3.2 × 10¹⁴
-times" (`stepFactorText`), not a row of digits. A popover opens in the
+where the browser can, as the cells are blended), always the same five
+labels "0 %" … "100 %" (`LEGEND_TICKS`: one label per stop was unreadable
+with 100 stops, maintainers 2026-10-29), "rarer" / "more often", that the
+colour follows the share evenly, keys for the marks (seen, in every event
+with its dot, never with its dotted outline, the facet itself), the names
+toggle (above), and that a square opens the dictionary. A popover opens in the
 middle of the window, so a capturing `beforetoggle` listener
 (`coOccurrenceWiring.ts`) places it by its button
 (`popoverPlacement`, `popover.ts`: right edge under the button's, below or above, whichever
@@ -2125,7 +2166,15 @@ block. The tabs are toggle buttons (`aria-pressed`), not ARIA tabs: pressing
 the open one hides the panel in **every** block (`panelTab: null`, its title
 says "Hide panel"), and the rows take the whole width. Each tab has its own
 `data-action` (`panel-seen`, `panel-about`), so the focus stays on it across
-the repaint. The rows and the panel sit side by side (3 : 2) once the block
+the repaint. **Seen together is only offered when there is co-occurrence
+data** (`offersSeenTogether`: some facet is seen with another; maintainers,
+2026-10-29): without it (or while the dictionary loads, or without colour
+tokens) the tab is not drawn and the blocks show About in its place
+(`shownPanelTab`, blockHtml.ts), with the About tab pressed. `panelTab` is
+left as it is, so the chart comes back by itself once data arrives, and a
+tab's press says whether it was open from what the screen shows
+(`aria-pressed`, `app.setPanelTab(tab, isOpen)`), not from `panelTab`. The
+rows and the panel sit side by side (3 : 2) once the block
 is at least 640 px wide, and the panel goes under the rows when it is
 narrower (a container query on `.qb-block`, since the open dictionary and
 nesting take width too, not the window's width).
@@ -2134,11 +2183,19 @@ nesting take width too, not the window's width).
   square pie chart: one box per facet it is seen with, area proportional to
   the value (`squarify` over a 100 × 60 box, placed in percentages so it
   stretches with the panel), largest first, coloured like the row; never-seen
-  facets are absent (`seenLayout`). Values too rare to have a size, and boxes
+  facets are absent (`seenLayout`). **The facets in every event of every
+  facet** (`alwaysTogetherIds`: 100 % in the map of every facet that is seen
+  with another; one no event holds, all zeros, has no say) go into one
+  **+ N in every event** box, top-left (`squarify`'s `first`), in the colour
+  of 100 %, not to scale: in production a few facets are in every event and
+  took over half of every chart (maintainers, 2026-10-29). It is sized and
+  grows like the merged box below, opens a list of its facets the same way
+  (id `popover-<block id>-always`), and its `data-co-box` is " " (no facet
+  id is blank). Values too rare to have a size, and boxes
   thinner than 12 px at a 300 × 180 px reference (the panel's typical
   width), go into one **+ N less often** box whose accessible name lists them
   (its caption says only how many). **Pressing it** (click or Enter) opens
-  a popover listing them (`mergedListHtml`, id `popover-<block id>-merged`):
+  a popover listing them (`gatheredHtml`, id `popover-<block id>-merged`):
   each facet in its cell's words with the number rounded as in the caption,
   largest first, the too-rare ones last. Production has hundreds of facets,
   so the list scrolls inside itself (`max-height` on `.qb-merged-list`) and
@@ -2160,7 +2217,7 @@ nesting take width too, not the window's width).
   (many facets merge), and must not read as "the most often": it is a
   neutral striped grey (`--qb-cooc-merged`, off the green heat scale) and
   is always laid out last, bottom-right, whatever its size (`squarify`'s
-  `keepLast`). It gets both labels, "+ N less
+  `last`). It gets both labels, "+ N less
   often" and "+N" (the browser can hide a label but not shorten it), and
   shows the long one where it fits in the real panel, else the short one,
   else neither (`labelToShow`; decided 2026-10-28: "+30" alone is unclear
@@ -2177,10 +2234,8 @@ nesting take width too, not the window's width).
   merged box has neither attribute, as it is not one facet. The tab's
   title line has its own **?** (the chart uses the row's colours; like the
   row's, only when there is a row) and the chart's caption. An
-  isolated facet, a facet without data (no **?**), one the dictionary does not know, and a page without any
-  co-occurrence data each get one sentence instead. Without a context
-  (the dictionary still loading, or no colour tokens) the tab says "Seen
-  together cannot be shown right now.", which claims nothing about the data.
+  isolated facet, a facet without data (no **?**), and one the dictionary
+  does not know each get one sentence instead.
 - **About** (`aboutPanelHtml`, `aboutPanel.ts`) shows the dictionary's details
   of the block's facet (`facetDetailsHtml`, the same markup as the opened
   dictionary card, without its fields: the block's rows beside it already
@@ -2248,16 +2303,29 @@ on whether it exists. Hence:
   plain unset row when the field is cleared with **Not filtered**, when
   another row is opened, or on Escape. A field dropped on the builder opens
   its row the same way ("Drag and drop").
-- **Folding long facets.** A facet with more than 5 fields (`FOLD_AFTER`) shows
-  only the set rows, the first 3 fields (`SHOWN_WHEN_FOLDED`) and the open
-  one, in the facet's order, and puts the rest behind a **+ N more fields**
+- **Folding long facets.** A facet with more than 5 fields (`FOLD_AFTER`)
+  shows only the set rows and the open one, in the facet's order, or, while
+  none is set or open, its first 3 fields (`SHOWN_WHEN_FOLDED`;
+  `visibleFieldIds`): empty rows next to a set one would only take room
+  (maintainers, 2026-10-29). The rest goes behind a **+ N more fields**
   button, which turns into **Show fewer fields** (`expandedBlockIds`, per
   block). **Why:** real facets have 2 to over 20 fields, and a block that
   always shows all of them would push the rest of the query off the screen. A
   set row is never hidden, so nothing the user chose goes out of sight. The
-  fold button is not drawn when it would do nothing: when the set and first
-  rows already show every field and the block is not expanded
+  fold button is not drawn when it would do nothing: when the shown rows
+  already show every field and the block is not expanded
   (`showsFoldButton`), since "+ 0 more fields" would be a dead button.
+  **Rows that fit beside the panel are shown anyway.** The folded rows are
+  drawn too, `hidden` and marked `data-folded` (as plain buttons they cost
+  little), and `fitFoldedRows` (`fieldRowsFit.ts`) shows as many of them,
+  in order, as fit within the panel's height while the panel stands beside
+  the rows, then rewrites the button's count, or hides it once nothing is
+  left (`extraRowsToShow` is the arithmetic). It runs after every paint and,
+  through a `ResizeObserver` on every panel, whenever a panel changes size.
+  **Why:** a facet with 7 fields showed 3 rows beside a chart twice their
+  height (maintainers, 2026-10-29). Only the browser knows the heights, so
+  it is not decided in the HTML. With the panel under the rows, or hidden,
+  nothing extra is shown.
 - **Stray rows.** A saved or kept query can hold a condition the rows cannot
   show: its field is not in the facet any more, or it is a second condition on
   a field that already has one. Each gets its own row after the facet's fields:
@@ -2547,10 +2615,17 @@ browser sends it no click and the user presses it again.
 
 ### Right — `statsPanel.ts`
 
-Every number goes through `format.ts` so it fits the 15rem column when the
-backend returns billions: `compact` (`1.2B`, exact value on hover),
-`matchRatio` (`62%`, `0.34%`, and `1 in 289.3M` rather than a misleading
-`0%`), `barWidth` (any nonzero match shows at least 2 px). Top to bottom: the
+**Numbers** (maintainers, 2026-10-29): every word is English, whatever the
+browser's language ("1,2 billion", not "1,2 mrd."; "7 Nov 2024" in
+`formatWhen`), and every digit grouping and decimal mark is the one of
+`NUMBER_LOCALE` in `src/config.ts` (Norwegian, "nb-NO": "12 345",
+"28,86", a saved query's date "08.10.2026"). `format.ts` writes a number
+in English and swaps in the marks (`englishWithSeparators`); the
+co-occurrence captions swap the backend's decimal point the same way
+(`decimalMark`). Every number goes through `format.ts` so it fits the 15rem column when the
+backend returns billions: `compact` (`1,2 billion`, exact value on hover),
+`matchRatio` (`62 %`, `0,34 %`, and `1 in 289,3 million` rather than a
+misleading `0 %`), `barWidth` (any nonzero match shows at least 2 px). Top to bottom: the
 headline (sum of successful databases; its share of **all selected
 databases**, failed and still-loading ones included, "x% of N"; and a bar of the
 same N events: green for the matches, so it is the same share as the text, a
@@ -2735,7 +2810,7 @@ contract", and the state in "State and the render loop"); this file only draws
   **Replace** when the query it replaces has gone), and that new one is the
   open query from then on.
 - **Saved queries**: newest first, one item per query with its **name, note,
-  number of databases and date** (`formatDate`, the viewer's locale, in a
+  number of databases and date** (`formatDate`, digits in `NUMBER_LOCALE`, in a
   `<time datetime>`), **Open** and **Delete**. **Decided by the maintainers
   (2026-10-08): the list never shows the query, its summary or any facet or
   field**, because queries can be sensitive; the note is there to help recall

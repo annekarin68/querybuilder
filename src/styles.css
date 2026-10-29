@@ -4,6 +4,32 @@
  * owns layout and colour. Colours and sizes live in the tokens below — change
  * them here, not in individual rules.
  */
+/*
+ * The italic Lato that Fomantic ships draws "≠" as a bare "/": "size ≠ 4"
+ * would read "size / 4" in every italic text (the summaries, the
+ * dictionary's comments) once the font has loaded (until then the
+ * browser's own font draws it). These two faces give italic Lato the
+ * upright "≠" instead. They only cover U+2260, and the browser tries the
+ * face declared last first, so they win over Fomantic's for that character.
+ */
+@font-face {
+  font-family: Lato;
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../node_modules/fomantic-ui-css/themes/default/assets/fonts/LatoLatin-Regular.woff2")
+    format("woff2");
+  unicode-range: U+2260;
+}
+@font-face {
+  font-family: Lato;
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../node_modules/fomantic-ui-css/themes/default/assets/fonts/LatoLatin-Bold.woff2")
+    format("woff2");
+  unicode-range: U+2260;
+}
 :root {
   --qb-bg: #f4f1e3;
   --qb-surface: #fffdf5;
@@ -61,7 +87,6 @@
   --qb-cooc-stop-5: #5f9a3f;
   --qb-cooc-stop-6: #3f7a2c;
   --qb-cooc-stop-7: #24521a;
-  --qb-cooc-never: #e4e1d2;
   /* The "+ N less often" box stands for a list, not a value: a cool grey with
      a diagonal stripe, off the green heat scale so it never reads as "the most
      often". Its label (--qb-cooc-dot-dark) must reach 4.5:1 on both greys. */
@@ -117,40 +142,6 @@ body {
   font-weight: 700;
   font-size: 1.05rem;
   white-space: nowrap;
-}
-/* The steps neither shrink nor scroll: when the bar is tight it is the account
-   name that gives way (see .qb-account-name), never the workflow. No overflow
-   either, so a step's focus ring is not clipped at the nav's edge. */
-.qb-steps {
-  display: flex;
-  gap: 0.25rem;
-  flex: none;
-}
-.qb-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  color: var(--qb-topbar-muted);
-  white-space: nowrap;
-}
-.qb-step:hover,
-.qb-step:focus-visible {
-  color: var(--qb-text-on-fill);
-}
-.qb-step.is-active {
-  background: var(--qb-topbar-2);
-  color: var(--qb-text-on-fill);
-}
-.qb-step-num {
-  display: inline-grid;
-  place-items: center;
-  width: 1.3rem;
-  height: 1.3rem;
-  border-radius: 50%;
-  border: 1px solid currentColor;
-  font-size: 0.75rem;
 }
 .qb-topbar-right {
   margin-left: auto;
@@ -259,13 +250,6 @@ body {
   max-height: calc(100vh - var(--qb-topbar-h) - 2 * var(--qb-gap));
   overflow-y: auto;
   overflow-wrap: anywhere;
-}
-.qb-coming-soon {
-  margin: 2rem;
-  padding: 3rem;
-  text-align: center;
-  font-size: 1.2rem;
-  color: var(--qb-muted);
 }
 /* Split-screen widths (the app supports down to 512 px, half of a 1024 px
    screen). The stats leave their column and sit between the query and the
@@ -644,12 +628,6 @@ body {
     gap: 0.75rem;
     padding: 0 0.75rem;
   }
-  .qb-steps {
-    gap: 0.15rem;
-  }
-  .qb-step {
-    padding: 0.3rem 0.5rem;
-  }
   .qb-account-chip {
     padding: 0.3rem 0.6rem;
     gap: 0.3rem;
@@ -662,7 +640,6 @@ body {
   }
   /* Visually hidden, not display:none: it must stay in the accessible name
      (the same rules as .qb-sr-only). */
-  .qb-step:not(.is-active) .qb-step-label,
   .qb-badge-text {
     position: absolute;
     width: 1px;
@@ -1081,14 +1058,45 @@ body {
   margin: 0 0 0.3rem;
 }
 .qb-co-top > .qb-legend-btn {
-  margin-left: auto;
+  flex: none;
 }
+/* Right-aligned, next to its "?": a short row would otherwise sit far from
+   the legend that explains it. `margin-left: auto` keeps the "?" on the
+   right when the row is empty. */
 .qb-co-row {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 2px;
+  margin-left: auto;
   /* Centred on the "?" while it is one line of cells. */
   padding-top: 6px;
+}
+/* "Show facet names above the squares" (the legend): each cell's name,
+   written upwards above it. Every line of cells gets the room for the
+   names above it (padding and row-gap); a longer name ends in "…". */
+.qb-co-row.shows-names {
+  --qb-co-name-h: 7.5rem;
+  padding-top: calc(var(--qb-co-name-h) + 2px);
+  row-gap: calc(var(--qb-co-name-h) + 4px);
+}
+.qb-co-cell {
+  position: relative;
+}
+.qb-co-name {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  max-height: var(--qb-co-name-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: translateX(-50%) rotate(180deg);
+  font-size: 10px;
+  line-height: 11px;
+  color: var(--qb-text);
+  pointer-events: none;
 }
 /* The name and value of the cell or box under the pointer or the focus
    (CAPTION, coOccurrenceHtml.ts): a title never shows on keyboard focus.
@@ -1160,17 +1168,19 @@ body {
   color: var(--qb-cooc-dot-dark); /* the dot is drawn in currentColor */
   cursor: pointer;
 }
-/* The dot: seen together (and too rare to colour, on an empty box). */
-.qb-co-cell.is-seen::after,
-.qb-co-cell.is-too-rare::after {
+/* The dot: only on a value of 100 % (seen together in every event). */
+.qb-co-cell.is-full::after {
   content: "";
   width: 3px;
   height: 3px;
   border-radius: 50%;
   background: currentColor;
 }
+/* Never seen together: an empty box with a dotted outline, so it can't be
+   taken for a value so small that it has the lightest colour. */
 .qb-co-cell.is-never {
-  background: var(--qb-cooc-never);
+  border-style: dotted;
+  background: var(--qb-surface);
 }
 /* The block's own facet: a round mustard mark, no ring. */
 .qb-co-cell.is-own {
@@ -1178,8 +1188,11 @@ body {
   border-radius: 50%;
   background: var(--qb-cooc-own);
 }
-.qb-co-cell:focus-visible,
-.qb-seen-box:focus-visible {
+/* `:focus`, not only `:focus-visible`: a square clicked with the mouse keeps
+   the focus (it opens the dictionary without moving it there), and the
+   ring shows which one the arrow keys go on from. */
+.qb-co-cell:focus,
+.qb-seen-box:focus {
   outline: 2px solid var(--qb-and);
   outline-offset: 1px;
 }
@@ -1201,7 +1214,6 @@ body {
   overflow: hidden;
   /* A thin card-coloured line between neighbouring boxes. */
   border: 1px solid var(--qb-surface);
-  background: var(--qb-cooc-never);
   color: var(--qb-cooc-dot-dark);
   font-size: 0.75rem;
   cursor: pointer;
@@ -1216,6 +1228,11 @@ body {
     var(--qb-cooc-merged) 0 6px,
     var(--qb-cooc-merged-stripe) 6px 9px
   );
+}
+/* "+ N in every event": the colour of 100 % is inline; the outline says it
+   is a box of its own, like the merged one. */
+.qb-seen-box.is-always {
+  border-color: var(--qb-cooc-cell-border);
 }
 .qb-seen-label {
   position: absolute;

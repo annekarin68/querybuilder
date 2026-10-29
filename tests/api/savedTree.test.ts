@@ -3,7 +3,7 @@ import { ContractError, ResponseValue } from "../../src/api/contract";
 import { toSavedTree } from "../../src/api/request";
 import { fromSavedTree } from "../../src/api/response";
 import { emptyQuery, newBlock, newFieldCondition } from "../../src/query/tree";
-import type { SavedGroup } from "../../src/api/types";
+import { NODE_KIND, type SavedGroup } from "../../src/api/types";
 import type { FacetBlock, Group } from "../../src/query/types";
 
 const read = (tree: unknown) =>
@@ -28,11 +28,11 @@ describe("fromSavedTree", () => {
 
   it("refuses the old shape: a condition directly in a group", () => {
     const old = {
-      kind: "group",
+      kind: NODE_KIND.group,
       operator: "AND",
       children: [
         {
-          kind: "condition",
+          kind: NODE_KIND.condition,
           facet_id: "thing",
           field_id: null,
           operator_id: "present",
@@ -46,11 +46,11 @@ describe("fromSavedTree", () => {
 
   it("refuses a block without negated, or a condition without a field", () => {
     const facet = (over: object) => ({
-      kind: "group",
+      kind: NODE_KIND.group,
       operator: "AND",
       children: [
         {
-          kind: "facet",
+          kind: NODE_KIND.facet,
           facet_id: "thing",
           negated: false,
           operator: "AND",
@@ -63,7 +63,9 @@ describe("fromSavedTree", () => {
     expect(() =>
       read(
         facet({
-          conditions: [{ kind: "condition", field_id: null, operator_id: null, value: null }],
+          conditions: [
+            { kind: NODE_KIND.condition, field_id: null, operator_id: null, value: null },
+          ],
         }),
       ),
     ).toThrow(ContractError);

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   coCtxOf,
   coRowHtml,
+  offersSeenTogether,
   seenLayout,
   seenTogetherHtml,
   rovingIndex,
@@ -37,7 +38,6 @@ function facet(id: string, name: string, values: Record<string, CoValue> = {}): 
 
 const tokens: CoTokens = {
   stops: ["#eeeeee", "#111111"],
-  never: "#dddddd",
   cellBorder: "#777777",
   own: "#886600",
   dotDark: "#000000",
@@ -62,9 +62,9 @@ function all(html: string, attribute: string): string[] {
 }
 
 describe("coCtxOf", () => {
-  it("works out the connected facets and the range once, for every block", () => {
+  it("works out the connected facets and the always-together ones once, for every block", () => {
     expect(ctx.connected.map((f) => f.id)).toEqual(["a", "b", "c", "d"]);
-    expect(ctx.range).toEqual({ min: 0.5, max: 50 });
+    expect([...ctx.always]).toEqual([]);
   });
 
   // Display data never blocks the builder: without two colour stops (the
@@ -94,7 +94,7 @@ describe("coRowHtml", () => {
       "Alpha (this facet)",
       "Beta: 50 % of Alpha's events",
       // The backend's text even when it is too small to colour (spec, section 6).
-      "Gamma: 1e-400 % of Alpha's events, too rare to colour",
+      "Gamma: 1e-400 % of Alpha's events",
       "Delta: never seen together",
     ]);
   });
@@ -105,7 +105,7 @@ describe("coRowHtml", () => {
     expect(all(coRowHtml(ctx, newBlock("a")), "title")).toEqual([]);
   });
 
-  it("marks each cell's kind, and colours only the seen ones", () => {
+  it("marks each cell's kind, and colours the seen and too-rare ones", () => {
     const html = coRowHtml(ctx, newBlock("a"));
     expect(all(html, "class").filter((c) => c.includes("qb-co-cell"))).toEqual([
       "qb-co-cell is-own",
@@ -113,9 +113,31 @@ describe("coRowHtml", () => {
       "qb-co-cell is-too-rare",
       "qb-co-cell is-never",
     ]);
-    // 50 is the top of the range: the last stop, with the light dot on it.
-    expect(html).toContain('style="background-color:#111111;color:#ffffff"');
-    expect(all(html, "style")).toHaveLength(1);
+    // Linear: 50 % is halfway between the two stops; a too-rare value has
+    // the colour of 0 %, the first stop.
+    expect(all(html, "style")).toEqual([
+      "background-color:#757575;color:#ffffff",
+      "background-color:#eeeeee;color:#000000",
+    ]);
+  });
+
+  // The dot only marks 100 % (the designer, 2026-10-29).
+  it("marks only a value of 100 % as full", () => {
+    const full = facet("f", "Full", { a: co("100"), b: co("99.5") });
+    const html = coRowHtml(coCtxOf([alpha, beta, full], tokens) as CoCtx, newBlock("f"));
+    expect(all(html, "class").filter((c) => c.includes("qb-co-cell"))).toEqual([
+      "qb-co-cell is-seen is-full",
+      "qb-co-cell is-seen",
+      "qb-co-cell is-own",
+    ]);
+  });
+
+  it("writes each facet's name above its cell while the names are shown", () => {
+    const named = coCtxOf(facets, tokens, true) as CoCtx;
+    const html = coRowHtml(named, newBlock("a"));
+    expect(html).toContain('class="qb-co-row shows-names"');
+    expect(html).toContain('<span class="qb-co-name" aria-hidden="true">Beta</span>');
+    expect(coRowHtml(ctx, newBlock("a"))).not.toContain("qb-co-name");
   });
 
   it("gives a roving tabindex: the first cell is the row's one tab stop", () => {
@@ -230,7 +252,29 @@ describe("seenLayout", () => {
   });
 
   it("is empty for an isolated facet", () => {
-    expect(seenLayout(ctx, lonely)).toEqual({ boxes: [], merged: null });
+    expect(seenLayout(ctx, lonely)).toEqual({ boxes: [], always: null, merged: null });
+  });
+
+  // Facets in every event of every facet would fill every chart (maintainers,
+  // 2026-10-29): they share one box, top-left, not to scale.
+  it("gathers the facets in every event of every facet in one box, top-left", () => {
+    const own = facet("own", "Own", { u: co("100"), v: co("100"), x: co("60"), y: co("30") });
+    const u = facet("u", "U", { own: co("100"), v: co("100"), x: co("100"), y: co("100") });
+    const v = facet("v", "V", { own: co("100"), u: co("100"), x: co("100"), y: co("100") });
+    const x = facet("x", "X", { own: co("50"), u: co("100"), v: co("100") });
+    const y = facet("y", "Y", { own: co("50"), u: co("100"), v: co("100") });
+    const layout = seenLayout(coCtxOf([own, u, v, x, y], tokens) as CoCtx, own);
+    expect(layout.always!.items.map((m) => m.facet.id)).toEqual(["u", "v"]);
+    expect(layout.always!.rect).toMatchObject({ x: 0, y: 0 });
+    expect(layout.boxes.map((b) => b.mark.facet.id)).toEqual(["x", "y"]);
+    // Not to scale: far smaller than the two 100 % values would take.
+    const area = (r: { w: number; h: number }) => r.w * r.h;
+    expect(area(layout.always!.rect)).toBeLessThan(area(layout.boxes[0]!.rect));
+    const html = seenTogetherHtml(coCtxOf([own, u, v, x, y], tokens)!, newBlock("own"));
+    expect(all(html, "data-co-box")).toEqual([" ", "x", "y"]);
+    expect(all(html, "data-caption")).toContain("2 facets in every event of every facet");
+    expect(html).toContain('popovertarget="popover-');
+    expect(html).toMatch(/<span class="qb-seen-label">\+ 2 in every event<\/span>/);
   });
 });
 
@@ -253,7 +297,7 @@ describe("seenTogetherHtml", () => {
       others.push(facet(`r${i}`, `R${i}`));
     }
     const own = facet("own", "Own", values);
-    const html = seenTogetherHtml(coCtxOf([own, ...others], tokens), newBlock("own"));
+    const html = seenTogetherHtml(coCtxOf([own, ...others], tokens)!, newBlock("own"));
     const merged = /<button[^>]*is-merged[^>]*>(.*?)<\/button>/.exec(html)?.[1];
     expect(merged).toBe(
       `<span class="qb-seen-label">+ 40 less often</span><span class="qb-seen-label is-short">+40</span>`,
@@ -262,7 +306,7 @@ describe("seenTogetherHtml", () => {
 
   it("lists the merged facets in the '+ N less often' box's accessible name", () => {
     const html = seenTogetherHtml(ctx, newBlock("a"));
-    const name = "1 less often: Gamma: 1e-400 % of Alpha's events, too rare to colour";
+    const name = "1 less often: Gamma: 1e-400 % of Alpha's events";
     expect(all(html, "aria-label")).toContain(name);
     expect(all(html, "title")).toEqual([]);
   });
@@ -281,7 +325,7 @@ describe("seenTogetherHtml", () => {
     const own = facet("o", "O", { w: co("90"), n: co("10") });
     const long = "A name far too long to fit in a small box";
     const html = seenTogetherHtml(
-      coCtxOf([own, facet("w", "Wide"), facet("n", long)], tokens),
+      coCtxOf([own, facet("w", "Wide"), facet("n", long)], tokens)!,
       newBlock("o"),
     );
     expect(html).toContain('<span class="qb-seen-label">Wide</span>');
@@ -300,17 +344,12 @@ describe("seenTogetherHtml", () => {
     expect(seenTogetherHtml(ctx, newBlock("gone"))).toContain(
       "This facet is not in the data dictionary.",
     );
-    expect(seenTogetherHtml(coCtxOf([gamma], tokens), newBlock("c"))).toContain(
-      "No co-occurrence data for this facet.",
-    );
   });
 
-  // Without colours (the stylesheet did not load) or while the dictionary
-  // loads, nothing is known about the data: no claim about it is made.
-  it("makes no claim about the data when it cannot draw the chart", () => {
-    const html = seenTogetherHtml(null, newBlock("a"));
-    expect(html).toContain("Seen together cannot be shown right now.");
-    expect(html).not.toContain("No co-occurrence data");
+  it("is offered only when some facet is seen with another", () => {
+    expect(offersSeenTogether(ctx)).toBe(true);
+    expect(offersSeenTogether(coCtxOf([gamma], tokens))).toBe(false);
+    expect(offersSeenTogether(null)).toBe(false);
   });
 
   it("never draws an empty accessible name", () => {
@@ -401,7 +440,7 @@ describe("the '+ N less often' box's list", () => {
     const popover = html.slice(html.indexOf(`<div id="${id}" popover class="qb-popover">`));
     expect(html.indexOf(`<div id="${id}"`)).toBeGreaterThan(chartEnd);
     expect(popover).toContain("1 facet seen together less often with <strong>Alpha</strong>");
-    expect(popover).toContain("<li>Gamma: 1e-400 % of Alpha&#39;s events, too rare to colour</li>");
+    expect(popover).toContain("<li>Gamma: 1e-400 % of Alpha&#39;s events</li>");
   });
 
   it("lists them largest first, the too-rare ones last", () => {
@@ -417,7 +456,7 @@ describe("the '+ N less often' box's list", () => {
       ...Array.from({ length: 40 }, (_, i) => facet(`s${i}`, `S${i}`)),
       facet("rare", "Rare"),
     ];
-    const html = seenTogetherHtml(coCtxOf([own, ...others], tokens), newBlock("o"));
+    const html = seenTogetherHtml(coCtxOf([own, ...others], tokens)!, newBlock("o"));
     const items = [...html.matchAll(/<li>([^<]*)<\/li>/g)].map((m) => m[1] as string);
     expect(items.length).toBeGreaterThan(1);
     expect(items.at(-1)).toContain("Rare:");
@@ -523,22 +562,25 @@ describe("a facet without co-occurrence data (null, not 'never seen together')",
   });
 });
 
+// The numbers on screen have the app's decimal mark (NUMBER_LOCALE in
+// src/config.ts, Norwegian ","); the backend's text itself has ".".
 describe("rounded text on screen", () => {
   const long = "76.19047619047619";
+  const longOnScreen = "76,19047619047619";
   const own = facet("o", "Own", { x: co(long), y: co("1.23456e-20") });
   const rounded = coCtxOf([own, facet("x", "X"), facet("y", "Y")], tokens) as CoCtx;
 
   it("rounds a cell's caption but keeps the full text in its accessible name", () => {
     const row = coRowHtml(rounded, newBlock("o"));
-    expect(all(row, "aria-label")).toContain(`X: ${long} % of Own's events`);
-    expect(all(row, "data-caption")).toContain("X: 76.2 % of Own's events");
-    expect(all(row, "data-caption")).toContain("Y: 1.23e-20 % of Own's events");
+    expect(all(row, "aria-label")).toContain(`X: ${longOnScreen} % of Own's events`);
+    expect(all(row, "data-caption")).toContain("X: 76,2 % of Own's events");
+    expect(all(row, "data-caption")).toContain("Y: 1,23e-20 % of Own's events");
   });
 
   it("rounds a box's caption the same way", () => {
     const html = seenTogetherHtml(rounded, newBlock("o"));
-    expect(all(html, "aria-label")).toContain(`X: ${long} % of Own's events`);
-    expect(all(html, "data-caption")).toContain("X: 76.2 % of Own's events");
+    expect(all(html, "aria-label")).toContain(`X: ${longOnScreen} % of Own's events`);
+    expect(all(html, "data-caption")).toContain("X: 76,2 % of Own's events");
   });
 
   it("leaves out data-caption when the caption would repeat the name", () => {
@@ -553,11 +595,11 @@ describe("rounded text on screen", () => {
       others.push(facet(`s${i}`, `S${i}`));
     }
     const html = seenTogetherHtml(
-      coCtxOf([facet("o", "O", values), ...others], tokens),
+      coCtxOf([facet("o", "O", values), ...others], tokens)!,
       newBlock("o"),
     );
-    expect(html).toContain("<li>S0: 0.00123 % of O&#39;s events</li>");
-    expect(all(html, "aria-label").join("|")).toContain("S0: 0.0012345678 % of O's events");
+    expect(html).toContain("<li>S0: 0,00123 % of O&#39;s events</li>");
+    expect(all(html, "aria-label").join("|")).toContain("S0: 0,0012345678 % of O's events");
   });
 });
 

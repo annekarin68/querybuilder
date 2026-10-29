@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   DOCS_HINT,
-  createReturnFocus,
   detailsToOpen,
   dragData,
   escapeClosesDocs,
@@ -319,10 +318,16 @@ describe("escapeClosesDocs", () => {
     floating: true,
     collapsed: false,
     focusInDocs: true,
+    focusOnOpener: false,
   };
 
   it("closes the floating docs when Escape is pressed inside them", () => {
     expect(escapeClosesDocs(closing)).toBe(true);
+  });
+
+  // A co-occurrence square opens the dictionary and keeps the focus.
+  it("closes them too when the focus is on the square that opened them", () => {
+    expect(escapeClosesDocs({ ...closing, focusInDocs: false, focusOnOpener: true })).toBe(true);
   });
 
   it("leaves Escape alone when the search box has already used it to clear its text", () => {
@@ -496,37 +501,5 @@ describe("detailsToOpen", () => {
     const panel = node("DIV", outside);
     const card = node("DETAILS", panel);
     expect(detailsToOpen(card, panel)).toEqual([card]);
-  });
-});
-
-describe("createReturnFocus", () => {
-  it("gives the remembered cell once", () => {
-    const memory = createReturnFocus<string>();
-    memory.remember(() => "cell");
-    expect(memory.take()).toBe("cell");
-    expect(memory.take()).toBeNull();
-  });
-
-  // Only a direct round trip (cell → dictionary → close) goes back to the
-  // cell: once the user has gone elsewhere, a later close goes to the rail.
-  it("forgets the cell once the focus leaves the dictionary for somewhere else", () => {
-    const memory = createReturnFocus<string>();
-    memory.remember(() => "cell");
-    memory.focusLeftDocs(true);
-    expect(memory.take()).toBeNull();
-  });
-
-  // The focus moving inside the dictionary, or to nowhere (null), keeps it.
-  it("keeps the cell while the focus stays in the dictionary", () => {
-    const memory = createReturnFocus<string>();
-    memory.remember(() => "cell");
-    memory.focusLeftDocs(false);
-    expect(memory.take()).toBe("cell");
-  });
-
-  it("gives null when the cell is gone", () => {
-    const memory = createReturnFocus<string>();
-    memory.remember(() => null);
-    expect(memory.take()).toBeNull();
   });
 });

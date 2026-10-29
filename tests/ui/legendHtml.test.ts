@@ -5,16 +5,14 @@ import type { CoTokens } from "../../src/ui/coTokens";
 // Made-up names: src/ never names backend data, and neither do these tests.
 const tokens: CoTokens = {
   stops: ["#eeeeee", "#888888", "#111111"],
-  never: "#dddddd",
   cellBorder: "#777777",
   own: "#886600",
   dotDark: "#000000",
   dotLight: "#ffffff",
 };
-const range = { min: 0.01, max: 100 };
 
 describe("legendHtml", () => {
-  const html = legendHtml("Alpha", range, tokens);
+  const html = legendHtml("Alpha", tokens, false);
 
   it("says what is measured, naming the block's facet", () => {
     expect(html).toContain(
@@ -23,8 +21,8 @@ describe("legendHtml", () => {
   });
 
   it("escapes the facet's name", () => {
-    expect(legendHtml("A<b>", range, tokens)).toContain("A&lt;b&gt;");
-    expect(legendHtml("A<b>", range, tokens)).not.toContain("A<b>");
+    expect(legendHtml("A<b>", tokens, false)).toContain("A&lt;b&gt;");
+    expect(legendHtml("A<b>", tokens, false)).not.toContain("A<b>");
   });
 
   it("draws the bar through every stop, blended in OKLab where the browser can", () => {
@@ -34,50 +32,46 @@ describe("legendHtml", () => {
     );
   });
 
-  it("labels each stop with the range's values (legendTicks), and the two ends", () => {
-    for (const label of ["0.01 %", "1 %", "100 %"]) expect(html).toContain(`>${label}</span>`);
+  // Five labels however many stops there are: with 100 stops one label per
+  // stop was unreadable (maintainers, 2026-10-29).
+  it("labels the bar from 0 % to 100 %, five labels for any number of stops", () => {
+    const many = { ...tokens, stops: Array.from({ length: 100 }, () => "#888888") };
+    for (const legend of [html, legendHtml("Alpha", many, false)]) {
+      const labels = [...legend.matchAll(/<span style="left:[^"]*">([^<]*)<\/span>/g)];
+      expect(labels.map((m) => m[1])).toEqual(["0 %", "25 %", "50 %", "75 %", "100 %"]);
+    }
     expect(html).toContain(">rarer<");
     expect(html).toContain(">more often<");
   });
 
-  it("says how far apart the steps are", () => {
-    expect(html).toContain("Log scale: each step is about 100 times more often.");
+  it("says that the scale is linear", () => {
+    expect(html).toContain("The colour follows the share evenly, from 0 % to 100 %.");
   });
 
-  it("leaves the step out when every value is the same (there are no steps)", () => {
-    expect(legendHtml("Alpha", { min: 5, max: 5 }, tokens)).not.toContain("Log scale");
-  });
-
-  it("has a key for each of the four marks", () => {
+  it("has a key for each mark", () => {
     expect(html).toContain("qb-co-cell is-seen");
+    expect(html).toContain("qb-co-cell is-seen is-full");
     expect(html).toContain("qb-co-cell is-never");
     expect(html).toContain("qb-co-cell is-own");
-    expect(html).toContain("qb-co-cell is-too-rare");
     for (const words of [
       "Seen together",
+      "Seen together in every event (100 %)",
       "Never seen together",
       "Alpha itself",
-      "Seen together, too rare to colour",
     ]) {
       expect(html).toContain(`<span>${words}</span>`);
     }
   });
 
-  it("says that a square opens the dictionary", () => {
-    expect(html).toContain("Click a square to open that facet in the data dictionary.");
+  it("has the toggle for the names above the squares, saying whether it is on", () => {
+    expect(html).toContain('data-action="co-names" aria-pressed="false"');
+    expect(legendHtml("Alpha", tokens, true)).toContain(
+      'data-action="co-names" aria-pressed="true"',
+    );
   });
 
-  // A row without a range: every value it has is too rare for a number,
-  // so there is no scale, but the marks still need their keys.
-  it("keeps the sentence and the keys without a bar when every value is too rare", () => {
-    const rare = legendHtml("Alpha", null, tokens);
-    expect(rare).toContain("How often each facet is seen together with <strong>Alpha</strong>");
-    expect(rare).toContain("Every value is too small to colour.");
-    expect(rare).not.toContain("linear-gradient");
-    expect(rare).not.toContain("Log scale");
-    for (const kind of ["is-seen", "is-never", "is-own", "is-too-rare"]) {
-      expect(rare).toContain(`qb-co-cell ${kind}`);
-    }
+  it("says that a square opens the dictionary", () => {
+    expect(html).toContain("Click a square to open that facet in the data dictionary.");
   });
 });
 

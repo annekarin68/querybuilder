@@ -295,6 +295,9 @@ export interface EscapeContext {
   floating: boolean;
   collapsed: boolean;
   focusInDocs: boolean;
+  /** The focus is on a co-occurrence square (`data-opens-docs`): it opens
+   *  the dictionary and keeps the focus, so its Escape must close it too. */
+  focusOnOpener: boolean;
 }
 
 /**
@@ -302,9 +305,11 @@ export interface EscapeContext {
  * first clears a search that has text in it (the search box handles that and
  * marks the event as used), and only the next Escape closes the dictionary:
  * a user who wanted to clear their search must not lose the whole panel.
+ * It works with the focus in the dictionary or on the square that opened it.
  */
 export function escapeClosesDocs(c: EscapeContext): boolean {
-  return c.key === "Escape" && !c.defaultPrevented && c.floating && !c.collapsed && c.focusInDocs;
+  const focusFits = c.focusInDocs || c.focusOnOpener;
+  return c.key === "Escape" && !c.defaultPrevented && c.floating && !c.collapsed && focusFits;
 }
 
 /**
@@ -340,33 +345,6 @@ export function detailsToOpen<T extends ParentChain<T>>(el: T, panel: T): T[] {
     if (node.tagName === "DETAILS") chain.unshift(node);
   }
   return chain;
-}
-
-/**
- * Where the focus goes back to when the dictionary folds: the co-occurrence
- * cell or box that opened it at a facet (main.ts). `remember` keeps a finder,
- * not the element, as a repaint may replace the cell meanwhile. Only a
- * direct round trip goes back (cell, dictionary, close): once the focus
- * leaves the dictionary for somewhere else, the cell is forgotten, and a
- * later close goes to the rail as usual. `take` gives it once.
- */
-export function createReturnFocus<T>() {
-  let finder: (() => T | null) | null = null;
-  return {
-    remember(find: () => T | null): void {
-      finder = find;
-    },
-    /** The focus left a dictionary element: `elsewhere` is true when it went
-     *  to something outside the dictionary (not within it, not to nothing). */
-    focusLeftDocs(elsewhere: boolean): void {
-      if (elsewhere) finder = null;
-    },
-    take(): T | null {
-      const find = finder;
-      finder = null;
-      return find?.() ?? null;
-    },
-  };
 }
 
 /** How long a card shown from the builder keeps its highlight. */
@@ -506,8 +484,9 @@ export function wireDocsSidebar(
   /**
    * Opens facet `facetId`'s card (its first one: a facet is listed under each
    * of its tags) and the section around it, scrolls it to the top of the
-   * panel, highlights it for a moment and puts the focus on its header, so
-   * the user lands on it with the keyboard too. The panel must be shown
+   * panel and highlights it for a moment. The focus stays where it was, on
+   * the co-occurrence square that asked for it, so the arrow keys can go on
+   * along the row (maintainers, 2026-10-29). The panel must be shown
    * already (app.showFacetInDictionary). False when no card has that facet.
    */
   function showFacet(facetId: string): boolean {
@@ -525,7 +504,6 @@ export function wireDocsSidebar(
     // page, to line the card up with the window's top.
     const offset = summary.getBoundingClientRect().top - container.getBoundingClientRect().top;
     container.scrollTop += offset - SCROLL_MARGIN_PX;
-    summary.focus({ preventScroll: true });
     // The highlight is a colour, faded in only where motion is welcome
     // (styles.css, `.is-highlighted`).
     if (highlight) {

@@ -30,20 +30,6 @@ function rovingGroupKey(group: Element): string | null {
   return `${blockId} ${group.classList.contains("qb-co-row") ? "row" : "chart"}`;
 }
 
-/** The cell or box `itemId` of the row or chart `groupKey` (rovingGroupKey),
- *  as it is on screen now (a repaint replaces them), or null if it is gone. */
-function rovingItemOf(
-  container: HTMLElement,
-  groupKey: string,
-  itemId: string,
-): HTMLElement | null {
-  for (const group of container.querySelectorAll("[data-roving]")) {
-    if (rovingGroupKey(group) !== groupKey) continue;
-    return rovingItems(group).find((item) => rovingIdOf(item) === itemId) ?? null;
-  }
-  return null;
-}
-
 /** The caption a row or chart shows its items in (`CAPTION`): the row's is
  *  at the end of its block's first head line (blockHtml.ts), the chart's in
  *  the title line above the chart (coOccurrenceHtml.ts). */
@@ -155,30 +141,24 @@ export interface CoOccurrenceWiring {
 /**
  * Install the behaviour of the co-occurrence rows and charts on `container`
  * (the builder). Call ONCE, from `wireQueryBuilder`. `showFacetInDictionary`
- * opens the dictionary at a facet; its second argument finds the pressed cell
- * or box again (null when it is gone), for when the user closes it.
+ * opens the dictionary at a facet.
  */
 export function wireCoOccurrence(
   container: HTMLElement,
-  showFacetInDictionary: (facetId: string, returnFocusTo: () => HTMLElement | null) => void,
+  showFacetInDictionary: (facetId: string) => void,
 ): CoOccurrenceWiring {
   /** A cell or box (`data-opens-docs`) pressed, by a click or Enter: open
-   *  the dictionary at its facet. It is found again by the words the Tab
-   *  stops are remembered by, since a repaint may replace it meanwhile. */
-  function openInDictionary(item: HTMLElement): void {
-    const group = item.parentElement;
-    const groupKey = group ? rovingGroupKey(group) : null;
-    const facetId = item.dataset.facetId;
-    if (!groupKey || !facetId) return;
-    const itemId = rovingIdOf(item);
-    showFacetInDictionary(facetId, () => rovingItemOf(container, groupKey, itemId));
-  }
-
+   *  the dictionary at its facet, and keep (or put) the focus on it, so it
+   *  shows as chosen, its caption shows, and the arrow keys go on from it
+   *  (maintainers, 2026-10-29). A browser that does not focus a button on
+   *  a mouse click (Safari) gets the focus put there by hand. */
   function handleClick(target: Element): boolean {
     // A button's Enter and Space arrive here as a click too.
     const opener = target.closest<HTMLElement>("[data-roving] > [data-opens-docs]");
-    if (!opener) return false;
-    openInDictionary(opener);
+    const facetId = opener?.dataset.facetId;
+    if (!opener || !facetId) return false;
+    opener.focus();
+    showFacetInDictionary(facetId);
     return true;
   }
 

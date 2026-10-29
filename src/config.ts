@@ -7,6 +7,13 @@
  */
 
 /**
+ * The digit grouping and decimal mark of every number on screen (a BCP 47
+ * locale): "nb-NO" writes "12 345" and "28,86". Only the marks: the words
+ * stay English ("1,2 billion"), as all text in the app is English.
+ */
+export const NUMBER_LOCALE = "nb-NO";
+
+/**
  * Facets shown first in the Matching events table, right after the event id,
  * in this order (`Facet.id`, the backend's label). The other facets follow by
  * facet number. A listed facet that no result holds gets no column. Empty by

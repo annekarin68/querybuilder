@@ -40,6 +40,7 @@ import { escapeHtml, paint } from "./panel";
 import { aboutCtxOf } from "./aboutPanel";
 import { footerHtml, groupHtml, type BlockCtx } from "./blockHtml";
 import { coCtxOf } from "./coOccurrenceHtml";
+import { fitFoldedRows } from "./fieldRowsFit";
 import { wireCoOccurrence } from "./coOccurrenceWiring";
 import { readCoTokens } from "./coTokens";
 import { pickedOperatorId } from "./fieldRows";
@@ -112,7 +113,7 @@ export function revealNode(container: HTMLElement, nodeId: string): void {
 function fieldRowOf(container: HTMLElement, blockId: string, fieldId: string): HTMLElement | null {
   return (
     nodeOf(container, blockId)?.querySelector<HTMLElement>(
-      `.qb-field-row:not(.is-stray)[data-field-id="${CSS.escape(fieldId)}"]`,
+      `.qb-field-row:not(.is-stray, [hidden])[data-field-id="${CSS.escape(fieldId)}"]`,
     ) ?? null
   );
 }
@@ -202,6 +203,7 @@ export const QUERY_BUILDER_KEYS: (keyof AppState)[] = [
   "expandedBlockIds",
   "openField",
   "panelTab",
+  "coNamesShown",
   "issues",
   "serverIssues",
   "facets",
@@ -229,7 +231,7 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
     panelTab: state.panelTab,
     // Worked out once per paint, not per block: every block's row shows the
     // same facets on the same colour scale.
-    co: state.facets ? coCtxOf(state.facets, readCoTokens()) : null,
+    co: state.facets ? coCtxOf(state.facets, readCoTokens(), state.coNamesShown) : null,
   };
   paint(
     el,
@@ -277,15 +279,16 @@ export function wireQueryBuilder(
     openFieldRow(ref: FieldRef | null): void;
     /** "+ N more fields" / "Show fewer fields" on a block. Not a query edit. */
     toggleFields(blockId: string): void;
-    /** A panel tab pressed (the open one again: hide the panel). */
-    setPanelTab(tab: PanelTab): void;
+    /** A panel tab pressed; `isOpen`: it was the open one, so hide the panel. */
+    setPanelTab(tab: PanelTab, isOpen: boolean): void;
+    /** The legend's "Show facet names above the squares". */
+    toggleCoNames(): void;
     /** The field About describes (null: the block's facet). Repaints only
      *  the About panels, never the rows. */
     selectFieldForPanel(ref: FieldRef | null): void;
     /** A co-occurrence cell or chart box was pressed: open the dictionary at
-     *  facet `facetId`. `returnFocusTo` finds that cell or box again (null
-     *  when it is gone), for when the user closes the dictionary. */
-    showFacetInDictionary(facetId: string, returnFocusTo: () => HTMLElement | null): void;
+     *  facet `facetId`, leaving the focus on the cell or box. */
+    showFacetInDictionary(facetId: string): void;
   },
 ): (state: AppState) => void {
   // "Seen together": the rows of cells, the charts and their popovers.
@@ -465,8 +468,10 @@ export function wireQueryBuilder(
     if (btn?.dataset.action === "start-fresh") return hooks.onStartFresh();
     if (btn?.dataset.action === "dismiss-restored") return hooks.onDismissRestored();
     // The panel's tabs switch the panel of every block, not one node.
-    if (btn?.dataset.action === "panel-seen") return hooks.setPanelTab("seen");
-    if (btn?.dataset.action === "panel-about") return hooks.setPanelTab("about");
+    const isOpen = btn?.getAttribute("aria-pressed") === "true";
+    if (btn?.dataset.action === "panel-seen") return hooks.setPanelTab("seen", isOpen);
+    if (btn?.dataset.action === "panel-about") return hooks.setPanelTab("about", isOpen);
+    if (btn?.dataset.action === "co-names") return hooks.toggleCoNames();
     if (btn?.dataset.action === "about-facet") return hooks.selectFieldForPanel(null);
     // A field's name selects it for About. The name is plain text, not a
     // control, so the focus does not move there and `focusin` below misses it.
@@ -735,11 +740,32 @@ export function wireQueryBuilder(
     afterPointer.run(() => commitTypedValue(row));
   });
 
+  // A folded facet shows as many of its hidden rows as fit beside its panel
+  // (fieldRowsFit.ts): after every paint, and again whenever a panel changes
+  // size (the window, the dictionary, the chart's own aspect ratio).
+  const panelSizes =
+    typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver((entries) =>
+          entries.forEach((entry) => {
+            const body = entry.target.parentElement;
+            if (body) fitFoldedRows(body);
+          }),
+        );
+
   return (state) => {
     // An open popover is opened again after the paint (coOccurrenceWiring.ts).
     const openPopoverId = coOccurrence.beforePaint();
     paintQueryBuilder(container, state);
     coOccurrence.afterPaint(openPopoverId);
+    // The old panels are gone with the repaint: watch the new ones (the
+    // observer also fits each one once, when it starts watching it).
+    panelSizes?.disconnect();
+    container.querySelectorAll<HTMLElement>(".qb-block-body").forEach((body) => {
+      fitFoldedRows(body);
+      const panel = body.querySelector(":scope > .qb-panel");
+      if (panel) panelSizes?.observe(panel);
+    });
     onDropdownChange(container, (el) => {
       const part = el.querySelector("select")?.dataset.part;
       if (part === "add-facet") return handleAddFacet(el);

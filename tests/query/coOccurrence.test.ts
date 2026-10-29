@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import type { CoValue, Facet } from "../../src/model";
 import {
+  alwaysTogetherIds,
   connectedFacets,
   coOccurrenceColour,
-  coOccurrenceRange,
   formatPercent,
-  legendTicks,
+  isFull,
+  LEGEND_TICKS,
   roundPercentText,
   scalePosition,
   squarify,
-  stepFactorText,
   type Rect,
 } from "../../src/query/coOccurrence";
 
@@ -48,38 +48,51 @@ describe("connectedFacets", () => {
   });
 });
 
-describe("coOccurrenceRange", () => {
-  it("ignores own values, zeros and too-rare values", () => {
-    const a = facet("a", { b: co("0.5"), c: co("0"), d: co("1e-400", true) });
-    const b = facet("b", { a: co("20") });
-    expect(coOccurrenceRange([a, b])).toEqual({ min: 0.5, max: 20 });
+describe("alwaysTogetherIds", () => {
+  it("finds the facets at 100 % in every other facet's map", () => {
+    const a = facet("a", { b: co("100"), c: co("100") });
+    const b = facet("b", { a: co("40"), c: co("100") });
+    const c = facet("c", { a: co("100"), b: co("100") });
+    // c is 100 in a and b; b only in a and c; a only in c.
+    expect([...alwaysTogetherIds([a, b, c])]).toEqual(["b", "c"]);
   });
-  it("is null when nothing is positive", () => {
-    expect(coOccurrenceRange([facet("a"), facet("b", { a: co("0") })])).toBeNull();
+  it("does not count a facet that is not seen with any other, or has no data", () => {
+    const a = facet("a", { b: co("100") });
+    const b = facet("b", { a: co("100") });
+    const empty = facet("e", { a: co("0"), b: co("0") });
+    const noData = { ...facet("n"), coOccurrence: null };
+    expect([...alwaysTogetherIds([a, b, empty, noData])]).toEqual(["a", "b"]);
+  });
+  it("is empty when no facet is seen with another", () => {
+    expect(alwaysTogetherIds([facet("a"), facet("b", { a: co("0") })]).size).toBe(0);
   });
 });
 
 describe("scalePosition", () => {
-  const range = { min: 1, max: 10000 };
-  it("is 0 at the minimum, 1 at the maximum and 0.5 at the geometric middle", () => {
-    expect(scalePosition(1, range)).toBe(0);
-    expect(scalePosition(10000, range)).toBe(1);
-    expect(scalePosition(100, range)).toBeCloseTo(0.5, 10);
+  // Linear, from 0 % to 100 % (the data analysts, 2026-10-29).
+  it("is the share itself, from 0 to 1", () => {
+    expect(scalePosition(0)).toBe(0);
+    expect(scalePosition(25)).toBe(0.25);
+    expect(scalePosition(100)).toBe(1);
   });
-  it("is 1 when the range is one value", () => {
-    expect(scalePosition(3, { min: 3, max: 3 })).toBe(1);
+  it("stays between 0 and 1", () => {
+    expect(scalePosition(-3)).toBe(0);
+    expect(scalePosition(120)).toBe(1);
+  });
+  it("isFull is true only at 100 %", () => {
+    expect(isFull(100)).toBe(true);
+    expect(isFull(99.99)).toBe(false);
   });
 });
 
 describe("coOccurrenceColour", () => {
   const stops = ["#000000", "#ff0000", "#ffffff"];
-  const range = { min: 1, max: 100 };
-  it("gives the first stop at the minimum and the last at the maximum", () => {
-    expect(coOccurrenceColour(1, range, stops)).toBe("#000000");
-    expect(coOccurrenceColour(100, range, stops)).toBe("#ffffff");
+  it("gives the first stop at 0 % and the last at 100 %", () => {
+    expect(coOccurrenceColour(0, stops)).toBe("#000000");
+    expect(coOccurrenceColour(100, stops)).toBe("#ffffff");
   });
   it("gives a stop exactly at its position", () => {
-    expect(coOccurrenceColour(10, range, stops)).toBe("#ff0000");
+    expect(coOccurrenceColour(50, stops)).toBe("#ff0000");
   });
 });
 
@@ -127,38 +140,15 @@ describe("squarify", () => {
 });
 
 describe("legend text", () => {
-  it("labels 7 stops from 1e-12 % to 100 %", () => {
-    const ticks = legendTicks({ min: 1e-12, max: 100 }, 7);
-    expect(ticks).toHaveLength(7);
-    expect(ticks[0]?.label).toBe("1e-12 %");
-    expect(ticks[6]?.label).toBe("100 %");
-    expect(ticks[0]?.at).toBe(0);
-    expect(ticks[6]?.at).toBe(1);
+  // Five labels whatever the number of stops: one per stop could not be
+  // read with 100 stops (maintainers, 2026-10-29).
+  it("has five labels from 0 % to 100 %", () => {
+    expect(LEGEND_TICKS.map((t) => t.label)).toEqual(["0 %", "25 %", "50 %", "75 %", "100 %"]);
+    expect(LEGEND_TICKS.map((t) => t.at)).toEqual([0, 0.25, 0.5, 0.75, 1]);
   });
-  it("says how many times more often each step is", () => {
-    expect(stepFactorText({ min: 1e-4, max: 100 }, 4)).toBe("about 100 times");
-  });
-  it("writes values below 1 % as plain decimals down to 0.001 %", () => {
-    const labels = (min: number, max: number, n: number) =>
-      legendTicks({ min, max }, n).map((t) => t.label);
-    expect(labels(0.5, 50, 3)).toEqual(["0.5 %", "5 %", "50 %"]);
-    expect(labels(0.04, 4, 2)).toEqual(["0.04 %", "4 %"]);
-    expect(labels(0.001, 0.1, 3)).toEqual(["0.001 %", "0.01 %", "0.1 %"]);
-    // Below 0.001 % a decimal would be a row of zeros: the exponent, as the
-    // backend writes such values in the captions.
-    expect(labels(1e-4, 1, 2)).toEqual(["1e-4 %", "1 %"]);
-  });
-  it("writes a huge step as a power of ten, not a row of digits", () => {
-    // Two stops over 1e-12 … 100: one step of 10^14.
-    expect(stepFactorText({ min: 1e-12, max: 100 }, 2)).toBe("about 10¹⁴ times");
-    expect(stepFactorText({ min: 1e-12, max: 3.2e2 }, 2)).toBe("about 3.2 × 10¹⁴ times");
-    // Below a million the digits are still easy to read.
-    expect(stepFactorText({ min: 1, max: 500_000 }, 2)).toBe("about 500000 times");
-    // Judged after rounding: 999 000 is "about a million".
-    expect(stepFactorText({ min: 1, max: 999_000 }, 2)).toBe("about 10⁶ times");
-  });
-  it("formatPercent adds the unit to the backend's text", () => {
+  it("formatPercent adds the unit to the backend's text, with the app's decimal mark", () => {
     expect(formatPercent("1.2e-20")).toBe("1.2e-20 %");
+    expect(formatPercent("76.2", ",")).toBe("76,2 %");
   });
 });
 
@@ -181,15 +171,12 @@ describe("robustness", () => {
     expect(rects.map((r) => r.w * r.h)).toEqual([0, 10000, 0]);
   });
   it("needs at least two stops", () => {
-    const range = { min: 1, max: 10 };
-    expect(() => coOccurrenceColour(5, range, ["#000000"])).toThrow(
+    expect(() => coOccurrenceColour(5, ["#000000"])).toThrow(
       "coOccurrenceColour needs at least two stops",
     );
-    expect(() => legendTicks(range, 1)).toThrow();
-    expect(() => stepFactorText(range, 1)).toThrow();
   });
   it("scalePosition of NaN is 0", () => {
-    expect(scalePosition(NaN, { min: 1, max: 10 })).toBe(0);
+    expect(scalePosition(NaN)).toBe(0);
   });
 });
 
@@ -199,14 +186,6 @@ describe("facets without data", () => {
   it("connectedFacets counts a facet without data when another facet names it", () => {
     const a = facet("a", { b: co("5") });
     expect(connectedFacets([a, noData("b"), noData("c")]).map((f) => f.id)).toEqual(["a", "b"]);
-  });
-
-  it("coOccurrenceRange skips a facet without data", () => {
-    expect(coOccurrenceRange([noData("a"), facet("b", { a: co("7") })])).toEqual({
-      min: 7,
-      max: 7,
-    });
-    expect(coOccurrenceRange([noData("a")])).toBeNull();
   });
 });
 
@@ -246,9 +225,9 @@ describe("roundPercentText", () => {
   });
 });
 
-describe("squarify with keepLast", () => {
+describe("squarify with pinned values", () => {
   it("lays the last value out last, in the bottom-right corner, even when it is the largest", () => {
-    const rects = squarify([5, 3, 2, 400], 100, 60, true);
+    const rects = squarify([5, 3, 2, 400], 100, 60, { last: true });
     const last = rects[3]!;
     expect(last.x + last.w).toBeCloseTo(100);
     expect(last.y + last.h).toBeCloseTo(60);
@@ -257,6 +236,16 @@ describe("squarify with keepLast", () => {
   });
 
   it("does the same as plain squarify when the last value is the smallest", () => {
-    expect(squarify([5, 3, 2], 100, 60, true)).toEqual(squarify([5, 3, 2], 100, 60));
+    expect(squarify([5, 3, 2], 100, 60, { last: true })).toEqual(squarify([5, 3, 2], 100, 60));
+  });
+
+  it("lays the first value out first, top-left, even when it is the smallest", () => {
+    const rects = squarify([1, 30, 20, 10, 5], 100, 60, { first: true, last: true });
+    expect(rects[0]).toMatchObject({ x: 0, y: 0 });
+    const last = rects[4]!;
+    expect(last.x + last.w).toBeCloseTo(100);
+    expect(last.y + last.h).toBeCloseTo(60);
+    const area = rects.reduce((sum, r) => sum + r.w * r.h, 0);
+    expect(area).toBeCloseTo(100 * 60);
   });
 });

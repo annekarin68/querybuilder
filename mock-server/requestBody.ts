@@ -2,6 +2,8 @@
 // src/api/types.ts) before anything reads it. The body is untrusted JSON; this
 // is also a working reference for the real backend's own check.
 
+import { NODE_KIND } from "../src/api/types";
+
 export const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 export const isScalar = (v: unknown) =>
@@ -14,11 +16,11 @@ const isNonEmptyString = (v: unknown) => typeof v === "string" && v !== "";
  */
 export function queryProblem(node: unknown, at = "query"): string | null {
   if (!isObject(node)) return `${at} must be an object.`;
-  if (node.kind !== "group" && node.kind !== "facet") {
-    return `${at}.kind must be "group" or "facet".`;
+  if (node.kind !== NODE_KIND.group && node.kind !== NODE_KIND.facet) {
+    return `${at}.kind must be "${NODE_KIND.group}" or "${NODE_KIND.facet}".`;
   }
   if (typeof node.id !== "string") return `${at}.id must be a string.`;
-  if (node.kind === "group") {
+  if (node.kind === NODE_KIND.group) {
     if (node.operator !== "AND" && node.operator !== "OR") {
       return `${at}.operator must be "AND" or "OR".`;
     }
@@ -47,7 +49,7 @@ export function queryProblem(node: unknown, at = "query"): string | null {
 
 /** What is wrong with `c` as a RequestFieldCondition (a set field of a block), or null. */
 function fieldConditionProblem(c: unknown, at: string): string | null {
-  if (!isObject(c) || c.kind !== "condition") return `${at} must be a condition.`;
+  if (!isObject(c) || c.kind !== NODE_KIND.condition) return `${at} must be a condition.`;
   if (typeof c.id !== "string") return `${at}.id must be a string.`;
   for (const key of ["field_id", "operator_id"] as const) {
     if (!isNonEmptyString(c[key])) return `${at}.${key} must be a non-empty string.`;

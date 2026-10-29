@@ -13,8 +13,6 @@ import type {
 import type { FieldCatalog } from "./query/fieldCatalog";
 import type { OpenSaved } from "./query/saved";
 
-export type ActiveView = "filter" | "review" | "approval" | "done";
-
 // Each async part of the state is a union on `status`: a field exists only in
 // the states where it means something, so TypeScript rejects impossible
 // combinations like "authenticated, but no user".
@@ -90,7 +88,6 @@ export interface AppState {
   /** The `Database.id`s of the databases the query runs against. Empty =
    *  nothing runs. */
   selectedDatabaseIds: string[];
-  activeView: ActiveView;
 
   /** The query tree. Its root is always a group. */
   query: Group;
@@ -110,6 +107,10 @@ export interface AppState {
    *  hidden for all blocks at once, and the rows take the whole width.
    *  Pressing the open tab again hides it. Display state, like the two above. */
   panelTab: PanelTab | null;
+  /** Whether every co-occurrence row shows its facets' names above the
+   *  cells (the legend's toggle). Display state, off at first: the names
+   *  make every block taller. */
+  coNamesShown: boolean;
   /** The field the About panel describes (a label clicked, or the focus moved
    *  into its row), or null: About describes the block's facet. Only the
    *  About panels repaint when it changes (main.ts, `ABOUT_PANEL_KEYS`), never
@@ -167,12 +168,12 @@ export const initialState: AppState = {
   auth: { status: "loading" },
   compliance: { status: "loading" },
   selectedDatabaseIds: [],
-  activeView: "filter",
   query: emptyQuery(),
   expandedBlockIds: [],
   openField: null,
   // The co-occurrence chart is the panel's news; About is one click away.
   panelTab: "seen",
+  coNamesShown: false,
   selectedField: null,
   issues: [],
   serverIssues: [],

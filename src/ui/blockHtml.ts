@@ -14,7 +14,14 @@ import {
   type Position,
 } from "./builderParts";
 import { aboutPanelHtml, aboutTitle, type AboutCtx } from "./aboutPanel";
-import { CAPTION, coRowHtml, hasCoRow, seenTogetherHtml, type CoCtx } from "./coOccurrenceHtml";
+import {
+  CAPTION,
+  coRowHtml,
+  hasCoRow,
+  offersSeenTogether,
+  seenTogetherHtml,
+  type CoCtx,
+} from "./coOccurrenceHtml";
 import { legendHtml, legendToggleHtml } from "./legendHtml";
 import { facetNameOrId } from "./facetWords";
 import { fieldRowsHtml } from "./fieldRows";
@@ -75,13 +82,24 @@ function logicButton(on: boolean, action: string, label: string): string {
  * focus stays on the pressed one across the repaint ("Keyboard focus across
  * repaints").
  */
-function panelTabsHtml(open: PanelTab | null): string {
+function panelTabsHtml(open: PanelTab | null, offersSeen: boolean): string {
   const tab = (tab: PanelTab, label: string) => {
     const on = open === tab;
     const hide = on ? ` title="Hide panel"` : "";
     return `<button type="button" class="qb-tab-btn${on ? " is-on" : ""}" data-action="panel-${tab}" aria-pressed="${on}"${hide}>${label}</button>`;
   };
-  return `<span class="qb-panel-tabs" role="group" aria-label="Panel beside the fields">${tab("seen", "Seen together")}${tab("about", "About")}</span>`;
+  const seen = offersSeen ? tab("seen", "Seen together") : "";
+  return `<span class="qb-panel-tabs" role="group" aria-label="Panel beside the fields">${seen}${tab("about", "About")}</span>`;
+}
+
+/**
+ * The tab the blocks show: `AppState.panelTab`, except that Seen together
+ * is only offered when there is co-occurrence data (`offersSeenTogether`);
+ * without it a block shows About in its place. The state is left as it is,
+ * so the chart comes back by itself once data arrives.
+ */
+export function shownPanelTab(open: PanelTab | null, offersSeen: boolean): PanelTab | null {
+  return open === "seen" && !offersSeen ? "about" : open;
 }
 
 /** The block's facet's name: the field catalog's, or its id when the
@@ -98,7 +116,7 @@ function legendButton(co: CoCtx, block: FacetBlock, name: string, where: "row" |
   return legendToggleHtml(
     popoverId(block.id, where),
     action,
-    legendHtml(name, co.range, co.tokens),
+    legendHtml(name, co.tokens, co.showNames),
   );
 }
 
@@ -134,14 +152,19 @@ function rowCaption(ctx: BlockCtx, block: FacetBlock): string {
 }
 
 /**
- * The head's second line: which occurrence the block means. Only once a
- * field is set (with none, the block just says the facet is present or
- * absent); ALL / ANY only once two are, as with one field they change nothing
- * (MIN_FIELDS_TO_COMBINE). Empty when there is nothing to say.
+ * The head's second line: which occurrence the block means. With no field
+ * set it says that the block asks only whether the facet is there, in the
+ * words of the query's summary ("Thing is present"): users did not know
+ * that empty fields are a valid filter (maintainers, 2026-10-29). ALL / ANY
+ * only once two fields are set, as with one they change nothing
+ * (MIN_FIELDS_TO_COMBINE).
  */
-function matchLineHtml(block: FacetBlock): string {
+function matchLineHtml(block: FacetBlock, facetName: string): string {
   const setCount = block.conditions.length;
-  if (setCount === 0) return "";
+  if (setCount === 0) {
+    const state = block.negated ? "is absent" : "is present";
+    return `<div class="qb-block-line qb-block-match"><span class="qb-group-label">No field set: matches every event where <strong>${escapeHtml(facetName)} ${state}</strong>.</span></div>`;
+  }
   const words =
     setCount < MIN_FIELDS_TO_COMBINE
       ? `<span class="qb-group-label">an occurrence where the set field matches</span>`
@@ -155,9 +178,11 @@ function matchLineHtml(block: FacetBlock): string {
  *  (`paintAboutPanels`). `tabindex="-1"`: About takes the focus by script when
  *  the button the focus was on goes ("← About"); its `aria-label` names it
  *  for screen readers and for focus memory across a builder repaint. */
-function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
+function panelHtml(ctx: BlockCtx, block: FacetBlock, tab: PanelTab | null): string {
   const id = escapeHtml(block.id);
-  if (ctx.panelTab === "seen") {
+  // "seen" is only shown with a context (`shownPanelTab`); `ctx.co` says so
+  // to TypeScript too.
+  if (tab === "seen" && ctx.co) {
     // The tab's own "?" only with a row, like the row's (coTopHtml).
     const legend = hasRow(ctx.co, block)
       ? legendButton(ctx.co, block, facetNameOf(ctx, block), "seen")
@@ -165,7 +190,7 @@ function panelHtml(ctx: BlockCtx, block: FacetBlock): string {
     const chart = seenTogetherHtml(ctx.co, block, legend);
     return `<div class="qb-panel"><div class="qb-seen" data-block-id="${id}">${chart}</div></div>`;
   }
-  if (ctx.panelTab === "about") {
+  if (tab === "about") {
     return `<div class="qb-panel"><div class="qb-about" data-block-id="${id}" tabindex="-1" role="group" aria-label="${escapeHtml(aboutTitle(ctx, block))}">${aboutPanelHtml(ctx, block)}</div></div>`;
   }
   return "";
@@ -198,7 +223,9 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
   // The tabs and ✕ share one right-aligned box (as a group's actions
   // do): when the line wraps they move together and stay on the right, so the
   // ✕ is never alone at the start of a line.
-  const actions = `<span class="qb-block-actions">${panelTabsHtml(ctx.panelTab)}${remove}</span>`;
+  const offersSeen = offersSeenTogether(ctx.co);
+  const tab = shownPanelTab(ctx.panelTab, offersSeen);
+  const actions = `<span class="qb-block-actions">${panelTabsHtml(tab, offersSeen)}${remove}</span>`;
   const line1 = `<div class="qb-block-line">${start}${has}${actions}${rowCaption(ctx, block)}</div>`;
   const expanded = ctx.expandedBlockIds.includes(block.id);
   const openFieldId = ctx.openField?.blockId === block.id ? ctx.openField.fieldId : null;
@@ -208,15 +235,15 @@ export function blockHtml(ctx: BlockCtx, block: FacetBlock, position: Position):
     expanded,
     openFieldId,
   );
-  const panel = panelHtml(ctx, block);
+  const panel = panelHtml(ctx, block, tab);
   // `shows-about`: a field's name selects it for About, so styles.css gives
   // the names a pointer cursor then. (With Seen together a click on a name
   // still selects, but nothing on screen would show it.)
   const bodyClasses = ["qb-block-body"];
   if (panel) bodyClasses.push("has-panel");
-  if (ctx.panelTab === "about") bodyClasses.push("shows-about");
+  if (tab === "about") bodyClasses.push("shows-about");
   const body = `<div class="${bodyClasses.join(" ")}"><div class="qb-field-rows">${rows}</div>${panel}</div>`;
-  return `<div class="qb-block ${tone}" data-node-id="${id}">${coTop}<div class="qb-block-head">${line1}${matchLineHtml(block)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
+  return `<div class="qb-block ${tone}" data-node-id="${id}">${coTop}<div class="qb-block-head">${line1}${matchLineHtml(block, name)}</div>${issuesHtml(block.id, ctx.issues)}${body}</div>`;
 }
 
 /** The "+ Facet" picker: one choice per facet. Choosing one adds a block to

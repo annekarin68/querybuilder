@@ -6,6 +6,7 @@ import {
   showsFoldButton,
   visibleFieldIds,
 } from "../../src/ui/fieldRows";
+import { extraRowsToShow } from "../../src/ui/fieldRowsFit";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { newBlock, newFieldCondition } from "../../src/query/tree";
 import type { FacetBlock, FieldCondition } from "../../src/query/types";
@@ -40,14 +41,35 @@ describe("visibleFieldIds", () => {
       hiddenCount: 0,
     });
   });
-  it("folds a large facet to the first 3, the set ones and the open one, in field order", () => {
-    expect(visibleFieldIds(ids, new Set(["f"]), false, "e")).toEqual({
-      shown: ["a", "b", "c", "e", "f"],
-      hiddenCount: 2,
+  it("folds a large facet to its first 3 while none is set or open", () => {
+    expect(visibleFieldIds(ids, new Set(), false, null)).toEqual({
+      shown: ["a", "b", "c"],
+      hiddenCount: 4,
     });
+  });
+  // The first empty rows would only take room next to the set ones
+  // (maintainers, 2026-10-29).
+  it("folds a large facet to the set ones and the open one, in field order, once any is", () => {
+    expect(visibleFieldIds(ids, new Set(["f"]), false, "e")).toEqual({
+      shown: ["e", "f"],
+      hiddenCount: 5,
+    });
+    expect(visibleFieldIds(ids, new Set(["b"]), false, null).shown).toEqual(["b"]);
   });
   it("shows everything when expanded", () => {
     expect(visibleFieldIds(ids, new Set(), true, null).hiddenCount).toBe(0);
+  });
+});
+
+describe("extraRowsToShow", () => {
+  it("shows as many whole rows as fit into the spare height, at most the hidden ones", () => {
+    expect(extraRowsToShow(95, 30, 4)).toBe(3);
+    expect(extraRowsToShow(29, 30, 4)).toBe(0);
+    expect(extraRowsToShow(500, 30, 4)).toBe(4);
+  });
+  it("shows none without room or without a height", () => {
+    expect(extraRowsToShow(-10, 30, 4)).toBe(0);
+    expect(extraRowsToShow(100, 0, 4)).toBe(0);
   });
 });
 
@@ -105,21 +127,25 @@ describe("fieldRowsHtml", () => {
 
   it("folds a large facet and says how many fields are hidden", () => {
     const html = fieldRowsHtml(ctx, block("thing"), false, null);
-    expect(html.match(/qb-field-row/g)).toHaveLength(3);
+    // Every field has a row; the folded ones are drawn hidden, for the
+    // browser to show where they fit beside the panel (fieldRowsFit.ts).
+    expect(html.match(/class="qb-field-row/g)).toHaveLength(7);
+    expect(html.match(/ hidden data-folded>/g)).toHaveLength(4);
     expect(html).toContain(
-      'data-action="toggle-fields" aria-expanded="false" aria-label="+ 4 more fields of Thing">+ 4 more fields</button>',
+      'data-action="toggle-fields" aria-expanded="false" aria-label="+ 4 more fields of Thing" data-facet-name="Thing">+ 4 more fields</button>',
     );
     expect(fieldRowsHtml(ctx, block("thing"), true, null)).toContain(
-      'aria-label="Show fewer fields of Thing">Show fewer fields</button>',
+      'aria-label="Show fewer fields of Thing" data-facet-name="Thing">Show fewer fields</button>',
     );
     expect(fieldRowsHtml(ctx, block("small"), false, null)).not.toContain("toggle-fields");
   });
 
   it("draws no fold button when a large facet hides nothing", () => {
-    // The set fields d..g plus the first three leave nothing behind the fold.
-    const setAll = ["d", "e", "f", "g"].map((id) => newFieldCondition(id, "gt", 1));
+    // Every field is set: nothing is behind the fold.
+    const setAll = ids.map((id) => newFieldCondition(id, "gt", 1));
     const html = fieldRowsHtml(ctx, block("thing", ...setAll), false, null);
-    expect(html.match(/qb-field-row/g)).toHaveLength(7);
+    expect(html.match(/class="qb-field-row/g)).toHaveLength(7);
+    expect(html).not.toContain("data-folded");
     expect(html).not.toContain("toggle-fields");
     expect(html).not.toContain("0 more");
     // Open, it still offers to close again.

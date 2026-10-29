@@ -1,17 +1,18 @@
-import type {
-  QueryRequest,
-  RequestFacet,
-  RequestFieldCondition,
-  RequestGroup,
-  RequestNode,
-  RequestScalar,
-  RequestValue,
-  SavedFacet,
-  SavedFieldCondition,
-  SavedGroup,
-  SavedNode,
-  SavedQueryRequest,
-  SavedValue,
+import {
+  NODE_KIND,
+  type QueryRequest,
+  type RequestFacet,
+  type RequestFieldCondition,
+  type RequestGroup,
+  type RequestNode,
+  type RequestScalar,
+  type RequestValue,
+  type SavedFacet,
+  type SavedFieldCondition,
+  type SavedGroup,
+  type SavedNode,
+  type SavedQueryRequest,
+  type SavedValue,
 } from "./types";
 import type { SavedQueryDraft } from "../model";
 import type { FacetBlock, FieldCondition, Group, QueryNode } from "../query/types";
@@ -38,12 +39,17 @@ function nodeOf(node: QueryNode): RequestNode {
 }
 
 function groupOf(g: Group): RequestGroup {
-  return { kind: "group", id: g.id, operator: g.operator, children: g.children.map(nodeOf) };
+  return {
+    kind: NODE_KIND.group,
+    id: g.id,
+    operator: g.operator,
+    children: g.children.map(nodeOf),
+  };
 }
 
 function facetOf(b: FacetBlock): RequestFacet {
   return {
-    kind: "facet",
+    kind: NODE_KIND.facet,
     id: b.id,
     facet_id: b.facetId,
     negated: b.negated,
@@ -55,7 +61,7 @@ function facetOf(b: FacetBlock): RequestFacet {
 function conditionOf(c: FieldCondition): RequestFieldCondition {
   if (c.operatorId === null) throw new Error(`Condition ${c.id} is unfinished and cannot be sent.`);
   return {
-    kind: "condition",
+    kind: NODE_KIND.condition,
     id: c.id,
     field_id: c.fieldId,
     operator_id: c.operatorId,
@@ -102,12 +108,12 @@ function savedNodeOf(node: QueryNode): SavedNode {
 }
 
 function savedGroupOf(g: Group): SavedGroup {
-  return { kind: "group", operator: g.operator, children: g.children.map(savedNodeOf) };
+  return { kind: NODE_KIND.group, operator: g.operator, children: g.children.map(savedNodeOf) };
 }
 
 function savedFacetOf(b: FacetBlock): SavedFacet {
   return {
-    kind: "facet",
+    kind: NODE_KIND.facet,
     facet_id: b.facetId,
     negated: b.negated,
     operator: b.operator,
@@ -117,7 +123,7 @@ function savedFacetOf(b: FacetBlock): SavedFacet {
 
 function savedConditionOf(c: FieldCondition): SavedFieldCondition {
   return {
-    kind: "condition",
+    kind: NODE_KIND.condition,
     field_id: c.fieldId,
     operator_id: c.operatorId,
     value: savedValueOf(c),

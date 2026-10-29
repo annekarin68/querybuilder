@@ -20,7 +20,7 @@ import { renderValueControl } from "./valueControl";
 
 /** Facets with more fields than this fold their unset rows. */
 export const FOLD_AFTER = 5;
-/** How many of a folded facet's first fields stay visible. */
+/** How many of a folded facet's first fields stay visible while none is set. */
 export const SHOWN_WHEN_FOLDED = 3;
 
 export interface RowCtx {
@@ -28,9 +28,12 @@ export interface RowCtx {
   issues: Issue[];
 }
 
-/** Which of a facet's fields get a row: all of them, or — for a large facet
- *  that is not expanded — the first few, the set ones and the open one,
- *  in the facet's order. */
+/** Which of a facet's fields get a visible row: all of them, or — for a
+ *  large facet that is not expanded — the set ones and the open one, in the
+ *  facet's order. Only while none is set or open does it show the first few
+ *  instead: empty rows next to a set one would only take room (maintainers,
+ *  2026-10-29). The browser may show more of the rest where they fit beside
+ *  the panel (fitFoldedRows, fieldRowsFit.ts). */
 export function visibleFieldIds(
   fieldIds: string[],
   setIds: ReadonlySet<string>,
@@ -38,9 +41,9 @@ export function visibleFieldIds(
   openFieldId: string | null,
 ): { shown: string[]; hiddenCount: number } {
   if (expanded || fieldIds.length <= FOLD_AFTER) return { shown: fieldIds, hiddenCount: 0 };
-  const shown = fieldIds.filter(
-    (id, i) => i < SHOWN_WHEN_FOLDED || setIds.has(id) || id === openFieldId,
-  );
+  const chosen = (id: string) => setIds.has(id) || id === openFieldId;
+  const anyChosen = fieldIds.some(chosen);
+  const shown = fieldIds.filter((id, i) => chosen(id) || (!anyChosen && i < SHOWN_WHEN_FOLDED));
   return { shown, hiddenCount: fieldIds.length - shown.length };
 }
 
@@ -100,9 +103,13 @@ function activeRowHtml(ctx: RowCtx, field: CatalogField, c: FieldCondition | und
     </div>${c ? issuesHtml(c.id, ctx.issues) : ""}`;
 }
 
-function unsetRowHtml(field: CatalogField): string {
+/** An unset row. A folded one (`folded`) is drawn `hidden`, with
+ *  `data-folded`: fitFoldedRows (fieldRowsFit.ts) shows it again where it
+ *  fits beside the panel. */
+function unsetRowHtml(field: CatalogField, folded = false): string {
   const name = escapeHtml(field.fieldName);
-  return `<div class="qb-field-row is-unset" data-field-id="${escapeHtml(field.fieldId)}">
+  const fold = folded ? " hidden data-folded" : "";
+  return `<div class="qb-field-row is-unset" data-field-id="${escapeHtml(field.fieldId)}"${fold}>
       <span class="qb-field-label">${name}<span class="qb-sr-only"> (not filtered)</span></span>
       <button type="button" class="qb-unset-slot" data-action="edit-field" data-field-id="${escapeHtml(field.fieldId)}" aria-label="Filter on ${name}" title="Filter on ${name}"></button>
       <span class="qb-unset-slot" aria-hidden="true"></span>
@@ -135,14 +142,20 @@ export function showsFoldButton(
   return fieldCount > FOLD_AFTER && (hiddenCount > 0 || expanded);
 }
 
-/** "+ N more fields" / "Show fewer fields". Its accessible name adds the
- *  facet's name: a page can hold several of these buttons. */
-function foldButton(hiddenCount: number, expanded: boolean, facetName: string): string {
-  const label = expanded
+/** The fold button's text: "+ 4 more fields" / "Show fewer fields". */
+export function foldLabel(hiddenCount: number, expanded: boolean): string {
+  return expanded
     ? "Show fewer fields"
     : `+ ${hiddenCount} more ${hiddenCount === 1 ? "field" : "fields"}`;
+}
+
+/** "+ N more fields" / "Show fewer fields". Its accessible name adds the
+ *  facet's name (`data-facet-name`, for fitFoldedRows): a page can hold
+ *  several of these buttons. */
+function foldButton(hiddenCount: number, expanded: boolean, facetName: string): string {
+  const label = foldLabel(hiddenCount, expanded);
   const name = `${label} of ${facetName}`;
-  return `<button type="button" class="ui mini basic button qb-more-fields" data-action="toggle-fields" aria-expanded="${expanded}" aria-label="${escapeHtml(name)}">${label}</button>`;
+  return `<button type="button" class="ui mini basic button qb-more-fields" data-action="toggle-fields" aria-expanded="${expanded}" aria-label="${escapeHtml(name)}" data-facet-name="${escapeHtml(facetName)}">${label}</button>`;
 }
 
 /** The rows of `block`: one per visible field of its facet, then any stray
@@ -167,12 +180,13 @@ export function fieldRowsHtml(
     expanded,
     openFieldId,
   );
-  const rows = fields
-    .filter((f) => shown.includes(f.fieldId))
-    .map((f) => {
-      const c = firstOf.get(f.fieldId);
-      return c || f.fieldId === openFieldId ? activeRowHtml(ctx, f, c) : unsetRowHtml(f);
-    });
+  // Every field gets a row; the hidden ones are only unset ones, drawn
+  // hidden (`unsetRowHtml`), as plain buttons they cost little.
+  const rows = fields.map((f) => {
+    const c = firstOf.get(f.fieldId);
+    if (c || f.fieldId === openFieldId) return activeRowHtml(ctx, f, c);
+    return unsetRowHtml(f, !shown.includes(f.fieldId));
+  });
   const facetName = findFacet(ctx.catalog, block.facetId)?.name ?? block.facetId;
   const fold = showsFoldButton(fields.length, hiddenCount, expanded)
     ? foldButton(hiddenCount, expanded, facetName)
