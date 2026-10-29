@@ -110,15 +110,23 @@ export function labelToShow(fits: boolean[]): number {
  * Hiding a label changes no size, so this cannot loop.
  */
 function hideCutLabels(chart: Element): void {
-  for (const box of chart.querySelectorAll(".qb-seen-box")) {
-    const labels = Array.from(box.querySelectorAll<HTMLElement>(".qb-seen-label"));
-    // Measured whether hidden or not: `visibility: hidden` keeps the layout.
-    const fits = labels.map(
-      (label) => label.scrollWidth <= label.clientWidth && label.scrollHeight <= label.clientHeight,
-    );
-    const shown = labelToShow(fits);
-    labels.forEach((label, i) => label.classList.toggle("is-cut", i !== shown));
-  }
+  const boxes = Array.from(chart.querySelectorAll(".qb-seen-box"), (box) =>
+    Array.from(box.querySelectorAll<HTMLElement>(".qb-seen-label")),
+  );
+  // Every size is read before any class changes: a read after a change
+  // makes the browser lay the page out again, once per box.
+  // Measured whether hidden or not: `visibility: hidden` keeps the layout.
+  const shown = boxes.map((labels) =>
+    labelToShow(
+      labels.map(
+        (label) =>
+          label.scrollWidth <= label.clientWidth && label.scrollHeight <= label.clientHeight,
+      ),
+    ),
+  );
+  boxes.forEach((labels, b) =>
+    labels.forEach((label, i) => label.classList.toggle("is-cut", i !== shown[b])),
+  );
 }
 
 /** What queryBuilder.ts calls to fit "Seen together" into its own handlers. */
@@ -192,8 +200,13 @@ export function wireCoOccurrence(
   function restoreTabStops(): void {
     for (const group of container.querySelectorAll("[data-roving]")) {
       const key = rovingGroupKey(group);
-      const ids = rovingItems(group).map(rovingIdOf);
-      setTabStop(group, tabStopIndex(ids, key ? tabStops.get(key) : undefined));
+      const remembered = key ? tabStops.get(key) : undefined;
+      // The markup already makes the first item the stop, so only a group
+      // with another remembered item is touched: a row can hold hundreds of
+      // cells, and setting each one's tabIndex on every paint was slow.
+      if (remembered === undefined) continue;
+      const index = tabStopIndex(rovingItems(group).map(rovingIdOf), remembered);
+      if (index !== 0) setTabStop(group, index);
     }
   }
 

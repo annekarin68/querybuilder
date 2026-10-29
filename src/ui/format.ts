@@ -16,13 +16,22 @@ import type { Database } from "../model";
 /** The language of the words in numbers and dates. */
 const WORDS_LOCALE = "en-GB";
 
+/** `separatorsOf`'s answers, by locale: building an `Intl.NumberFormat` is
+ *  slow, and the builder asks once for every co-occurrence cell it draws. */
+const separatorCache = new Map<string, { group: string; decimal: string }>();
+
 /** The digit grouping and decimal mark of `locale`: "\u00a0" and "," in Norwegian. */
 function separatorsOf(locale: string): { group: string; decimal: string } {
-  const parts = new Intl.NumberFormat(locale).formatToParts(12345.6);
-  return {
-    group: parts.find((p) => p.type === "group")?.value ?? ",",
-    decimal: parts.find((p) => p.type === "decimal")?.value ?? ".",
-  };
+  let marks = separatorCache.get(locale);
+  if (!marks) {
+    const parts = new Intl.NumberFormat(locale).formatToParts(12345.6);
+    marks = {
+      group: parts.find((p) => p.type === "group")?.value ?? ",",
+      decimal: parts.find((p) => p.type === "decimal")?.value ?? ".",
+    };
+    separatorCache.set(locale, marks);
+  }
+  return marks;
 }
 
 /** The decimal mark of every number on screen: "," in Norwegian. */

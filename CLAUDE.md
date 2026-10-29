@@ -64,8 +64,8 @@ logic lives in small pure functions that the Node-only tests can reach.
 
 Run `npm run typecheck && npm test && npm run lint && npm run build`, the same
 steps as CI (the build also runs `check:offline`), and, while `mock-server/`
-exists, `npm run typecheck:mock && npm run test:mock`: CI leaves the mock out,
-so this is the only place its tests and the `noBackendDataInSrc` guard run.
+exists, `npm run typecheck:mock && npm run test:mock` (CI's separate `mock`
+job, which also runs the `noBackendDataInSrc` guard).
 Then read your whole diff:
 
 - Is it easy for a junior developer to maintain?

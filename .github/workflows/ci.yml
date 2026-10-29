@@ -24,3 +24,25 @@ jobs:
       - run: npm run lint
       # Also runs check:offline, the guard for the LAN-only constraint.
       - run: npm run build
+
+  # The mock server's type-check and tests, among them the guard that src/
+  # names no backend data (noBackendDataInSrc). A job of its own, so a mock
+  # that drifted from src/api/types.ts shows as "mock" and never hides the
+  # app's own result. Skipped once mock-server/ is deleted.
+  mock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: present
+        run: echo "mock=$([ -d mock-server ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - if: steps.present.outputs.mock == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.present.outputs.mock == 'yes'
+        run: npm ci
+      - if: steps.present.outputs.mock == 'yes'
+        run: npm run typecheck:mock
+      - if: steps.present.outputs.mock == 'yes'
+        run: npm run test:mock

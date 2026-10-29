@@ -67,6 +67,19 @@ describe("coCtxOf", () => {
     expect([...ctx.always]).toEqual([]);
   });
 
+  // The builder repaints every block on every edit; with hundreds of facets,
+  // drawing the rows and charts again each time took about half a second.
+  it("draws a row and a chart once per dictionary, colours and names setting", () => {
+    const again = coCtxOf(facets, tokens) as CoCtx;
+    expect(again.memo).toBe(ctx.memo);
+    expect(coRowHtml(again, newBlock("a"))).toBe(coRowHtml(ctx, newBlock("a")));
+    expect(seenLayout(again, alpha)).toBe(seenLayout(ctx, alpha));
+    const named = coCtxOf(facets, tokens, true) as CoCtx;
+    expect(coRowHtml(named, newBlock("a"))).toContain("qb-co-name");
+    const recoloured = coCtxOf(facets, { ...tokens, stops: ["#ffffff", "#000000"] }) as CoCtx;
+    expect(coRowHtml(recoloured, newBlock("a"))).not.toBe(coRowHtml(ctx, newBlock("a")));
+  });
+
   // Display data never blocks the builder: without two colour stops (the
   // CSS did not load) there is simply no row and no chart.
   it("is null without two colour stops", () => {

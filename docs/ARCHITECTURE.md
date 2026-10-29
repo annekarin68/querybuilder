@@ -215,7 +215,8 @@ hidden second set of faces (`EASTER_EGG_MASCOT`: `egg-*.svg`, same rules as
 30 pickle images for a few seconds (`createClickCounter`, `startRain`,
 `src/ui/pickleRain.ts`; only files that load are used) and, when turning on,
 show `EASTER_EGG_TOAST`. Five more switch back. It rains even under reduced
-motion: five quick clicks on a hidden target are a deliberate act. The logo is
+motion: five quick clicks on a hidden target are a deliberate act. It stays in
+production, toast included (maintainers, 2026-10-29). The logo is
 `draggable="false"`, so a click that moves a few pixels is not swallowed as an
 image drag.
 
@@ -406,7 +407,7 @@ scripts/               check-offline.mjs ("Offline-first"), dev-servers.mjs (`np
 vite.config.ts         Dev proxy to DEV_BACKEND_URL, the offline plugins, THIRD-PARTY-NOTICES.txt.
 .env                   VITE_API_BASE (the API prefix and version) and DEV_BACKEND_URL.
 eslint.config.js       ESLint and the import airlocks (jQuery; mock-server/; src/api/types.ts).
-.github/workflows/ci.yml  typecheck, test, lint, build.
+.github/workflows/ci.yml  typecheck, test, lint, build; the mock's checks in a job of their own.
 tsconfig*.json         Strict TypeScript: everything (tsconfig.json), the mock (.mock), src/ for the build (.app).
 vitest.config.ts       Node environment: project "app" (`npm test`) and project "mock" (`npm run test:mock`).
 .claude/agents/        The subagents for planned work (CLAUDE.md, "Subagents").
@@ -1295,7 +1296,10 @@ same rule, so they agree. **A facet whose own map is `null`** gets no row, no
 cell in other blocks' rows still comes from their maps. With no data at all, or
 without two colour stops, there is no row and no chart: co-occurrence is
 display data and never blocks the builder. The connected and always-together
-facets are worked out once per dictionary (`coCtxOf`).
+facets, and each facet's row and chart, are worked out once per dictionary
+and kept (`coCtxOf`, `MatrixMemo`): the builder repaints every block on every
+edit, and with hundreds of facets drawing them again took about half a second
+per edit. A changed theme or names setting draws them again.
 
 Each cell is a button in a `role="group"` named "Seen together with <facet>".
 Its accessible name says the facet and the backend's own text ("<other>: 5 %
@@ -1815,7 +1819,7 @@ Environment variables, read by `index.ts`:
 The real backend's data differs, which is why `src/` must never name the mock's
 (`src/config.ts` holds deployment-specific names;
 `mock-server/tests/noBackendDataInSrc.test.ts` enforces it, in
-`npm run test:mock`).
+`npm run test:mock` and CI's `mock` job).
 
 ---
 
@@ -1877,12 +1881,15 @@ backend), `mock`, `build` (`typecheck`, then `build:app`: the app's own
 type-check, the bundle and `check:offline`), `preview`, `test`, `test:watch`,
 `typecheck`, `test:mock`, `typecheck:mock`, `lint` (ESLint + Prettier),
 `format`, `check:offline`, `servers` and `doc`. CI runs typecheck, test, lint
-and build on every pull request and push to `main`.
+and build on every pull request and push to `main`, and the mock's checks in a
+separate `mock` job.
 
-**The mock is not part of CI**: it is a development aid that will drift from
-the real backend or be deleted, so `typecheck`, `test`, `build` and CI pass
-without it. Its checks are `typecheck:mock` (`tsconfig.mock.json`) and
-`test:mock`, run before a commit while the folder exists. No file in `tests/`
+**The app's checks never depend on the mock**: it is a development aid that
+will drift from the real backend or be deleted, so `typecheck`, `test` and
+`build` pass without it. Its checks are `typecheck:mock` (`tsconfig.mock.json`)
+and `test:mock`, run before a commit and in CI's own `mock` job, which is
+skipped once the folder is gone. That job is where the `noBackendDataInSrc`
+guard runs, since it needs the mock's data. No file in `tests/`
 may import it (`tsc` would pull it back in); `appScripts.test.ts` keeps it that
 way. `build:app` type-checks only `src/` (`tsconfig.app.json`, browser types),
 so it builds even when the mock or the tests have drifted.

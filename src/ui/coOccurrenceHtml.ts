@@ -24,8 +24,8 @@ import { escapeHtml } from "./panel";
 import { POPOVER_CLASS, popoverId } from "./popover";
 
 /** What the row and the chart of every block need. Worked out once per
- *  paint (`coCtxOf`), because the connected facets and the colour range are
- *  the same in every block. */
+ *  paint (`coCtxOf`), because the connected facets and the colours are the
+ *  same in every block. */
 export interface CoCtx {
   /** The dictionary. */
   facets: Facet[];
@@ -38,11 +38,43 @@ export interface CoCtx {
   /** Whether the rows show each cell's facet name above it (the legend's
    *  "Show names"). */
   showNames: boolean;
+  /** What was drawn already for this dictionary (`MatrixMemo`). */
+  memo: MatrixMemo;
 }
 
-/** The two matrix-wide results, kept per dictionary: the builder repaints on
- *  every edit, and the dictionary only changes when it is loaded again. */
-const matrixCache = new WeakMap<Facet[], { connected: Facet[]; always: Set<string> }>();
+/**
+ * What is worked out once per dictionary and kept: the builder repaints
+ * every block on every edit, but a row and a chart depend only on the
+ * dictionary, the colours and the block's facet, never on the query. With
+ * hundreds of facets, drawing them again on each edit took about half a
+ * second. The keys of `rows` and `layouts` start with the colour tokens
+ * (`tokensKey`), so a changed theme draws them again.
+ */
+interface MatrixMemo {
+  connected: Facet[];
+  always: Set<string>;
+  /** A row's HTML, by tokens, names on or off and the block's facet id. */
+  rows: Map<string, string>;
+  /** A chart's layout, by tokens and the block's facet id. */
+  layouts: Map<string, SeenLayout>;
+}
+
+/** The memo of each dictionary: it changes only when it is loaded again
+ *  (a new array), and then the old memo goes with the old array. */
+const matrixCache = new WeakMap<Facet[], MatrixMemo>();
+
+/** The part of a memo key that says which colours were used. */
+const tokensKey = (tokens: CoTokens) => JSON.stringify(tokens);
+
+/** `memo.get(key)`, worked out by `make` the first time. */
+function remembered<T>(memo: Map<string, T>, key: string, make: () => T): T {
+  let value = memo.get(key);
+  if (value === undefined) {
+    value = make();
+    memo.set(key, value);
+  }
+  return value;
+}
 
 /** The context for one paint, or null when there is nothing to colour with:
  *  without two colour stops (the stylesheet did not load) the row and the
@@ -50,12 +82,17 @@ const matrixCache = new WeakMap<Facet[], { connected: Facet[]; always: Set<strin
  *  builder. */
 export function coCtxOf(facets: Facet[], tokens: CoTokens, showNames = false): CoCtx | null {
   if (tokens.stops.length < 2) return null;
-  let matrix = matrixCache.get(facets);
-  if (!matrix) {
-    matrix = { connected: connectedFacets(facets), always: alwaysTogetherIds(facets) };
-    matrixCache.set(facets, matrix);
+  let memo = matrixCache.get(facets);
+  if (!memo) {
+    memo = {
+      connected: connectedFacets(facets),
+      always: alwaysTogetherIds(facets),
+      rows: new Map(),
+      layouts: new Map(),
+    };
+    matrixCache.set(facets, memo);
   }
-  return { facets, ...matrix, tokens, showNames };
+  return { facets, connected: memo.connected, always: memo.always, tokens, showNames, memo };
 }
 
 /** Whether the Seen together tab is offered at all: only when some facet is
@@ -186,6 +223,12 @@ const tabindexAt = (index: number) => (index === 0 ? "0" : "-1");
  */
 export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
   if (!hasCoRow(ctx, block)) return "";
+  const key = `${tokensKey(ctx.tokens)}\n${ctx.showNames}\n${block.facetId}`;
+  return remembered(ctx.memo.rows, key, () => drawRow(ctx, block));
+}
+
+/** `coRowHtml`'s work, done once per facet (see `MatrixMemo`). */
+function drawRow(ctx: CoCtx, block: FacetBlock): string {
   const own = ownFacet(ctx, block);
   const ownName = facetNameOrId(ctx.facets, block.facetId);
   const marks = ctx.connected.map((other) => markOf(ctx, own, ownName, other));
@@ -295,6 +338,12 @@ const isTiny = (rect: Rect) => Math.min(rect.w, rect.h) * PX_PER_UNIT < MIN_BOX_
  * boxes more room, so it is repeated until no box is too small.
  */
 export function seenLayout(ctx: CoCtx, own: Facet): SeenLayout {
+  const key = `${tokensKey(ctx.tokens)}\n${own.id}`;
+  return remembered(ctx.memo.layouts, key, () => layOut(ctx, own));
+}
+
+/** `seenLayout`'s work, done once per facet (see `MatrixMemo`). */
+function layOut(ctx: CoCtx, own: Facet): SeenLayout {
   const marks = ctx.connected
     .map((other) => markOf(ctx, own, own.name, other))
     .filter((mark) => mark.kind === "seen" || mark.kind === "too-rare");
