@@ -178,7 +178,7 @@ least two, numbered without gaps: `readCoTokens()` in `src/ui/coTokens.ts`
 reads them until the first empty one; the parsing is the pure
 `coTokensFrom`), the merged box's two greys (`--qb-cooc-merged`,
 `--qb-cooc-merged-stripe`), `--qb-cooc-cell-border` (each cell's outline,
-dotted for "never seen together"), `--qb-cooc-own` (the facet itself) and the
+dashed for "never seen together"), `--qb-cooc-own` (the facet itself) and the
 dot/label colours `--qb-cooc-dot-dark` and `--qb-cooc-dot-light`. A stop that
 is not `#rrggbb` is left out and named once in the console: the colour maths
 would read it as black, while the legend's bar would not. Colours between two
@@ -1283,8 +1283,9 @@ block's* facet:
   seen most often stand out.
 - **100 %** also has a dot (`.is-full`, its colour from `betterOn`): it marks
   "in every event".
-- **Never seen**: an empty box with a **dotted outline**, so it cannot be
-  taken for a tiny value in the lightest colour.
+- **Never seen**: an empty box with a **dashed outline**, so it cannot be
+  taken for a tiny value in the lightest colour (a 1 px dotted outline read
+  as solid at this size).
 - **The block's own facet**: a round mustard mark.
 - **Too small for a JavaScript number** (`tooRare`): the colour of 0 %.
 
