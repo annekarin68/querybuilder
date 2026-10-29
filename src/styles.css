@@ -1177,10 +1177,31 @@ body {
   background: currentColor;
 }
 /* Never seen together: an empty box with a dotted outline, so it can't be
-   taken for a value so small that it has the lightest colour. */
+   taken for a value so small that it has the lightest colour. The dots are
+   drawn here, one every 3 px, three to a side: the browser's own `dotted`
+   border puts one on every other pixel, which on an 11 px box looks like a
+   solid line. Each side is a 1 px strip of a repeating gradient (1 px dot,
+   2 px gap) starting 2 px in, so the dots sit at 2, 5 and 8 px and the
+   rounded corners stay empty. The border stays, transparent, so the box
+   keeps the size of the other cells. */
 .qb-co-cell.is-never {
-  border-style: dotted;
-  background: var(--qb-surface);
+  --qb-dots-across: repeating-linear-gradient(
+    to right,
+    var(--qb-cooc-cell-border) 0 1px,
+    transparent 1px 3px
+  );
+  --qb-dots-down: repeating-linear-gradient(
+    to bottom,
+    var(--qb-cooc-cell-border) 0 1px,
+    transparent 1px 3px
+  );
+  border-color: transparent;
+  background:
+    var(--qb-dots-across) 2px 0 / 7px 1px no-repeat border-box,
+    var(--qb-dots-across) 2px 100% / 7px 1px no-repeat border-box,
+    var(--qb-dots-down) 0 2px / 1px 7px no-repeat border-box,
+    var(--qb-dots-down) 100% 2px / 1px 7px no-repeat border-box,
+    var(--qb-surface);
 }
 /* The block's own facet: a round mustard mark, no ring. */
 .qb-co-cell.is-own {
