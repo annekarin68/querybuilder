@@ -1177,8 +1177,11 @@ body {
   background: currentColor;
 }
 /* Never seen together: an empty box with a dotted outline, so it can't be
-   taken for a value so small that it has the lightest colour. */
+   taken for a value so small that it has the lightest colour. A pixel more
+   room on each side: with the row's 2 px gap, the dotted edges of two
+   neighbours ran together into one dotted strip. */
 .qb-co-cell.is-never {
+  margin-inline: 1px;
   border-style: dotted;
   background: var(--qb-surface);
 }
