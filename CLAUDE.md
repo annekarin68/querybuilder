@@ -57,8 +57,6 @@ logic lives in small pure functions that the Node-only tests can reach.
   tell the maintainers what changed upstream.
 - A new worktree needs its own `npm ci`. A symlinked `node_modules` makes Vite
   answer 403 for Fomantic's fonts, so icons show as squares.
-- Do not open a pull request unless you are asked to in that moment. Push the
-  branch and say so.
 
 ## Before you commit
 

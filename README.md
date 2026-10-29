@@ -111,8 +111,9 @@ has checklists for the most common changes (a new operator, a new API
 endpoint, a new panel, …).
 
 CI (`.github/workflows/ci.yml`) runs typecheck, tests, lint and build on every
-pull request and push to `main`. It leaves the mock server out, so they pass
-with `mock-server/` deleted; run `typecheck:mock` and `test:mock` yourself.
+pull request and push to `main`; these pass with `mock-server/` deleted. The
+mock's `typecheck:mock` and `test:mock` run in a separate `mock` job, skipped
+once the folder is gone.
 
 ## Deploying `dist/`
 
