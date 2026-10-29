@@ -5,60 +5,107 @@
 
 import type { CoValue, Facet } from "../model";
 import {
+  alwaysTogetherIds,
   coOccurrenceColour,
-  coOccurrenceRange,
   connectedFacets,
   formatPercent,
+  FULL_PERCENT,
+  isFull,
   roundPercentText,
   squarify,
-  type CoRange,
   type Rect,
 } from "../query/coOccurrence";
 import type { FacetBlock } from "../query/types";
 import { betterOn } from "../util/colour";
 import type { CoTokens } from "./coTokens";
 import { facetNameOrId, UNKNOWN_FACET } from "./facetWords";
+import { decimalMark } from "./format";
 import { escapeHtml } from "./panel";
 import { POPOVER_CLASS, popoverId } from "./popover";
 
 /** What the row and the chart of every block need. Worked out once per
- *  paint (`coCtxOf`), because the connected facets and the colour range are
- *  the same in every block. */
+ *  paint (`coCtxOf`), because the connected facets and the colours are the
+ *  same in every block. */
 export interface CoCtx {
   /** The dictionary. */
   facets: Facet[];
   /** The facets of the row: seen with at least one other, dictionary order. */
   connected: Facet[];
-  /** The colour scale's ends; null when nothing is ever seen together. */
-  range: CoRange | null;
+  /** The facets seen in every event of every other facet
+   *  (`alwaysTogetherIds`): the chart gathers them in one box. */
+  always: Set<string>;
   tokens: CoTokens;
+  /** Whether the rows show each cell's facet name above it (the legend's
+   *  "Show names"). */
+  showNames: boolean;
+  /** What was drawn already for this dictionary (`MatrixMemo`). */
+  memo: MatrixMemo;
 }
 
-/** The two matrix-wide results, kept per dictionary: the builder repaints on
- *  every edit, and the dictionary only changes when it is loaded again. */
-const matrixCache = new WeakMap<Facet[], { connected: Facet[]; range: CoRange | null }>();
+/**
+ * What is worked out once per dictionary and kept: the builder repaints
+ * every block on every edit, but a row and a chart depend only on the
+ * dictionary, the colours and the block's facet, never on the query. With
+ * hundreds of facets, drawing them again on each edit took about half a
+ * second. The keys of `rows` and `layouts` start with the colour tokens
+ * (`tokensKey`), so a changed theme draws them again.
+ */
+interface MatrixMemo {
+  connected: Facet[];
+  always: Set<string>;
+  /** A row's HTML, by tokens, names on or off and the block's facet id. */
+  rows: Map<string, string>;
+  /** A chart's layout, by tokens and the block's facet id. */
+  layouts: Map<string, SeenLayout>;
+}
+
+/** The memo of each dictionary: it changes only when it is loaded again
+ *  (a new array), and then the old memo goes with the old array. */
+const matrixCache = new WeakMap<Facet[], MatrixMemo>();
+
+/** The part of a memo key that says which colours were used. */
+const tokensKey = (tokens: CoTokens) => JSON.stringify(tokens);
+
+/** `memo.get(key)`, worked out by `make` the first time. */
+function remembered<T>(memo: Map<string, T>, key: string, make: () => T): T {
+  let value = memo.get(key);
+  if (value === undefined) {
+    value = make();
+    memo.set(key, value);
+  }
+  return value;
+}
 
 /** The context for one paint, or null when there is nothing to colour with:
  *  without two colour stops (the stylesheet did not load) the row and the
  *  chart are left out. Co-occurrence is display data and never blocks the
  *  builder. */
-export function coCtxOf(facets: Facet[], tokens: CoTokens): CoCtx | null {
+export function coCtxOf(facets: Facet[], tokens: CoTokens, showNames = false): CoCtx | null {
   if (tokens.stops.length < 2) return null;
-  let matrix = matrixCache.get(facets);
-  if (!matrix) {
-    matrix = { connected: connectedFacets(facets), range: coOccurrenceRange(facets) };
-    matrixCache.set(facets, matrix);
+  let memo = matrixCache.get(facets);
+  if (!memo) {
+    memo = {
+      connected: connectedFacets(facets),
+      always: alwaysTogetherIds(facets),
+      rows: new Map(),
+      layouts: new Map(),
+    };
+    matrixCache.set(facets, memo);
   }
-  return { facets, ...matrix, tokens };
+  return { facets, connected: memo.connected, always: memo.always, tokens, showNames, memo };
+}
+
+/** Whether the Seen together tab is offered at all: only when some facet is
+ *  seen together with another. Without any co-occurrence data the tab
+ *  would only ever say so (maintainers, 2026-10-29). */
+export function offersSeenTogether(ctx: CoCtx | null): boolean {
+  return ctx !== null && ctx.connected.length > 0;
 }
 
 /** Said (hover and screen readers) by a block whose facet is seen with no
  *  other facet; its row is a row of never-seen cells. */
 const NEVER_WITH_ANY = "Never seen together with another facet.";
 const NO_DATA = "No co-occurrence data for this facet.";
-/** Without a context (the dictionary is loading, or the colour tokens are
- *  missing) nothing is known about the data, so nothing is claimed about it. */
-const CANNOT_SHOW = "Seen together cannot be shown right now.";
 
 /** What a cell (or a box) shows about another facet. */
 export type CellKind = "own" | "seen" | "too-rare" | "never";
@@ -76,7 +123,9 @@ export interface CoMark {
   /** The value's size, 0 to 100; 0 for every kind but "seen" (a too-rare
    *  value is below what a number holds). */
   percent: number;
-  /** Only for "seen": the heat colour and the dot (or label) on it. */
+  /** Only for "seen" and "too-rare": the heat colour and the dot (or
+   *  label) on it. A too-rare value has the colour of 0 %, like every
+   *  value too small to tell from it on a linear scale. */
   background: string | null;
   ink: string | null;
 }
@@ -110,7 +159,8 @@ function markOf(ctx: CoCtx, own: Facet | null, ownName: string, other: Facet): C
   const percent = kind === "seen" ? value!.percent : 0;
   const mark = { facet: other, kind, percent, background: null, ink: null };
   // The name says the backend's text in full; the caption rounds it.
-  const worded = (text: string) => `${other.name}: ${formatPercent(text)} of ${ownName}'s events`;
+  const worded = (text: string) =>
+    `${other.name}: ${formatPercent(text, decimalMark())} of ${ownName}'s events`;
   const both = (words: (text: string) => string) => ({
     name: words(value?.text ?? ""),
     caption: words(roundPercentText(value?.text ?? "")),
@@ -120,19 +170,20 @@ function markOf(ctx: CoCtx, own: Facet | null, ownName: string, other: Facet): C
       const name = `${other.name} (this facet)`;
       return { ...mark, name, caption: name };
     }
-    case "too-rare":
+    case "too-rare": {
       // Still the backend's text ("1e-400 %"): it is all there is to say
       // about a value too small for a number, and hover must never lose it.
-      return { ...mark, ...both((text) => `${worded(text)}, too rare to colour`) };
+      const { stops, dotDark, dotLight } = ctx.tokens;
+      const background = coOccurrenceColour(0, stops);
+      return { ...mark, ...both(worded), background, ink: betterOn(background, dotDark, dotLight) };
+    }
     case "never": {
       const name = `${other.name}: never seen together`;
       return { ...mark, name, caption: name };
     }
     case "seen": {
       const { stops, dotDark, dotLight } = ctx.tokens;
-      // A seen value is always inside the range, which is built from them all.
-      const range = ctx.range ?? { min: value!.percent, max: value!.percent };
-      const background = coOccurrenceColour(value!.percent, range, stops);
+      const background = coOccurrenceColour(value!.percent, stops);
       return {
         ...mark,
         // The name has the backend's own text, never re-formatted (formatPercent).
@@ -172,6 +223,12 @@ const tabindexAt = (index: number) => (index === 0 ? "0" : "-1");
  */
 export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
   if (!hasCoRow(ctx, block)) return "";
+  const key = `${tokensKey(ctx.tokens)}\n${ctx.showNames}\n${block.facetId}`;
+  return remembered(ctx.memo.rows, key, () => drawRow(ctx, block));
+}
+
+/** `coRowHtml`'s work, done once per facet (see `MatrixMemo`). */
+function drawRow(ctx: CoCtx, block: FacetBlock): string {
   const own = ownFacet(ctx, block);
   const ownName = facetNameOrId(ctx.facets, block.facetId);
   const marks = ctx.connected.map((other) => markOf(ctx, own, ownName, other));
@@ -184,13 +241,22 @@ export function coRowHtml(ctx: CoCtx, block: FacetBlock): string {
       const name = escapeHtml(mark.name);
       const style = colourStyle(mark);
       const id = escapeHtml(other.id);
-      return `<button type="button" class="qb-co-cell is-${mark.kind}" data-co-cell="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}"${captionAttr(mark)}${style ? ` style="${style}"` : ""}></button>`;
+      // Only a value of 100 % gets a dot (the designer, 2026-10-29): it
+      // marks "in every event", the one value a colour cannot pin down.
+      const full = mark.kind === "seen" && isFull(mark.percent) ? " is-full" : "";
+      // The name above the cell, while "Show names" is on. Hidden from
+      // screen readers: it is the start of the cell's accessible name.
+      const label = ctx.showNames
+        ? `<span class="qb-co-name" aria-hidden="true">${escapeHtml(other.name)}</span>`
+        : "";
+      return `<button type="button" class="qb-co-cell is-${mark.kind}${full}" data-co-cell="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}"${captionAttr(mark)}${style ? ` style="${style}"` : ""}>${label}</button>`;
     })
     .join("");
   // A title on the group itself: the browser shows it on the gaps and reads
   // it to screen readers as the group's description.
   const title = isolated ? ` title="${NEVER_WITH_ANY}"` : "";
-  return `<div class="qb-co-row" role="group" aria-label="Seen together with ${escapeHtml(ownName)}"${title} data-roving>${cells}</div>`;
+  const names = ctx.showNames ? " shows-names" : "";
+  return `<div class="qb-co-row${names}" role="group" aria-label="Seen together with ${escapeHtml(ownName)}"${title} data-roving>${cells}</div>`;
 }
 
 // ---- The caption ----------------------------------------------------------
@@ -227,21 +293,25 @@ const CHART_HEIGHT = 60;
 const PX_PER_UNIT = 3;
 /** A box thinner than this is hard to see and to press: it is merged. */
 const MIN_BOX_PX = 12;
-/** "+ N less often" stands for a list, not one value, so it is not drawn to
- *  scale: it starts at this share of the chart and grows (MERGED_GROWTH)
- *  until it, too, is at least MIN_BOX_PX thick, so it can be seen and pressed
- *  (it also needs a size when it only holds values too rare to have one). */
-const MERGED_MIN_SHARE = 0.02;
-const MERGED_MAX_SHARE = 0.5;
-const MERGED_GROWTH = 1.5;
+/** The two gathered boxes, "+ N in every event" and "+ N less often", stand
+ *  for a list, not one value, so they are not drawn to scale: each starts
+ *  at this share of the chart and grows (GATHERED_GROWTH) until it, too, is
+ *  at least MIN_BOX_PX thick, so it can be seen and pressed (the merged box
+ *  also needs a size when it only holds values too rare to have one). */
+const GATHERED_MIN_SHARE = 0.02;
+const GATHERED_MAX_SHARE = 0.5;
+const GATHERED_GROWTH = 1.5;
 
 export interface SeenBox {
   mark: CoMark;
   rect: Rect;
 }
 
-export interface MergedBox {
-  /** The facets it stands for, largest first, the too-rare ones last. */
+/** A box that stands for several facets: "+ N in every event" or
+ *  "+ N less often". */
+export interface GatheredBox {
+  /** The facets it stands for: for the merged box largest first, the
+   *  too-rare ones last; for the "in every event" box in dictionary order. */
   items: CoMark[];
   rect: Rect;
 }
@@ -249,40 +319,60 @@ export interface MergedBox {
 export interface SeenLayout {
   /** Largest first. */
   boxes: SeenBox[];
-  merged: MergedBox | null;
+  /** The facets seen in every event of every facet (`CoCtx.always`),
+   *  top-left: at 100 % in every chart they would take most of its room
+   *  from the facets that say something (maintainers, 2026-10-29). */
+  always: GatheredBox | null;
+  /** The rarest facets, bottom-right. */
+  merged: GatheredBox | null;
 }
 
 const isTiny = (rect: Rect) => Math.min(rect.w, rect.h) * PX_PER_UNIT < MIN_BOX_PX;
 
 /**
  * The square pie chart of facet `own`: one box per facet it is seen with,
- * area proportional to the value; never-seen facets are absent. Values too
- * rare to have a size, and boxes too small to see, go into one "+ N less
- * often" box, always the rarest ones. Merging gives the other boxes more
- * room, so it is repeated until no box is too small.
+ * area proportional to the value; never-seen facets are absent. The facets
+ * in every event of every facet go into one "+ N in every event" box.
+ * Values too rare to have a size, and boxes too small to see, go into one
+ * "+ N less often" box, always the rarest ones. Merging gives the other
+ * boxes more room, so it is repeated until no box is too small.
  */
 export function seenLayout(ctx: CoCtx, own: Facet): SeenLayout {
+  const key = `${tokensKey(ctx.tokens)}\n${own.id}`;
+  return remembered(ctx.memo.layouts, key, () => layOut(ctx, own));
+}
+
+/** `seenLayout`'s work, done once per facet (see `MatrixMemo`). */
+function layOut(ctx: CoCtx, own: Facet): SeenLayout {
   const marks = ctx.connected
     .map((other) => markOf(ctx, own, own.name, other))
     .filter((mark) => mark.kind === "seen" || mark.kind === "too-rare");
   const percentOf = (mark: CoMark) => mark.percent;
   // A stable sort keeps the dictionary order between equal values.
   const bySize = (a: CoMark, b: CoMark) => percentOf(b) - percentOf(a);
-  let shown = marks.filter((m) => m.kind === "seen").sort(bySize);
+  const isAlways = (mark: CoMark) => ctx.always.has(mark.facet.id);
+  const always = marks.filter((m) => m.kind === "seen" && isAlways(m));
+  let shown = marks.filter((m) => m.kind === "seen" && !isAlways(m)).sort(bySize);
   let merged = marks.filter((m) => m.kind === "too-rare");
 
-  let mergedShare = MERGED_MIN_SHARE;
+  let alwaysShare = GATHERED_MIN_SHARE;
+  let mergedShare = GATHERED_MIN_SHARE;
+  const grown = (share: number) => Math.min(GATHERED_MAX_SHARE, share * GATHERED_GROWTH);
   for (;;) {
     const values = shown.map(percentOf);
+    // The "in every event" box, if any, is the first value: squarify lays
+    // it out first (top-left); the merged box is the last (bottom-right).
+    const lead = always.length > 0 ? [gatheredValue(values, alwaysShare)] : [];
     const rects = squarify(
-      [...values, mergedValue(values, merged, mergedShare)],
+      [...lead, ...values, mergedValue(values, merged, mergedShare)],
       CHART_WIDTH,
       CHART_HEIGHT,
-      // Always last (bottom-right), whatever its size: it is an aggregate,
-      // not "the most often", and in production it is often the largest.
-      true,
+      // Pinned whatever their sizes: they are aggregates, not values, and in
+      // production the merged one is often the largest.
+      { first: lead.length > 0, last: true },
     );
-    const tiny = shown.filter((_, index) => isTiny(rects[index] as Rect));
+    const shownRects = rects.slice(lead.length, lead.length + shown.length);
+    const tiny = shown.filter((_, index) => isTiny(shownRects[index] as Rect));
     if (tiny.length > 0) {
       // Merged by value, not by shape: "less often" must hold, so every
       // merged facet is rarer than every box still shown. A box can be thin
@@ -295,26 +385,41 @@ export function seenLayout(ctx: CoCtx, own: Facet): SeenLayout {
       merged = [...rarer, ...merged].sort(bySize);
       continue;
     }
-    const mergedRect = rects[shown.length] as Rect;
-    if (merged.length > 0 && isTiny(mergedRect) && mergedShare < MERGED_MAX_SHARE) {
-      mergedShare = Math.min(MERGED_MAX_SHARE, mergedShare * MERGED_GROWTH);
+    const alwaysRect = lead.length > 0 ? (rects[0] as Rect) : null;
+    const mergedRect = rects[rects.length - 1] as Rect;
+    const growAlways =
+      alwaysRect !== null && isTiny(alwaysRect) && alwaysShare < GATHERED_MAX_SHARE;
+    const growMerged = merged.length > 0 && isTiny(mergedRect) && mergedShare < GATHERED_MAX_SHARE;
+    if (growAlways || growMerged) {
+      if (growAlways) alwaysShare = grown(alwaysShare);
+      if (growMerged) mergedShare = grown(mergedShare);
       continue;
     }
-    const boxes = shown.map((mark, index) => ({ mark, rect: rects[index] as Rect }));
-    return { boxes, merged: merged.length ? { items: merged, rect: mergedRect } : null };
+    const boxes = shown.map((mark, index) => ({ mark, rect: shownRects[index] as Rect }));
+    return {
+      boxes,
+      always: alwaysRect ? { items: always, rect: alwaysRect } : null,
+      merged: merged.length ? { items: merged, rect: mergedRect } : null,
+    };
   }
+}
+
+/** The size `squarify` gets for a gathered box: `share` of the whole chart
+ *  (share = value / (shownTotal + value), solved for value). When no facet
+ *  has its own box, the gathered box is the whole chart. */
+function gatheredValue(shownValues: number[], share: number): number {
+  const shownTotal = shownValues.reduce((sum, v) => sum + v, 0);
+  if (shownTotal === 0) return 1;
+  return (share * shownTotal) / (1 - share);
 }
 
 /** The size `squarify` gets for "+ N less often": the merged values, but at
  *  least `share` of the whole chart (0 when nothing is merged). */
 function mergedValue(shownValues: number[], merged: CoMark[], share: number): number {
   if (merged.length === 0) return 0;
-  const shownTotal = shownValues.reduce((sum, v) => sum + v, 0);
   // A too-rare value's percent is 0: its real size is below what a number holds.
   const mergedSum = merged.reduce((sum, m) => sum + m.percent, 0);
-  if (shownTotal === 0) return 1; // the merged box is the whole chart
-  // share = value / (shownTotal + value), solved for value.
-  return Math.max(mergedSum, (share * shownTotal) / (1 - share));
+  return Math.max(mergedSum, gatheredValue(shownValues, share));
 }
 
 /** A length in chart units as a percentage of the chart's side. */
@@ -332,85 +437,134 @@ function placeStyle(rect: Rect): string {
 /** "1 facet" / "30 facets". */
 const facetCount = (n: number) => `${n} ${n === 1 ? "facet" : "facets"}`;
 
-/** The caption of "+ N less often": what it is, in one short line. */
-function mergedCaption(merged: MergedBox): string {
-  return `${facetCount(merged.items.length)}, each less often than the boxes shown`;
+/** What tells the two gathered boxes apart: their words, class and focus
+ *  memory id (`data-co-box`). Neither id can be a facet's id, as the
+ *  dictionary has no blank ids: the merged box's is "", the other's " ". */
+interface Gathered {
+  where: "always" | "merged";
+  boxId: string;
+  className: string;
+  /** The long label, e.g. "+ 3 in every event"; the short one is "+3". */
+  label(count: number): string;
+  /** How its accessible name starts, before the list: "3 in every event". */
+  name(count: number): string;
+  /** The caption: what it is, in one short line. */
+  caption(count: number): string;
+  /** The first words of its accessible name and list (escaped HTML). */
+  listLead(count: number, ownName: string): string;
 }
 
-/** The merged box's accessible name lists what it stands for, since it has
- *  no label for each. It can be thousands of characters, too long for the
- *  caption, which gets `mergedCaption` instead (`data-caption`). */
-function mergedName(merged: MergedBox): string {
-  return `${merged.items.length} less often: ${merged.items.map((m) => m.name).join("; ")}`;
-}
+const ALWAYS: Gathered = {
+  where: "always",
+  boxId: " ",
+  className: "is-always",
+  label: (count) => `+ ${count} in every event`,
+  name: (count) => `${count} in every event`,
+  caption: (count) => `${facetCount(count)} in every event of every facet`,
+  listLead: (count, ownName) =>
+    `${facetCount(count)} in every event of every facet, so in every event of <strong>${escapeHtml(ownName)}</strong> too:`,
+};
+
+const MERGED: Gathered = {
+  where: "merged",
+  boxId: "",
+  className: "is-merged",
+  label: (count) => `+ ${count} less often`,
+  name: (count) => `${count} less often`,
+  caption: (count) => `${facetCount(count)}, each less often than the boxes shown`,
+  listLead: (count, ownName) =>
+    `${facetCount(count)} seen together less often with <strong>${escapeHtml(ownName)}</strong>:`,
+};
 
 /**
- * What "+ N less often" stands for, as a popover its box opens (click or
- * Enter; `popovertarget`): sighted users see only "+N" on the box, and a
- * box that does nothing when pressed would be a dead control. Each facet in
- * the words of its cell, largest first, the too-rare ones last (the order of
- * `MergedBox.items`). It is a popover like the legend (`POPOVER_CLASS`), so
- * coOccurrenceWiring.ts places it by its box, follows the scroll and reopens
- * it after a repaint as it does a legend. It sits after the chart, not inside it: the chart's arrow keys go
- * through the chart's own buttons only (`rovingItems`). Plain text items,
- * for now: the facets are also cells in the row above, which open the
- * dictionary.
+ * A gathered box and the popover it opens (click or Enter;
+ * `popovertarget`): sighted users see only "+N" on a small box, and a box
+ * that does nothing when pressed would be a dead control. The list has each
+ * facet in the words of its cell, in the order of `GatheredBox.items`. It
+ * is a popover like the legend (`POPOVER_CLASS`), so coOccurrenceWiring.ts
+ * places it by its box, follows the scroll and reopens it after a repaint
+ * as it does a legend. The popover goes after the chart, not inside it: the
+ * chart's arrow keys go through the chart's own buttons only
+ * (`rovingItems`). The box has no `data-facet-id` or `data-opens-docs`: it
+ * is not one facet. Its accessible name lists what it stands for, since it
+ * has no label for each; that can be thousands of characters, too long for
+ * the caption, which gets the short `caption` instead (`data-caption`).
  */
-function mergedListHtml(id: string, merged: MergedBox, ownName: string): string {
-  const items = merged.items.map((m) => `<li>${escapeHtml(m.caption)}</li>`).join("");
-  return `<div id="${escapeHtml(id)}" popover class="${POPOVER_CLASS}"><p>${facetCount(merged.items.length)} seen together less often with <strong>${escapeHtml(ownName)}</strong>:</p><ul class="qb-merged-list">${items}</ul></div>`;
+function gatheredHtml(
+  kind: Gathered,
+  box: GatheredBox,
+  blockId: string,
+  ownName: string,
+  index: number,
+  colour: string,
+): { button: string; list: string } {
+  const count = box.items.length;
+  const name = `${kind.name(count)}: ${box.items.map((m) => m.name).join("; ")}`;
+  // Both labels: the browser shows the long one if it fits, else the
+  // short one, else neither (hideCutLabels). A label can be hidden there,
+  // not shortened, so the short one has to be drawn already.
+  const text = `<span class="qb-seen-label">${kind.label(count)}</span><span class="qb-seen-label is-short">+${count}</span>`;
+  const listId = escapeHtml(popoverId(blockId, kind.where));
+  const button = `<button type="button" class="qb-seen-box ${kind.className}" data-co-box="${kind.boxId}" popovertarget="${listId}" tabindex="${tabindexAt(index)}" aria-label="${escapeHtml(name)}" data-caption="${escapeHtml(kind.caption(count))}" style="${placeStyle(box.rect)}${colour ? `;${colour}` : ""}">${text}</button>`;
+  const items = box.items.map((m) => `<li>${escapeHtml(m.caption)}</li>`).join("");
+  const list = `<div id="${listId}" popover class="${POPOVER_CLASS}"><p>${kind.listLead(count, ownName)}</p><ul class="qb-merged-list">${items}</ul></div>`;
+  return { button, list };
 }
 
 /**
  * The Seen together tab of `block`: its title and the square pie chart. A box
  * is a button with the same name as the cell of its facet, a roving tabindex
  * like the row's, and `data-facet-id` and `data-opens-docs` like a cell's (a
- * click opens the dictionary there). The merged box has neither: it is not
- * one facet; it opens the list of the facets it stands for (`mergedListHtml`).
- * `data-co-box` is what focus memory finds it by; the merged box's is empty,
- * which no facet id is. `ctx` is null while there is no data to show.
+ * click opens the dictionary there). The two gathered boxes have neither:
+ * each opens the list of the facets it stands for (`gatheredHtml`).
+ * `data-co-box` is what focus memory finds a box by. Only drawn when the
+ * tab is offered (`offersSeenTogether`): some facet is seen with another.
  */
-export function seenTogetherHtml(ctx: CoCtx | null, block: FacetBlock, legendButton = ""): string {
-  const own = ctx ? ownFacet(ctx, block) : null;
-  const ownName = facetNameOrId(ctx?.facets ?? null, block.facetId);
+export function seenTogetherHtml(ctx: CoCtx, block: FacetBlock, legendButton = ""): string {
+  const own = ownFacet(ctx, block);
+  const ownName = facetNameOrId(ctx.facets, block.facetId);
   // The tab's own "?" sits on the title's line, as the chart uses the row's
   // colours; so does the chart's caption, laid over the title (styles.css).
   const head = (caption: string) =>
     `<div class="qb-seen-head"><h3 class="qb-seen-title">Seen together with ${escapeHtml(ownName)}</h3>${caption}${legendButton}</div>`;
   const note = (text: string) => `${head("")}<p class="qb-muted">${text}</p>`;
-  if (!ctx) return note(CANNOT_SHOW);
-  if (ctx.connected.length === 0) return note(NO_DATA);
   if (!own) return note(UNKNOWN_FACET);
   // No "?" here: it would explain colours that are not shown.
   if (own.coOccurrence === null) {
     return `<div class="qb-seen-head"><h3 class="qb-seen-title">Seen together with ${escapeHtml(ownName)}</h3></div><p class="qb-muted">${NO_DATA}</p>`;
   }
   const layout = seenLayout(ctx, own);
-  if (layout.boxes.length === 0 && !layout.merged) return note(NEVER_WITH_ANY);
+  if (layout.boxes.length === 0 && !layout.always && !layout.merged) return note(NEVER_WITH_ANY);
 
-  const boxes = layout.boxes.map(({ mark, rect }, index) => {
+  const buttons: string[] = [];
+  const lists: string[] = [];
+  const addGathered = (kind: Gathered, box: GatheredBox, colour: string) => {
+    const { button, list } = gatheredHtml(kind, box, block.id, ownName, buttons.length, colour);
+    buttons.push(button);
+    lists.push(list);
+  };
+  // In the order they are laid out, which is also the arrow keys' order.
+  if (layout.always) {
+    // The colour of 100 %, as each of its facets would have.
+    const { stops, dotDark, dotLight } = ctx.tokens;
+    const top = coOccurrenceColour(FULL_PERCENT, stops);
+    addGathered(
+      ALWAYS,
+      layout.always,
+      `background-color:${top};color:${betterOn(top, dotDark, dotLight)}`,
+    );
+  }
+  for (const { mark, rect } of layout.boxes) {
     const name = escapeHtml(mark.name);
     const id = escapeHtml(mark.facet.id);
     // Every box gets its label; hideCutLabels hides those that do not fit.
     const text = `<span class="qb-seen-label">${escapeHtml(mark.facet.name)}</span>`;
-    return `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(index)}" aria-label="${name}"${captionAttr(mark)} style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`;
-  });
-  let mergedList = "";
-  if (layout.merged) {
-    const merged = layout.merged;
-    const name = escapeHtml(mergedName(merged));
-    // Both labels: the browser shows the long one if it fits, else the
-    // short one, else neither (hideCutLabels). A label can be hidden there,
-    // not shortened, so the short one has to be drawn already.
-    const count = merged.items.length;
-    const text = `<span class="qb-seen-label">+ ${count} less often</span><span class="qb-seen-label is-short">+${count}</span>`;
-    const listId = popoverId(block.id, "merged");
-    boxes.push(
-      `<button type="button" class="qb-seen-box is-merged" data-co-box="" popovertarget="${escapeHtml(listId)}" tabindex="${tabindexAt(boxes.length)}" aria-label="${name}" data-caption="${escapeHtml(mergedCaption(merged))}" style="${placeStyle(merged.rect)}">${text}</button>`,
+    buttons.push(
+      `<button type="button" class="qb-seen-box" data-co-box="${id}" data-facet-id="${id}" data-opens-docs tabindex="${tabindexAt(buttons.length)}" aria-label="${name}"${captionAttr(mark)} style="${placeStyle(rect)};${colourStyle(mark)}">${text}</button>`,
     );
-    mergedList = mergedListHtml(listId, merged, ownName);
   }
-  return `${head(CAPTION)}<div class="qb-seen-chart" role="group" aria-label="Seen together with ${escapeHtml(ownName)}, by share of its events" data-roving>${boxes.join("")}</div>${mergedList}`;
+  if (layout.merged) addGathered(MERGED, layout.merged, "");
+  return `${head(CAPTION)}<div class="qb-seen-chart" role="group" aria-label="Seen together with ${escapeHtml(ownName)}, by share of its events" data-roving>${buttons.join("")}</div>${lists.join("")}`;
 }
 
 // ---- Keyboard ------------------------------------------------------------

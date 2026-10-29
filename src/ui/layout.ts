@@ -1,15 +1,7 @@
-import type { ActiveView } from "../state";
 import { EASTER_EGG_MASCOT, MASCOT } from "../config";
 import type { MascotState } from "./mascot";
 import { SAVED_TITLE_ID } from "./savedQueries";
 import { EVENT_TITLE_ID } from "./eventDialog";
-
-const VIEWS: { id: ActiveView; label: string }[] = [
-  { id: "filter", label: "Filter" },
-  { id: "review", label: "Review" },
-  { id: "approval", label: "Approval" },
-  { id: "done", label: "Done" },
-];
 
 /**
  * The file for `face`, from the easter-egg set while it is on. A file that
@@ -65,8 +57,6 @@ export interface Shell {
     preview: HTMLElement;
     account: HTMLElement;
   };
-  /** Show the Filter view, or the "Coming soon" placeholder for the other steps. */
-  setActiveView(v: ActiveView): void;
   /** The Save… / Saved queries dialog (savedQueries.ts). Never replaced: only
    *  its contents are repainted, and it is opened and closed to match the state. */
   savedDialog: HTMLDialogElement;
@@ -83,10 +73,10 @@ export interface Shell {
    *  open, its own region speaks: a modal dialog makes the page's one inert. */
   announce(message: string): void;
   /** Fold the data dictionary into its rail, or open it. Folding it while
-   *  it has the focus moves the focus to `focusOnFold`, or to the rail. */
-  setSidebarCollapsed(collapsed: boolean, focusOnFold?: HTMLElement | null): void;
-  /** Listen for clicks on the workflow steps and the docs toggles. Call once. */
-  onMenu(handler: { view(v: ActiveView): void; toggleSidebar(): void }): void;
+   *  it has the focus moves the focus to the rail. */
+  setSidebarCollapsed(collapsed: boolean): void;
+  /** Listen for clicks on the docs toggles. Call once. */
+  onMenu(handler: { toggleSidebar(): void }): void;
 }
 
 /**
@@ -98,8 +88,7 @@ export interface Shell {
 const DIALOG_INSIDE = `<div class="qb-dialog-body" data-dialog-body></div><div class="qb-sr-only" role="status" aria-live="polite" data-dialog-announcer></div>`;
 
 /**
- * The page frame, rendered once: a top bar (app name, workflow steps, account
- * area), then a docs rail + three columns — the data dictionary (collapsible,
+ * The page frame, rendered once: a top bar (app name, account area), then a docs rail + three columns — the data dictionary (collapsible,
  * open by default, resizable), the main column (databases, query, matching events)
  * and the statistics column (pinned beside the main column on wide screens,
  * between the query and Run query on narrow ones). Panels paint into the
@@ -115,12 +104,6 @@ export function renderShell(root: HTMLElement): Shell {
   root.innerHTML = `
     <header class="qb-topbar">
       ${BRAND_HTML}
-      <nav class="qb-steps" data-menu="views" aria-label="Workflow">
-        ${VIEWS.map(
-          (v, i) =>
-            `<a class="qb-step${v.id === "filter" ? " is-active" : ""}" href="#" data-view="${v.id}" title="${v.label}"${v.id === "filter" ? ' aria-current="step"' : ""}><span class="qb-step-num">${i + 1}</span><span class="qb-step-label">${v.label}</span></a>`,
-        ).join("")}
-      </nav>
       <div class="qb-topbar-right">
         <div data-panel="account"></div>
       </div>
@@ -151,7 +134,6 @@ export function renderShell(root: HTMLElement): Shell {
   const railIcon = find(".qb-docs-rail i");
   const railLabel = find(".qb-docs-rail span");
   const docsColumn = find(".qb-col-docs");
-  const steps = find('[data-menu="views"]');
   const logo = find<HTMLImageElement>(".qb-logo");
   const announcer = find("[data-announcer]");
   /** Where `announce` speaks: the open dialog's region, else the page's. */
@@ -205,26 +187,6 @@ export function renderShell(root: HTMLElement): Shell {
       showMascot();
     },
 
-    setActiveView(v) {
-      steps.querySelectorAll<HTMLElement>("[data-view]").forEach((a) => {
-        const on = a.dataset.view === v;
-        a.classList.toggle("is-active", on);
-        if (on) a.setAttribute("aria-current", "step");
-        else a.removeAttribute("aria-current");
-      });
-      const filtering = v === "filter";
-      body.hidden = !filtering;
-      let placeholder = root.querySelector<HTMLElement>("#qb-coming-soon");
-      if (!filtering && !placeholder) {
-        placeholder = document.createElement("div");
-        placeholder.id = "qb-coming-soon";
-        placeholder.className = "qb-card qb-coming-soon";
-        placeholder.innerHTML = `<i class="clock outline icon"></i> Coming soon`;
-        body.after(placeholder);
-      }
-      if (placeholder) placeholder.hidden = filtering;
-    },
-
     announce(message) {
       // Emptied first, then filled a moment later: a screen reader only speaks
       // a change, so the same message twice in a row would otherwise be silent.
@@ -245,7 +207,7 @@ export function renderShell(root: HTMLElement): Shell {
       waiting.push(message);
     },
 
-    setSidebarCollapsed(collapsed, focusOnFold = null) {
+    setSidebarCollapsed(collapsed) {
       // Asked before the docs are hidden: the browser drops focus from hidden elements.
       const focusInDocs = docsColumn.contains(document.activeElement);
       body.classList.toggle("qb-docs-collapsed", collapsed);
@@ -256,23 +218,11 @@ export function renderShell(root: HTMLElement): Shell {
       railIcon.setAttribute("aria-hidden", "true");
       railLabel.textContent = toggle.label;
       // Folding the docs hides the control that had focus; keep the keyboard
-      // user in the page by moving focus to the rail that brings them back,
-      // or to where they came from (a co-occurrence cell, main.ts).
-      if (collapsed && focusInDocs) (focusOnFold ?? rail).focus();
+      // user in the page by moving focus to the rail that brings them back.
+      if (collapsed && focusInDocs) rail.focus();
     },
 
-    /**
-     * The step links carry `href="#"` only so they are keyboard-focusable (an
-     * `<a>` without `href` is skipped by Tab and ignores Enter) — every handler
-     * below calls preventDefault so the URL hash never changes.
-     */
     onMenu(handler) {
-      steps.addEventListener("click", (e) => {
-        const item = (e.target as HTMLElement).closest<HTMLElement>("[data-view]");
-        if (!item) return;
-        e.preventDefault();
-        handler.view(item.dataset.view as ActiveView);
-      });
       // Delegated: the rail AND the docs panel's own Hide button toggle the
       // docs, and the Hide button is repainted with its panel, so it can't be
       // bound once.

@@ -21,7 +21,6 @@ import { renderShell } from "./ui/layout";
 import { mascotFor } from "./ui/mascot";
 import { renderAccountMenu, wireAccountMenu } from "./ui/accountMenu";
 import {
-  createReturnFocus,
   escapeClosesDocs,
   KEEPS_FLOATING_DOCS_OPEN,
   renderDocsSidebar,
@@ -78,14 +77,9 @@ shell.logo.addEventListener("click", () => {
 // Wire every panel once. The listeners are delegated to the panel containers
 // renderShell created, so they survive every repaint.
 shell.onMenu({
-  view: (v) => store.setState({ activeView: v }),
   toggleSidebar: () => store.setState({ sidebarCollapsed: !store.getState().sidebarCollapsed }),
 });
 const docs = wireDocsSidebar(panels.docs, () => store.getState().facets, app.onAddItem);
-// The co-occurrence cell or box that last opened the dictionary: when the
-// user closes the dictionary straight after, the focus goes back there, not
-// to the rail (`createReturnFocus`).
-const returnFocus = createReturnFocus<HTMLElement>();
 wireDocsResize(shell.docsResizeHandle);
 wireDataPreview(panels.preview, {
   onRun: app.runPreview,
@@ -114,11 +108,14 @@ const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.o
   openFieldRow: app.openFieldRow,
   toggleFields: app.toggleFields,
   setPanelTab: app.setPanelTab,
+  toggleCoNames: app.toggleCoNames,
   selectFieldForPanel: app.selectFieldForPanel,
-  showFacetInDictionary: (facetId, returnFocusTo) => {
+  showFacetInDictionary: (facetId) => {
     // The app unfolds the dictionary first: a folded one has no card to show.
+    // The focus stays on the square, so a screen reader is told instead.
     if (app.showFacetInDictionary(facetId) && docs.showFacet(facetId)) {
-      returnFocus.remember(returnFocusTo);
+      const name = store.getState().facets?.find((f) => f.id === facetId)?.name ?? facetId;
+      shell.announce(`${name} is open in the data dictionary.`);
     }
   },
 });
@@ -131,15 +128,13 @@ wireEventDialog(shell.eventDialog, app.closeEvent);
  * (re)render it. Add a key here whenever a render function starts reading it.
  */
 const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
-  { keys: ["activeView"], run: (s) => shell.setActiveView(s.activeView) },
   {
     keys: ["issues", "stats", "preview", "easterEgg"],
     run: (s) => shell.setMascot(mascotFor(s), s.easterEgg),
   },
   {
     keys: ["sidebarCollapsed"],
-    run: (s) =>
-      shell.setSidebarCollapsed(s.sidebarCollapsed, s.sidebarCollapsed ? returnFocus.take() : null),
+    run: (s) => shell.setSidebarCollapsed(s.sidebarCollapsed),
   },
   { keys: ["facets", "databases", "catalog"], run: (s) => renderDocsSidebar(panels.docs, s) },
   {
@@ -224,17 +219,10 @@ document.addEventListener("keydown", (e) => {
     floating: window.matchMedia(NARROW_SCREEN).matches,
     collapsed: store.getState().sidebarCollapsed,
     focusInDocs: docsColumn.contains(document.activeElement),
+    focusOnOpener: document.activeElement?.matches("[data-opens-docs]") ?? false,
   });
   if (!closes) return;
   store.setState({ sidebarCollapsed: true });
-});
-
-// The focus going from the docs to anything outside them ends the round trip
-// from a co-occurrence cell (`createReturnFocus`). Null (the focus going
-// nowhere, as when the docs fold) does not count.
-docsColumn.addEventListener("focusout", (e) => {
-  const next = e.relatedTarget;
-  returnFocus.focusLeftDocs(next instanceof Node && !docsColumn.contains(next));
 });
 
 // A click anywhere else on the page also closes the floating docs, since they

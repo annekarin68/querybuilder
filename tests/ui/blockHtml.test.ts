@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { blockHtml, footerHtml, groupHtml, type BlockCtx } from "../../src/ui/blockHtml";
+import {
+  blockHtml,
+  footerHtml,
+  groupHtml,
+  shownPanelTab,
+  type BlockCtx,
+} from "../../src/ui/blockHtml";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import {
   emptyQuery,
@@ -70,7 +76,15 @@ describe("blockHtml", () => {
     expect(html).toContain('data-action="set-has-no" aria-pressed="false"');
     expect(html).not.toContain("set-and");
     expect(html).not.toContain("an occurrence where");
-    expect(html).not.toContain("qb-block-match");
+    // Empty fields are a valid filter, and the block says so (maintainers,
+    // 2026-10-29), in the summary's words.
+    expect(html).toContain(
+      "No field set: matches every event where <strong>Thing is present</strong>.",
+    );
+    const none = { ...b, negated: true };
+    expect(blockHtml(ctxFor({ ...emptyQuery(), children: [none] }), none, pos)).toContain(
+      "<strong>Thing is absent</strong>",
+    );
     expect(html).toContain('aria-label="Remove Thing"');
   });
 
@@ -169,7 +183,13 @@ describe("blockHtml", () => {
   describe("the panel tabs and the panel", () => {
     const b = newBlock("thing");
     const q: Group = { ...emptyQuery(), children: [b] };
-    const draw = (panelTab: BlockCtx["panelTab"]) => blockHtml({ ...ctxFor(q), panelTab }, b, pos);
+    const withData = () =>
+      coCtxOf(
+        withCoDict(),
+        coTokensFrom((name) => TOKENS[name] ?? ""),
+      );
+    const draw = (panelTab: BlockCtx["panelTab"]) =>
+      blockHtml({ ...ctxFor(q), co: withData(), panelTab }, b, pos);
 
     it("draws Seen together and About as toggle buttons, the open one says it hides", () => {
       const html = draw("seen");
@@ -271,9 +291,28 @@ describe("blockHtml", () => {
       const html = draw("seen");
       expect(html).toContain('<div class="qb-block-body has-panel">');
       expect(html).toContain(`<div class="qb-seen" data-block-id="${b.id}">`);
-      // Without a co-occurrence context the tab says so (coOccurrenceHtml.ts).
-      expect(html).toContain("Seen together cannot be shown right now.");
+      expect(html).toContain('class="qb-seen-chart"');
       expect(html).not.toContain("qb-about");
+    });
+
+    // Without any co-occurrence data the tab is not offered, and About
+    // takes its place (maintainers, 2026-10-29); the state is left alone.
+    it("offers no Seen together tab without co-occurrence data, and shows About", () => {
+      for (const co of [
+        null,
+        coCtxOf(
+          [facets[0]!],
+          coTokensFrom((n) => TOKENS[n] ?? ""),
+        ),
+      ]) {
+        const html = blockHtml({ ...ctxFor(q), co, panelTab: "seen" }, b, pos);
+        expect(html).not.toContain("panel-seen");
+        expect(html).toContain('data-action="panel-about" aria-pressed="true" title="Hide panel"');
+        expect(html).toContain(`class="qb-about" data-block-id="${b.id}"`);
+      }
+      expect(shownPanelTab("seen", false)).toBe("about");
+      expect(shownPanelTab("seen", true)).toBe("seen");
+      expect(shownPanelTab(null, false)).toBeNull();
     });
 
     // The row comes from coOccurrenceHtml.ts; here only where it goes.
@@ -379,7 +418,7 @@ describe("footerHtml", () => {
       "Add a facet to start building the query.",
     );
     const q: Group = { ...emptyQuery(), children: [newBlock("thing")] };
-    expect(footerHtml(q, [], catalog)).toContain("Thing present");
+    expect(footerHtml(q, [], catalog)).toContain("Thing is present");
   });
 
   it("counts the parts with an issue, not the issues", () => {

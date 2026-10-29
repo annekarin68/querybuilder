@@ -195,6 +195,20 @@ export type SavedValue = null | RequestScalar | (RequestScalar | null)[];
 
 // ---- the query tree with facet blocks (docs/superpowers/specs/2026-10-27-facet-blocks-design.md, section 4)
 
+/**
+ * The backend's word for each kind of node in a query tree (its `kind`).
+ * The ONLY place they are spelled: request.ts writes them, response.ts
+ * checks them, and the mock server answers with them. The backend may call
+ * a facet block something else; change the text here and nothing else
+ * needs to change. (The frontend's own `QueryNode.kind` in
+ * src/query/types.ts is a separate word that never goes over the wire.)
+ */
+export const NODE_KIND = {
+  group: "group",
+  facet: "facet",
+  condition: "condition",
+} as const;
+
 /** The body of POST {prefix}/filter/validate and /filter/execute. */
 export interface QueryRequest {
   /** `DatabasesResponse.label` of each database to run against. Never empty. */
@@ -205,7 +219,7 @@ export interface QueryRequest {
 export type RequestNode = RequestGroup | RequestFacet;
 
 export interface RequestGroup {
-  kind: "group";
+  kind: typeof NODE_KIND.group;
   /** The frontend's id for this node: opaque, unique within the request.
    *  Quoted back as `StatsErrorMessage.node_id`. */
   id: string;
@@ -220,7 +234,7 @@ export interface RequestGroup {
  * present (absent). The backend interprets it.
  */
 export interface RequestFacet {
-  kind: "facet";
+  kind: typeof NODE_KIND.facet;
   id: string;
   /** `IndividualResponse.label`. */
   facet_id: string;
@@ -231,7 +245,7 @@ export interface RequestFacet {
 }
 
 export interface RequestFieldCondition {
-  kind: "condition";
+  kind: typeof NODE_KIND.condition;
   id: string;
   /** `IndividualFieldResponse.label`, within the facet of the block. */
   field_id: string;
@@ -245,14 +259,14 @@ export interface RequestFieldCondition {
 export type SavedNode = SavedGroup | SavedFacet;
 
 export interface SavedGroup {
-  kind: "group";
+  kind: typeof NODE_KIND.group;
   operator: "AND" | "OR";
   /** May be empty. */
   children: SavedNode[];
 }
 
 export interface SavedFacet {
-  kind: "facet";
+  kind: typeof NODE_KIND.facet;
   facet_id: string;
   negated: boolean;
   operator: "AND" | "OR";
@@ -260,7 +274,7 @@ export interface SavedFacet {
 }
 
 export interface SavedFieldCondition {
-  kind: "condition";
+  kind: typeof NODE_KIND.condition;
   field_id: string;
   operator_id: string | null;
   value: SavedValue;

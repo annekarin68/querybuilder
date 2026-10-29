@@ -140,21 +140,21 @@ describe("co-occurrence colours", () => {
   // painter will draw them.
   const backgrounds = (): string[] => {
     const all = stops();
-    const out = [...all, token("qb-cooc-never")];
+    const out = [...all];
     for (let i = 0; i + 1 < all.length; i++) {
       for (const t of [0.25, 0.5, 0.75]) out.push(mixOklab(all[i]!, all[i + 1]!, t));
     }
     return out;
   };
 
-  it("the chosen dot colour reaches 3:1 on every stop, blend and the never colour", () => {
+  it("the chosen dot colour reaches 3:1 on every stop and blend", () => {
     for (const bg of backgrounds()) {
       const dot = betterOn(bg, token("qb-cooc-dot-dark"), token("qb-cooc-dot-light"));
       expect(contrastRatio(bg, dot), `${dot} on ${bg}`).toBeGreaterThanOrEqual(3);
     }
   });
 
-  it("the chosen box label colour reaches 4.5:1 on every stop, blend and the never colour", () => {
+  it("the chosen box label colour reaches 4.5:1 on every stop and blend", () => {
     for (const bg of backgrounds()) {
       const label = betterOn(bg, token("qb-cooc-dot-dark"), token("qb-cooc-dot-light"));
       expect(contrastRatio(bg, label), `${label} on ${bg}`).toBeGreaterThanOrEqual(4.5);

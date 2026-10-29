@@ -64,16 +64,15 @@ logic lives in small pure functions that the Node-only tests can reach.
 
 Run `npm run typecheck && npm test && npm run lint && npm run build`, the same
 steps as CI (the build also runs `check:offline`), and, while `mock-server/`
-exists, `npm run typecheck:mock && npm run test:mock`: CI leaves the mock out,
-so this is the only place its tests and the `noBackendDataInSrc` guard run.
+exists, `npm run typecheck:mock && npm run test:mock` (CI's separate `mock`
+job, which also runs the `noBackendDataInSrc` guard).
 Then read your whole diff:
 
 - Is it easy for a junior developer to maintain?
 - Could it have broken something in the code it touches (including Fomantic's
   behaviour)?
 - Does `docs/ARCHITECTURE.md` still describe the code? A disagreement between
-  the two is a bug: fix the doc in the same change. `docs/CHANGELOG.md` is an
-  archive and is not updated any more.
+  the two is a bug: fix the doc in the same change.
 
 Say in your report what you checked. The tests run in Node without a DOM, so
 check UI changes in a real browser too (Playwright with Chromium; install the

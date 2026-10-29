@@ -1,8 +1,9 @@
-import type {
-  SavedQueryRequest,
-  SavedQueryResponse,
-  SavedValue,
-  UserResponse,
+import {
+  NODE_KIND,
+  type SavedQueryRequest,
+  type SavedQueryResponse,
+  type SavedValue,
+  type UserResponse,
 } from "../src/api/types";
 import { isObject, isScalar } from "./requestBody";
 import { pathBelow } from "./paths";
@@ -169,14 +170,14 @@ const isNonBlankStringOrNull = (v: unknown) => v === null || isNonBlankString(v)
  */
 function savedTreeProblem(node: unknown, at: string, isRoot = false): string | null {
   if (!isObject(node)) return `${at} must be an object.`;
-  if (isRoot && node.kind !== "group") return `${at}.kind must be "group".`;
-  if (node.kind !== "group" && node.kind !== "facet") {
-    return `${at}.kind must be "group" or "facet".`;
+  if (isRoot && node.kind !== NODE_KIND.group) return `${at}.kind must be "${NODE_KIND.group}".`;
+  if (node.kind !== NODE_KIND.group && node.kind !== NODE_KIND.facet) {
+    return `${at}.kind must be "${NODE_KIND.group}" or "${NODE_KIND.facet}".`;
   }
   if (node.operator !== "AND" && node.operator !== "OR") {
     return `${at}.operator must be "AND" or "OR".`;
   }
-  if (node.kind === "group") {
+  if (node.kind === NODE_KIND.group) {
     if (!Array.isArray(node.children)) return `${at}.children must be a list.`;
     for (const [i, child] of node.children.entries()) {
       const problem = savedTreeProblem(child, `${at}.children[${i}]`);
@@ -197,7 +198,7 @@ function savedTreeProblem(node: unknown, at: string, isRoot = false): string | n
 /** What is wrong with `c` as a SavedFieldCondition (a set field of a block), or null. */
 function savedConditionProblem(c: unknown, at: string): string | null {
   if (!isObject(c)) return `${at} must be an object.`;
-  if (c.kind !== "condition") return `${at}.kind must be "condition".`;
+  if (c.kind !== NODE_KIND.condition) return `${at}.kind must be "${NODE_KIND.condition}".`;
   if (!isNonBlankString(c.field_id)) return `${at}.field_id must be a non-blank string.`;
   if (!isNonBlankStringOrNull(c.operator_id)) {
     return `${at}.operator_id must be a non-blank string or null.`;

@@ -56,8 +56,8 @@ Other scripts:
 | `npm run preview` | Serve the built `dist/`. |
 | `npm run test` | Vitest unit tests, no DOM: the app's behaviour (`src/app.ts`, with a fake API), the query model, the API client and its contract checks, the store, utilities, the pure view helpers and the lint airlocks. Never touches the mock server. |
 | `npm run typecheck` | `tsc --noEmit`: the app, the tests and the configs, not the mock server. |
-| `npm run test:mock` | The mock server's own tests (`mock-server/tests/`): every route over real HTTP, the real client against the mock, and the `noBackendDataInSrc` guard. Not run in CI. |
-| `npm run typecheck:mock` | Type-check the mock server (`tsconfig.mock.json`). Not run in CI. |
+| `npm run test:mock` | The mock server's own tests (`mock-server/tests/`): every route over real HTTP, the real client against the mock, and the `noBackendDataInSrc` guard. CI runs it in a separate `mock` job. |
+| `npm run typecheck:mock` | Type-check the mock server (`tsconfig.mock.json`). CI runs it in the `mock` job. |
 | `npm run lint` | ESLint + Prettier check. |
 | `npm run format` | Rewrite files with Prettier. Run it when `npm run lint` fails on formatting. |
 | `npm run check:offline` | Scan the text files in `dist/` for off-origin URLs (`http(s)`, `ws(s)`, protocol-relative `//host`). |

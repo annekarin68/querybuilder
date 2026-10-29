@@ -25,9 +25,9 @@ const block = (facetId: string, ...conditions: FieldCondition[]): FacetBlock => 
 });
 
 describe("blockText", () => {
-  it("says present / absent when nothing is set", () => {
-    expect(blockText(block("thing"), catalog)).toBe("Thing present");
-    expect(blockText({ ...block("thing"), negated: true }, catalog)).toBe("Thing absent");
+  it("says is present / is absent when nothing is set", () => {
+    expect(blockText(block("thing"), catalog)).toBe("Thing is present");
+    expect(blockText({ ...block("thing"), negated: true }, catalog)).toBe("Thing is absent");
   });
 
   it("writes one set field without brackets", () => {
@@ -102,7 +102,7 @@ describe("blockText", () => {
     expect(blockText(block("thing", newFieldCondition("size", null, null)), catalog)).toBe(
       "Thing has size (operator?)",
     );
-    expect(blockText(block("nope"), catalog)).toBe("(facet?) present");
+    expect(blockText(block("nope"), catalog)).toBe("(facet?) is present");
   });
 });
 
@@ -115,7 +115,9 @@ describe("queryToText", () => {
         groupOf([block("other"), { ...block("thing"), negated: true }], "OR"),
       ],
     };
-    expect(queryToText(q, catalog)).toBe("Thing has size > 40 AND (Other present OR Thing absent)");
+    expect(queryToText(q, catalog)).toBe(
+      "Thing has size > 40 AND (Other is present OR Thing is absent)",
+    );
   });
 
   it("names an empty query and an empty group", () => {

@@ -515,7 +515,7 @@ describe("Matching events pages and the event dialog", () => {
   });
 
   // Numbers follow the viewer's language ("1,987" or "1.987"), like the paging line.
-  it("writes the numbers of the announcement in the viewer's format", () => {
+  it("writes the numbers of the announcement with the app's digit grouping", () => {
     const thousands: EventRecord[] = Array.from({ length: 2500 }, (_, i) => ({
       id: `t-${i}`,
       values: {},
@@ -525,11 +525,9 @@ describe("Matching events pages and the event dialog", () => {
       preview: { status: "ok", events: thousands, page: 0 },
     });
     app.showEventPage(1);
-    expect(announce).toHaveBeenCalledWith(
-      `Showing results ${(101).toLocaleString()} to ${(200).toLocaleString()} of ${(2500).toLocaleString()}.`,
-    );
+    expect(announce).toHaveBeenCalledWith("Showing results 101 to 200 of 2\u00a0500.");
     expect(previewAnnouncement({ status: "ok", events: thousands, page: 0 })).toBe(
-      `Showing ${(2500).toLocaleString()} results.`,
+      "Showing 2\u00a0500 results.",
     );
   });
 
@@ -1308,12 +1306,14 @@ describe("the panel beside each block", () => {
   it("setPanelTab switches the tab, and pressing the open one hides the panel", async () => {
     vi.useFakeTimers();
     const { app, api, store } = setup(shown);
-    app.setPanelTab("about");
+    app.setPanelTab("about", false);
     expect(store.getState().panelTab).toBe("about");
-    app.setPanelTab("about");
+    app.setPanelTab("about", true);
     expect(store.getState().panelTab).toBeNull();
-    app.setPanelTab("seen");
+    app.setPanelTab("seen", false);
     expect(store.getState().panelTab).toBe("seen");
+    app.toggleCoNames();
+    expect(store.getState().coNamesShown).toBe(true);
     expect(store.getState()).toMatchObject({ preview: shown.preview, restoredNotice: true });
     await vi.advanceTimersByTimeAsync(STATS_DEBOUNCE_MS);
     expect(api.getStats).not.toHaveBeenCalled();

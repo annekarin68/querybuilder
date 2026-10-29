@@ -1,5 +1,5 @@
 // What the co-occurrence popovers share: the legend that a "?" opens
-// (legendHtml.ts) and the list that the chart's "+ N less often" box opens
+// (legendHtml.ts) and the lists that the chart's gathered boxes open
 // (coOccurrenceHtml.ts). Both are the browser's own popover (`<div popover>`
 // opened by a `<button popovertarget>`), so Escape, a click outside and the
 // focus going back to the button come from the browser. Here: their class,
@@ -11,9 +11,10 @@
 export const POPOVER_CLASS = "qb-popover";
 
 /** A popover's id, per block (ids are unique on the page): the row's "?"
- *  legend (`row`), the Seen together tab's "?" legend (`seen`), and the list
- *  of the chart's "+ N less often" box (`merged`). */
-export function popoverId(blockId: string, where: "row" | "seen" | "merged"): string {
+ *  legend (`row`), the Seen together tab's "?" legend (`seen`), and the lists
+ *  of the chart's "+ N in every event" (`always`) and "+ N less often"
+ *  (`merged`) boxes. */
+export function popoverId(blockId: string, where: "row" | "seen" | "always" | "merged"): string {
   return `popover-${blockId}-${where}`;
 }
 

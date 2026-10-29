@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { NODE_KIND } from "../../src/api/types";
 import { toQueryRequest, toSavedQueryRequest, toSavedTree } from "../../src/api/request";
 import { unfinishedDraft, unfinishedRequest } from "../savedQueryFixtures";
 import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
@@ -20,19 +21,19 @@ describe("toQueryRequest", () => {
     expect(toQueryRequest(query, ["alpha"])).toEqual({
       databases: ["alpha"],
       query: {
-        kind: "group",
+        kind: NODE_KIND.group,
         id: query.id,
         operator: "AND",
         children: [
           {
-            kind: "facet",
+            kind: NODE_KIND.facet,
             id: block.id,
             facet_id: "thing",
             negated: true,
             operator: "OR",
             conditions: [
               {
-                kind: "condition",
+                kind: NODE_KIND.condition,
                 id: cond.id,
                 field_id: "size",
                 operator_id: "between",
@@ -41,12 +42,12 @@ describe("toQueryRequest", () => {
             ],
           },
           {
-            kind: "group",
+            kind: NODE_KIND.group,
             id: inner.id,
             operator: "OR",
             children: [
               {
-                kind: "facet",
+                kind: NODE_KIND.facet,
                 id: inner.children[0]!.id,
                 facet_id: "other",
                 negated: false,
@@ -79,16 +80,16 @@ describe("toSavedTree", () => {
     };
     const saved = toSavedTree(unfinished);
     expect(saved).toEqual({
-      kind: "group",
+      kind: NODE_KIND.group,
       operator: "AND",
       children: [
         {
-          kind: "facet",
+          kind: NODE_KIND.facet,
           facet_id: "thing",
           negated: false,
           operator: "AND",
           conditions: [
-            { kind: "condition", field_id: "size", operator_id: null, value: [3, null] },
+            { kind: NODE_KIND.condition, field_id: "size", operator_id: null, value: [3, null] },
           ],
         },
       ],

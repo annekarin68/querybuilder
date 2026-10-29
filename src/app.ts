@@ -38,6 +38,7 @@ import {
   type StatsState,
   type Store,
 } from "./state";
+import { exact } from "./ui/format";
 import { debounce } from "./util/debounce";
 import { pageOf } from "./util/paging";
 import {
@@ -128,7 +129,7 @@ export function previewAnnouncement(preview: PreviewState): string | null {
     case "ok": {
       const n = preview.events.length;
       if (n === 0) return "No events match this query.";
-      return n === 1 ? "Showing 1 result." : `Showing ${n.toLocaleString()} results.`;
+      return n === 1 ? "Showing 1 result." : `Showing ${exact(n)} results.`;
     }
   }
 }
@@ -453,11 +454,20 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
 
   /**
    * A tab of the panel beside every block. Pressing the tab that is open
-   * hides the panel for every block (`panelTab: null`), so the rows get the
-   * whole width (spec, decision 10). Display state: nothing is refetched.
+   * (`isOpen`: the blocks show it) hides the panel for every block
+   * (`panelTab: null`), so the rows get the whole width (spec, decision 10).
+   * Whether it is open is what the screen says, not `panelTab`: without
+   * co-occurrence data the blocks show About in place of Seen together
+   * (`shownPanelTab`, blockHtml.ts). Display state: nothing is refetched.
    */
-  function setPanelTab(tab: PanelTab): void {
-    store.setState({ panelTab: store.getState().panelTab === tab ? null : tab });
+  function setPanelTab(tab: PanelTab, isOpen: boolean): void {
+    store.setState({ panelTab: isOpen ? null : tab });
+  }
+
+  /** The legend's "Show facet names above the squares": on or off in every
+   *  row at once. Display state. */
+  function toggleCoNames(): void {
+    store.setState({ coNamesShown: !store.getState().coNamesShown });
   }
 
   /**
@@ -905,7 +915,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     store.setState({ preview: { ...preview, page: shown.page } });
     // The viewer's number format, like the paging line on screen.
     announce(
-      `Showing results ${shown.from.toLocaleString()} to ${shown.to.toLocaleString()} of ${shown.total.toLocaleString()}.`,
+      `Showing results ${exact(shown.from)} to ${exact(shown.to)} of ${exact(shown.total)}.`,
     );
   }
 
@@ -934,6 +944,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     openFieldRow,
     toggleFields,
     setPanelTab,
+    toggleCoNames,
     selectFieldForPanel,
     showFacetInDictionary,
     onMoveNode,

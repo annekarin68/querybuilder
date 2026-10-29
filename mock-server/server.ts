@@ -22,7 +22,7 @@ import {
   savedQueryOwner,
   type SavedQueryAnswer,
 } from "./savedQueries";
-import type { RequestGroup, StatsErrorMessage } from "../src/api/types";
+import { NODE_KIND, type RequestGroup, type StatsErrorMessage } from "../src/api/types";
 import {
   startLogin,
   issueFakeCode,
@@ -191,7 +191,9 @@ async function readQueryBody(
     return null;
   }
   const problem =
-    (query as { kind?: unknown }).kind === "group" ? queryProblem(query) : "query must be a group.";
+    (query as { kind?: unknown }).kind === NODE_KIND.group
+      ? queryProblem(query)
+      : "query must be a group.";
   if (problem) {
     sendJson(res, 400, { error: `Malformed query: ${problem}` });
     return null;
