@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { escapeAction, focusAfterRepaint, savedDialogHtml } from "../../src/ui/savedQueries";
+import {
+  escapeAction,
+  focusAfterRepaint,
+  nameHint,
+  savedDialogHtml,
+} from "../../src/ui/savedQueries";
 import { initialState, type AppState } from "../../src/state";
 import type { SavedQuery } from "../../src/model";
 import { unfinishedDraft } from "../savedQueryFixtures";
@@ -55,6 +60,29 @@ describe("the save dialog", () => {
     );
     expect(html).toMatch(/id="qb-save-name"[^>]*value="A &quot;b&quot; &lt;c&gt;"/);
     expect(html).toMatch(/id="qb-save-note"[^>]*value="n&amp;n"/);
+  });
+
+  describe("name hint (a new name saves a copy, #97)", () => {
+    const open = { id: "1", name: "Old <b>", note: "", query: initialState.query, databaseIds: [] };
+
+    it("nameHint is null when nothing is open, plain text otherwise", () => {
+      expect(nameHint(null)).toBeNull();
+      expect(nameHint(open)).toBe(
+        "Keep the name to update \u201cOld <b>\u201d. A new name saves a copy; \u201cOld <b>\u201d stays as it is.",
+      );
+    });
+
+    it("the form shows the escaped hint and links it to the Name box", () => {
+      const html = savedDialogHtml(saveDialog({ openSaved: open }));
+      expect(html).toContain('<p class="qb-dialog-hint" id="qb-save-name-hint">Keep the name');
+      expect(html).toContain("\u201cOld &lt;b&gt;\u201d");
+      expect(html).toMatch(/id="qb-save-name"[^>]*aria-describedby="qb-save-name-hint"/);
+    });
+
+    it("a query never saved has neither", () => {
+      const html = savedDialogHtml(saveDialog());
+      expect(html).not.toContain("qb-save-name-hint");
+    });
   });
 
   // A repaint (saving, an error) must not throw away what the user typed.

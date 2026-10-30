@@ -1783,7 +1783,10 @@ saved-queries state.
 - **Save query**: **Name** (required, at most 80 characters) and **Note**
   (optional, at most 80), **Save** and **Cancel**. Both start with the open
   saved query's name and note: saving under the same name updates it, and an
-  empty Note box would wipe its note. A name that belongs to another saved
+  empty Note box would wipe its note. While a saved query is open, a hint
+  under Name (`nameHint`) says: keep the name to update it, a new name saves a
+  copy and leaves the open one as it is (`saveTarget`; decided 2026-10-30,
+  #97, because there is no rename). A name that belongs to another saved
   query asks "Another saved query already has this name. Replace it?" (not
   repeating the name: names match whatever the case, so the typed spelling
   may not be the existing query's); the boxes are
