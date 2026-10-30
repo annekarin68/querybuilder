@@ -8,9 +8,10 @@ export interface SlotRequest {
 }
 
 /**
- * At most one in-flight request of a kind (statistics, Run query, the saved-query
- * list; saves and deletes have none, app.ts says why). `start()` aborts the previous one, if it was given the slot's
- * `signal`; `cancel()` aborts without starting another.
+ * At most one in-flight request of a kind (statistics, Run query, the
+ * saved-query list; saves and deletes have none, app.ts says why). `start()`
+ * aborts the previous one, if it was given the slot's `signal`; `cancel()`
+ * aborts without starting another.
  *
  * This is the whole stale-response guard (docs/ARCHITECTURE.md, "Correctness
  * invariant"): every

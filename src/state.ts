@@ -45,7 +45,8 @@ export type SavedDialog = null | "save" | "list" | "login-to-save" | "login-to-l
 /** Saving the query on screen, as the save dialog shows it. */
 export type SaveState =
   | { status: "idle" }
-  | { status: "saving" }
+  /** `name` and `note` are what is being saved, so a reopened dialog shows them. */
+  | { status: "saving"; name: string; note: string }
   /** The name belongs to another saved query: ask "Replace it?" */
   | { status: "conflict"; name: string; note: string }
   | { status: "error"; error: string };
@@ -218,8 +219,9 @@ export function runBlocker(state: RunInputs): RunBlocker | null {
   if (countBlocks(state.query) === 0) return "no-facet";
   if (state.issues.length > 0) return "unfinished";
   // A database found a problem in a part of the query. Only Run is blocked:
-  // the statistics that report it stay on screen, and a query or database
-  // change resets both before the next fetch.
+  // the statistics that report it stay on screen. A query edit keeps the
+  // problems on parts it did not touch, so the next statistics line (sent
+  // even in this state) replaces them.
   if (state.serverIssues.length > 0) return "rejected";
   return null;
 }

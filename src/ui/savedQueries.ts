@@ -68,8 +68,11 @@ function questionHtml(q: Question): string {
  */
 function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
   const { save, openSaved } = state;
-  const name = typed?.name ?? openSaved?.name ?? "";
-  const note = typed?.note ?? openSaved?.note ?? "";
+  // While saving, the draft being sent: a dialog reopened mid-save has typed
+  // nothing, and must show what is saved, not the open query's name.
+  const sent = save.status === "saving" ? save : null;
+  const name = typed?.name ?? sent?.name ?? openSaved?.name ?? "";
+  const note = typed?.note ?? sent?.note ?? openSaved?.note ?? "";
   const saving = save.status === "saving";
   const locked = saving || save.status === "conflict" ? " readonly" : "";
   const error =

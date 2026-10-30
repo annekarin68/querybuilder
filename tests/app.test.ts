@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createApp, previewAnnouncement, STATS_DEBOUNCE_MS, type AppApi } from "../src/app";
+import { savedDialogHtml } from "../src/ui/savedQueries";
 import { ApiError, COMPLIANCE_START_URL, LOGIN_URL } from "../src/api/client";
 import type {
   Database,
@@ -1663,7 +1664,7 @@ describe("saved queries: saving", () => {
   it("creates a new saved query from the query and selection on screen", async () => {
     const { app, api, store, announce } = setup({ ...ready(), ...loggedIn, savedDialog: "save" });
     app.saveQuery("  Weekly ", " note ");
-    expect(store.getState().save).toEqual({ status: "saving" });
+    expect(store.getState().save).toEqual({ status: "saving", name: "Weekly", note: "note" });
     await flushPromises();
     const { query } = store.getState();
     expect(api.createSavedQuery).toHaveBeenCalledWith({
@@ -1791,7 +1792,7 @@ describe("saved queries: saving", () => {
     app.saveQuery("Weekly", "note");
     await flushPromises();
     app.confirmReplace();
-    expect(store.getState().save).toEqual({ status: "saving" });
+    expect(store.getState().save).toEqual({ status: "saving", name: "Weekly", note: "note" });
     await flushPromises();
     expect(api.updateSavedQuery).toHaveBeenCalledWith(
       "other",
@@ -1871,7 +1872,7 @@ describe("saved queries: saving", () => {
     const { app, store, showError } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
     app.saveQuery("Weekly", "");
     app.closeSavedDialog();
-    expect(store.getState().save).toEqual({ status: "saving" });
+    expect(store.getState().save).toEqual({ status: "saving", name: "Weekly", note: "" });
     slow.reject(new ApiError(500, "late"));
     await flushPromises();
     expect(store.getState().save).toEqual({ status: "idle" });
@@ -1899,7 +1900,9 @@ describe("saved queries: saving", () => {
     app.saveQuery("A", "");
     app.closeSavedDialog();
     app.openSaveDialog();
-    expect(store.getState().save).toEqual({ status: "saving" });
+    expect(store.getState().save).toEqual({ status: "saving", name: "A", note: "" });
+    // The reopened form shows what is being saved, not the open query's name.
+    expect(savedDialogHtml(store.getState())).toContain('value="A"');
     app.saveQuery("B", "");
     expect(api.createSavedQuery).toHaveBeenCalledOnce();
     slow.resolve(savedQuery("a", "A"));
@@ -1907,6 +1910,38 @@ describe("saved queries: saving", () => {
     // The reopened form shows this save, so it closes with it.
     expect(store.getState().savedDialog).toBeNull();
     expect(store.getState().openSaved).toMatchObject({ id: "a" });
+  });
+
+  it("a late failure with the Saved queries list open goes to the list's notice (#84)", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const { app, store, showError } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.closeSavedDialog();
+    app.openSavedList();
+    await flushPromises();
+    slow.reject(new ApiError(500, "late"));
+    await flushPromises();
+    expect(showError).not.toHaveBeenCalled();
+    expect(store.getState().savedListNotice).toEqual({
+      tone: "error",
+      text: expect.stringMatching(/^Couldn't save “Weekly”\. /),
+    });
+  });
+
+  it("a late success with the list open reloads the list", async () => {
+    const slow = deferred<SavedQuery>();
+    const api = fakeApi({ createSavedQuery: vi.fn(() => slow.promise) });
+    const { app, store } = setup({ ...ready(), ...loggedIn, savedDialog: "save" }, api);
+    app.saveQuery("Weekly", "");
+    app.closeSavedDialog();
+    app.openSavedList();
+    await flushPromises();
+    const calls = vi.mocked(api.listSavedQueries).mock.calls.length;
+    slow.resolve(savedQuery("new", "Weekly"));
+    await flushPromises();
+    expect(vi.mocked(api.listSavedQueries).mock.calls.length).toBe(calls + 1);
+    expect(store.getState().savedDialog).toBe("list");
   });
 
   it("does not start a second save while one is running", async () => {
@@ -2142,6 +2177,32 @@ describe("saved queries: deleting", () => {
     expect(store.getState().savedConfirm).toBeNull();
     expect(store.getState().query).toBe(before);
     answer.resolve();
+    await flushPromises();
+    expect(store.getState().deletingSavedId).toBeNull();
+  });
+
+  it("an older delete's answer does not clear a newer delete's busy mark", async () => {
+    const first = deferred<void>();
+    const second = deferred<void>();
+    const answers = [first, second];
+    const api = fakeApi({ deleteSavedQuery: vi.fn(() => answers.shift()!.promise) });
+    const { app, store } = setup(
+      {
+        ...loggedIn,
+        ...ready(),
+        savedDialog: "list",
+        savedList: { status: "ok", queries: [a, b], unreadable: 0 },
+      },
+      api,
+    );
+    app.askDeleteSaved("a");
+    app.confirmSavedAction();
+    app.askDeleteSaved("b");
+    app.confirmSavedAction();
+    first.resolve();
+    await flushPromises();
+    expect(store.getState().deletingSavedId).toBe("b");
+    second.resolve();
     await flushPromises();
     expect(store.getState().deletingSavedId).toBeNull();
   });
