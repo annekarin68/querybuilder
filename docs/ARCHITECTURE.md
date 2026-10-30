@@ -1099,8 +1099,10 @@ change what the query means and are never sent or saved.
 - **`issues.ts`** — `serverIssues` turns each stats error that points at a
   node into an `Issue` marked `fromServer`, always highlighted (mustard or
   red: users missed them in grey). `placeIssues` moves an issue to a node that
-  is drawn: inside a folded group or block, onto the outermost folded one; an
-  unknown node, onto the root. Equal issues on one node are kept once.
+  is drawn: inside a folded group or block, onto the outermost folded one,
+  reworded "Inside this group: …" / "Inside this facet: …" (the folded node
+  shows none of the controls the message names; issue #87); an unknown node,
+  onto the root. Equal issues on one node are kept once.
 - **`summary.ts`** — the query in plain words, for the footer and folded
   lines. As short as it can be without becoming ambiguous, because it is often
   cut off:
@@ -1141,19 +1143,21 @@ change what the query means and are never sent or saved.
 
 Anonymous: a **Log in** button. Logged in: a chip with the user's name and a
 compliance badge that opens a native `<details>` menu: the session's compliance
-log as indented JSON with **Invalidate**, or **Start compliance check**; then
-**Log out**. The log is a scrolling `<pre>` with `tabindex="0"` and an
+log as indented JSON with **Withdraw compliance reason**, or **Start
+compliance check**; then **Log out**. The log is a scrolling `<pre>` with `tabindex="0"` and an
 `aria-label`, because a scrollable region the keyboard cannot focus cannot be
 scrolled by it. Outside clicks and Escape close the menu. Display only
-("Auth"). **Invalidate** and **Log out** close the menu at once and put the
-focus on the chip, so a failure's toast does not cover the open menu.
+("Auth"). **Withdraw compliance reason** and **Log out** close the menu at
+once and put the focus on the chip, so a failure's toast does not cover the open menu.
 
 ### Above the builder — `databasePicker.ts`
 
 One pill per database (a native checkbox in a styled label; hover shows
 "owner: description"), "N of M selected", **All** / **None**. With none
 selected, a warning says "Select at least one database." and the other cards
-say why they are empty.
+say why they are empty. When the backend lists no databases at all, the card
+and the other cards say "No databases are available to you." instead
+(`NO_DATABASES`): there would be nothing to select.
 
 **Failed databases.** A selected database that failed for the query on screen
 gets a danger outline, a "!" and the hidden text " failed for this query"
@@ -1686,7 +1690,8 @@ the co-occurrence captions swap the backend's decimal point the same way
 column when the backend returns billions: `compact` ("1,2 billion", the exact
 value on hover), `matchRatio` ("62 %", "0,34 %", and "1 in 289,3 million"
 rather than a misleading "0 %"), `barWidth` (a nonzero match shows at least
-2 px).
+2 px). A row for a database missing from the list has no known size, so it
+shows the count ("7 events") instead of a share.
 
 Top to bottom:
 
@@ -1768,8 +1773,10 @@ results, and accept a sideways scroll bar.
 - A real `<table>`: a hidden `<caption>`, `scope`d headers, the id cell the
   row's `<th>`.
 - **Event JSON dialog** (`eventDialog.ts`): an id opens that result's JSON in a
-  native `<dialog>`, in a focusable, scrolling `<pre role="region">` that
-  alone scrolls on a short window. Built like the saved-queries dialog
+  native `<dialog>`. The JSON is the app's own `EventRecord`, not the server's
+  response (our keys, and nothing the app doesn't read), and the dialog says so
+  ("This is the event as this app reads it, not the server's own response.").
+  It sits in a focusable, scrolling `<pre role="region">` that alone scrolls on a short window. Built like the saved-queries dialog
   (created once, painted from `openEventId`, opened and closed to match); the
   focus starts on **Close** and goes back to the id afterwards; not repainted
   while the same result stays open (that would scroll the JSON to its top);
@@ -1788,8 +1795,13 @@ saved-queries state.
 - **Save query**: **Name** (required, at most 80 characters) and **Note**
   (optional, at most 80), **Save** and **Cancel**. Both start with the open
   saved query's name and note: saving under the same name updates it, and an
-  empty Note box would wipe its note. A name that belongs to another saved
-  query asks "A saved query called “…” exists. Replace it?"; the boxes are
+  empty Note box would wipe its note. While a saved query is open, a hint
+  under Name (`nameHint`) says: keep the name to update it, a new name saves a
+  copy and leaves the open one as it is (`saveTarget`; decided 2026-10-30,
+  #97, because there is no rename). A name that belongs to another saved
+  query asks "Another saved query already has this name. Replace it?" (not
+  repeating the name: names match whatever the case, so the typed spelling
+  may not be the existing query's); the boxes are
   read-only while saving or asking, so what is asked about is what is in them.
   A save that works closes the dialog and is announced. An update answered
   `404` (deleted in another tab) creates the query instead (`updateOrCreate`).
@@ -1901,9 +1913,10 @@ The real backend's data differs, which is why `src/` must never name the mock's
   plain words for the kind of failure, never the server's text, a status code
   or a URL. No old data is kept ("Correctness invariant"). The details go to
   the console. Errors of superseded, aborted requests never reach a panel.
-- An action with no panel of its own (**Log out**, **Invalidate**) reports a
-  failure with a red toast, also spoken (`AppDeps.showError`), below the top
-  bar so it covers neither the menu nor the chip. A failed **Delete** of a
+- An action with no panel of its own (**Log out**, **Withdraw compliance
+  reason**) reports a failure with a red toast, also spoken
+  (`AppDeps.showError`), below the top bar so it covers neither the menu nor
+  the chip. A failed **Delete** of a
   saved query shows inside the dialog instead (the modal hides toasts);
   deleting one that is already gone (`404`) counts as deleted.
 - A problem a database finds in the query comes in its stats line, not as an

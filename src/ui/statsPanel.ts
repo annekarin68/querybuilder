@@ -2,7 +2,7 @@ import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../
 import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { placeIssues } from "../query/issues";
-import { failureReasons, queryIsAtFault } from "./databasePicker";
+import { blockedText, failureReasons, queryIsAtFault } from "./databasePicker";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
 /** The databases are loaded once into AppState.databases; a result only
@@ -27,10 +27,14 @@ function successRowHtml(result: Ok, db: Database | undefined): string {
   const name = db?.name ?? result.databaseId;
   const total = db?.eventCount ?? 0;
   const { matchCount } = result;
-  return `<div class="qb-db-row" title="${escapeHtml(name)}: ${escapeHtml(exact(matchCount))} of ${escapeHtml(exact(total))}">
+  // A database missing from the list has no known size: "none" would hide
+  // its matches, so the row shows the count instead.
+  const ratio = db ? matchRatio(matchCount, total) : countLabel(matchCount, "event");
+  const title = db ? `${name}: ${exact(matchCount)} of ${exact(total)}` : `${name}: ${ratio}`;
+  return `<div class="qb-db-row" title="${escapeHtml(title)}">
     <span class="qb-db-name">${escapeHtml(name)}</span>
     ${bar(matchCount, total)}
-    <span class="qb-db-ratio">${escapeHtml(matchRatio(matchCount, total))}</span>
+    <span class="qb-db-ratio">${escapeHtml(ratio)}</span>
     ${messagesHtml(result.notes, "qb-db-msg")}
   </div>`;
 }
@@ -292,7 +296,7 @@ export function statsPanelHtml(state: AppState): string {
   // "rejected" is explained BY the results (each database's errors), so they
   // stay on screen; every other blocker means there are no results to show.
   if (blocker && blocker !== "rejected") {
-    return card(state, placeholder(BLOCKED_MESSAGES[blocker]));
+    return card(state, placeholder(blockedText(blocker, state, BLOCKED_MESSAGES)));
   }
   const stats = state.stats;
   if (stats.status === "error") {

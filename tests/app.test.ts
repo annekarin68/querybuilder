@@ -319,7 +319,7 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(announce).toHaveBeenLastCalledWith(
-      "Could not load events: Something went wrong. Try again; if it keeps happening, reload the page.",
+      "Couldn't load events: Something went wrong. Try again; if it keeps happening, reload the page.",
     );
   });
 
@@ -704,9 +704,9 @@ describe("query and database changes", () => {
   });
 });
 
-// ---- log out / invalidate compliance --------------------------------------
+// ---- log out / withdraw compliance --------------------------------------
 
-describe("logging out and invalidating compliance", () => {
+describe("logging out and withdrawing compliance", () => {
   const signedIn: Partial<AppState> = {
     ...ready(),
     preview: { status: "ok", events, page: 0 },
@@ -733,14 +733,14 @@ describe("logging out and invalidating compliance", () => {
     expect(showError).toHaveBeenCalledWith("Couldn't log out. Try again.");
   });
 
-  it("says so when invalidating the compliance reason fails", async () => {
+  it("says so when withdrawing the compliance reason fails", async () => {
     const api = fakeApi({
       invalidateCompliance: vi.fn(async () => Promise.reject(new ApiError(500, "x"))),
     });
     const { app, showError } = setup(signedIn, api);
-    app.onInvalidateCompliance();
+    app.onWithdrawCompliance();
     await flushPromises();
-    expect(showError).toHaveBeenCalledWith("Couldn't invalidate the compliance reason. Try again.");
+    expect(showError).toHaveBeenCalledWith("Couldn't withdraw the compliance reason. Try again.");
   });
 
   // A browser that restores its last session brings sessionStorage back, so
@@ -773,9 +773,9 @@ describe("logging out and invalidating compliance", () => {
     expect(store.getState().compliance.status).toBe("required");
   });
 
-  it("invalidating compliance clears the preview and asks for a reason again", async () => {
+  it("withdrawing compliance clears the preview and asks for a reason again", async () => {
     const { app, api, store } = setup(signedIn);
-    app.onInvalidateCompliance();
+    app.onWithdrawCompliance();
     expect(store.getState().preview).toEqual({ status: "idle" });
     await flushPromises();
     expect(api.invalidateCompliance).toHaveBeenCalled();
@@ -1891,7 +1891,10 @@ describe("saved queries: saving", () => {
     slow.reject(new ApiError(409, "taken"));
     await flushPromises();
     expect(store.getState().save).toEqual({ status: "idle" });
-    expect(showError).toHaveBeenCalledOnce();
+    // No name box is on screen any more, so the toast says which name.
+    expect(showError).toHaveBeenCalledExactlyOnceWith(
+      "Not saved: another saved query already has this name (“Weekly”). Save again to replace it.",
+    );
   });
 
   it("reopening during a save shows that save, and Save can't start a second one (#84)", async () => {

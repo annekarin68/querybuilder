@@ -2,6 +2,7 @@ import type { AppState, SavedConfirm, SavedListNotice } from "../state";
 import type { SavedQuery, UnreadableSaved } from "../model";
 import { unreadableName } from "./savedNames";
 import type { createApp } from "../app";
+import type { OpenSaved } from "../query/saved";
 import { dialogBody, escapeHtml, paint } from "./panel";
 import { countLabel, formatDate } from "./format";
 
@@ -19,6 +20,12 @@ import { countLabel, formatDate } from "./format";
 
 /** The heading's id: the `<dialog>` in layout.ts is labelled by it. */
 export const SAVED_TITLE_ID = "qb-saved-title";
+
+/** The save form's question when the name is taken. It doesn't repeat the
+ *  name: names match whatever the case, so the typed spelling ("night SHIFT")
+ *  could differ from the existing query's ("Night shift"), and the create's
+ *  409 doesn't say which query it is. The name box shows what was typed. */
+const CLASH_QUESTION = "Another saved query already has this name. Replace it?";
 
 /** The query card button that opens each dialog, by its `data-action`: the
  *  focus goes back to it when the dialog closes. */
@@ -62,6 +69,17 @@ function questionHtml(q: Question): string {
 }
 
 /**
+ * What the Name box's hint says when a saved query is open: the same name
+ * updates it, a new name saves a copy (`saveTarget`, decided 2026-10-30, #97).
+ * Plain text, not escaped: the caller escapes it. Null when nothing is open.
+ */
+export function nameHint(openSaved: OpenSaved | null): string | null {
+  if (!openSaved) return null;
+  const { name } = openSaved;
+  return `Keep the name to update “${name}”. A new name saves a copy; “${name}” stays as it is.`;
+}
+
+/**
  * The save form. The boxes start with the open saved query's name and note (a
  * re-save updates it, and an empty note box would wipe its note) unless the
  * user has typed something (`typed`). While saving, or while asking "Replace
@@ -74,6 +92,11 @@ function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
   const sent = save.status === "saving" ? save : null;
   const name = typed?.name ?? sent?.name ?? openSaved?.name ?? "";
   const note = typed?.note ?? sent?.note ?? openSaved?.note ?? "";
+  const hint = nameHint(openSaved);
+  const describedBy = hint ? ` aria-describedby="qb-save-name-hint"` : "";
+  const hintHtml = hint
+    ? `<p class="qb-dialog-hint" id="qb-save-name-hint">${escapeHtml(hint)}</p>`
+    : "";
   const saving = save.status === "saving";
   const locked = saving || save.status === "conflict" ? " readonly" : "";
   const error =
@@ -84,7 +107,7 @@ function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
     save.status === "conflict"
       ? questionHtml({
           id: "qb-replace-question",
-          textHtml: `A saved query called “${escapeHtml(save.name)}” exists. Replace it?`,
+          textHtml: CLASH_QUESTION,
           yes: "Replace",
           yesAction: "confirm-replace",
           cancelAction: "cancel-replace",
@@ -98,7 +121,8 @@ function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
   return `<form method="dialog" class="ui form" data-save-form>
       <div class="required field">
         <label for="qb-save-name">Name</label>
-        <input type="text" id="qb-save-name" name="name" required maxlength="80" autocomplete="off" data-initial-focus value="${escapeHtml(name)}"${locked} />
+        <input type="text" id="qb-save-name" name="name" required maxlength="80" autocomplete="off" data-initial-focus${describedBy} value="${escapeHtml(name)}"${locked} />
+        ${hintHtml}
       </div>
       <div class="field">
         <label for="qb-save-note">Note</label>

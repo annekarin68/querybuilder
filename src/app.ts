@@ -126,7 +126,7 @@ export function previewAnnouncement(preview: PreviewState): string | null {
     case "loading":
       return "Fetching events…";
     case "error":
-      return `Could not load events: ${preview.error}`;
+      return `Couldn't load events: ${preview.error}`;
     case "ok": {
       const n = preview.events.length;
       if (n === 0) return "No events match this query.";
@@ -346,16 +346,17 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (stats.status === "loading") refreshStats();
   }
 
-  function onInvalidateCompliance(): void {
+  function onWithdrawCompliance(): void {
     resetPreview();
     api
+      // The UI says "withdraw"; the backend's word (endpoint) is "invalidate".
       .invalidateCompliance()
       .then(() => {
         store.setState({ compliance: { status: "required" } });
       })
       .catch((err) => {
-        console.error("Invalidate compliance failed:", err);
-        showError("Couldn't invalidate the compliance reason. Try again.");
+        console.error("Withdraw compliance failed:", err);
+        showError("Couldn't withdraw the compliance reason. Try again.");
       });
   }
 
@@ -812,7 +813,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
         if (err instanceof ApiError && err.status === 409) {
           if (formShown()) return store.setState({ save: { status: "conflict", name, note } });
           return reportFailure(
-            `Not saved: a saved query is already called “${name}”. Save again to replace it.`,
+            `Not saved: another saved query already has this name (“${name}”). Save again to replace it.`,
           );
         }
         savedCallFailed(err, (error) => {
@@ -1049,7 +1050,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onDatabasesChange,
     onPageRestored,
     onLogout,
-    onInvalidateCompliance,
+    onWithdrawCompliance,
     startFresh,
     dismissRestoredNotice,
     retryStats,

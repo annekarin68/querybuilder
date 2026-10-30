@@ -3,6 +3,7 @@ import { FIRST_COLUMNS } from "../config";
 import { pageOf } from "../util/paging";
 import { escapeHtml, paint } from "./panel";
 import { exact } from "./format";
+import { blockedText } from "./databasePicker";
 import { eventTableHtml, pagingHtml, scrollAfterRepaint, tableColumns } from "./eventTable";
 
 /**
@@ -111,7 +112,8 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
     return;
   }
   if (blocker) {
-    paint(el, card(runBlock({ message: BLOCKED_MESSAGES[blocker], enabled: false })));
+    const message = blockedText(blocker, state, BLOCKED_MESSAGES);
+    paint(el, card(runBlock({ message, enabled: false })));
     return;
   }
   // app.ts resets preview to "idle" (changeScope) in the same
@@ -142,7 +144,7 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
     paint(
       el,
       card(
-        `<div class="ui small negative message"><div class="header">Could not load events</div><p>${escapeHtml(p.error)}</p></div>
+        `<div class="ui small negative message"><div class="header">Couldn't load events</div><p>${escapeHtml(p.error)}</p></div>
          ${runBlock({ enabled: true, label: "Try again" })}`,
       ),
     );

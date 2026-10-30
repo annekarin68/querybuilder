@@ -99,7 +99,7 @@ wireStatsPanel(panels.stats, {
 });
 wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
-  onInvalidate: app.onInvalidateCompliance,
+  onWithdraw: app.onWithdrawCompliance,
 });
 const { render: renderQueryBuilder, runAfterPointer } = wireQueryBuilder(
   panels.center,

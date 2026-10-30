@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { placeIssues, serverIssues } from "../../src/query/issues";
+import { insideMessage, placeIssues, serverIssues } from "../../src/query/issues";
 import { emptyQuery, groupOf, newBlock, newFieldCondition } from "../../src/query/tree";
 import type { FacetBlock, Group, Issue } from "../../src/query/types";
 import { dbError, failed, ok } from "../statsFixtures";
@@ -31,13 +31,33 @@ describe("placeIssues", () => {
       ...root,
       children: [{ ...inner, children: [{ ...block, collapsed: true }] }],
     };
-    expect(placeIssues(folded, [issue(c.id)])).toEqual([issue(block.id)]);
+    expect(placeIssues(folded, [issue(c.id)])).toEqual([
+      issue(block.id, insideMessage("facet", "m")),
+    ]);
   });
 
   it("moves it to the outermost folded group around it", () => {
     const { c, block, inner, root } = sample();
     const folded: Group = { ...root, children: [{ ...inner, collapsed: true }] };
-    expect(placeIssues(folded, [issue(c.id), issue(block.id)])).toEqual([issue(inner.id)]);
+    expect(placeIssues(folded, [issue(c.id), issue(block.id)])).toEqual([
+      issue(inner.id, insideMessage("group", "m")),
+    ]);
+  });
+
+  // Issue #87: "Add a facet to this group." from an empty inner group must
+  // not read as if the folded outer group (which has a facet) were empty.
+  it("rewords a moved issue, and keeps the folded node's own as it is", () => {
+    const { c, block, inner, root } = sample();
+    const folded: Group = { ...root, children: [{ ...inner, collapsed: true }] };
+    expect(
+      placeIssues(folded, [issue(inner.id, "Own."), issue(c.id, "Add a facet to this group.")]),
+    ).toEqual([
+      issue(inner.id, "Own."),
+      issue(inner.id, "Inside this group: Add a facet to this group."),
+    ]);
+    expect(placeIssues(folded, [issue(block.id, "Unknown facet.")])[0]!.message).toBe(
+      "Inside this group: Unknown facet.",
+    );
   });
 
   it("puts an unknown id on the root", () => {
@@ -59,8 +79,8 @@ describe("placeIssues: a local and a server issue with the same text", () => {
     const { c, block, inner, root } = sample();
     const folded: Group = { ...root, children: [{ ...inner, collapsed: true }] };
     expect(placeIssues(folded, [issue(c.id), issue(block.id), issue(c.id, "Other.")])).toEqual([
-      issue(inner.id),
-      issue(inner.id, "Other."),
+      issue(inner.id, insideMessage("group", "m")),
+      issue(inner.id, insideMessage("group", "Other.")),
     ]);
   });
 });

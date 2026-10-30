@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { escapeAction, focusAfterRepaint, savedDialogHtml } from "../../src/ui/savedQueries";
+import {
+  escapeAction,
+  focusAfterRepaint,
+  nameHint,
+  savedDialogHtml,
+} from "../../src/ui/savedQueries";
 import { initialState, type AppState } from "../../src/state";
 import type { SavedQuery } from "../../src/model";
 import { unfinishedDraft } from "../savedQueryFixtures";
@@ -57,6 +62,29 @@ describe("the save dialog", () => {
     expect(html).toMatch(/id="qb-save-note"[^>]*value="n&amp;n"/);
   });
 
+  describe("name hint (a new name saves a copy, #97)", () => {
+    const open = { id: "1", name: "Old <b>", note: "", query: initialState.query, databaseIds: [] };
+
+    it("nameHint is null when nothing is open, plain text otherwise", () => {
+      expect(nameHint(null)).toBeNull();
+      expect(nameHint(open)).toBe(
+        "Keep the name to update \u201cOld <b>\u201d. A new name saves a copy; \u201cOld <b>\u201d stays as it is.",
+      );
+    });
+
+    it("the form shows the escaped hint and links it to the Name box", () => {
+      const html = savedDialogHtml(saveDialog({ openSaved: open }));
+      expect(html).toContain('<p class="qb-dialog-hint" id="qb-save-name-hint">Keep the name');
+      expect(html).toContain("\u201cOld &lt;b&gt;\u201d");
+      expect(html).toMatch(/id="qb-save-name"[^>]*aria-describedby="qb-save-name-hint"/);
+    });
+
+    it("a query never saved has neither", () => {
+      const html = savedDialogHtml(saveDialog());
+      expect(html).not.toContain("qb-save-name-hint");
+    });
+  });
+
   // A repaint (saving, an error) must not throw away what the user typed.
   it("keeps what the user typed over the open query's name", () => {
     const html = savedDialogHtml(
@@ -83,12 +111,16 @@ describe("the save dialog", () => {
     expect(html).toMatch(/<button type="submit"[^>]*>Save<\/button>/);
   });
 
-  it("asks before replacing another saved query of that name, escaped", () => {
+  // The question leaves the name out (issue #97): names match whatever the
+  // case, so the typed spelling could differ from the existing query's. The
+  // box above it still shows what was typed.
+  it("asks before replacing another saved query of that name, the name escaped in the box", () => {
     const html = savedDialogHtml(
       saveDialog({ save: { status: "conflict", name: "We<ek>", note: "" } }),
+      { name: "We<ek>", note: "" },
     );
-    expect(text(html)).toContain("A saved query called “We<ek>” exists. Replace it?");
-    expect(html).toContain("We&lt;ek&gt;");
+    expect(text(html)).toContain("Another saved query already has this name. Replace it?");
+    expect(html).toMatch(/id="qb-save-name"[^>]*value="We&lt;ek&gt;"/);
     expect(html).toMatch(/data-action="confirm-replace"[^>]*>Replace<\/button>/);
     expect(html).toMatch(/data-action="cancel-replace"[^>]*>Cancel<\/button>/);
     // The question is about the name in the box: it cannot change meanwhile.
