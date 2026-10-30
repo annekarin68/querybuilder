@@ -306,7 +306,7 @@ describe("expand and add affordances", () => {
   it("the hint tells people to click to expand, and what '+ Add' does", () => {
     expect(DOCS_HINT).toMatch(/click/i);
     expect(DOCS_HINT).toMatch(/expand/i);
-    expect(DOCS_HINT).toMatch(/\+ Add/);
+    expect(DOCS_HINT).toMatch(/its \+/);
     expect(DOCS_HINT).toMatch(/with an arrow/);
   });
 });

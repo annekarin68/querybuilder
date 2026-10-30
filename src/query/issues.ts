@@ -66,12 +66,41 @@ function drawnNodeIds(query: Group): Map<string, string> {
  * issue inside a folded group or block goes to the outermost folded node
  * around it, and one whose node isn't in `query` goes to the root group.
  * Issues that end up the same on one node are kept once.
+ *
+ * A moved issue is reworded ("Inside this group: Enter a value."): its
+ * message names a control the folded node doesn't show, and "Add a facet to
+ * this group." on a group that already has one would send the user to the
+ * wrong place (issue #87).
  */
 export function placeIssues(query: Group, issues: Issue[]): Issue[] {
   const drawn = drawnNodeIds(query);
+  const folded = foldedNodeKinds(query);
   return withoutRepeats(
-    issues.map((issue) => ({ ...issue, nodeId: drawn.get(issue.nodeId) ?? query.id })),
+    issues.map((issue) => {
+      const nodeId = drawn.get(issue.nodeId) ?? query.id;
+      const kind = nodeId === issue.nodeId ? undefined : folded.get(nodeId);
+      return kind
+        ? { ...issue, nodeId, message: insideMessage(kind, issue.message) }
+        : { ...issue, nodeId };
+    }),
   );
+}
+
+/** The folded groups and blocks in `query`, by id, with what the UI calls
+ *  them: a block is a "facet". */
+function foldedNodeKinds(query: Group): Map<string, "group" | "facet"> {
+  const kinds = new Map<string, "group" | "facet">();
+  const visit = (node: QueryNode) => {
+    if (node.collapsed) kinds.set(node.id, node.kind);
+    if (node.kind === "group") node.children.forEach(visit);
+  };
+  visit(query);
+  return kinds;
+}
+
+/** The message of an issue drawn on the folded node around it. */
+export function insideMessage(kind: "group" | "facet", message: string): string {
+  return `Inside this ${kind}: ${message}`;
 }
 
 /** The node (group, block or field condition) with this id in `query`, or null. */

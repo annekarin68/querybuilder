@@ -20,6 +20,12 @@ import { countLabel, formatDate } from "./format";
 /** The heading's id: the `<dialog>` in layout.ts is labelled by it. */
 export const SAVED_TITLE_ID = "qb-saved-title";
 
+/** The save form's question when the name is taken. It doesn't repeat the
+ *  name: names match whatever the case, so the typed spelling ("night SHIFT")
+ *  could differ from the existing query's ("Night shift"), and the create's
+ *  409 doesn't say which query it is. The name box shows what was typed. */
+const CLASH_QUESTION = "Another saved query already has this name. Replace it?";
+
 /** The query card button that opens each dialog, by its `data-action`: the
  *  focus goes back to it when the dialog closes. */
 const OPENER_ACTION = {
@@ -81,7 +87,7 @@ function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
     save.status === "conflict"
       ? questionHtml({
           id: "qb-replace-question",
-          textHtml: `A saved query called “${escapeHtml(save.name)}” exists. Replace it?`,
+          textHtml: CLASH_QUESTION,
           yes: "Replace",
           yesAction: "confirm-replace",
           cancelAction: "cancel-replace",

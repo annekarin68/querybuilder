@@ -126,7 +126,7 @@ export function previewAnnouncement(preview: PreviewState): string | null {
     case "loading":
       return "Fetching events…";
     case "error":
-      return `Could not load events: ${preview.error}`;
+      return `Couldn't load events: ${preview.error}`;
     case "ok": {
       const n = preview.events.length;
       if (n === 0) return "No events match this query.";
@@ -355,7 +355,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       })
       .catch((err) => {
         console.error("Invalidate compliance failed:", err);
-        showError("Couldn't invalidate the compliance reason. Try again.");
+        showError("Couldn't withdraw the compliance reason. Try again.");
       });
   }
 
@@ -802,7 +802,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
           if (formShown()) return store.setState({ save: { status: "conflict", name, note } });
           store.setState({ save: { status: "idle" } });
           return showError(
-            `Not saved: a saved query is already called “${name}”. Save again to replace it.`,
+            `Not saved: another saved query already has this name (“${name}”). Save again to replace it.`,
           );
         }
         savedCallFailed(err, (error) => {
@@ -869,7 +869,6 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (store.getState().save.status === "conflict") store.setState({ save: { status: "idle" } });
   }
 
-  /** The saved query `id` from the list on screen, if it is still there. */
   /** The name the list shows for the saved query `id`, readable or not. */
   function listedName(id: string): string | undefined {
     const { savedList } = store.getState();
@@ -878,6 +877,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     return listedQuery(id)?.name ?? (unreadable ? unreadableName(unreadable) : undefined);
   }
 
+  /** The saved query `id` from the list on screen, if it is still there. */
   function listedQuery(id: string): SavedQuery | undefined {
     const { savedList } = store.getState();
     return savedList.status === "ok" ? savedList.queries.find((q) => q.id === id) : undefined;

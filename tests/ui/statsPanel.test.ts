@@ -189,6 +189,26 @@ describe("statsPanelHtml", () => {
     );
   });
 
+  // Issue #97: with nothing to select, "Select at least one" can't be done.
+  it("says no database is available when the backend lists none", () => {
+    const html = statsPanelHtml({ ...ready, databases: [], selectedDatabaseIds: [] });
+    expect(html).toContain("No databases are available to you.");
+    expect(html).not.toContain("Select at least one");
+  });
+
+  // Issue #97: a database missing from the list has no known size, so its
+  // ratio would be "none" in spite of its matches.
+  it("shows the count for a database that isn't in the list", () => {
+    const html = statsPanelHtml({
+      ...ready,
+      databases: [db("a", 1000)],
+      stats: { status: "ok", results: [ok("a", 5), ok("b", 7)] },
+    });
+    expect(html).toContain('<span class="qb-db-ratio">7 events</span>');
+    expect(html).toContain('title="b: 7 events"');
+    expect(html).toContain('<span class="qb-db-ratio">0,5 %</span>');
+  });
+
   describe("errors, each where they can be fixed", () => {
     const message = "Text is too long (at most 100 characters).";
     const issue = { nodeId: condition.id, message, kind: "invalid" as const };

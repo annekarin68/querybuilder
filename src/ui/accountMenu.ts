@@ -38,10 +38,10 @@ export function complianceHtml(c: ComplianceState): string {
       <a class="ui fluid small primary button" href="${escapeHtml(COMPLIANCE_START_URL)}">Start compliance check</a>`;
   }
   return `<pre class="qb-account-log" tabindex="0" aria-label="Compliance log">${escapeHtml(c.log)}</pre>
-    <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Invalidate</button>`;
+    <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Withdraw compliance reason</button>`;
 }
 
-/** Invalidate and Log out change what the menu shows, and the repaint
+/** Withdraw compliance reason and Log out change what the menu shows, and the repaint
  *  rebuilds it closed. Their buttons are gone (or hidden), so paint() moves
  *  the keyboard focus to the chip, or to Log in: each is the panel's
  *  `data-focus-landing` (focusMemory.ts). */

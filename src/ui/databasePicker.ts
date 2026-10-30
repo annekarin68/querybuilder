@@ -79,6 +79,16 @@ function currentFailures(state: AppState): Map<string, string[]> {
   return failedDatabases(state.stats.results.filter((r) => selected.has(r.databaseId)));
 }
 
+/** What every panel says when the backend lists no databases at all for this
+ *  user, in place of "Select at least one database". */
+export const NO_DATABASES = "No databases are available to you.";
+
+/** The message for `state` when nothing is selected: `selectText`, or
+ *  NO_DATABASES when there is nothing to select. */
+export function noDatabaseText(state: Pick<AppState, "databases">, selectText: string): string {
+  return state.databases?.length === 0 ? NO_DATABASES : selectText;
+}
+
 /**
  * The database scope selector, above the query builder. Databases are
  * arbitrary partitions with no semantic tie to event content (returned by
@@ -93,6 +103,14 @@ function currentFailures(state: AppState): Map<string, string[]> {
  */
 export function databasePickerHtml(state: AppState): string {
   if (!state.databases) return "";
+  // "0 of 0 selected" and "Select at least one database." would ask for
+  // something the user can't do.
+  if (state.databases.length === 0) {
+    return `<div class="qb-card qb-dbpicker">
+       <h2 class="qb-card-title">Databases</h2>
+       <p class="qb-db-warn"><i class="exclamation triangle icon"></i>${NO_DATABASES}</p>
+     </div>`;
+  }
   const selected = new Set(state.selectedDatabaseIds);
   const failures = currentFailures(state);
   const pills = state.databases

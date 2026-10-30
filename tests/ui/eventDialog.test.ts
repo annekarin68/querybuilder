@@ -2,7 +2,12 @@ import { describe, it, expect } from "vitest";
 import { buildFieldCatalog } from "../../src/query/fieldCatalog";
 import { emptyQuery, newBlock } from "../../src/query/tree";
 import { initialState, runBlocker, type AppState } from "../../src/state";
-import { EVENT_TITLE_ID, eventDialogHtml, openEventOf } from "../../src/ui/eventDialog";
+import {
+  EVENT_JSON_HINT,
+  EVENT_TITLE_ID,
+  eventDialogHtml,
+  openEventOf,
+} from "../../src/ui/eventDialog";
 
 const event = { id: "6f1c2a9e-0b7d-4c55-9a43-2f0e8d1b7c10", values: { a: [{ x: "<b>" }] } };
 // Results on screen and Run not blocked: a catalog, a database, one facet
@@ -52,6 +57,11 @@ describe("eventDialogHtml", () => {
     );
     expect(html).toContain("&lt;b&gt;");
     expect(html).not.toContain("<b>");
+  });
+
+  // Issue #97: the JSON is the app's EventRecord, not the server's response.
+  it("says the JSON is the app's reading of the event", () => {
+    expect(eventDialogHtml(event)).toContain(`<p class="qb-dialog-hint">${EVENT_JSON_HINT}</p>`);
   });
 
   // The id comes from the backend: it must not be able to add markup.

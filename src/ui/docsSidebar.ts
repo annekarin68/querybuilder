@@ -53,9 +53,11 @@ const chevron = `<i class="angle right icon qb-chevron" aria-hidden="true"></i>`
  *  name line up with the rows that do have a chevron (CSS gives it the width). */
 const chevronSpacer = `<span class="qb-chevron-spacer" aria-hidden="true"></span>`;
 
-/** What the sidebar tells people about its rows, shown under the title. */
+/** What the sidebar tells people about its rows, shown under the title. "its
+ *  +", not "+ Add": in a narrow sidebar the word "Add" is hidden and only the
+ *  "+" is left (styles.css, `.qb-add-label`). */
 export const DOCS_HINT =
-  "Click a section, facet or field with an arrow to expand it. Drag it into the query, or press + Add.";
+  "Click a section, facet or field with an arrow to expand it. Drag it into the query, or press its +.";
 
 /**
  * The "Add to query" button. With `text` it is a labelled button, like the

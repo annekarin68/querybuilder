@@ -113,6 +113,16 @@ describe("databasePickerHtml", () => {
     stats: { status, results },
   });
 
+  // Issue #97: "0 of 0 selected" and "Select at least one database." ask for
+  // something the user can't do.
+  it("says no database is available when the backend lists none", () => {
+    const html = databasePickerHtml({ ...base, databases: [], selectedDatabaseIds: [] });
+    expect(html).toContain("No databases are available to you.");
+    expect(html).not.toContain("0 of 0");
+    expect(html).not.toContain("Select at least one");
+    expect(html).not.toContain("data-db-all");
+  });
+
   it("makes All the focus landing, so focus survives the Deselect failing button vanishing", () => {
     const html = databasePickerHtml(base);
     expect(html).toContain("data-db-all data-focus-landing>All</button>");

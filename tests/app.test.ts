@@ -318,7 +318,7 @@ describe("runPreview (the Run query button)", () => {
     app.runPreview();
     await flushPromises();
     expect(announce).toHaveBeenLastCalledWith(
-      "Could not load events: Something went wrong. Try again; if it keeps happening, reload the page.",
+      "Couldn't load events: Something went wrong. Try again; if it keeps happening, reload the page.",
     );
   });
 
@@ -739,7 +739,7 @@ describe("logging out and invalidating compliance", () => {
     const { app, showError } = setup(signedIn, api);
     app.onInvalidateCompliance();
     await flushPromises();
-    expect(showError).toHaveBeenCalledWith("Couldn't invalidate the compliance reason. Try again.");
+    expect(showError).toHaveBeenCalledWith("Couldn't withdraw the compliance reason. Try again.");
   });
 
   // A browser that restores its last session brings sessionStorage back, so
@@ -1890,7 +1890,10 @@ describe("saved queries: saving", () => {
     slow.reject(new ApiError(409, "taken"));
     await flushPromises();
     expect(store.getState().save).toEqual({ status: "idle" });
-    expect(showError).toHaveBeenCalledOnce();
+    // No name box is on screen any more, so the toast says which name.
+    expect(showError).toHaveBeenCalledExactlyOnceWith(
+      "Not saved: another saved query already has this name (“Weekly”). Save again to replace it.",
+    );
   });
 
   it("reopening during a save shows that save, and Save can't start a second one (#84)", async () => {

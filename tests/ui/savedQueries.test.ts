@@ -81,12 +81,16 @@ describe("the save dialog", () => {
     expect(html).toMatch(/<button type="submit"[^>]*>Save<\/button>/);
   });
 
-  it("asks before replacing another saved query of that name, escaped", () => {
+  // The question leaves the name out (issue #97): names match whatever the
+  // case, so the typed spelling could differ from the existing query's. The
+  // box above it still shows what was typed.
+  it("asks before replacing another saved query of that name, the name escaped in the box", () => {
     const html = savedDialogHtml(
       saveDialog({ save: { status: "conflict", name: "We<ek>", note: "" } }),
+      { name: "We<ek>", note: "" },
     );
-    expect(text(html)).toContain("A saved query called “We<ek>” exists. Replace it?");
-    expect(html).toContain("We&lt;ek&gt;");
+    expect(text(html)).toContain("Another saved query already has this name. Replace it?");
+    expect(html).toMatch(/id="qb-save-name"[^>]*value="We&lt;ek&gt;"/);
     expect(html).toMatch(/data-action="confirm-replace"[^>]*>Replace<\/button>/);
     expect(html).toMatch(/data-action="cancel-replace"[^>]*>Cancel<\/button>/);
     // The question is about the name in the box: it cannot change meanwhile.

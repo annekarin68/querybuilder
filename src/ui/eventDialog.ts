@@ -28,10 +28,16 @@ export function openEventOf(
   return preview.events.find((e) => e.id === openEventId) ?? null;
 }
 
+/** The JSON is the app's own reading of the event (`EventRecord`), not the
+ *  server's response: its keys are ours, and fields the app doesn't read are
+ *  not in it. Without this line a user would take it for the raw event. */
+export const EVENT_JSON_HINT = "As this app reads the event from the server.";
+
 export function eventDialogHtml(event: EventRecord | null): string {
   if (!event) return "";
   return `<h2 class="qb-dialog-title" id="${EVENT_TITLE_ID}">Event ${escapeHtml(shortId(event.id))}</h2>
     <p class="qb-dialog-hint">${escapeHtml(event.id)}</p>
+    <p class="qb-dialog-hint">${EVENT_JSON_HINT}</p>
     <pre class="qb-event-json" tabindex="0" role="region" aria-label="The event as JSON">${escapeHtml(JSON.stringify(event, null, 2))}</pre>
     <div class="qb-dialog-actions">
       <button type="button" class="ui small basic button" data-action="close-event" data-initial-focus>Close</button>
