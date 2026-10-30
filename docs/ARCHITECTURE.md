@@ -454,7 +454,8 @@ removed (a new block never gets an old id, so they would stay for ever).
   Whether it was edited since is worked out (`isEdited`), never stored.
 - `savedDialog`: which dialog is open (`"save"`, `"list"`, or the login
   question `"login-to-save"` / `"login-to-list"`), or `null`.
-- `save`: `idle`, `saving`, `conflict` (the name is taken: "Replace it?") or
+- `save`: `idle`, `saving` (with the `name` and `note` being sent, so a
+  reopened dialog shows them), `conflict` (the name is taken: "Replace it?") or
   `error`.
 - `savedList`: `idle`, `loading`, `ok` (with `unreadable`, how many entries
   could not be read) or `error`; reloaded every time the list opens and after
@@ -510,6 +511,16 @@ control afterwards.
 
 - **Only a panel that had the focus.** A repaint elsewhere leaves the focus
   alone: results arriving never pull a user out of the builder.
+- **Nothing the user didn't do repaints the box they are in.** A repaint
+  rebuilds a value box and fires its `change`, which commits half-typed text.
+  So a builder repaint that only a statistics line asked for (`serverIssues`)
+  waits while the focus is in a text box or dropdown of the builder, and is
+  done when the focus leaves (`holdsBuilderRepaint` in `queryBuilder.ts`, the
+  `held` hook in `main.ts`; issue #76). That repaint runs through the
+  builder's `afterPointer` (`runAfterPointer`), so a press on a builder button,
+  which moves the focus on mousedown, is repainted only after the release and
+  its click is not lost ("Keyboard focus across repaints"). Any other change
+  repaints at once.
 - **"The same control"** is found by what it is, not where it is: its row or
   group (`data-node-id`), its tag, and the first of these attributes it has:
   `data-event-id`, `data-field-id`, `data-co-cell`, `data-co-box`,
@@ -552,7 +563,11 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
 - **Every query edit and database change** resets `stats` and `preview` in
   the same `setState` that writes the new `query` / `selectedDatabaseIds`
   (`changeScope` in `app.ts`). Old numbers disappear the instant the scope
-  changes, before any new request goes out.
+  changes, before any new request goes out. One exception: a query edit keeps
+  the server's problems on the nodes it did not touch
+  (`issuesOnUnchangedNodes`) until the new statistics have finished, so an
+  unchanged problem does not vanish and come back, repainting the builder
+  each time. A database change drops them all.
 - **If the query can't run yet** (`runBlocker`: still loading, no database,
   no facet block, any validation issue, or — for Run only — a database that
   reported a problem in a part of the query), no request fires, **Run** is
@@ -560,28 +575,40 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
 - **A rejected query keeps its statistics.** When a database's stats line
   points at a node (`"rejected"`), only Run is blocked; the statistics stay
   on screen because they are what explains the block. The next query or
-  database change resets them, and with them the block. A rejection that
-  arrives after Run was clicked replaces the Matching events panel's content
-  with the blocked Run message, like every other blocker.
+  database change resets them, and with them the block (or, for problems
+  carried over an edit, the next statistics that no longer report them; the
+  statistics still go out while Run is `"rejected"`). A rejection that
+  arrives after Run was clicked abandons the run and resets Matching events
+  to the blocked Run message (`setStats`), so its results are never shown or
+  announced.
 - **Stale-response guard — one rule.** `app.ts` keeps one `requestSlot()` per
-  kind: stats, preview, save and the saved-queries list. Every query or scope
+  kind: stats, preview and the saved-queries list. Every query or scope
   change cancels stats and preview; closing the saved-queries dialog cancels
-  save and the list (they do not depend on the query on screen). Starting a
-  request replaces the previous one of its kind. A response, a streamed line,
-  an error — and the compliance check after a `403` — is applied only while
+  the list (it does not depend on the query on screen). Starting a request
+  replaces the previous one of its kind. A response, a streamed line, an
+  error — and the compliance check after a `403` — is applied only while
   `req.isStale()` is false. Identity, not content, is compared, so an
-  edit-and-undo can't revive an old request. A save that finishes after its
-  dialog closed is still remembered (`openSaved`): it did happen on the
-  server. `deleteSaved` has no slot: a delete is not superseded by a later
-  one, so its answer is always applied (it clears `openSaved` if that query
-  was open, and reloads the list if the list is still open).
+  edit-and-undo can't revive an old request.
+- **Saves and deletes have no slot: they are never abandoned**, because they
+  may already have happened on the server. Closing the dialog during a save
+  keeps `save` at `"saving"`, so reopening shows that save and Save can't
+  start a second one. Its answer is always applied (`openSaved`) and always
+  reported: in the save form if it is open; in the list's notice
+  (`savedListNotice`, and a success reloads the list) if the list is open;
+  otherwise spoken (success) or as a toast (failure, or a name clash; issue
+  #84). A running delete draws its query's buttons busy (`deletingSavedId`,
+  cleared only by the delete that set it); its answer clears `openSaved` if
+  that query was open, and reloads the list if the list is still open.
 - **Superseded requests are aborted, not just ignored** (the slot's
   `AbortController` goes through `client.ts`), so edits don't leave
-  `/api/filter/validate` streams running on the backend.
+  `/api/filter/validate` streams running on the backend. The saved-queries
+  list is only ignored: `listSavedQueries` takes no signal.
 - **Whoever aborts a request resets its panel.** An aborted request's own
   handlers are stale and never touch state. `changeScope` resets both panels;
   logout and compliance invalidation reset only the preview
-  (`/api/filter/validate` is anonymous).
+  (`/api/filter/validate` is anonymous). A page shown again from the
+  browser's back/forward cache (Back from the login page: no load, `pageshow`
+  with `persisted`) resets what was left waiting: `onPageRestored`.
 - **Streaming is not staleness.** While `stats.status` is `"loading"`,
   `stats.results` holds fewer results than there are selected databases;
   every result it holds belongs to the query on screen, because the guard
@@ -894,6 +921,15 @@ tab. The copy that does it is the **kept query** (`src/util/keptQuery.ts`).
 4. **No automatic retry.** The user presses Run (or **Save…**) again, which
    keeps the flow loop-free ("Auth"). Which saved query was open is not
    carried over: the title says plain "Query" again.
+5. **Back without logging in may not load the page at all.** The browser can
+   show it again from its back/forward cache, exactly as it was left: no
+   `start()`, so the kept query plays no part, and Matching events would sit
+   on "Fetching events…" for ever. `main.ts` listens for `pageshow` with
+   `persisted` and calls `app.onPageRestored`, which resets Matching events
+   and a save left on "Saving…", reloads an open saved-queries list and asks
+   again for statistics that were loading (issue #77). The dev server never
+   shows this (its live reload keeps pages out of that cache, and Playwright
+   turns the cache off): check it on a build.
 
 ### Dates
 
@@ -1599,6 +1635,9 @@ action has finished, and the commit repaints the builder:
   and applied after the release.
 - **With the keyboard**, Tab or Enter would repaint before the focus moved, so
   even with the pointer up the commit waits one tick.
+- **A repaint held for a statistics line** (issue #76) waits for the focus to
+  leave the value box; the focus leaves on mousedown, so it too goes through
+  `afterPointer` and is done after the release.
 - **A click on a button or link** (`shouldFlushBeforeClick`) applies the held
   edit first, from a capture-phase listener, so **Run query** and the login
   links see the typed value. One queue (`flush`) serves all three; a window
@@ -1733,10 +1772,13 @@ saved-queries state.
   read-only while saving or asking, so what is asked about is what is in them.
   A save that works closes the dialog and is announced. An update answered
   `404` (deleted in another tab) creates the query instead (`updateOrCreate`).
+  Closing the dialog does not stop a save: reopening shows it still saving,
+  and a failure after the close is a toast ("Correctness invariant").
 - **Saved queries**: newest first, each with its **name, note, number of
   databases and date**, **Open** and **Delete**, and **never the query, its
   summary or any facet or field** (queries can be sensitive). **Delete** asks
-  "Delete “…”?" in place of that item's buttons; **Open** over unsaved work asks
+  "Delete “…”?" in place of that item's buttons, which are busy until the
+  server has answered (`deletingSavedId`); **Open** over unsaved work asks
   "Replace the current query? Its changes are not saved." Loading, the empty
   state, errors with **Try again**, unreadable entries ("N saved queries from
   an older version can't be opened.") and how a delete went

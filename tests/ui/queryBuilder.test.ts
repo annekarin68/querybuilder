@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { noticeHtml, restoredNoticeHtml, queryTitleHtml } from "../../src/ui/queryBuilder";
+import {
+  holdsBuilderRepaint,
+  noticeHtml,
+  restoredNoticeHtml,
+  queryTitleHtml,
+} from "../../src/ui/queryBuilder";
 import { initialState, type AppState } from "../../src/state";
 import { RESTORED_MESSAGE } from "../../src/util/keptQuery";
 import { addChild, emptyQuery, newBlock } from "../../src/query/tree";
@@ -116,5 +121,17 @@ describe("the query card's title", () => {
   it("draws no buttons until the databases and the field catalog have loaded", () => {
     expect(queryTitleHtml({ ...loaded, databases: null })).not.toContain("<button");
     expect(queryTitleHtml({ ...loaded, catalog: null })).not.toContain("<button");
+  });
+});
+
+describe("holdsBuilderRepaint (#76)", () => {
+  it("holds a repaint only a statistics line asked for, while a value box is in use", () => {
+    expect(holdsBuilderRepaint(new Set(["serverIssues", "stats"]), true)).toBe(true);
+    expect(holdsBuilderRepaint(new Set(["serverIssues"]), false)).toBe(false);
+  });
+
+  it("never holds a change the user made", () => {
+    expect(holdsBuilderRepaint(new Set(["serverIssues", "query"]), true)).toBe(false);
+    expect(holdsBuilderRepaint(new Set(["selectedDatabaseIds"]), true)).toBe(false);
   });
 });

@@ -28,7 +28,13 @@ import {
 } from "./ui/docsSidebar";
 import { wireDocsResize } from "./ui/docsResize";
 import { renderDatabasePicker, wireDatabasePicker } from "./ui/databasePicker";
-import { QUERY_BUILDER_KEYS, revealNode, wireQueryBuilder } from "./ui/queryBuilder";
+import {
+  holdsBuilderRepaint,
+  isValueBoxInUse,
+  QUERY_BUILDER_KEYS,
+  revealNode,
+  wireQueryBuilder,
+} from "./ui/queryBuilder";
 import { ABOUT_PANEL_KEYS, paintAboutPanels } from "./ui/aboutPanel";
 import { renderStatsPanel, wireStatsPanel } from "./ui/statsPanel";
 import { renderDataPreview, wireDataPreview } from "./ui/dataPreview";
@@ -95,30 +101,59 @@ wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onInvalidate: app.onInvalidateCompliance,
 });
-const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange, {
-  onDrop: app.onDropItem,
-  onMove: app.onMoveNode,
-  onDismissNotice: app.dismissDropNotice,
-  onNotice: app.showNotice,
-  announce: shell.announce,
-  onOpenSaveDialog: app.openSaveDialog,
-  onOpenSavedList: app.openSavedList,
-  onStartFresh: app.startFresh,
-  onDismissRestored: app.dismissRestoredNotice,
-  openFieldRow: app.openFieldRow,
-  toggleFields: app.toggleFields,
-  setPanelTab: app.setPanelTab,
-  toggleCoNames: app.toggleCoNames,
-  selectFieldForPanel: app.selectFieldForPanel,
-  showFacetInDictionary: (facetId) => {
-    // The app unfolds the dictionary first: a folded one has no card to show.
-    // The focus stays on the square, so a screen reader is told instead.
-    if (app.showFacetInDictionary(facetId) && docs.showFacet(facetId)) {
-      const name = store.getState().facets?.find((f) => f.id === facetId)?.name ?? facetId;
-      shell.announce(`${name} is open in the data dictionary.`);
-    }
+const { render: renderQueryBuilder, runAfterPointer } = wireQueryBuilder(
+  panels.center,
+  store.getState,
+  app.onQueryChange,
+  {
+    onDrop: app.onDropItem,
+    onMove: app.onMoveNode,
+    onDismissNotice: app.dismissDropNotice,
+    onNotice: app.showNotice,
+    announce: shell.announce,
+    onOpenSaveDialog: app.openSaveDialog,
+    onOpenSavedList: app.openSavedList,
+    onStartFresh: app.startFresh,
+    onDismissRestored: app.dismissRestoredNotice,
+    openFieldRow: app.openFieldRow,
+    toggleFields: app.toggleFields,
+    setPanelTab: app.setPanelTab,
+    toggleCoNames: app.toggleCoNames,
+    selectFieldForPanel: app.selectFieldForPanel,
+    showFacetInDictionary: (facetId) => {
+      // The app unfolds the dictionary first: a folded one has no card to show.
+      // The focus stays on the square, so a screen reader is told instead.
+      if (app.showFacetInDictionary(facetId) && docs.showFacet(facetId)) {
+        const name = store.getState().facets?.find((f) => f.id === facetId)?.name ?? facetId;
+        shell.announce(`${name} is open in the data dictionary.`);
+      }
+    },
   },
-});
+);
+
+// A builder repaint that a statistics line asked for while the user was in a
+// value box waits until the focus leaves it (holdsBuilderRepaint, issue #76).
+let builderRepaintWaiting = false;
+function renderBuilder(state: AppState): void {
+  builderRepaintWaiting = false;
+  renderQueryBuilder(state);
+}
+function holdBuilderRepaint(changed: ReadonlySet<keyof AppState>): boolean {
+  const hold = holdsBuilderRepaint(changed, isValueBoxInUse(panels.center));
+  if (hold) builderRepaintWaiting = true;
+  return hold;
+}
+// After the focus has moved: a Tab into the next value box still waits. Pressing
+// a builder button moves the focus on mousedown, so the repaint goes through the
+// builder's afterPointer: it waits until the mouse button is released, else the
+// button under the pointer would be replaced and its click would be lost.
+panels.center.addEventListener("focusout", () =>
+  runAfterPointer(() => {
+    if (builderRepaintWaiting && !isValueBoxInUse(panels.center)) {
+      repaintPanel(renderBuilder, store.getState());
+    }
+  }),
+);
 
 wireSavedDialog(shell.savedDialog, app);
 wireEventDialog(shell.eventDialog, app.closeEvent);
@@ -127,7 +162,12 @@ wireEventDialog(shell.eventDialog, app.closeEvent);
  * Each panel's re-render trigger: which AppState keys it depends on, and how to
  * (re)render it. Add a key here whenever a render function starts reading it.
  */
-const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void }[] = [
+const panelRenderers: {
+  keys: (keyof AppState)[];
+  run: (state: AppState) => void;
+  /** True: skip this repaint for now (the panel repaints itself later). */
+  held?: (changed: ReadonlySet<keyof AppState>) => boolean;
+}[] = [
   {
     keys: ["issues", "stats", "preview", "easterEgg"],
     run: (s) => shell.setMascot(mascotFor(s), s.easterEgg),
@@ -144,7 +184,7 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   // The builder's keys leave out `selectedField`: a field selected for the
   // About panel repaints only those panels, after the builder, so a builder
   // repaint in the same change has drawn them already.
-  { keys: QUERY_BUILDER_KEYS, run: renderQueryBuilder },
+  { keys: QUERY_BUILDER_KEYS, run: renderBuilder, held: holdBuilderRepaint },
   // It reads the state afresh rather than taking `s`: focusing a row selects
   // its field (a nested setState), and that can happen inside the builder's
   // repaint just above, when paint() puts the focus back. With `s` this row
@@ -180,7 +220,15 @@ const panelRenderers: { keys: (keyof AppState)[]; run: (state: AppState) => void
   // Last: when a dialog closes, the focus goes back to its button in the query
   // card, which must already be repainted (opening a saved query repaints it).
   {
-    keys: ["savedDialog", "save", "savedList", "savedConfirm", "savedListNotice", "openSaved"],
+    keys: [
+      "savedDialog",
+      "save",
+      "savedList",
+      "savedConfirm",
+      "deletingSavedId",
+      "savedListNotice",
+      "openSaved",
+    ],
     run: (s) => renderSavedDialog(shell.savedDialog, s),
   },
   // After the preview row, which repaints the id buttons that closing this
@@ -254,8 +302,8 @@ function repaintPanel(run: (state: AppState) => void, state: AppState): void {
 }
 
 store.subscribe((state, changed) => {
-  for (const { keys, run } of panelRenderers) {
-    if (keys.some((k) => changed.has(k))) repaintPanel(run, state);
+  for (const { keys, run, held } of panelRenderers) {
+    if (keys.some((k) => changed.has(k)) && !held?.(changed)) repaintPanel(run, state);
   }
 });
 
@@ -306,6 +354,14 @@ function showFatalError(err: unknown): void {
   if (action === "reload") actionButton?.addEventListener("click", () => window.location.reload());
   actionButton?.focus();
 }
+
+// Back from the login or compliance page can show this page from the
+// browser's back/forward cache instead of loading it (`persisted`): no
+// start(), so the app resets what was left waiting (onPageRestored). The dev
+// server's live reload keeps pages out of that cache: check this on a build.
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) app.onPageRestored();
+});
 
 const resumed = consumeResumeParam();
 // First paint: loaders/placeholders until the startup requests finish.

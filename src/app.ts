@@ -3,7 +3,7 @@ import type * as client from "./api/client";
 import { userMessage } from "./api/errorText";
 import type { Compliance, DatabaseResult, SavedQuery, SavedQueryDraft } from "./model";
 import { buildFieldCatalog } from "./query/fieldCatalog";
-import { serverIssues } from "./query/issues";
+import { issuesOnUnchangedNodes, mergeIssues, serverIssues } from "./query/issues";
 import {
   dropItem,
   dropMessage,
@@ -26,7 +26,7 @@ import {
   type Direction,
 } from "./query/tree";
 import { hasUnsavedWork, sameName, saveTarget, type OpenSaved } from "./query/saved";
-import type { Group } from "./query/types";
+import type { Group, Issue } from "./query/types";
 import { validateQuery } from "./query/validate";
 import {
   displayStateFor,
@@ -139,11 +139,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   // (docs/ARCHITECTURE.md, "Correctness invariant").
   const statsSlot = requestSlot();
   const previewSlot = requestSlot();
-  // Saved-queries requests have their own slots: a query edit does not make
-  // them stale (they do not depend on the query on screen), closing the dialog
-  // or asking again does.
+  // The saved-queries list has its own slot: a query edit does not make it
+  // stale (it does not depend on the query on screen), closing the dialog or
+  // asking again does. Saves and deletes have none: they are never abandoned
+  // (see sendSave).
   const savedListSlot = requestSlot();
-  const saveSlot = requestSlot();
 
   /**
    * A 403 from /api/filter/execute means "authenticated, but some requirement is unmet" —
@@ -223,6 +223,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       });
   }
 
+  // The server's problems an edit left standing (`changeScope`): still shown
+  // while the new statistics stream in, and replaced by what those say once
+  // they have finished.
+  let carriedIssues: Issue[] = [];
+
   /**
    * Write `stats`, and the problems its lines point at (`serverIssues`) — but
    * those only when they changed. Stats lines stream in one by one; the query
@@ -230,15 +235,34 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
    * open dropdown and drops a value the user is typing.
    */
   function setStats(stats: StatsState): void {
-    const issues = serverIssues(stats);
-    const same = JSON.stringify(issues) === JSON.stringify(store.getState().serverIssues);
-    store.setState(same ? { stats } : { stats, serverIssues: issues });
+    const finished = stats.status === "ok" || stats.status === "error";
+    if (finished) carriedIssues = [];
+    const issues = mergeIssues(carriedIssues, serverIssues(stats));
+    const state = store.getState();
+    if (JSON.stringify(issues) === JSON.stringify(state.serverIssues)) {
+      store.setState({ stats });
+      return;
+    }
+    // A database has just found a problem while Run query was fetching: Run
+    // is blocked now, so the run is abandoned and its panel reset, or its
+    // results would be announced next to "Run is blocked" (issue #81).
+    const runRejected =
+      state.serverIssues.length === 0 && issues.length > 0 && state.preview.status === "loading";
+    if (runRejected) previewSlot.cancel();
+    store.setState({
+      stats,
+      serverIssues: issues,
+      ...(runRejected ? { preview: { status: "idle" as const } } : {}),
+    });
   }
 
   /** Statistics, streamed one line per database and refetched live (debounced). */
   const refreshStats = debounce(() => {
     const state = store.getState();
-    if (runBlocker(state)) return;
+    // "rejected" only blocks Run: these statistics are what will say whether
+    // the problems carried over an edit are still there.
+    const blocker = runBlocker(state);
+    if (blocker && blocker !== "rejected") return;
     const req = statsSlot.start();
     const results: DatabaseResult[] = [];
     setStats({ status: "loading", results: [] });
@@ -302,6 +326,25 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
       });
   }
 
+  /**
+   * The browser showed this page again from its back/forward cache, for
+   * example after Back from the login or compliance page: nothing reloaded, so
+   * what was waiting when the page was left is still drawn as waiting, but its
+   * request ended with the navigation. Reset those panels and ask again where
+   * that is safe (issue #77). The query and the dialogs stay as they were.
+   */
+  function onPageRestored(): void {
+    resetPreview();
+    savedListSlot.cancel();
+    const { save, savedDialog, stats } = store.getState();
+    store.setState({
+      save: save.status === "saving" ? { status: "idle" } : save,
+      deletingSavedId: null,
+    });
+    if (savedDialog === "list") loadSavedList();
+    if (stats.status === "loading") refreshStats();
+  }
+
   function onInvalidateCompliance(): void {
     resetPreview();
     api
@@ -318,18 +361,21 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   /**
    * A query edit or a database-scope change: clear stats (with their
    * serverIssues) & preview in the SAME setState and abandon every request
-   * still in flight, then schedule fresh statistics.
+   * still in flight, then schedule fresh statistics. `carried`: the server's
+   * problems that stay on screen until the new statistics have finished (a
+   * query edit keeps those on the nodes it did not touch).
    */
-  function changeScope(patch: Partial<AppState>): void {
+  function changeScope(patch: Partial<AppState>, carried: Issue[] = []): void {
     statsSlot.cancel();
     previewSlot.cancel();
+    carriedIssues = carried;
     store.setState({
       // An edit means the user carries on with the restored query (or a fresh
       // one): the Restored notice has nothing left to offer.
       restoredNotice: false,
       ...patch,
       stats: { status: "idle", results: [] },
-      serverIssues: [],
+      serverIssues: carried,
       preview: { status: "idle" },
       openEventId: null, // the dialog shows one of the results being reset
     });
@@ -346,12 +392,15 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     }
     const issues = catalog ? validateQuery(nextQuery, catalog) : [];
     // A removed block takes its display state with it (see displayStateFor).
-    const { openField, expandedBlockIds, selectedField } = store.getState();
-    changeScope({
-      query: nextQuery,
-      issues,
-      ...displayStateFor(nextQuery, { openField, expandedBlockIds, selectedField }),
-    });
+    const { openField, expandedBlockIds, selectedField, serverIssues: shown } = store.getState();
+    changeScope(
+      {
+        query: nextQuery,
+        issues,
+        ...displayStateFor(nextQuery, { openField, expandedBlockIds, selectedField }),
+      },
+      issuesOnUnchangedNodes(query, nextQuery, shown),
+    );
   }
 
   /** Show a drop's problems, or clear an old warning when there are none. */
@@ -662,7 +711,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
 
   function openSaveDialog(): void {
     if (!mayUseSavedQueries("save")) return;
-    store.setState({ savedDialog: "save", save: { status: "idle" } });
+    // Reopened while a save is still running: show that one.
+    const saving = store.getState().save.status === "saving";
+    store.setState(
+      saving ? { savedDialog: "save" } : { savedDialog: "save", save: { status: "idle" } },
+    );
   }
 
   /** (Re)load the list. `notice` is what to show above it meanwhile: a reload
@@ -689,26 +742,41 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   function closeSavedDialog(): void {
-    // A late answer must not repaint a closed dialog, so abandon what is in
-    // flight and reset what the dialogs show.
+    // A late list must not repaint a closed dialog, so abandon it and reset
+    // what the dialogs show. A running save goes on (sendSave says why), and
+    // stays "saving" so that reopening shows it and Save can't start another.
     savedListSlot.cancel();
-    saveSlot.cancel();
+    const { save } = store.getState();
     store.setState({
       savedDialog: null,
       savedConfirm: null,
-      save: { status: "idle" },
+      save: save.status === "saving" ? save : { status: "idle" },
       savedList: { status: "idle" },
       savedListNotice: null,
     });
   }
 
-  /** Send `draft` and show how it went. A save that succeeds is remembered
-   *  even if the dialog was closed meanwhile: it did happen on the server. */
+  /**
+   * Send `draft` and show how it went. The save is never abandoned, not even
+   * when the dialog is closed: it may already have happened on the server, so
+   * the answer is always used and always reported. In the dialog if it is
+   * open (again) on the save form; otherwise a success is spoken and a failure
+   * is a toast, so it never goes unnoticed (issue #84).
+   */
   function sendSave(draft: SavedQueryDraft, send: () => Promise<SavedQuery>): void {
     const { name, note } = draft;
     const openWhenStarted = store.getState().openSaved;
-    const req = saveSlot.start();
-    store.setState({ save: { status: "saving" } });
+    const formShown = () => store.getState().savedDialog === "save";
+    // Where a late answer is shown: the save form if it is open; the list's
+    // notice if the list is (a toast would be drawn under its backdrop); a
+    // toast when no dialog is open.
+    const reportFailure = (text: string) => {
+      store.setState({ save: { status: "idle" } });
+      if (store.getState().savedDialog === "list") {
+        store.setState({ savedListNotice: { tone: "error", text } });
+      } else showError(text);
+    };
+    store.setState({ save: { status: "saving", name, note } });
     send()
       .then((saved) => {
         // The open query remembers the tree that was sent, which is the tree
@@ -727,21 +795,29 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
         // that other query).
         const patch: Partial<AppState> =
           store.getState().openSaved === openWhenStarted ? { openSaved: openNow } : {};
-        // Leave the dialog alone when it was closed, or closed and reopened.
-        store.setState(
-          req.isStale() ? patch : { ...patch, savedDialog: null, save: { status: "idle" } },
-        );
+        // The form closes; any other dialog the user opened meanwhile stays.
+        store.setState({
+          ...patch,
+          save: { status: "idle" },
+          ...(formShown() ? { savedDialog: null } : {}),
+        });
         announce(`Saved “${saved.name}”.`);
+        // The list is open: it must show the new query.
+        if (store.getState().savedDialog === "list") loadSavedList();
       })
       .catch((err) => {
-        if (req.isStale()) return;
         // 409: the name belongs to another saved query. Not an error: the
         // dialog asks whether to replace it.
         if (err instanceof ApiError && err.status === 409) {
-          store.setState({ save: { status: "conflict", name, note } });
-          return;
+          if (formShown()) return store.setState({ save: { status: "conflict", name, note } });
+          return reportFailure(
+            `Not saved: a saved query is already called “${name}”. Save again to replace it.`,
+          );
         }
-        savedCallFailed(err, (error) => store.setState({ save: { status: "error", error } }));
+        savedCallFailed(err, (error) => {
+          if (formShown()) return store.setState({ save: { status: "error", error } });
+          reportFailure(`Couldn't save “${name}”. ${error}`);
+        });
       });
   }
 
@@ -768,7 +844,8 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     // One save at a time: Enter in the form submits even when the button is
     // disabled, and a second create would get a 409 against the first, asking
     // "Replace it?" about the user's own save. (confirmReplace needs the
-    // "conflict" state, which a running save has already left.)
+    // "conflict" state, which a running save has already left.) Closing the
+    // dialog keeps the state "saving", so this holds across close and reopen.
     if (store.getState().save.status === "saving") return;
     const draft = draftOf(name, note);
     if (draft.name === "") {
@@ -845,6 +922,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   function askOpenSaved(id: string): void {
+    if (store.getState().deletingSavedId === id) return; // it is being deleted
     const saved = listedQuery(id);
     if (!saved) return; // the list changed under the click
     const { openSaved, query, selectedDatabaseIds } = store.getState();
@@ -856,12 +934,20 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   function askDeleteSaved(id: string): void {
+    if (store.getState().deletingSavedId === id) return; // already being deleted
     store.setState({ savedConfirm: { action: "delete", id }, savedListNotice: null });
   }
 
   function deleteSaved(id: string): void {
     const name = listedQuery(id)?.name;
+    // Its buttons are drawn busy until the server has answered (issue #84).
+    store.setState({ deletingSavedId: id });
+    // Only this delete's own mark: another delete may have started since.
+    const clearBusy = () => {
+      if (store.getState().deletingSavedId === id) store.setState({ deletingSavedId: null });
+    };
     const deleted = () => {
+      clearBusy();
       const { openSaved, savedDialog } = store.getState();
       // The query on screen stays; it just no longer belongs to a saved one.
       if (openSaved?.id === id) store.setState({ openSaved: null });
@@ -874,6 +960,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     api.deleteSavedQuery(id).then(deleted, (err) => {
       // Already gone (deleted in another tab): that is what the user wanted.
       if (err instanceof ApiError && err.status === 404) return deleted();
+      clearBusy();
       // Keep the list on screen: replacing it with an error would hide every
       // other saved query because one delete failed. The notice is shown inside
       // the dialog: a toast would be drawn under its backdrop (Delete is only
@@ -951,6 +1038,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     dismissDropNotice,
     showNotice,
     onDatabasesChange,
+    onPageRestored,
     onLogout,
     onInvalidateCompliance,
     startFresh,
