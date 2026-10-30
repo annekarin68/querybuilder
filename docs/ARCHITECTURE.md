@@ -1137,13 +1137,11 @@ change what the query means and are never sent or saved.
 Anonymous: a **Log in** button. Logged in: a chip with the user's name and a
 compliance badge that opens a native `<details>` menu: the session's compliance
 log as indented JSON with **Withdraw compliance reason**, or **Start
-compliance check**; then
-**Log out**. The log is a scrolling `<pre>` with `tabindex="0"` and an
+compliance check**; then **Log out**. The log is a scrolling `<pre>` with `tabindex="0"` and an
 `aria-label`, because a scrollable region the keyboard cannot focus cannot be
 scrolled by it. Outside clicks and Escape close the menu. Display only
-("Auth"). **Withdraw compliance reason** and **Log out** close the menu at once
-and put the
-focus on the chip, so a failure's toast does not cover the open menu.
+("Auth"). **Withdraw compliance reason** and **Log out** close the menu at
+once and put the focus on the chip, so a failure's toast does not cover the open menu.
 
 ### Above the builder — `databasePicker.ts`
 
@@ -1762,9 +1760,8 @@ results, and accept a sideways scroll bar.
 - **Event JSON dialog** (`eventDialog.ts`): an id opens that result's JSON in a
   native `<dialog>`. The JSON is the app's own `EventRecord`, not the server's
   response (our keys, and nothing the app doesn't read), and the dialog says so
-  ("As this app reads the event from the server."). It sits in a focusable,
-  scrolling `<pre role="region">` that
-  alone scrolls on a short window. Built like the saved-queries dialog
+  ("This is the event as this app reads it, not the server's own response.").
+  It sits in a focusable, scrolling `<pre role="region">` that alone scrolls on a short window. Built like the saved-queries dialog
   (created once, painted from `openEventId`, opened and closed to match); the
   focus starts on **Close** and goes back to the id afterwards; not repainted
   while the same result stays open (that would scroll the JSON to its top);
@@ -1902,9 +1899,9 @@ The real backend's data differs, which is why `src/` must never name the mock's
   or a URL. No old data is kept ("Correctness invariant"). The details go to
   the console. Errors of superseded, aborted requests never reach a panel.
 - An action with no panel of its own (**Log out**, **Withdraw compliance
-  reason**) reports a
-  failure with a red toast, also spoken (`AppDeps.showError`), below the top
-  bar so it covers neither the menu nor the chip. A failed **Delete** of a
+  reason**) reports a failure with a red toast, also spoken
+  (`AppDeps.showError`), below the top bar so it covers neither the menu nor
+  the chip. A failed **Delete** of a
   saved query shows inside the dialog instead (the modal hides toasts);
   deleting one that is already gone (`404`) counts as deleted.
 - A problem a database finds in the query comes in its stats line, not as an

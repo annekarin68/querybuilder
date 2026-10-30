@@ -89,6 +89,18 @@ export function noDatabaseText(state: Pick<AppState, "databases">, selectText: s
   return state.databases?.length === 0 ? NO_DATABASES : selectText;
 }
 
+/** The text a panel shows for `blocker`: its own message, except that
+ *  "no-database" says NO_DATABASES when there is nothing to select. One
+ *  helper, so that no panel can forget the rule. */
+export function blockedText<K extends string>(
+  blocker: K,
+  state: Pick<AppState, "databases">,
+  messages: Record<K, string>,
+): string {
+  const text = messages[blocker];
+  return blocker === "no-database" ? noDatabaseText(state, text) : text;
+}
+
 /**
  * The database scope selector, above the query builder. Databases are
  * arbitrary partitions with no semantic tie to event content (returned by

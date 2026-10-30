@@ -7,7 +7,7 @@ describe("the account menu's Compliance section", () => {
     expect(html).toContain(
       '<pre class="qb-account-log" tabindex="0" aria-label="Compliance log">{\n  &quot;reason&quot;: &quot;audit&quot;\n}</pre>',
     );
-    expect(html.indexOf("qb-account-log")).toBeLessThan(html.indexOf("invalidate-compliance"));
+    expect(html.indexOf("qb-account-log")).toBeLessThan(html.indexOf("withdraw-compliance"));
     // Issue #97: a bare "Invalidate" didn't say what it invalidates.
     expect(html).toContain(">Withdraw compliance reason</button>");
   });

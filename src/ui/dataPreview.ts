@@ -3,7 +3,7 @@ import { FIRST_COLUMNS } from "../config";
 import { pageOf } from "../util/paging";
 import { escapeHtml, paint } from "./panel";
 import { exact } from "./format";
-import { noDatabaseText } from "./databasePicker";
+import { blockedText } from "./databasePicker";
 import { eventTableHtml, pagingHtml, scrollAfterRepaint, tableColumns } from "./eventTable";
 
 /**
@@ -112,8 +112,7 @@ export function renderDataPreview(el: HTMLElement, state: AppState): void {
     return;
   }
   if (blocker) {
-    const text = BLOCKED_MESSAGES[blocker];
-    const message = blocker === "no-database" ? noDatabaseText(state, text) : text;
+    const message = blockedText(blocker, state, BLOCKED_MESSAGES);
     paint(el, card(runBlock({ message, enabled: false })));
     return;
   }

@@ -703,7 +703,7 @@ describe("query and database changes", () => {
   });
 });
 
-// ---- log out / invalidate compliance --------------------------------------
+// ---- log out / withdraw compliance --------------------------------------
 
 describe("logging out and invalidating compliance", () => {
   const signedIn: Partial<AppState> = {
@@ -737,7 +737,7 @@ describe("logging out and invalidating compliance", () => {
       invalidateCompliance: vi.fn(async () => Promise.reject(new ApiError(500, "x"))),
     });
     const { app, showError } = setup(signedIn, api);
-    app.onInvalidateCompliance();
+    app.onWithdrawCompliance();
     await flushPromises();
     expect(showError).toHaveBeenCalledWith("Couldn't withdraw the compliance reason. Try again.");
   });
@@ -774,7 +774,7 @@ describe("logging out and invalidating compliance", () => {
 
   it("invalidating compliance clears the preview and asks for a reason again", async () => {
     const { app, api, store } = setup(signedIn);
-    app.onInvalidateCompliance();
+    app.onWithdrawCompliance();
     expect(store.getState().preview).toEqual({ status: "idle" });
     await flushPromises();
     expect(api.invalidateCompliance).toHaveBeenCalled();

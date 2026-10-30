@@ -31,7 +31,8 @@ export function openEventOf(
 /** The JSON is the app's own reading of the event (`EventRecord`), not the
  *  server's response: its keys are ours, and fields the app doesn't read are
  *  not in it. Without this line a user would take it for the raw event. */
-export const EVENT_JSON_HINT = "As this app reads the event from the server.";
+export const EVENT_JSON_HINT =
+  "This is the event as this app reads it, not the server's own response.";
 
 export function eventDialogHtml(event: EventRecord | null): string {
   if (!event) return "";

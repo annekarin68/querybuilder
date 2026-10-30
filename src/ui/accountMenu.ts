@@ -38,7 +38,7 @@ export function complianceHtml(c: ComplianceState): string {
       <a class="ui fluid small primary button" href="${escapeHtml(COMPLIANCE_START_URL)}">Start compliance check</a>`;
   }
   return `<pre class="qb-account-log" tabindex="0" aria-label="Compliance log">${escapeHtml(c.log)}</pre>
-    <button type="button" class="ui fluid small basic button" data-action="invalidate-compliance">Withdraw compliance reason</button>`;
+    <button type="button" class="ui fluid small basic button" data-action="withdraw-compliance">Withdraw compliance reason</button>`;
 }
 
 /** Withdraw compliance reason and Log out change what the menu shows, and the repaint
@@ -83,7 +83,7 @@ export function renderAccountMenu(el: HTMLElement, state: AppState): void {
 /** Delegated menu actions + close-on-outside-click/Escape. Call once at startup. */
 export function wireAccountMenu(
   container: HTMLElement,
-  handlers: { onLogout(): void; onInvalidate(): void },
+  handlers: { onLogout(): void; onWithdraw(): void },
 ): void {
   // A <details> menu doesn't close itself on an outside click or on Escape.
   const openMenu = () => container.querySelector<HTMLDetailsElement>("details.qb-account[open]");
@@ -96,14 +96,14 @@ export function wireAccountMenu(
   container.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const logout = t.closest("[data-action='logout']");
-    const invalidate = t.closest("[data-action='invalidate-compliance']");
-    if (!logout && !invalidate) return;
+    const withdraw = t.closest("[data-action='withdraw-compliance']");
+    if (!logout && !withdraw) return;
     // Closed before the request: a failure is shown as a toast at the top
     // right, which would otherwise cover the open menu. A success repaints the
     // menu closed anyway.
     closeMenu();
     if (logout) handlers.onLogout();
-    else handlers.onInvalidate();
+    else handlers.onWithdraw();
   });
   document.addEventListener("click", (e) => {
     if (!container.contains(e.target as Node)) openMenu()?.removeAttribute("open");

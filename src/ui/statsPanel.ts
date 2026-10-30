@@ -2,7 +2,7 @@ import { runBlocker, type AppState, type RunBlocker, type StatsState } from "../
 import type { Database, DatabaseResult } from "../model";
 import { escapeHtml, paint } from "./panel";
 import { placeIssues } from "../query/issues";
-import { failureReasons, noDatabaseText, queryIsAtFault } from "./databasePicker";
+import { blockedText, failureReasons, queryIsAtFault } from "./databasePicker";
 import { barWidth, compact, countLabel, exact, matchRatio } from "./format";
 
 /** The databases are loaded once into AppState.databases; a result only
@@ -296,8 +296,7 @@ export function statsPanelHtml(state: AppState): string {
   // "rejected" is explained BY the results (each database's errors), so they
   // stay on screen; every other blocker means there are no results to show.
   if (blocker && blocker !== "rejected") {
-    const text = BLOCKED_MESSAGES[blocker];
-    return card(state, placeholder(blocker === "no-database" ? noDatabaseText(state, text) : text));
+    return card(state, placeholder(blockedText(blocker, state, BLOCKED_MESSAGES)));
   }
   const stats = state.stats;
   if (stats.status === "error") {

@@ -346,15 +346,16 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (stats.status === "loading") refreshStats();
   }
 
-  function onInvalidateCompliance(): void {
+  function onWithdrawCompliance(): void {
     resetPreview();
     api
+      // The UI says "withdraw"; the backend's word (endpoint) is "invalidate".
       .invalidateCompliance()
       .then(() => {
         store.setState({ compliance: { status: "required" } });
       })
       .catch((err) => {
-        console.error("Invalidate compliance failed:", err);
+        console.error("Withdraw compliance failed:", err);
         showError("Couldn't withdraw the compliance reason. Try again.");
       });
   }
@@ -1036,7 +1037,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     onDatabasesChange,
     onPageRestored,
     onLogout,
-    onInvalidateCompliance,
+    onWithdrawCompliance,
     startFresh,
     dismissRestoredNotice,
     retryStats,

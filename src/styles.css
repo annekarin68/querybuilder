@@ -2401,7 +2401,7 @@ details[open] > summary > .qb-chevron {
 }
 
 /* Toasts (showToast in src/ui/fomantic.ts) start below the top bar, not on
-   it: there a failed Log out or Invalidate covered the account chip, which
+   it: there a failed Log out or Withdraw covered the account chip, which
    then has the keyboard focus, or the open account menu. */
 .ui.toast-container.top.right {
   top: calc(var(--qb-topbar-h) + 0.5rem);
