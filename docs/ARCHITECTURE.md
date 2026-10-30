@@ -454,7 +454,8 @@ removed (a new block never gets an old id, so they would stay for ever).
   Whether it was edited since is worked out (`isEdited`), never stored.
 - `savedDialog`: which dialog is open (`"save"`, `"list"`, or the login
   question `"login-to-save"` / `"login-to-list"`), or `null`.
-- `save`: `idle`, `saving`, `conflict` (the name is taken: "Replace it?") or
+- `save`: `idle`, `saving` (with the `name` and `note` being sent, so a
+  reopened dialog shows them), `conflict` (the name is taken: "Replace it?") or
   `error`.
 - `savedList`: `idle`, `loading`, `ok` (with `unreadable`, how many entries
   could not be read) or `error`; reloaded every time the list opens and after
@@ -515,7 +516,11 @@ control afterwards.
   So a builder repaint that only a statistics line asked for (`serverIssues`)
   waits while the focus is in a text box or dropdown of the builder, and is
   done when the focus leaves (`holdsBuilderRepaint` in `queryBuilder.ts`, the
-  `held` hook in `main.ts`; issue #76). Any other change repaints at once.
+  `held` hook in `main.ts`; issue #76). That repaint runs through the
+  builder's `afterPointer` (`runAfterPointer`), so a press on a builder button,
+  which moves the focus on mousedown, is repainted only after the release and
+  its click is not lost ("Keyboard focus across repaints"). Any other change
+  repaints at once.
 - **"The same control"** is found by what it is, not where it is: its row or
   group (`data-node-id`), its tag, and the first of these attributes it has:
   `data-event-id`, `data-field-id`, `data-co-cell`, `data-co-box`,
@@ -588,9 +593,11 @@ databases. Otherwise they are empty (placeholder or error), never stale.**
   may already have happened on the server. Closing the dialog during a save
   keeps `save` at `"saving"`, so reopening shows that save and Save can't
   start a second one. Its answer is always applied (`openSaved`) and always
-  reported: in the save form if it is open, otherwise spoken (success) or as
-  a toast (failure, or a name clash; issue #84). A running delete draws its
-  query's buttons busy (`deletingSavedId`); its answer clears `openSaved` if
+  reported: in the save form if it is open; in the list's notice
+  (`savedListNotice`, and a success reloads the list) if the list is open;
+  otherwise spoken (success) or as a toast (failure, or a name clash; issue
+  #84). A running delete draws its query's buttons busy (`deletingSavedId`,
+  cleared only by the delete that set it); its answer clears `openSaved` if
   that query was open, and reloads the list if the list is still open.
 - **Superseded requests are aborted, not just ignored** (the slot's
   `AbortController` goes through `client.ts`), so edits don't leave
@@ -1644,6 +1651,9 @@ action has finished, and the commit repaints the builder:
   and applied after the release.
 - **With the keyboard**, Tab or Enter would repaint before the focus moved, so
   even with the pointer up the commit waits one tick.
+- **A repaint held for a statistics line** (issue #76) waits for the focus to
+  leave the value box; the focus leaves on mousedown, so it too goes through
+  `afterPointer` and is done after the release.
 - **A click on a button or link** (`shouldFlushBeforeClick`) applies the held
   edit first, from a capture-phase listener, so **Run query** and the login
   links see the typed value. One queue (`flush`) serves all three; a window

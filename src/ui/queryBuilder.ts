@@ -273,7 +273,9 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
  * panel). Call ONCE at startup. The handlers read the current tree through
  * `getState()` when an event fires, so they never go stale across repaints.
  *
- * Returns the query builder's render function — the only way to paint it.
+ * Returns the query builder's render function — the only way to paint it —
+ * and `runAfterPointer`, for a repaint that must not land under a pressed mouse
+ * button (see main.ts).
  * Rendering and binding must happen together: Fomantic dropdowns don't emit a
  * usable native "change", so their onChange is bound per element, and every
  * paint replaces those elements.
@@ -315,7 +317,7 @@ export function wireQueryBuilder(
      *  facet `facetId`, leaving the focus on the cell or box. */
     showFacetInDictionary(facetId: string): void;
   },
-): (state: AppState) => void {
+): { render: (state: AppState) => void; runAfterPointer: (commit: () => void) => void } {
   // "Seen together": the rows of cells, the charts and their popovers.
   const coOccurrence = wireCoOccurrence(container, hooks.showFacetInDictionary);
 
@@ -806,7 +808,7 @@ export function wireQueryBuilder(
           }),
         );
 
-  return (state) => {
+  const render = (state: AppState): void => {
     // An open popover is opened again after the paint (coOccurrenceWiring.ts).
     const openPopoverId = coOccurrence.beforePaint();
     paintQueryBuilder(container, state);
@@ -828,4 +830,5 @@ export function wireQueryBuilder(
       else commitValue(row); // a value chosen from a list
     });
   };
+  return { render, runAfterPointer: afterPointer.run };
 }

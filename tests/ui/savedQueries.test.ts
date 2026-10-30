@@ -70,7 +70,9 @@ describe("the save dialog", () => {
   });
 
   it("while saving, Save shows a loader and is disabled", () => {
-    const html = savedDialogHtml(saveDialog({ save: { status: "saving" } }));
+    const html = savedDialogHtml(
+      saveDialog({ save: { status: "saving", name: "Weekly", note: "" } }),
+    );
     expect(html).toMatch(/<button type="submit" class="[^"]*\bloading\b[^"]*"[^>]*disabled/);
   });
 
@@ -330,14 +332,19 @@ describe("focusAfterRepaint (where the keyboard focus goes)", () => {
   it("a name clash takes the focus to Replace", () => {
     expect(
       focusAfterRepaint(
-        saveDialog({ save: { status: "saving" } }),
+        saveDialog({ save: { status: "saving", name: "Weekly", note: "" } }),
         saveDialog({ save: { status: "conflict", name: "x", note: "" } }),
       ),
     ).toEqual({ action: "confirm-replace" });
   });
 
   it("otherwise leaves it where paint() put it", () => {
-    expect(focusAfterRepaint(saveDialog(), saveDialog({ save: { status: "saving" } }))).toBeNull();
+    expect(
+      focusAfterRepaint(
+        saveDialog(),
+        saveDialog({ save: { status: "saving", name: "Weekly", note: "" } }),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -359,7 +366,9 @@ describe("escapeAction (what Escape does)", () => {
 
   it("closes the dialog when no question is showing", () => {
     expect(escapeAction(saveDialog())).toBe("close-saved-dialog");
-    expect(escapeAction(saveDialog({ save: { status: "saving" } }))).toBe("close-saved-dialog");
+    expect(escapeAction(saveDialog({ save: { status: "saving", name: "Weekly", note: "" } }))).toBe(
+      "close-saved-dialog",
+    );
     expect(escapeAction(saveDialog({ save: { status: "error", error: "x" } }))).toBe(
       "close-saved-dialog",
     );
