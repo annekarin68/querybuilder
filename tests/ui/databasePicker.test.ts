@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Database, DatabaseResult } from "../../src/model";
 import { initialState, type AppState } from "../../src/state";
 import {
+  blockedText,
   databasePickerHtml,
   deselectFailingIds,
   failedDatabases,
@@ -187,5 +188,22 @@ describe("databasePickerHtml", () => {
 
     const none = databasePickerHtml(withResults([ok("a", 1), ok("b", 1)]));
     expect(none).not.toContain("data-db-deselect-failing");
+  });
+});
+
+// Both the Matching events card and the statistics use this helper, so this is
+// how the Matching events card's "no databases" message is tested.
+describe("blockedText", () => {
+  const messages = { "no-database": "Select at least one database.", other: "Add a facet." };
+
+  it("says no database is available when the backend lists none", () => {
+    expect(blockedText("no-database", { databases: [] }, messages)).toBe(
+      "No databases are available to you.",
+    );
+  });
+
+  it("keeps the panel's own text otherwise", () => {
+    expect(blockedText("no-database", { databases: null }, messages)).toBe(messages["no-database"]);
+    expect(blockedText("other", { databases: [] }, messages)).toBe("Add a facet.");
   });
 });

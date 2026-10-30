@@ -87,8 +87,11 @@ export function nameHint(openSaved: OpenSaved | null): string | null {
  */
 function saveFormHtml(state: AppState, typed: TypedDraft | null): string {
   const { save, openSaved } = state;
-  const name = typed?.name ?? openSaved?.name ?? "";
-  const note = typed?.note ?? openSaved?.note ?? "";
+  // While saving, the draft being sent: a dialog reopened mid-save has typed
+  // nothing, and must show what is saved, not the open query's name.
+  const sent = save.status === "saving" ? save : null;
+  const name = typed?.name ?? sent?.name ?? openSaved?.name ?? "";
+  const note = typed?.note ?? sent?.note ?? openSaved?.note ?? "";
   const hint = nameHint(openSaved);
   const describedBy = hint ? ` aria-describedby="qb-save-name-hint"` : "";
   const hintHtml = hint
@@ -147,6 +150,7 @@ function savedItemHtml(
 ): string {
   const name = escapeHtml(q.name);
   const id = escapeHtml(q.id);
+  // While a delete runs the buttons are aria-disabled, not disabled (see deleteButtonHtml).
   const busy = deleting ? ` aria-disabled="true"` : "";
   const asking = confirm?.id === q.id ? confirm.action : null;
   const actions =
@@ -192,6 +196,7 @@ function deleteQuestionHtml(name: string): string {
  *  question handed back to the button stays on it (app.ts ignores the
  *  presses). */
 function deleteButtonHtml(id: string, name: string, deleting: boolean, first: boolean): string {
+  // While a delete runs the buttons are aria-disabled, not disabled (see deleteButtonHtml).
   const busy = deleting ? ` aria-disabled="true"` : "";
   return `<button type="button" class="ui mini basic button${deleting ? " loading" : ""}" data-action="delete-saved" data-id="${id}" aria-label="${deleting ? "Deleting" : "Delete"} ${name}"${busy}${first ? " data-initial-focus" : ""}>Delete</button>`;
 }

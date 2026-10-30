@@ -101,30 +101,35 @@ wireAccountMenu(panels.account, {
   onLogout: app.onLogout,
   onWithdraw: app.onWithdrawCompliance,
 });
-const renderQueryBuilder = wireQueryBuilder(panels.center, store.getState, app.onQueryChange, {
-  onDrop: app.onDropItem,
-  onMove: app.onMoveNode,
-  onDismissNotice: app.dismissDropNotice,
-  onNotice: app.showNotice,
-  announce: shell.announce,
-  onOpenSaveDialog: app.openSaveDialog,
-  onOpenSavedList: app.openSavedList,
-  onStartFresh: app.startFresh,
-  onDismissRestored: app.dismissRestoredNotice,
-  openFieldRow: app.openFieldRow,
-  toggleFields: app.toggleFields,
-  setPanelTab: app.setPanelTab,
-  toggleCoNames: app.toggleCoNames,
-  selectFieldForPanel: app.selectFieldForPanel,
-  showFacetInDictionary: (facetId) => {
-    // The app unfolds the dictionary first: a folded one has no card to show.
-    // The focus stays on the square, so a screen reader is told instead.
-    if (app.showFacetInDictionary(facetId) && docs.showFacet(facetId)) {
-      const name = store.getState().facets?.find((f) => f.id === facetId)?.name ?? facetId;
-      shell.announce(`${name} is open in the data dictionary.`);
-    }
+const { render: renderQueryBuilder, runAfterPointer } = wireQueryBuilder(
+  panels.center,
+  store.getState,
+  app.onQueryChange,
+  {
+    onDrop: app.onDropItem,
+    onMove: app.onMoveNode,
+    onDismissNotice: app.dismissDropNotice,
+    onNotice: app.showNotice,
+    announce: shell.announce,
+    onOpenSaveDialog: app.openSaveDialog,
+    onOpenSavedList: app.openSavedList,
+    onStartFresh: app.startFresh,
+    onDismissRestored: app.dismissRestoredNotice,
+    openFieldRow: app.openFieldRow,
+    toggleFields: app.toggleFields,
+    setPanelTab: app.setPanelTab,
+    toggleCoNames: app.toggleCoNames,
+    selectFieldForPanel: app.selectFieldForPanel,
+    showFacetInDictionary: (facetId) => {
+      // The app unfolds the dictionary first: a folded one has no card to show.
+      // The focus stays on the square, so a screen reader is told instead.
+      if (app.showFacetInDictionary(facetId) && docs.showFacet(facetId)) {
+        const name = store.getState().facets?.find((f) => f.id === facetId)?.name ?? facetId;
+        shell.announce(`${name} is open in the data dictionary.`);
+      }
+    },
   },
-});
+);
 
 // A builder repaint that a statistics line asked for while the user was in a
 // value box waits until the focus leaves it (holdsBuilderRepaint, issue #76).
@@ -138,13 +143,16 @@ function holdBuilderRepaint(changed: ReadonlySet<keyof AppState>): boolean {
   if (hold) builderRepaintWaiting = true;
   return hold;
 }
-// After the focus has moved: a Tab into the next value box still waits.
+// After the focus has moved: a Tab into the next value box still waits. Pressing
+// a builder button moves the focus on mousedown, so the repaint goes through the
+// builder's afterPointer: it waits until the mouse button is released, else the
+// button under the pointer would be replaced and its click would be lost.
 panels.center.addEventListener("focusout", () =>
-  setTimeout(() => {
+  runAfterPointer(() => {
     if (builderRepaintWaiting && !isValueBoxInUse(panels.center)) {
       repaintPanel(renderBuilder, store.getState());
     }
-  }, 0),
+  }),
 );
 
 wireSavedDialog(shell.savedDialog, app);

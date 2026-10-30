@@ -748,11 +748,11 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     // what the dialogs show. A running save goes on (sendSave says why), and
     // stays "saving" so that reopening shows it and Save can't start another.
     savedListSlot.cancel();
-    const saving = store.getState().save.status === "saving";
+    const { save } = store.getState();
     store.setState({
       savedDialog: null,
       savedConfirm: null,
-      save: saving ? { status: "saving" } : { status: "idle" },
+      save: save.status === "saving" ? save : { status: "idle" },
       savedList: { status: "idle" },
       savedListNotice: null,
     });
@@ -769,7 +769,16 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     const { name, note } = draft;
     const openWhenStarted = store.getState().openSaved;
     const formShown = () => store.getState().savedDialog === "save";
-    store.setState({ save: { status: "saving" } });
+    // Where a late answer is shown: the save form if it is open; the list's
+    // notice if the list is (a toast would be drawn under its backdrop); a
+    // toast when no dialog is open.
+    const reportFailure = (text: string) => {
+      store.setState({ save: { status: "idle" } });
+      if (store.getState().savedDialog === "list") {
+        store.setState({ savedListNotice: { tone: "error", text } });
+      } else showError(text);
+    };
+    store.setState({ save: { status: "saving", name, note } });
     send()
       .then((saved) => {
         // The open query remembers the tree that was sent, which is the tree
@@ -795,21 +804,21 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
           ...(formShown() ? { savedDialog: null } : {}),
         });
         announce(`Saved “${saved.name}”.`);
+        // The list is open: it must show the new query.
+        if (store.getState().savedDialog === "list") loadSavedList();
       })
       .catch((err) => {
         // 409: the name belongs to another saved query. Not an error: the
         // dialog asks whether to replace it.
         if (err instanceof ApiError && err.status === 409) {
           if (formShown()) return store.setState({ save: { status: "conflict", name, note } });
-          store.setState({ save: { status: "idle" } });
-          return showError(
+          return reportFailure(
             `Not saved: another saved query already has this name (“${name}”). Save again to replace it.`,
           );
         }
         savedCallFailed(err, (error) => {
           if (formShown()) return store.setState({ save: { status: "error", error } });
-          store.setState({ save: { status: "idle" } });
-          showError(`Couldn't save “${name}”. ${error}`);
+          reportFailure(`Couldn't save “${name}”. ${error}`);
         });
       });
   }
@@ -943,8 +952,12 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     const name = listedName(id);
     // Its buttons are drawn busy until the server has answered (issue #84).
     store.setState({ deletingSavedId: id });
+    // Only this delete's own mark: another delete may have started since.
+    const clearBusy = () => {
+      if (store.getState().deletingSavedId === id) store.setState({ deletingSavedId: null });
+    };
     const deleted = () => {
-      store.setState({ deletingSavedId: null });
+      clearBusy();
       const { openSaved, savedDialog } = store.getState();
       // The query on screen stays; it just no longer belongs to a saved one.
       if (openSaved?.id === id) store.setState({ openSaved: null });
@@ -957,7 +970,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     api.deleteSavedQuery(id).then(deleted, (err) => {
       // Already gone (deleted in another tab): that is what the user wanted.
       if (err instanceof ApiError && err.status === 404) return deleted();
-      store.setState({ deletingSavedId: null });
+      clearBusy();
       // Keep the list on screen: replacing it with an error would hide every
       // other saved query because one delete failed. The notice is shown inside
       // the dialog: a toast would be drawn under its backdrop (Delete is only

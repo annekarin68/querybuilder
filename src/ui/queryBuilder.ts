@@ -48,7 +48,7 @@ import { onDropdownChange, openDropdown } from "./fomantic";
 import { forgetDrag, draggedItem } from "./dragMemory";
 import { isRestoringFocus } from "./focusMemory";
 import { hoverTitle } from "./format";
-import { readValueControl, withTypedEntry } from "./valueControl";
+import { readValueControl, shouldAddTypedEntry, withTypedEntry } from "./valueControl";
 
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
@@ -82,7 +82,6 @@ function describeClickTarget(el: Element): ClickTargetDescription {
     inLink: el.closest("a[href]") !== null,
     inDataAction: el.closest("[data-action]") !== null,
     inDropdown: el.closest(".ui.dropdown") !== null,
-    inCheckbox: el.closest(".ui.checkbox") !== null,
   };
 }
 
@@ -273,7 +272,9 @@ function paintQueryBuilder(el: HTMLElement, state: AppState): void {
  * panel). Call ONCE at startup. The handlers read the current tree through
  * `getState()` when an event fires, so they never go stale across repaints.
  *
- * Returns the query builder's render function — the only way to paint it.
+ * Returns the query builder's render function — the only way to paint it —
+ * and `runAfterPointer`, for a repaint that must not land under a pressed mouse
+ * button (see main.ts).
  * Rendering and binding must happen together: Fomantic dropdowns don't emit a
  * usable native "change", so their onChange is bound per element, and every
  * paint replaces those elements.
@@ -315,7 +316,7 @@ export function wireQueryBuilder(
      *  facet `facetId`, leaving the focus on the cell or box. */
     showFacetInDictionary(facetId: string): void;
   },
-): (state: AppState) => void {
+): { render: (state: AppState) => void; runAfterPointer: (commit: () => void) => void } {
   // "Seen together": the rows of cells, the charts and their popovers.
   const coOccurrence = wireCoOccurrence(container, hooks.showFacetInDictionary);
 
@@ -363,9 +364,8 @@ export function wireQueryBuilder(
   }
 
   /** Apply the value shown in field row `row` to its condition. Only a set
-   *  row with an operator has a value control. */
-  /** `typed`: text left in a free-entry dropdown's typing box, added as an
-   *  entry (withTypedEntry). */
+   *  row with an operator has a value control. `typed`: text left in a
+   *  free-entry dropdown's typing box, added as an entry (withTypedEntry). */
   function commitValue(row: HTMLElement, typed = ""): void {
     const { query, catalog } = getState();
     const block = blockOf(row);
@@ -764,11 +764,12 @@ export function wireQueryBuilder(
     const conditionNow = () => blockOf(row)?.conditions.find((c) => c.id === row.dataset.nodeId);
     const before = conditionNow();
     afterPointer.run(() => {
-      // A menu item was picked meanwhile (the condition changed), or the
-      // focus is back in the dropdown: the typed text is not the choice.
-      if (conditionNow() !== before) return;
-      if (dropdown.isConnected && dropdown.contains(document.activeElement)) return;
-      commitValue(row, typed);
+      const add = shouldAddTypedEntry({
+        typed,
+        conditionChanged: conditionNow() !== before,
+        focusInDropdown: dropdown.isConnected && dropdown.contains(document.activeElement),
+      });
+      if (add) commitValue(row, typed);
     });
   });
 
@@ -806,7 +807,7 @@ export function wireQueryBuilder(
           }),
         );
 
-  return (state) => {
+  const render = (state: AppState): void => {
     // An open popover is opened again after the paint (coOccurrenceWiring.ts).
     const openPopoverId = coOccurrence.beforePaint();
     paintQueryBuilder(container, state);
@@ -828,4 +829,5 @@ export function wireQueryBuilder(
       else commitValue(row); // a value chosen from a list
     });
   };
+  return { render, runAfterPointer: afterPointer.run };
 }

@@ -85,7 +85,7 @@ export const NO_DATABASES = "No databases are available to you.";
 
 /** The message for `state` when nothing is selected: `selectText`, or
  *  NO_DATABASES when there is nothing to select. */
-export function noDatabaseText(state: Pick<AppState, "databases">, selectText: string): string {
+function noDatabaseText(state: Pick<AppState, "databases">, selectText: string): string {
   return state.databases?.length === 0 ? NO_DATABASES : selectText;
 }
 
