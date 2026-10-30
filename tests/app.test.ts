@@ -2207,7 +2207,7 @@ describe("saved queries: deleting", () => {
         ...loggedIn,
         ...ready(),
         savedDialog: "list",
-        savedList: { status: "ok", queries: [a, b], unreadable: 0 },
+        savedList: { status: "ok", queries: [a, b], unreadable: [] },
       },
       api,
     );
