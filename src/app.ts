@@ -39,6 +39,7 @@ import {
   type Store,
 } from "./state";
 import { exact } from "./ui/format";
+import { unreadableName } from "./ui/savedNames";
 import { debounce } from "./util/debounce";
 import { pageOf } from "./util/paging";
 import {
@@ -877,6 +878,14 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (store.getState().save.status === "conflict") store.setState({ save: { status: "idle" } });
   }
 
+  /** The name the list shows for the saved query `id`, readable or not. */
+  function listedName(id: string): string | undefined {
+    const { savedList } = store.getState();
+    if (savedList.status !== "ok") return undefined;
+    const unreadable = savedList.unreadable.find((u) => u.id === id);
+    return listedQuery(id)?.name ?? (unreadable ? unreadableName(unreadable) : undefined);
+  }
+
   /** The saved query `id` from the list on screen, if it is still there. */
   function listedQuery(id: string): SavedQuery | undefined {
     const { savedList } = store.getState();
@@ -939,7 +948,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
   }
 
   function deleteSaved(id: string): void {
-    const name = listedQuery(id)?.name;
+    const name = listedName(id);
     // Its buttons are drawn busy until the server has answered (issue #84).
     store.setState({ deletingSavedId: id });
     // Only this delete's own mark: another delete may have started since.

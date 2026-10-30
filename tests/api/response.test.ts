@@ -11,7 +11,10 @@ import {
   toField,
   toSavedQuery,
   toUser,
+  missingAnswers,
+  unexpectedLine,
 } from "../../src/api/response";
+import type { DatabaseResult } from "../../src/model";
 import { toSavedQueryRequest } from "../../src/api/request";
 import {
   unfinishedDraft,
@@ -776,5 +779,37 @@ describe("countWithoutCoOccurrence", () => {
   it("is silent when every facet has a map", () => {
     expect(countWithoutCoOccurrence([read({ ...wireFacet(), co_occurrence: {} })])).toBe(0);
     expect(console.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("unexpectedLine and missingAnswers (#79)", () => {
+  const line = (databaseId: string): DatabaseResult => ({
+    databaseId,
+    status: "ok",
+    matchCount: 1,
+    notes: [],
+  });
+
+  it("keeps the first line of each requested database only", () => {
+    expect(unexpectedLine(line("a"), ["a"], new Set())).toBeNull();
+    expect(unexpectedLine(line("a"), ["a"], new Set(["a"]))).toMatch(/already answered/);
+    expect(unexpectedLine(line("z"), ["a"], new Set())).toMatch(/wasn't asked for/);
+  });
+
+  it("stands in a failed result for each database without an answer", () => {
+    expect(missingAnswers(["a", "b"], new Set(["a"]))).toEqual([
+      {
+        databaseId: "b",
+        status: "failed",
+        errors: [
+          {
+            message: "The server sent no answer for this database.",
+            kind: "invalid",
+            nodeId: null,
+          },
+        ],
+        notes: [],
+      },
+    ]);
   });
 });

@@ -38,8 +38,8 @@ describe("nextFieldCondition", () => {
       operatorId: "gt",
       value: null,
     });
-    // A boolean toggle is never "unset" on screen, so its default is false.
-    expect(nextFieldCondition(undefined, "thing", "ok", "eq", catalog, never)!.value).toBe(false);
+    // A yes/no value starts unset too: nobody chose false (#83).
+    expect(nextFieldCondition(undefined, "thing", "ok", "eq", catalog, never)!.value).toBeNull();
   });
 
   it("keeps the condition's id and reads the value while the shape is the same", () => {

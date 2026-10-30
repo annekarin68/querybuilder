@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { CatalogField, CatalogOperator } from "../../src/query/fieldCatalog";
 import {
+  booleanFromOptionValue,
+  booleanOptionValue,
   optionEntry,
   parseEntry,
   readValueControl,
   renderValueControl,
+  shouldAddTypedEntry,
+  withTypedEntry,
 } from "../../src/ui/valueControl";
 
 function field(overrides: Partial<CatalogField> = {}): CatalogField {
@@ -46,9 +50,16 @@ describe("renderValueControl", () => {
     expect(html).toContain('title="9"');
   });
 
-  it('arity "one" + boolean renders a toggle checkbox', () => {
-    const html = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), true);
-    expect(html).toContain("ui toggle checkbox");
+  it('arity "one" + boolean is a true/false dropdown that can be unset (#83)', () => {
+    const unset = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), null);
+    expect(unset).toContain('class="ui search selection dropdown"');
+    expect(unset).toContain('<option value="">Choose…</option>');
+    expect(unset).not.toContain("selected");
+    expect(unset).not.toContain("checkbox");
+    const yes = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), true);
+    expect(yes).toContain('<option value="yes" selected>true</option>');
+    const no = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), false);
+    expect(no).toContain('<option value="no" selected>false</option>');
   });
 
   it("Equals on a field with a pick-list is a free-entry dropdown of its values", () => {
@@ -201,5 +212,72 @@ describe("readValueControl on a free-entry dropdown", () => {
     expect(readValueControl(rowWith(option("4"), option("42", true)), "many", "number")).toEqual([
       4, 42,
     ]);
+  });
+});
+
+describe("withTypedEntry (#82)", () => {
+  it("makes text left in the box the value, as Enter would", () => {
+    expect(withTypedEntry(null, "abc", false, "string")).toBe("abc");
+    expect(withTypedEntry(null, "42", false, "number")).toBe(42);
+  });
+
+  it("adds it to a list once", () => {
+    expect(withTypedEntry(["a"], "b", true, "string")).toEqual(["a", "b"]);
+    expect(withTypedEntry(["a"], "a", true, "string")).toEqual(["a"]);
+    expect(withTypedEntry(null, "a", true, "string")).toEqual(["a"]);
+  });
+
+  it("changes nothing for blank text", () => {
+    expect(withTypedEntry(["a"], "  ", true, "string")).toEqual(["a"]);
+    expect(withTypedEntry("x", "", false, "string")).toBe("x");
+  });
+});
+
+describe("the yes/no dropdown's option values (#83)", () => {
+  // "false" as an option value would be turned into a boolean by jQuery's
+  // .data() inside Fomantic and show as an empty box, hence "yes" / "no".
+  it("maps a stored boolean to an option value, a stored false included", () => {
+    expect(booleanOptionValue(true)).toBe("yes");
+    expect(booleanOptionValue(false)).toBe("no");
+    expect(booleanOptionValue(null)).toBe("");
+    expect(booleanOptionValue(undefined)).toBe("");
+  });
+
+  it("maps an option value back; the unset option is null", () => {
+    expect(booleanFromOptionValue("yes")).toBe(true);
+    expect(booleanFromOptionValue("no")).toBe(false);
+    expect(booleanFromOptionValue("")).toBeNull();
+  });
+
+  it("round-trips every state", () => {
+    for (const v of [true, false, null]) {
+      expect(booleanFromOptionValue(booleanOptionValue(v))).toBe(v);
+    }
+  });
+
+  it("never uses the words true or false as option values", () => {
+    const html = renderValueControl(field({ valueType: "boolean" }), op("one", "eq"), false);
+    expect(html).not.toContain('value="true"');
+    expect(html).not.toContain('value="false"');
+  });
+});
+
+describe("shouldAddTypedEntry", () => {
+  const base = { typed: "sed", conditionChanged: false, focusInDropdown: false };
+
+  it("adds text left in the box when the focus went elsewhere", () => {
+    expect(shouldAddTypedEntry(base)).toBe(true);
+  });
+
+  it("does not add blank text", () => {
+    expect(shouldAddTypedEntry({ ...base, typed: "  " })).toBe(false);
+  });
+
+  it("does not add when the condition changed: a menu pick wins", () => {
+    expect(shouldAddTypedEntry({ ...base, conditionChanged: true })).toBe(false);
+  });
+
+  it("does not add when the focus is back in the same dropdown", () => {
+    expect(shouldAddTypedEntry({ ...base, focusInDropdown: true })).toBe(false);
   });
 });

@@ -2458,14 +2458,6 @@ a {
   background: var(--qb-selected-bg);
   color: var(--qb-selected-text);
 }
-.ui.toggle.checkbox input:checked ~ label::before,
-.ui.toggle.checkbox input:focus:checked ~ label::before {
-  background-color: var(--qb-and);
-}
-.ui.checkbox input:focus ~ label::before,
-.ui.checkbox input:checked:focus ~ label::before {
-  border-color: var(--qb-and);
-}
 .ui.selection.active.dropdown .menu {
   border-color: var(--qb-and);
 }

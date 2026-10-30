@@ -263,6 +263,44 @@ export function toDatabaseResult(line: ResponseObject<StatsResponse>): DatabaseR
   return { databaseId, status: "failed", errors, notes };
 }
 
+/**
+ * Why a stats line must be left out, or null to keep it: the stream answers
+ * each requested database once, so a line for a database that wasn't asked
+ * for, or a second line for one, would be counted twice and could push the
+ * headline over 100 % (issue #79). `answered`: the databases that already
+ * have a line.
+ */
+export function unexpectedLine(
+  result: DatabaseResult,
+  requested: readonly string[],
+  answered: ReadonlySet<string>,
+): string | null {
+  if (!requested.includes(result.databaseId)) return "a database that wasn't asked for";
+  if (answered.has(result.databaseId)) return "a database that already answered";
+  return null;
+}
+
+/**
+ * A "failed" stand-in for every requested database the stream ended without
+ * answering, so the statistics never look complete when they are not
+ * (issue #79). Like the "sent no count" one in `toDatabaseResult`.
+ */
+export function missingAnswers(
+  requested: readonly string[],
+  answered: ReadonlySet<string>,
+): DatabaseResult[] {
+  return requested
+    .filter((id) => !answered.has(id))
+    .map((databaseId) => ({
+      databaseId,
+      status: "failed",
+      errors: [
+        { message: "The server sent no answer for this database.", kind: "invalid", nodeId: null },
+      ],
+      notes: [],
+    }));
+}
+
 export function toUser(u: ResponseObject<UserResponse>): User {
   // The backend already picked the best name (username, else email, else id).
   // A blank one shows the id, as a nameless database does.
@@ -290,7 +328,7 @@ export function toCompliance(body: ResponseValue): Compliance {
 export function toSavedQuery(q: ResponseObject<SavedQueryResponse>): SavedQuery {
   return {
     id: q.id("id"),
-    name: q.id("name").trim(),
+    name: q.requiredText("name"),
     note: q.text("note"),
     databaseIds: q.ids("databases"),
     query: fromSavedTree(q.object<SavedGroup>("query")),

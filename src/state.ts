@@ -8,6 +8,7 @@ import type {
   EventRecord,
   Facet,
   SavedQuery,
+  UnreadableSaved,
   User,
 } from "./model";
 import type { FieldCatalog } from "./query/fieldCatalog";
@@ -52,11 +53,11 @@ export type SaveState =
   | { status: "error"; error: string };
 
 /** The logged-in user's saved queries, newest first, as the list dialog
- *  shows them. `unreadable` counts the ones that could not be read (saved by
- *  an older version): the dialog says how many, above the list. */
+ *  shows them. `unreadable`: the ones that could not be read (saved by an
+ *  older version): the dialog says how many, and lists them with Delete only. */
 export type SavedListState =
   | { status: "idle" | "loading" }
-  | { status: "ok"; queries: SavedQuery[]; unreadable: number }
+  | { status: "ok"; queries: SavedQuery[]; unreadable: UnreadableSaved[] }
   | { status: "error"; error: string };
 
 /** A line above the saved-queries list: a delete that failed ("error",

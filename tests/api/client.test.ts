@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import type { DatabaseResult } from "../../src/model";
 import {
   ApiError,
   COMPLIANCE_START_URL,
@@ -455,7 +456,7 @@ describe("api client", () => {
     const stream = feedableStreamFetch();
     vi.stubGlobal("fetch", stream.fetchMock);
     const received: unknown[] = [];
-    const pending = getStats(query, databaseIds, (r) => received.push(r));
+    const pending = getStats(query, ["alpha"], (r) => received.push(r));
     // Three chunks, each well inside the timeout, together longer than it.
     for (let i = 0; i < 3; i++) {
       await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1_000);
@@ -494,7 +495,7 @@ describe("api client", () => {
   it("getStats delivers a last line that has no trailing newline", async () => {
     vi.stubGlobal("fetch", mockStreamFetch(200, [alphaLine]));
     const received: unknown[] = [];
-    await getStats(query, databaseIds, (r) => received.push(r));
+    await getStats(query, ["alpha"], (r) => received.push(r));
     expect(received).toEqual([{ databaseId: "alpha", status: "ok", matchCount: 1, notes: [] }]);
   });
 
@@ -508,12 +509,32 @@ describe("api client", () => {
     const stream = feedableStreamFetch();
     vi.stubGlobal("fetch", stream.fetchMock);
     const received: { databaseId: string }[] = [];
-    const pending = getStats(query, databaseIds, (r) => received.push(r));
+    const pending = getStats(query, ["caf\u00e9"], (r) => received.push(r));
     stream.sendBytes(bytes.slice(0, cut));
     stream.sendBytes(bytes.slice(cut));
     stream.close();
     await pending;
     expect(received.map((r) => r.databaseId)).toEqual(["caf\u00e9"]);
+  });
+
+  it("getStats gives a database the stream never answered a failed result (#79)", async () => {
+    vi.stubGlobal("fetch", mockStreamFetch(200, [`${alphaLine}\n`]));
+    const received: DatabaseResult[] = [];
+    await getStats(query, ["alpha", "beta"], (r) => received.push(r));
+    expect(received.map((r) => [r.databaseId, r.status])).toEqual([
+      ["alpha", "ok"],
+      ["beta", "failed"],
+    ]);
+  });
+
+  it("getStats leaves out repeated and unrequested lines, with a warning (#79)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const ghost = JSON.stringify({ label: "zzz", success: true, match_count: 9 });
+    vi.stubGlobal("fetch", mockStreamFetch(200, [`${alphaLine}\n${alphaLine}\n${ghost}\n`]));
+    const received: DatabaseResult[] = [];
+    await getStats(query, ["alpha"], (r) => received.push(r));
+    expect(received.map((r) => r.databaseId)).toEqual(["alpha"]);
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 
   it("getStats accepts \\r\\n line endings", async () => {
@@ -608,7 +629,7 @@ describe("saved queries", () => {
     const out = await listSavedQueries();
     expect(out.queries).toHaveLength(1);
     expect(out.queries[0]).toMatchObject({ ...saved, databaseIds: ["alpha"] });
-    expect(out.unreadable).toBe(0);
+    expect(out.unreadable).toEqual([]);
     expect(f).toHaveBeenCalledWith("/api/v1/filter/saved", {
       method: "GET",
       signal: expect.any(AbortSignal),
@@ -676,13 +697,18 @@ describe("saved queries", () => {
       query: { kind: "group", operator: "AND", children: [{ kind: "condition" }] },
     };
 
-    it("skips each entry that can't be read, and counts it", async () => {
+    it("sets aside each entry that can't be read, by id and name (#80)", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const nameless = { ...oldShape, name: 7 };
       vi.stubGlobal("fetch", mockFetchOnce(200, [oldShape, unfinishedResponse, nameless, 42]));
       const out = await listSavedQueries();
       expect(out.queries.map((q) => q.id)).toEqual(["sq-1"]);
-      expect(out.unreadable).toBe(3);
+      // Kept by id, so it can still be deleted; 42 has not even an id.
+      expect(out.unreadable).toEqual([
+        { id: "sq-old", name: "Old trips" },
+        { id: "sq-old", name: "" },
+        { id: null, name: "" },
+      ]);
       // One warning per skipped entry, naming it when its name can be read.
       expect(warn).toHaveBeenCalledTimes(3);
       expect(warn.mock.calls[0]![0]).toContain("“Old trips”");

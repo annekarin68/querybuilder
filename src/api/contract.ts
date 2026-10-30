@@ -207,6 +207,12 @@ export class ResponseObject<T> {
     throw this.error(key, "non-blank text");
   }
 
+  /** Text the app can't do without and shows (a saved query's name):
+   *  trimmed, and like `id` it must not be blank. */
+  requiredText(key: Key<T>): string {
+    return this.id(key).trim();
+  }
+
   /** A list of machine ids (see `id`): every item must be non-blank text.
    *  A missing key, a value that isn't a list, or a bad item throws; the
    *  message names the item, e.g. `"[0].databases[1]"`. */
