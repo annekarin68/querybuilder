@@ -878,7 +878,6 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     if (store.getState().save.status === "conflict") store.setState({ save: { status: "idle" } });
   }
 
-  /** The saved query `id` from the list on screen, if it is still there. */
   /** The name the list shows for the saved query `id`, readable or not. */
   function listedName(id: string): string | undefined {
     const { savedList } = store.getState();
@@ -887,6 +886,7 @@ export function createApp({ store, api, navigate, announce, showError }: AppDeps
     return listedQuery(id)?.name ?? (unreadable ? unreadableName(unreadable) : undefined);
   }
 
+  /** The saved query `id` from the list on screen, if it is still there. */
   function listedQuery(id: string): SavedQuery | undefined {
     const { savedList } = store.getState();
     return savedList.status === "ok" ? savedList.queries.find((q) => q.id === id) : undefined;

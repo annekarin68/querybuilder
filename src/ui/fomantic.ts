@@ -34,6 +34,15 @@ const FREE_ENTRY_DROPDOWN = { ...DROPDOWN, allowAdditions: true, delimiter: "\u0
  * - Its typing box (`input.search`) is what has the keyboard focus, and it has
  *   no accessible name, so a screen reader says only "edit text". Give it the
  *   <select>'s aria-label.
+ * - It writes every menu item's label into a `data-text` attribute and reads
+ *   it back with jQuery's `.data()`, which turns the text "true" / "false" /
+ *   "null" (or a number) into a non-string. Fomantic then shows an empty box
+ *   for "false", and for "true" mistakes the text for its "do not fire
+ *   onChange" argument, so picking it changes nothing. Items without
+ *   `data-text` fall back to their own (escaped) HTML, which is the same label
+ *   as text. So the attribute and jQuery's cached copy are removed, and the
+ *   shown text of an item already chosen (set while initialising, before we
+ *   can remove them) is filled in again.
  * - The shown choice, and in a multi-select each chosen label, is cut off with
  *   "…" when it is longer than the dropdown. showFullChoice puts the full text
  *   in a `title` on what the pointer is over, and removes it from a placeholder.
@@ -44,6 +53,10 @@ function describeDropdown(node: HTMLElement): void {
   const dropdown = node.closest<HTMLElement>(".ui.dropdown") ?? node;
   const label = dropdown.querySelector("select")?.getAttribute("aria-label");
   if (label) dropdown.querySelector("input.search")?.setAttribute("aria-label", label);
+  $(dropdown).find(".menu .item[data-text]").removeAttr("data-text").removeData("text");
+  const shown = dropdown.querySelector(":scope > .text");
+  const chosen = dropdown.querySelector(":scope > .menu > .item.active.selected");
+  if (shown && chosen && shown.innerHTML === "") shown.innerHTML = chosen.innerHTML;
   showFullChoice(dropdown);
 }
 

@@ -1520,8 +1520,13 @@ equals** on a field with a pick-list, a free-entry dropdown (known values, plus
 anything typed); otherwise one input, a timestamp box, or for a yes/no field a
 **Choose… / true / false** dropdown that starts unset (a toggle could not show
 "unset", and a default of false ran statistics on a value nobody chose;
-maintainers' decision on #83); a
-from–to pair (numbers and dates); or, for **Is any of** / **Is none of**, a
+maintainers' decision on #83). It is a `search selection` dropdown like the
+others (a plain `selection` one is a focusable `div` that focus memory does not
+find again after a repaint), and its option values are `yes` / `no`, not
+`true` / `false`: Fomantic reads values with jQuery's `.data()`, which turns
+"false" into a boolean. The same happens to an item's label (`data-text`:
+"false" shows an empty box, "true" makes the pick fire no change), so
+`fomantic.ts` removes `data-text` and jQuery's cached copy from every menu item. A from–to pair (numbers and dates); or, for **Is any of** / **Is none of**, a
 free-entry multi-select. Free-entry dropdowns are Fomantic `search` dropdowns
 with `allowAdditions` (`data-free-entry`): their `delimiter` is a character no
 key can type, so a comma is part of an entry, and `optionEntry` undoes
@@ -1658,7 +1663,7 @@ action has finished, and the commit repaints the builder:
   edit first, from a capture-phase listener, so **Run query** and the login
   links see the typed value. One queue (`flush`) serves all three; a window
   `blur` flushes too.
-- **Dropdowns and checkboxes are left out of that early flush**: repainting
+- **Dropdowns are left out of that early flush**: repainting
   before their click would destroy the handler the click needs. That repaint
   closes a dropdown the click just opened, so `commitTypedValue` opens it
   again.

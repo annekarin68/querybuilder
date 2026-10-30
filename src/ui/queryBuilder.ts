@@ -48,7 +48,7 @@ import { onDropdownChange, openDropdown } from "./fomantic";
 import { forgetDrag, draggedItem } from "./dragMemory";
 import { isRestoringFocus } from "./focusMemory";
 import { hoverTitle } from "./format";
-import { readValueControl, withTypedEntry } from "./valueControl";
+import { readValueControl, shouldAddTypedEntry, withTypedEntry } from "./valueControl";
 
 /** The dismissible warning for a drop that couldn't be done in full. */
 export function noticeHtml(notice: string | null): string {
@@ -82,7 +82,6 @@ function describeClickTarget(el: Element): ClickTargetDescription {
     inLink: el.closest("a[href]") !== null,
     inDataAction: el.closest("[data-action]") !== null,
     inDropdown: el.closest(".ui.dropdown") !== null,
-    inCheckbox: el.closest(".ui.checkbox") !== null,
   };
 }
 
@@ -365,9 +364,8 @@ export function wireQueryBuilder(
   }
 
   /** Apply the value shown in field row `row` to its condition. Only a set
-   *  row with an operator has a value control. */
-  /** `typed`: text left in a free-entry dropdown's typing box, added as an
-   *  entry (withTypedEntry). */
+   *  row with an operator has a value control. `typed`: text left in a
+   *  free-entry dropdown's typing box, added as an entry (withTypedEntry). */
   function commitValue(row: HTMLElement, typed = ""): void {
     const { query, catalog } = getState();
     const block = blockOf(row);
@@ -766,11 +764,12 @@ export function wireQueryBuilder(
     const conditionNow = () => blockOf(row)?.conditions.find((c) => c.id === row.dataset.nodeId);
     const before = conditionNow();
     afterPointer.run(() => {
-      // A menu item was picked meanwhile (the condition changed), or the
-      // focus is back in the dropdown: the typed text is not the choice.
-      if (conditionNow() !== before) return;
-      if (dropdown.isConnected && dropdown.contains(document.activeElement)) return;
-      commitValue(row, typed);
+      const add = shouldAddTypedEntry({
+        typed,
+        conditionChanged: conditionNow() !== before,
+        focusInDropdown: dropdown.isConnected && dropdown.contains(document.activeElement),
+      });
+      if (add) commitValue(row, typed);
     });
   });
 

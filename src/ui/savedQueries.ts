@@ -126,6 +126,7 @@ function savedItemHtml(
 ): string {
   const name = escapeHtml(q.name);
   const id = escapeHtml(q.id);
+  // While a delete runs the buttons are aria-disabled, not disabled (see deleteButtonHtml).
   const busy = deleting ? ` aria-disabled="true"` : "";
   const asking = confirm?.id === q.id ? confirm.action : null;
   const actions =
@@ -171,6 +172,7 @@ function deleteQuestionHtml(name: string): string {
  *  question handed back to the button stays on it (app.ts ignores the
  *  presses). */
 function deleteButtonHtml(id: string, name: string, deleting: boolean, first: boolean): string {
+  // While a delete runs the buttons are aria-disabled, not disabled (see deleteButtonHtml).
   const busy = deleting ? ` aria-disabled="true"` : "";
   return `<button type="button" class="ui mini basic button${deleting ? " loading" : ""}" data-action="delete-saved" data-id="${id}" aria-label="${deleting ? "Deleting" : "Delete"} ${name}"${busy}${first ? " data-initial-focus" : ""}>Delete</button>`;
 }

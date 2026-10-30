@@ -134,7 +134,6 @@ describe("shouldFlushBeforeClick", () => {
       inLink: false,
       inDataAction: false,
       inDropdown: false,
-      inCheckbox: false,
       ...overrides,
     };
   }
@@ -153,10 +152,6 @@ describe("shouldFlushBeforeClick", () => {
 
   it("does not flush inside a Fomantic dropdown: a repaint would swallow the click", () => {
     expect(shouldFlushBeforeClick(clicked({ inDropdown: true, inDataAction: true }))).toBe(false);
-  });
-
-  it("does not flush inside a Fomantic checkbox, for the same reason", () => {
-    expect(shouldFlushBeforeClick(clicked({ inCheckbox: true, inButton: true }))).toBe(false);
   });
 
   it("does not flush for a click on plain text", () => {

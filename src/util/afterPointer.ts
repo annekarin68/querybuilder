@@ -71,8 +71,6 @@ export interface ClickTargetDescription {
   inDataAction: boolean;
   /** A Fomantic `.ui.dropdown`. */
   inDropdown: boolean;
-  /** A Fomantic `.ui.checkbox`. */
-  inCheckbox: boolean;
 }
 
 /**
@@ -81,11 +79,11 @@ export interface ClickTargetDescription {
  * That includes links, because a link that keeps the query and then leaves the
  * page (Log in) would otherwise save it without the value.
  *
- * False inside a Fomantic dropdown or checkbox: the repaint destroys Fomantic's
- * handlers, so repainting before their click would make the click do nothing;
- * they use the after-the-click timeout instead.
+ * False inside a Fomantic dropdown: the repaint destroys Fomantic's
+ * handlers, so repainting before its click would make the click do nothing;
+ * it uses the after-the-click timeout instead.
  */
 export function shouldFlushBeforeClick(target: ClickTargetDescription): boolean {
-  if (target.inDropdown || target.inCheckbox) return false;
+  if (target.inDropdown) return false;
   return target.inButton || target.inLink || target.inDataAction;
 }
